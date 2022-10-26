@@ -95,18 +95,18 @@ func initRouter() *gin.Engine {
 	// API endpoint
 	api := router.Group("/api")
 	{
-		open := api.Group("/open").Use(middlewares.Auth())
+		open := api.Group("/open")
 		{
 			open.POST("/token", controllers.GenerateToken)
 			open.POST("/user/register", controllers.RegisterUser)
 		}
 
-		auth := api.Group("/auth").Use(middlewares.Auth())
+		auth := api.Group("/auth").Use(middlewares.Auth(false))
 		{
 			auth.GET("/ping", controllers.Ping)
 		}
 
-		admin := api.Group("/admin").Use(middlewares.Admin())
+		admin := api.Group("/admin").Use(middlewares.Auth(true))
 		{
 			admin.POST("/invite/register", controllers.RegisterInvite)
 		}
