@@ -12,14 +12,16 @@ var jwtKey = []byte("supersecretkey")
 type JWTClaim struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
+	Admin    bool   `json:"admin"`
 	jwt.StandardClaims
 }
 
-func GenerateJWT(email string, username string) (tokenString string, err error) {
+func GenerateJWT(email string, username string, admin bool) (tokenString string, err error) {
 	expirationTime := time.Now().Add(1 * time.Hour)
 	claims := &JWTClaim{
 		Email:    email,
 		Username: username,
+		Admin:    admin,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},
@@ -28,7 +30,7 @@ func GenerateJWT(email string, username string) (tokenString string, err error) 
 	tokenString, err = token.SignedString(jwtKey)
 	return
 }
-func ValidateToken(signedToken string) (err error) {
+func ValidateToken(signedToken string, admin bool) (err error) {
 	token, err := jwt.ParseWithClaims(
 		signedToken,
 		&JWTClaim{},
@@ -46,6 +48,10 @@ func ValidateToken(signedToken string) (err error) {
 	}
 	if claims.ExpiresAt < time.Now().Local().Unix() {
 		err = errors.New("token expired")
+		return
+	}
+	if admin && !claims.Admin {
+		err = errors.New("token not admin")
 		return
 	}
 	return

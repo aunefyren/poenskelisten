@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Auth() gin.HandlerFunc {
+func Admin() gin.HandlerFunc {
 	return func(context *gin.Context) {
 		tokenString := context.GetHeader("Authorization")
 		if tokenString == "" {
@@ -14,7 +14,7 @@ func Auth() gin.HandlerFunc {
 			context.Abort()
 			return
 		}
-		err := auth.ValidateToken(tokenString, false)
+		err := auth.ValidateToken(tokenString, true)
 		if err != nil {
 			context.JSON(401, gin.H{"error": err.Error()})
 			context.Abort()
