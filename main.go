@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"path/filepath"
 	"time"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -89,6 +90,9 @@ func main() {
 
 func initRouter() *gin.Engine {
 	router := gin.Default()
+	router.LoadHTMLGlob("web/*.html")
+	
+	// API endpoint
 	api := router.Group("/api")
 	{
 		api.POST("/token", controllers.GenerateToken)
@@ -98,5 +102,17 @@ func initRouter() *gin.Engine {
 			secured.GET("/ping", controllers.Ping)
 		}
 	}
+	
+	// Static endpoint
+	router.GET("/", func(c *gin.Context) {
+        c.HTML(http.StatusOK, "test.html", nil)
+    })
+	router.GET("/groups/", func(c *gin.Context) {
+        c.HTML(http.StatusOK, "groups.html", nil)
+    })
+	router.GET("/groups/:group_id", func(c *gin.Context) {
+        c.HTML(http.StatusOK, "group.html", nil)
+    })
+	
 	return router
 }
