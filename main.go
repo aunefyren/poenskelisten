@@ -10,6 +10,7 @@ import (
 	"poenskelisten/middlewares"
 	"poenskelisten/util"
 	"strconv"
+	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,6 +19,10 @@ import (
 func main() {
 
 	util.PrintASCII()
+	
+	// Create files directory
+	newpath := filepath.Join(".", "files")
+	err := os.MkdirAll(newpath, os.ModePerm)
 
 	// Create and define file for logging
 	Log, err := os.OpenFile("files/poenskelisten.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
@@ -31,6 +36,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Set log file as log destination
 	log.SetOutput(Log)
 
 	// Load config file
