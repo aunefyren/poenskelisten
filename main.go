@@ -79,6 +79,8 @@ func main() {
 	}
 
 	// Initialize Database
+	fmt.Println("Connecting to database...")
+	log.Println("Connecting to database...")
 	database.Connect(Config.DBUsername + ":" + Config.DBPassword + "@tcp(" + Config.DBIP + ":" + strconv.Itoa(Config.DBPort) + ")/" + Config.DBName + "?parseTime=true")
 	database.Migrate()
 
@@ -112,9 +114,14 @@ func initRouter() *gin.Engine {
 		}
 	}
 
+	// Static endpoint for different directories
+	router.Static("/assets", "./web/assets")
+	router.Static("/css", "./web/css")
+	router.Static("/js", "./web/js")
+
 	// Static endpoint for homepage
 	router.GET("/", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "test.html", nil)
+		c.HTML(http.StatusOK, "frontpage.html", nil)
 	})
 
 	// Static endpoint for selecting your group

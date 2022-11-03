@@ -17,7 +17,7 @@ type JWTClaim struct {
 }
 
 func GenerateJWT(email string, username string, admin bool) (tokenString string, err error) {
-	expirationTime := time.Now().Add(1 * time.Hour)
+	expirationTime := time.Now().Add(1 * time.Hour * 24 * 7)
 	claims := &JWTClaim{
 		Email:    email,
 		Username: username,
