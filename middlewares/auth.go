@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"errors"
 	"poenskelisten/auth"
 
 	"github.com/gin-gonic/gin"
@@ -22,4 +23,16 @@ func Auth(admin bool) gin.HandlerFunc {
 		}
 		context.Next()
 	}
+}
+
+func GetAuthUsername(tokenString string) (int, error) {
+
+	if tokenString == "" {
+		return 0, errors.New("No Auhtorization header given.")
+	}
+	claims, err := auth.ParseToken(tokenString)
+	if err != nil {
+		return 0, err
+	}
+	return claims.UserID, nil
 }
