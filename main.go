@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"poenskelisten/config"
@@ -92,7 +91,6 @@ func main() {
 
 func initRouter() *gin.Engine {
 	router := gin.Default()
-	router.LoadHTMLGlob("web/*/*.html")
 
 	// API endpoint
 	api := router.Group("/api")
@@ -106,6 +104,8 @@ func initRouter() *gin.Engine {
 		auth := api.Group("/auth").Use(middlewares.Auth(false))
 		{
 			auth.GET("/ping", controllers.Ping)
+			auth.POST("/group/register", controllers.RegisterGroup)
+			auth.POST("/group/join", controllers.JoinGroup)
 		}
 
 		admin := api.Group("/admin").Use(middlewares.Auth(true))
@@ -113,31 +113,6 @@ func initRouter() *gin.Engine {
 			admin.POST("/invite/register", controllers.RegisterInvite)
 		}
 	}
-
-	// Static endpoint for different directories
-	router.Static("/assets", "./web/assets")
-	router.Static("/css", "./web/css")
-	router.Static("/js", "./web/js")
-
-	// Static endpoint for homepage
-	router.GET("/", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "frontpage.html", nil)
-	})
-
-	// Static endpoint for selecting your group
-	router.GET("/groups/", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "groups.html", nil)
-	})
-
-	// Static endpoint for details in your group
-	router.GET("/groups/:group_id", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "group.html", nil)
-	})
-
-	// Static endpoint for wishlist in your group
-	router.GET("/groups/:group_id/:wishlist_id", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "wishlist.html", nil)
-	})
 
 	return router
 }

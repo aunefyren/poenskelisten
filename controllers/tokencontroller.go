@@ -35,7 +35,7 @@ func GenerateToken(context *gin.Context) {
 		context.Abort()
 		return
 	}
-	tokenString, err := auth.GenerateJWT(user.Email, user.Username, *user.Admin)
+	tokenString, err := auth.GenerateJWT(user.Email, int(user.ID), *user.Admin)
 	if err != nil {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		context.Abort()
