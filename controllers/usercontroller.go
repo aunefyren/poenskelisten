@@ -67,7 +67,13 @@ func RegisterUser(context *gin.Context) {
 		return
 	}
 
-	// SET CODE TO USED
+	// Set code to used
+	err = database.SetUsedUserInviteCode(usercreationrequest.InviteCode)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
 
 	// Return response
 	context.JSON(http.StatusCreated, gin.H{"userId": user.ID, "email": user.Email})

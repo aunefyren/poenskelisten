@@ -58,7 +58,7 @@ func RegisterGroup(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"name": group.Name})
+	context.JSON(http.StatusCreated, gin.H{"message": "Group created."})
 }
 
 func JoinGroup(context *gin.Context) {
@@ -78,8 +78,12 @@ func JoinGroup(context *gin.Context) {
 	}
 
 	// Verify membership doesnt exist
-	groupmembershiprecord := database.Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group = ?", groupmembership.Group).Where("`group_memberships`.member = ?", groupmembership.Member).Find(&groupmembership)
-	if groupmembershiprecord.RowsAffected > 0 {
+	MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, groupmembership.Group)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	} else if MembershipStatus {
 		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Group membership already exists."})
 		context.Abort()
@@ -104,5 +108,5 @@ func JoinGroup(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"name": group.Name})
+	context.JSON(http.StatusCreated, gin.H{"message": "Group joined."})
 }
