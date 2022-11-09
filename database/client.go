@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"log"
 	"poenskelisten/models"
 
@@ -24,20 +25,21 @@ func Migrate() {
 	Instance.AutoMigrate(&models.Invite{})
 	Instance.AutoMigrate(&models.Group{})
 	Instance.AutoMigrate(&models.GroupMembership{})
+	Instance.AutoMigrate(&models.Wishlist{})
 	log.Println("Database Migration Completed!")
 }
 
 // Verify e-mail is not in use
 func VerifyUniqueUserEmail(providedEmail string) (bool, error) {
 	var user models.User
-	userrecords := Instance.Where("`users`.email= ?", user.Email).Find(&user)
+	userrecords := Instance.Where("`users`.email= ?", providedEmail).Find(&user)
 	if userrecords.Error != nil {
 		return false, userrecords.Error
 	}
 	if userrecords.RowsAffected != 0 {
-		return true, nil
+		return false, nil
 	}
-	return false, nil
+	return true, nil
 }
 
 // Verify unsued invite code exists
@@ -54,13 +56,25 @@ func VerifyUnusedUserInviteCode(providedCode string) (bool, error) {
 }
 
 // Set invite code to used
-func SetUsedUserInviteCode(providedCode string) (bool, error) {
+func SetUsedUserInviteCode(providedCode string) error {
 	var invitestruct models.Invite
-	Instance.Where("`invites`.invite_code= ?", providedCode).Update("invite_used", 1)
+	inviterecords := Instance.Model(invitestruct).Where("`invites`.invite_code= ?", providedCode).Update("invite_used", 1)
 	if inviterecords.Error != nil {
-		return false, inviterecords.Error
+		return inviterecords.Error
 	}
 	if inviterecords.RowsAffected != 1 {
+		return errors.New("Code not changed in database.")
+	}
+	return nil
+}
+
+// Verify if a user ID is a member of a group
+func VerifyUserMembershipToGroup(UserID int, GroupID int) (bool, error) {
+	var groupmembership models.GroupMembership
+	groupmembershiprecord := Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group = ?", GroupID).Where("`group_memberships`.member = ?", UserID).Find(&groupmembership)
+	if groupmembershiprecord.Error != nil {
+		return false, groupmembershiprecord.Error
+	} else if groupmembershiprecord.RowsAffected != 1 {
 		return false, nil
 	}
 	return true, nil
