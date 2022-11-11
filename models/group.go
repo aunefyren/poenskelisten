@@ -21,5 +21,5 @@ type GroupMembershipUser struct {
 	gorm.Model
 	Group   int  `json:"group_id"`
 	Enabled bool `json:"enabled"`
-	Member  User `json:"member"`
+	Members User `json:"members"`
 }

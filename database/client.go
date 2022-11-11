@@ -87,7 +87,7 @@ func GetUserInformation(UserID int) (models.User, error) {
 	if userrecord.Error != nil {
 		return models.User{}, userrecord.Error
 	} else if userrecord.RowsAffected != 1 {
-		return models.User{}, errors.New("Failed to find correct users in DB.")
+		return models.User{}, errors.New("Failed to find correct user in DB.")
 	}
 
 	// Redact user information
@@ -95,4 +95,25 @@ func GetUserInformation(UserID int) (models.User, error) {
 	user.Email = "REDACTED"
 
 	return user, nil
+}
+
+// Get user information
+func GetUserMembersFromGroup(GroupID int) ([]models.User, error) {
+	var users []models.User
+	var group_memberships []models.GroupMembership
+
+	membershiprecords := Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group = ?", GroupID).Find(&group_memberships)
+	if membershiprecords.Error != nil {
+		return []models.User{}, membershiprecords.Error
+	}
+
+	for _, membership := range group_memberships {
+		user_object, err := GetUserInformation(membership.Member)
+		if err != nil {
+			return []models.User{}, err
+		}
+		users = append(users, user_object)
+	}
+
+	return users, nil
 }
