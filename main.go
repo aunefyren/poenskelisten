@@ -111,6 +111,7 @@ func initRouter() *gin.Engine {
 			auth.POST("/group/get/members/:group_id", controllers.GetGroupMembers)
 			auth.POST("/wishlist/register", controllers.RegisterWishlist)
 			auth.POST("/wishlist/get/:group_id", controllers.GetWishlists)
+			auth.POST("/user/get/:user_id", controllers.GetUser)
 		}
 
 		admin := api.Group("/admin").Use(middlewares.Auth(true))

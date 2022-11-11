@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"poenskelisten/database"
 	"poenskelisten/models"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -77,4 +78,28 @@ func RegisterUser(context *gin.Context) {
 
 	// Return response
 	context.JSON(http.StatusCreated, gin.H{"userId": user.ID, "email": user.Email})
+}
+
+func GetUser(context *gin.Context) {
+
+	// Create user request
+	var user = context.Param("user_id")
+
+	// Parse group id
+	user_id_int, err := strconv.Atoi(user)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	user_object, err := database.GetUserInformation(user_id_int)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Reply
+	context.JSON(http.StatusCreated, gin.H{"user": user_object, "message": "User retrieved."})
 }
