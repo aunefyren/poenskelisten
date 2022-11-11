@@ -103,3 +103,25 @@ func GetUser(context *gin.Context) {
 	// Reply
 	context.JSON(http.StatusCreated, gin.H{"user": user_object, "message": "User retrieved."})
 }
+
+func GetUsers(context *gin.Context) {
+
+	// Create user request
+	var user_struct []models.User
+
+	userrecord := database.Instance.Where("`users`.enabled = ?", 1).Find(&user_struct)
+	if userrecord.Error != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": userrecord.Error})
+		context.Abort()
+		return
+	}
+
+	for index, _ := range user_struct {
+		// Redact user information
+		user_struct[index].Email = "REDACTED"
+		user_struct[index].Password = "REDACTED"
+	}
+
+	// Reply
+	context.JSON(http.StatusCreated, gin.H{"users": user_struct, "message": "Users retrieved."})
+}

@@ -224,7 +224,7 @@ func GetGroupMembers(context *gin.Context) {
 		}
 
 		var groupmembership_with_user models.GroupMembershipUser
-		groupmembership_with_user.Member = user_object
+		groupmembership_with_user.Members = user_object
 		groupmembership_with_user.CreatedAt = membership.CreatedAt
 		groupmembership_with_user.DeletedAt = membership.DeletedAt
 		groupmembership_with_user.Enabled = membership.Enabled
