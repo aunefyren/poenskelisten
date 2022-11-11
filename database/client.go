@@ -79,3 +79,20 @@ func VerifyUserMembershipToGroup(UserID int, GroupID int) (bool, error) {
 	}
 	return true, nil
 }
+
+// Get user information
+func GetUserInformation(UserID int) (models.User, error) {
+	var user models.User
+	userrecord := Instance.Where("`users`.enabled = ?", 1).Where("`users`.id = ?", UserID).Find(&user)
+	if userrecord.Error != nil {
+		return models.User{}, userrecord.Error
+	} else if userrecord.RowsAffected != 1 {
+		return models.User{}, errors.New("Failed to find correct users in DB.")
+	}
+
+	// Redact user information
+	user.Password = "REDACTED"
+	user.Email = "REDACTED"
+
+	return user, nil
+}

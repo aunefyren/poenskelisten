@@ -16,3 +16,10 @@ type GroupMembership struct {
 	Enabled bool `json:"enabled" gorm:"not null;default: true"`
 	Member  int  `json:"member_id" gorm:"not null"`
 }
+
+type GroupMembershipUser struct {
+	gorm.Model
+	Group   int  `json:"group_id"`
+	Enabled bool `json:"enabled"`
+	Member  User `json:"member"`
+}
