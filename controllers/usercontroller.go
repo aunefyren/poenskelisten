@@ -101,7 +101,7 @@ func GetUser(context *gin.Context) {
 	}
 
 	// Reply
-	context.JSON(http.StatusCreated, gin.H{"user": user_object, "message": "User retrieved."})
+	context.JSON(http.StatusOK, gin.H{"user": user_object, "message": "User retrieved."})
 }
 
 func GetUsers(context *gin.Context) {
@@ -123,5 +123,5 @@ func GetUsers(context *gin.Context) {
 	}
 
 	// Reply
-	context.JSON(http.StatusCreated, gin.H{"users": user_struct, "message": "Users retrieved."})
+	context.JSON(http.StatusOK, gin.H{"users": user_struct, "message": "Users retrieved."})
 }

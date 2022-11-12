@@ -9,7 +9,8 @@ import (
 	"poenskelisten/controllers"
 	"poenskelisten/database"
 	"poenskelisten/middlewares"
-	"poenskelisten/util"
+	"poenskelisten/poeutilities"
+
 	"strconv"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 
 func main() {
 
-	util.PrintASCII()
+	poeutilities.PrintASCII()
 
 	// Create files directory
 	newpath := filepath.Join(".", "files")
@@ -104,14 +105,21 @@ func initRouter() *gin.Engine {
 		auth := api.Group("/auth").Use(middlewares.Auth(false))
 		{
 			auth.GET("/ping", controllers.Ping)
+
 			auth.POST("/group/register", controllers.RegisterGroup)
 			auth.POST("/group/join", controllers.JoinGroup)
 			auth.POST("/group/get", controllers.GetGroups)
 			auth.POST("/group/get/:group_id", controllers.GetGroup)
-			auth.POST("/group/get/members/:group_id", controllers.GetGroupMembers)
+			auth.POST("/group/get/:group_id/members", controllers.GetGroupMembers)
+
 			auth.POST("/wishlist/register", controllers.RegisterWishlist)
-			auth.POST("/wishlist/get/:group_id", controllers.GetWishlistsFromGroup)
-			auth.POST("/wishlist/get/:group_id/:wishlist_id", controllers.GetWishlistFromGroup)
+			auth.POST("/wishlist/get", controllers.GetWishlists)
+			auth.POST("/wishlist/get/:wishlist_id", controllers.GetWishlist)
+			auth.POST("/wishlist/get/group/:group_id", controllers.GetWishlistsFromGroup)
+
+			auth.POST("/wish/get/:group_id/:wishlist_id", controllers.GetWishesFromWishlist)
+			auth.POST("/wish/register/:wishlist_id", controllers.RegisterWish)
+
 			auth.POST("/user/get/:user_id", controllers.GetUser)
 			auth.POST("/user/get", controllers.GetUsers)
 		}
