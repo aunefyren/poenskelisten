@@ -1,6 +1,8 @@
-package util
+package poeutilities
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func PrintASCII() {
 	fmt.Println(``)
@@ -15,4 +17,5 @@ func PrintASCII() {
 	fmt.Println(`|\____________\|\____________\|\____________\|\____________\|\____________\|\____________\|\____________\`)
 	fmt.Println(`\|____________|\|____________|\|____________|\|____________|\|____________|\|____________|\|____________|`)
 	fmt.Println(``)
+	return
 }

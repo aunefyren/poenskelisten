@@ -10,6 +10,14 @@ type Group struct {
 	Owner       int    `json:"owner_id" gorm:"not null"`
 }
 
+type GroupUser struct {
+	gorm.Model
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Enabled     bool   `json:"enabled" `
+	Owner       User   `json:"owner"`
+}
+
 type GroupMembership struct {
 	gorm.Model
 	Group   int  `json:"group_id" gorm:"not null"`

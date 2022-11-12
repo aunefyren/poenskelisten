@@ -116,6 +116,7 @@ func GetGroups(context *gin.Context) {
 
 	// Create group request
 	var groups []models.Group
+	var groups_with_owner []models.GroupUser
 
 	// Get user ID
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
@@ -128,15 +129,40 @@ func GetGroups(context *gin.Context) {
 	// Get groups
 	database.Instance.Where("`groups`.enabled = ?", 1).Joins("JOIN group_memberships on group_memberships.group = groups.id").Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member = ?", UserID).Find(&groups)
 
+	// Add owner information to each group
+	for _, group := range groups {
+
+		user_object, err := database.GetUserInformation(group.Owner)
+		if err != nil {
+			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			context.Abort()
+			return
+		}
+
+		var group_with_owner models.GroupUser
+		group_with_owner.CreatedAt = group.CreatedAt
+		group_with_owner.DeletedAt = group.DeletedAt
+		group_with_owner.Description = group.Description
+		group_with_owner.Enabled = group.Enabled
+		group_with_owner.ID = group.ID
+		group_with_owner.Model = group.Model
+		group_with_owner.Name = group.Name
+		group_with_owner.Owner = user_object
+		group_with_owner.UpdatedAt = group.UpdatedAt
+
+		groups_with_owner = append(groups_with_owner, group_with_owner)
+
+	}
+
 	// Reply
-	context.JSON(http.StatusCreated, gin.H{"groups": groups, "message": "Groups retrieved."})
+	context.JSON(http.StatusOK, gin.H{"groups": groups_with_owner, "message": "Groups retrieved."})
 }
 
 func GetGroup(context *gin.Context) {
 
 	// Create group request
-	var groups []models.Group
-	var group = context.Param("group_id")
+	var group models.Group
+	var group_id = context.Param("group_id")
 
 	// Get user ID
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
@@ -147,7 +173,7 @@ func GetGroup(context *gin.Context) {
 	}
 
 	// Parse group id
-	group_id_int, err := strconv.Atoi(group)
+	group_id_int, err := strconv.Atoi(group_id)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
@@ -168,10 +194,29 @@ func GetGroup(context *gin.Context) {
 	}
 
 	// Get groups
-	database.Instance.Where("`groups`.enabled = ?", 1).Joins("JOIN group_memberships on group_memberships.group = groups.id").Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member = ?", UserID).Where("`group_memberships`.group = ?", group).Find(&groups)
+	database.Instance.Where("`groups`.enabled = ?", 1).Joins("JOIN group_memberships on group_memberships.group = groups.id").Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member = ?", UserID).Where("`group_memberships`.group = ?", group_id).Find(&group)
+
+	// Add owner information to group
+	user_object, err := database.GetUserInformation(group.Owner)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	var group_with_owner models.GroupUser
+	group_with_owner.CreatedAt = group.CreatedAt
+	group_with_owner.DeletedAt = group.DeletedAt
+	group_with_owner.Description = group.Description
+	group_with_owner.Enabled = group.Enabled
+	group_with_owner.ID = group.ID
+	group_with_owner.Model = group.Model
+	group_with_owner.Name = group.Name
+	group_with_owner.Owner = user_object
+	group_with_owner.UpdatedAt = group.UpdatedAt
 
 	// Reply
-	context.JSON(http.StatusCreated, gin.H{"group": groups, "message": "Group retrieved."})
+	context.JSON(http.StatusOK, gin.H{"group": group_with_owner, "message": "Group retrieved."})
 }
 
 func GetGroupMembers(context *gin.Context) {
@@ -238,5 +283,5 @@ func GetGroupMembers(context *gin.Context) {
 	}
 
 	// Reply
-	context.JSON(http.StatusCreated, gin.H{"group_members": group_memberships_user, "message": "Group members retrieved."})
+	context.JSON(http.StatusOK, gin.H{"group_members": group_memberships_user, "message": "Group members retrieved."})
 }
