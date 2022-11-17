@@ -65,6 +65,7 @@ func RegisterGroup(context *gin.Context) {
 func JoinGroup(context *gin.Context) {
 
 	// Create groupmembership request
+	var group_id = context.Param("group_id")
 	var groupmembership models.GroupMembership
 	if err := context.ShouldBindJSON(&groupmembership); err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -78,28 +79,38 @@ func JoinGroup(context *gin.Context) {
 		return
 	}
 
+	// Parse group id
+	group_id_int, err := strconv.Atoi(group_id)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
 	// Verify membership doesnt exist
-	MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, groupmembership.Group)
+	MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, group_id_int)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	} else if MembershipStatus {
 		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Group membership already exists."})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Group membership already exists."})
 		context.Abort()
 		return
 	}
 
-	// Verify group is owned by  requester
+	// Verify group is owned by requester
 	var group models.Group
 	grouprecord := database.Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", groupmembership.Group).Where("`groups`.owner = ?", UserID).Find(&group)
 	if grouprecord.Error != nil {
 		//context.JSON(http.StatusInternalServerError, gin.H{"error": grouprecord.Error.Error()})
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Only owners can edit their group memberships."})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Only owners can edit their group memberships."})
 		context.Abort()
 		return
 	}
+
+	groupmembership.Group = group_id_int
 
 	// Add group membership to database
 	record := database.Instance.Create(&groupmembership)
