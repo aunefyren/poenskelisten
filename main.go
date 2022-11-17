@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"poenskelisten/config"
@@ -14,6 +15,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -93,12 +95,14 @@ func main() {
 func initRouter() *gin.Engine {
 	router := gin.Default()
 
+	router.LoadHTMLGlob("web/*/*.html")
+
 	// API endpoint
 	api := router.Group("/api")
 	{
 		open := api.Group("/open")
 		{
-			open.POST("/token", controllers.GenerateToken)
+			open.POST("/token/register", controllers.GenerateToken)
 			open.POST("/user/register", controllers.RegisterUser)
 		}
 
@@ -106,8 +110,10 @@ func initRouter() *gin.Engine {
 		{
 			auth.GET("/ping", controllers.Ping)
 
+			auth.POST("/token/validate", controllers.ValidateToken)
+
 			auth.POST("/group/register", controllers.RegisterGroup)
-			auth.POST("/group/join", controllers.JoinGroup)
+			auth.POST("/group/:group_id/join", controllers.JoinGroup)
 			auth.POST("/group/get", controllers.GetGroups)
 			auth.POST("/group/get/:group_id", controllers.GetGroup)
 			auth.POST("/group/get/:group_id/members", controllers.GetGroupMembers)
@@ -129,6 +135,52 @@ func initRouter() *gin.Engine {
 			admin.POST("/invite/register", controllers.RegisterInvite)
 		}
 	}
+
+	router.Use(cors.New(cors.Config{
+		AllowOrigins: []string{"http://localhost:8081", "http://localhost:8080"},
+		// AllowAllOrigins:  true,
+		AllowMethods:     []string{"GET", "POST"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Access-Control-Allow-Origin"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		AllowOriginFunc:  func(origin string) bool { return true },
+		MaxAge:           12 * time.Hour,
+	}))
+
+	// Static endpoint for different directories
+	router.Static("/assets", "./web/assets")
+	router.Static("/css", "./web/css")
+	router.Static("/js", "./web/js")
+
+	// Static endpoint for homepage
+	router.GET("/", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "frontpage.html", nil)
+	})
+
+	// Static endpoint for selecting your group
+	router.GET("/login", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "login.html", nil)
+	})
+
+	// Static endpoint for selecting your group
+	router.GET("/register", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "register.html", nil)
+	})
+
+	// Static endpoint for selecting your group
+	router.GET("/groups/", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "groups.html", nil)
+	})
+
+	// Static endpoint for details in your group
+	router.GET("/groups/:group_id", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "group.html", nil)
+	})
+
+	// Static endpoint for wishlist in your group
+	router.GET("/groups/:group_id/:wishlist_id", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "wishlist.html", nil)
+	})
 
 	return router
 }

@@ -1,3 +1,5 @@
+var api_url = "http://localhost:8080/api/"
+
 // Load service worker
 window.addEventListener("load", () => {
     if ("serviceWorker" in navigator) {
@@ -62,7 +64,6 @@ function get_cookie(cname) {
 
 // Validate login token and get login details
 function get_login(cookie) {
-    var json_jwt = JSON.stringify({});
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4 && this.status == 200) {
@@ -77,10 +78,10 @@ function get_login(cookie) {
         }
     };
     xhttp.withCredentials = false;
-    xhttp.open("post", "https://api.krenkelsesarmeen.no/validate-token");
+    xhttp.open("post", api_url + "auth/token/validate");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", "Bearer " + cookie);
-    xhttp.send(json_jwt);
+    xhttp.setRequestHeader("Authorization", cookie);
+    xhttp.send();
     return;
 }
 
@@ -142,72 +143,38 @@ function get_base64(file, onLoadCallback) {
 
 // Show options that can be access when logged in
 function showLoggedInMenu() {
-    // hide login and sign up from navbar & show logout button
-    document.getElementById('logg_inn').classList.add('disabled');
-    document.getElementById('logg_inn').classList.remove('enabled');
+    document.getElementById('login').classList.add('disabled');
+    document.getElementById('login').classList.remove('enabled');
 
-    document.getElementById('registrer').classList.add('disabled');
-    document.getElementById('registrer').classList.remove('enabled');
+    document.getElementById('logout').classList.add('enabled');
+    document.getElementById('logout').classList.remove('disabled');
 
-    document.getElementById('logg_ut').classList.add('enabled');
-    document.getElementById('logg_ut').classList.remove('disabled');
+    document.getElementById('groups').classList.add('enabled');
+    document.getElementById('groups').classList.remove('disabled');
 
-    document.getElementById('update_account').classList.add('enabled');
-    document.getElementById('update_account').classList.remove('disabled');
+    document.getElementById('account').classList.add('enabled');
+    document.getElementById('account').classList.remove('disabled');
 
-    document.getElementById('autister').classList.add('enabled');
-    document.getElementById('autister').classList.remove('disabled');
-
-    document.getElementById('medlemmer').classList.add('enabled');
-    document.getElementById('medlemmer').classList.remove('disabled');
-
-    document.getElementById('bilder_tab').classList.add('enabled');
-    document.getElementById('bilder_tab').classList.remove('disabled');
-
-    document.getElementById('innlegg').classList.add('enabled');
-    document.getElementById('innlegg').classList.remove('disabled');
-
-    document.getElementById('minecraft').classList.add('enabled');
-    document.getElementById('minecraft').classList.remove('disabled');
-
-    document.getElementById('chat_tab').classList.add('enabled');
-    document.getElementById('chat_tab').classList.remove('disabled');
-
-    document.getElementById('wiki_tab').classList.add('enabled');
-    document.getElementById('wiki_tab').classList.remove('disabled');
+    document.getElementById('register').classList.add('disabled');
+    document.getElementById('register').classList.remove('enabled');
 }
 
 // Remove options not accessable when not logged in
 function showLoggedOutMenu() {
-    document.getElementById('logg_inn').classList.add('enabled');
-    document.getElementById('logg_inn').classList.remove('disabled');
+    document.getElementById('login').classList.add('enabled');
+    document.getElementById('login').classList.remove('disabled');
 
-    document.getElementById('logg_ut').classList.add('disabled');
-    document.getElementById('logg_ut').classList.remove('enabled');
+    document.getElementById('logout').classList.add('disabled');
+    document.getElementById('logout').classList.remove('enabled');
 
-    document.getElementById('update_account').classList.add('disabled');
-    document.getElementById('update_account').classList.remove('enabled');
+    document.getElementById('groups').classList.add('disabled');
+    document.getElementById('groups').classList.remove('enabled');
 
-    document.getElementById('autister').classList.add('disabled');
-    document.getElementById('autister').classList.remove('enabled');
+    document.getElementById('account').classList.add('disabled');
+    document.getElementById('account').classList.remove('enabled');
 
-    document.getElementById('medlemmer').classList.add('disabled');
-    document.getElementById('medlemmer').classList.remove('enabled');
-
-    document.getElementById('bilder_tab').classList.add('disabled');
-    document.getElementById('bilder_tab').classList.remove('enabled');
-
-    document.getElementById('innlegg').classList.add('disabled');
-    document.getElementById('innlegg').classList.remove('enabled');
-
-    document.getElementById('minecraft').classList.add('disabled');
-    document.getElementById('minecraft').classList.remove('enabled');
-
-    document.getElementById('chat_tab').classList.add('disabled');
-    document.getElementById('chat_tab').classList.remove('enabled');
-
-    document.getElementById('wiki_tab').classList.add('disabled');
-    document.getElementById('wiki_tab').classList.remove('enabled');
+    document.getElementById('register').classList.add('enabled');
+    document.getElementById('register').classList.remove('disabled');
 }
 
 // Toggle navar expansion
@@ -263,8 +230,8 @@ function error(message) {
 }
 
 // When log out button is pressed, remove cookie and redirect to home page
-function logg_ut() {
-    set_cookie("krenke-jwt", "", 1);
+function logout() {
+    set_cookie("poenskelisten", "", 1);
     window.location.href = './';
 }
 

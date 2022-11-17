@@ -36,3 +36,15 @@ func GetAuthUsername(tokenString string) (int, error) {
 	}
 	return claims.UserID, nil
 }
+
+func GetTokenClaims(tokenString string) (*auth.JWTClaim, error) {
+
+	if tokenString == "" {
+		return &auth.JWTClaim{}, errors.New("No Auhtorization header given.")
+	}
+	claims, err := auth.ParseToken(tokenString)
+	if err != nil {
+		return &auth.JWTClaim{}, err
+	}
+	return claims, nil
+}

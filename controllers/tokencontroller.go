@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"poenskelisten/auth"
 	"poenskelisten/database"
+	"poenskelisten/middlewares"
 	"poenskelisten/models"
 
 	"github.com/gin-gonic/gin"
@@ -16,12 +18,14 @@ type TokenRequest struct {
 
 func GenerateToken(context *gin.Context) {
 	var request TokenRequest
+
 	var user models.User
 	if err := context.ShouldBindJSON(&request); err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
+
 	// check if email exists and password is correct
 	record := database.Instance.Where("email = ?", request.Email).First(&user)
 	if record.Error != nil {
@@ -31,7 +35,8 @@ func GenerateToken(context *gin.Context) {
 	}
 	credentialError := user.CheckPassword(request.Password)
 	if credentialError != nil {
-		context.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		fmt.Println("Invalid credentials")
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		context.Abort()
 		return
 	}
@@ -41,5 +46,18 @@ func GenerateToken(context *gin.Context) {
 		context.Abort()
 		return
 	}
-	context.JSON(http.StatusOK, gin.H{"token": tokenString})
+	context.JSON(http.StatusOK, gin.H{"token": tokenString, "message": "Logged in!"})
+}
+
+func ValidateToken(context *gin.Context) {
+
+	Claims, err := middlewares.GetTokenClaims(context.GetHeader("Authorization"))
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	context.JSON(http.StatusOK, gin.H{"message": "Valid session!", "data": Claims})
+
 }

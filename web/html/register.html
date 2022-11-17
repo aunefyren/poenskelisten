@@ -12,7 +12,7 @@
         <!-- Custom CSS -->
         <link rel="stylesheet" type="text/css" href="css/main.css">
         <link rel="manifest" href="assets/manifest.json" />
-        <script src="js/frontpage.js"></script>
+        <script src="js/register.js"></script>
         <script src="js/functions.js"></script>
         <!-- <script src="https://code.jquery.com/jquery-3.6.0.slim.js" integrity="sha256-HwWONEZrpuoh951cQD1ov2HUK5zA5DwJ1DNUXaM6FsY=" crossorigin="anonymous"></script> -->
 
@@ -66,27 +66,19 @@
                 </div>
 
                 <a class="nav-title" id="nav-title" href="./" id='home'>
-                    <b>Krenkelsesarmeen</b>
+                    <b>Pønskelisten</b>
                 </a>
 
                 <a class="nav-icon" href="javascript:void(0);" class="icon" onclick="toggle_navbar()" style="padding: 0;">
                     <img src="assets/tab.png" style="box-sizing: border-box;height: 4em;padding: 1em;margin: auto;"></img>
                 </a>
 
-                <a class="nav-item disabled" href="innlegg.html" id='innlegg'>Innlegg</a>
-                <a class="nav-item disabled" href="chat.html" id='chat_tab'>Chat</a>
-
-                <a class="nav-item disabled" href="bilder.html" id='bilder_tab'>Bilder</a>
-                <a class="nav-item disabled" href="wiki.html" id='wiki_tab'>Wiki</a>
-            
-                <a class="nav-item disabled" href="autister.html" id='autister'>Autister</a>
-                <a class="nav-item" href="medlemmer.html" id='medlemmer'>Medlemmer</a>
-                <a class="nav-item" href="minecraft.html" id='minecraft'><img src="assets/minecraft.svg" style="height: 100%; box-sizing: border-box;"></a>
-            
-                <a class="nav-item disabled" href="bruker.html" id='update_account'>Bruker</a>
-                <a class="nav-item enabled" href="logginn.html" id='logg_inn'>Logg inn</a>
-                <a class="nav-item disabled" href="registrer.html" id='registrer'>Registrer deg</a>
-                <a class="nav-item disabled" href="#" onclick="logg_ut()" id='logg_ut'>Logg ut</a>
+                <a class="nav-item disabled" href="groups" id='groups'>Groups</a>
+       
+                <a class="nav-item disabled" href="account" id='account'>Account</a>
+                <a class="nav-item enabled" href="login" id='login'>Log in</a>
+                <a class="nav-item enabled" href="register" id='register'>Register</a>
+                <a class="nav-item disabled" href="#" onclick="logout()" id='logout'>Log out</a>
             
             </nav>
         </div>
@@ -114,15 +106,15 @@
 
             var ignoreNav = document.getElementById('nav');
             var jwt;
-            info('Laster inn...');
+            info('Loading...');
             showLoggedOutMenu();
-            jwt = get_cookie('krenke-jwt');
+            jwt = get_cookie('poenskelisten');
             get_login(jwt);
             
         </script>
 
         <noscript>
-            <h3>Du trenger JavaScript på din nettleser for å bruke denne nettsiden. Skru det på eller bytt nettleser.</h3>
+            <h3>You need JavaScript to use this website.</h3>
         </noscript>
 
     </body>
