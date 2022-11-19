@@ -11,49 +11,45 @@ function load_page(result) {
                     
                     <div class="module">
                     
-                        <div class="news_post">
-                    
-                            <div class="title">
-                                Register
-                            </div>
+                        <div class="title">
+                            Register
+                        </div>
 
-                            <div class="body">
-                                Did you get an invitation?
-                            </div>
+                        <div class="body">
+                            Did you get an invitation?
+                        </div>
 
-                            <br>
-                            <br>
+                        <br>
+                        <br>
 
-                            <div class="action-block">
-                                <form action="" onsubmit="event.preventDefault(); send_registration();">
+                        <div class="action-block">
+                            <form action="" onsubmit="event.preventDefault(); send_registration();">
 
-                                    <hr>
+                                <hr>
 
-                                    <label id="form-input-icon" for="email"></label>
-                                    <input type="email" name="email" id="email" placeholder="Email" required/>
+                                <label id="form-input-icon" for="email"></label>
+                                <input type="email" name="email" id="email" placeholder="Email" required/>
 
-                                    <label id="form-input-icon" for="first_name"></label>
-                                    <input type="text" name="first_name" id="first_name" placeholder="First name" required/>
+                                <label id="form-input-icon" for="first_name"></label>
+                                <input type="text" name="first_name" id="first_name" placeholder="First name" required/>
 
-                                    <label id="form-input-icon" for="last_name"></label>
-                                    <input type="text" name="last_name" id="last_name" placeholder="Last name" required/>
-    
-                                    <label id="form-input-icon" for="password"></label>
-                                    <input type="password" name="password" id="password" placeholder="Password" required/>
+                                <label id="form-input-icon" for="last_name"></label>
+                                <input type="text" name="last_name" id="last_name" placeholder="Last name" required/>
 
-                                    <label id="form-input-icon" for="password_repeat"></label>
-                                    <input type="password" name="password_repeat" id="password_repeat" placeholder="Repeat the password" required/>
+                                <label id="form-input-icon" for="password"></label>
+                                <input type="password" name="password" id="password" placeholder="Password" required/>
 
-                                    <label id="form-input-icon" for="invitation_code"></label>
-                                    <input type="text" name="invitation_code" id="invitation_code" placeholder="Invitation code" required/>
-                                    
-                                    <hr>
+                                <label id="form-input-icon" for="password_repeat"></label>
+                                <input type="password" name="password_repeat" id="password_repeat" placeholder="Repeat the password" required/>
 
-                                    <button id="register-button" type="submit" href="/">Register</button>
+                                <label id="form-input-icon" for="invitation_code"></label>
+                                <input type="text" name="invitation_code" id="invitation_code" placeholder="Invitation code" required/>
+                                
+                                <hr>
 
-                                </form>
-                            </div>
-                            
+                                <button id="register-button" type="submit" href="/">Register</button>
+
+                            </form>
                         </div>
                         
                     </div>

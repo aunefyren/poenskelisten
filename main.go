@@ -86,6 +86,19 @@ func main() {
 	database.Connect(Config.DBUsername + ":" + Config.DBPassword + "@tcp(" + Config.DBIP + ":" + strconv.Itoa(Config.DBPort) + ")/" + Config.DBName + "?parseTime=true")
 	database.Migrate()
 
+	/*
+		fmt.Println("Sending e-mail...")
+		toList := []string{"oystein.sverre@gmail.com"}
+		auth := smtp.PlainAuth(Config.SMTPFrom, Config.SMTPUsername, Config.SMTPPassword, Config.SMTPHost)
+		msg := "Hello geeks!!!"
+		body := []byte(msg)
+		smt_port_int := strconv.Itoa(Config.SMTPPort)
+		err = smtp.SendMail(Config.SMTPHost+":"+smt_port_int, auth, Config.SMTPFrom, toList, body)
+		if err != nil {
+			fmt.Println(err)
+		}
+	*/
+
 	// Initialize Router
 	router := initRouter()
 	log.Fatal(router.Run(":" + strconv.Itoa(Config.PoenskelistenPort)))
@@ -168,7 +181,7 @@ func initRouter() *gin.Engine {
 	})
 
 	// Static endpoint for selecting your group
-	router.GET("/groups/", func(c *gin.Context) {
+	router.GET("/groups", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "groups.html", nil)
 	})
 

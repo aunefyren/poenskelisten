@@ -89,8 +89,8 @@ function get_login(cookie) {
 function invalid_session() {
     showLoggedOutMenu();
     document.getElementById('content').innerHTML = '';
-    document.getElementById('card-header').innerHTML = 'Nope...';
-    error('Ingen tilgang.');
+    document.getElementById('card-header').innerHTML = 'Log in...';
+    error('No access.');
 }
 
 // Call given URL, get image from API, call place_image() which is a local function, not here

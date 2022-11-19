@@ -20,6 +20,7 @@ func Connect(connectionString string) {
 	}
 	log.Println("Connected to Database!")
 }
+
 func Migrate() {
 	Instance.AutoMigrate(&models.User{})
 	Instance.AutoMigrate(&models.Invite{})
@@ -144,6 +145,19 @@ func GetUserInformation(UserID int) (models.User, error) {
 	user.Email = "REDACTED"
 
 	return user, nil
+}
+
+// Get owner id of wishlist
+func GetWishlistOwner(WishlistID int) (int, error) {
+	var wishlist models.Wishlist
+	wishlistrecord := Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", WishlistID).Find(&wishlist)
+	if wishlistrecord.Error != nil {
+		return 0, wishlistrecord.Error
+	} else if wishlistrecord.RowsAffected != 1 {
+		return 0, errors.New("Failed to find correct wishlist in DB.")
+	}
+
+	return wishlist.Owner, nil
 }
 
 // Get user information
