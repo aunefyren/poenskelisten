@@ -10,12 +10,19 @@ type Group struct {
 	Owner       int    `json:"owner_id" gorm:"not null"`
 }
 
+type GroupCreationRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Members     []int  `json:"members"`
+}
+
 type GroupUser struct {
 	gorm.Model
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Enabled     bool   `json:"enabled" `
 	Owner       User   `json:"owner"`
+	Members     []User `json:"members"`
 }
 
 type GroupMembership struct {

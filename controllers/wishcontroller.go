@@ -62,7 +62,14 @@ func GetWishesFromWishlist(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"wishes": wishes, "message": "Wishes retrieved."})
+	owner_id, err := database.GetWishlistOwner(wishlist_id_int)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err})
+		context.Abort()
+		return
+	}
+
+	context.JSON(http.StatusOK, gin.H{"owner_id": owner_id, "wishes": wishes, "message": "Wishes retrieved."})
 }
 
 func RegisterWish(context *gin.Context) {
@@ -144,8 +151,15 @@ func RegisterWish(context *gin.Context) {
 		return
 	}
 
+	new_wishes, err := database.GetWishesFromWishlist(wishlist_id_int)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err})
+		context.Abort()
+		return
+	}
+
 	// Return response
-	context.JSON(http.StatusCreated, gin.H{"message": "Wish saved."})
+	context.JSON(http.StatusCreated, gin.H{"message": "Wish saved.", "wishes": new_wishes})
 }
 
 func parseRawURLFunction(rawurl string) (domain string, scheme string, err error) {

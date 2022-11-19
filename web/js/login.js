@@ -11,37 +11,33 @@ function load_page(result) {
                     
                     <div class="module">
                     
-                        <div class="news_post">
-                    
-                            <div class="title">
-                                Log in
-                            </div>
+                        <div class="title">
+                            Log in
+                        </div>
 
-                            <div class="body">
-                                To view your wishes you need to login in...
-                            </div>
+                        <div class="body">
+                            To view your wishes you need to login in...
+                        </div>
 
-                            <br>
-                            <br>
+                        <br>
+                        <br>
 
-                            <div class="action-block">
-                                <form action="" onsubmit="event.preventDefault(); send_log_in();">
+                        <div class="action-block">
+                            <form action="" onsubmit="event.preventDefault(); send_log_in();">
 
-                                    <hr>
+                                <hr>
 
-                                    <label id="form-input-icon" for="email"></label>
-                                    <input type="email" name="email" id="email" placeholder="Email" required/>
-    
-                                    <label id="form-input-icon" for="password"></label>
-                                    <input type="password" name="password" id="password" placeholder="Password" required/>
-                                    
-                                    <hr>
+                                <label id="form-input-icon" for="email"></label>
+                                <input type="email" name="email" id="email" placeholder="Email" required/>
 
-                                    <button id="log-in-button" type="submit" href="/">Log in</button>
+                                <label id="form-input-icon" for="password"></label>
+                                <input type="password" name="password" id="password" placeholder="Password" required/>
+                                
+                                <hr>
 
-                                </form>
-                            </div>
-                            
+                                <button id="log-in-button" type="submit" href="/">Log in</button>
+
+                            </form>
                         </div>
                         
                     </div>

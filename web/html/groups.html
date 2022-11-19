@@ -12,8 +12,11 @@
         <!-- Custom CSS -->
         <link rel="stylesheet" type="text/css" href="css/main.css">
         <link rel="manifest" href="assets/manifest.json" />
-        <script src="js/frontpage.js"></script>
+        <script src="js/groups.js"></script>
         <script src="js/functions.js"></script>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300&display=swap" rel="stylesheet"> 
         <!-- <script src="https://code.jquery.com/jquery-3.6.0.slim.js" integrity="sha256-HwWONEZrpuoh951cQD1ov2HUK5zA5DwJ1DNUXaM6FsY=" crossorigin="anonymous"></script> -->
 
         <!-- All Apple touch icons for iPad, iPhone, iPod -->
@@ -65,7 +68,7 @@
                     <a href="./"><img src="assets/logo/version4/logo_round_red.png" style="box-sizing: border-box; height: 4em;padding: 0.5em; margin: auto;"></img></a>
                 </div>
 
-                <a class="nav-title" id="nav-title" href="./" id='home'>
+                <a class="nav-title" id="nav-title" href="../" id='home'>
                     <b>Pønskelisten</b>
                 </a>
 
@@ -73,11 +76,11 @@
                     <img src="assets/tab.png" style="box-sizing: border-box;height: 4em;padding: 1em;margin: auto;"></img>
                 </a>
 
-                <a class="nav-item disabled" href="groups" id='groups'>Groups</a>
+                <a class="nav-item disabled" href="../groups" id='groups'>Groups</a>
        
-                <a class="nav-item disabled" href="account" id='account'>Account</a>
-                <a class="nav-item enabled" href="login" id='login'>Log in</a>
-                <a class="nav-item enabled" href="register" id='register'>Register</a>
+                <a class="nav-item disabled" href="../account" id='account'>Account</a>
+                <a class="nav-item enabled" href="../login" id='login'>Log in</a>
+                <a class="nav-item enabled" href="../register" id='register'>Register</a>
                 <a class="nav-item disabled" href="#" onclick="logout()" id='logout'>Log out</a>
             
             </nav>
@@ -105,6 +108,7 @@
         <script>
 
             var ignoreNav = document.getElementById('nav');
+            var groups;
             var jwt;
             info('Loading...');
             showLoggedOutMenu();
