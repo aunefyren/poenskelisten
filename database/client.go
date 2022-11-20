@@ -70,6 +70,58 @@ func SetUsedUserInviteCode(providedCode string) error {
 	return nil
 }
 
+// Set group to disabled
+func DeleteGroup(GroupID int) error {
+	var group models.Group
+	grouprecords := Instance.Model(group).Where("`groups`.ID= ?", GroupID).Update("enabled", 0)
+	if grouprecords.Error != nil {
+		return grouprecords.Error
+	}
+	if grouprecords.RowsAffected != 1 {
+		return errors.New("Failed to delete group in database.")
+	}
+	return nil
+}
+
+// Set group membership to disabled
+func DeleteGroupMembership(GroupMembershipID int) error {
+	var groupmembership models.GroupMembership
+	grouprecords := Instance.Model(groupmembership).Where("`group_memberships`.ID= ?", GroupMembershipID).Update("enabled", 0)
+	if grouprecords.Error != nil {
+		return grouprecords.Error
+	}
+	if grouprecords.RowsAffected != 1 {
+		return errors.New("Failed to delete group membership in database.")
+	}
+	return nil
+}
+
+// Set wishlist to disabled
+func DeleteWishlist(WishlistID int) error {
+	var wishlist models.Wishlist
+	wishlistrecords := Instance.Model(wishlist).Where("`wishlists`.ID= ?", WishlistID).Update("enabled", 0)
+	if wishlistrecords.Error != nil {
+		return wishlistrecords.Error
+	}
+	if wishlistrecords.RowsAffected != 1 {
+		return errors.New("Failed to delete wishlist in database.")
+	}
+	return nil
+}
+
+// Set wish to disabled
+func DeleteWish(WishID int) error {
+	var wish models.Wish
+	wishrecords := Instance.Model(wish).Where("`wishes`.ID= ?", WishID).Update("enabled", 0)
+	if wishrecords.Error != nil {
+		return wishrecords.Error
+	}
+	if wishrecords.RowsAffected != 1 {
+		return errors.New("Failed to delete wish in database.")
+	}
+	return nil
+}
+
 // Verify if a user ID is a member of a group
 func VerifyUserMembershipToGroup(UserID int, GroupID int) (bool, error) {
 	var groupmembership models.GroupMembership
@@ -216,4 +268,30 @@ func GetWishesFromWishlist(WishlistID int) ([]models.WishUser, error) {
 	}
 
 	return wishes_with_owner, nil
+}
+
+// Get group id of wishlist
+func GetWishlistGroup(WishlistID int) (int, error) {
+	var wishlist models.Wishlist
+	wishlistrecord := Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", WishlistID).Find(&wishlist)
+	if wishlistrecord.Error != nil {
+		return 0, wishlistrecord.Error
+	} else if wishlistrecord.RowsAffected != 1 {
+		return 0, errors.New("Failed to find correct wishlist in DB.")
+	}
+
+	return wishlist.Group, nil
+}
+
+// get wishlist id from wish id
+func GetWishlistFromWish(WishID int) (int, error) {
+	var wish models.Wish
+	wishrecord := Instance.Where("`wishes`.enabled = ?", 1).Where("`wishes`.id = ?", WishID).Find(&wish)
+	if wishrecord.Error != nil {
+		return 0, wishrecord.Error
+	} else if wishrecord.RowsAffected != 1 {
+		return 0, errors.New("Failed to find correct wish in DB.")
+	}
+
+	return wish.WishlistID, nil
 }

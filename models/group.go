@@ -38,3 +38,7 @@ type GroupMembershipUser struct {
 	Enabled bool `json:"enabled"`
 	Members User `json:"members"`
 }
+
+type GroupMembershipCreationRequest struct {
+	Members []int `json:"members" gorm:"not null"`
+}

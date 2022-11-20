@@ -126,7 +126,9 @@ func initRouter() *gin.Engine {
 			auth.POST("/token/validate", controllers.ValidateToken)
 
 			auth.POST("/group/register", controllers.RegisterGroup)
+			auth.POST("/group/:group_id/delete", controllers.DeleteGroup)
 			auth.POST("/group/:group_id/join", controllers.JoinGroup)
+			auth.POST("/group/:group_id/remove", controllers.RemoveFromGroup)
 			auth.POST("/group/get", controllers.GetGroups)
 			auth.POST("/group/get/:group_id", controllers.GetGroup)
 			auth.POST("/group/get/:group_id/members", controllers.GetGroupMembers)
@@ -135,9 +137,11 @@ func initRouter() *gin.Engine {
 			auth.POST("/wishlist/get", controllers.GetWishlists)
 			auth.POST("/wishlist/get/:wishlist_id", controllers.GetWishlist)
 			auth.POST("/wishlist/get/group/:group_id", controllers.GetWishlistsFromGroup)
+			auth.POST("/wishlist/:wishlist_id/delete", controllers.DeleteWishlistsFromGroup)
 
-			auth.POST("/wish/get/:group_id/:wishlist_id", controllers.GetWishesFromWishlist)
+			auth.POST("/wish/get/:wishlist_id", controllers.GetWishesFromWishlist)
 			auth.POST("/wish/register/:wishlist_id", controllers.RegisterWish)
+			auth.POST("/wish/:wish_id/delete", controllers.DeleteWish)
 
 			auth.POST("/user/get/:user_id", controllers.GetUser)
 			auth.POST("/user/get", controllers.GetUsers)

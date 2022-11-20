@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
 	"poenskelisten/database"
 	"poenskelisten/middlewares"
@@ -86,6 +87,98 @@ func JoinGroup(context *gin.Context) {
 
 	// Create groupmembership request
 	var group_id = context.Param("group_id")
+	var groupmembership models.GroupMembershipCreationRequest
+
+	if err := context.ShouldBindJSON(&groupmembership); err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	if len(groupmembership.Members) < 1 {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You must provide one or more users."})
+		context.Abort()
+		return
+	}
+
+	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Parse group id
+	group_id_int, err := strconv.Atoi(group_id)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	for _, Member := range groupmembership.Members {
+
+		var groupmembershipdb models.GroupMembership
+		groupmembershipdb.Member = Member
+
+		// Verify user exists
+		_, err := database.GetUserInformation(Member)
+		if err != nil {
+			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			context.Abort()
+			return
+		}
+
+		// Verify membership doesnt exist
+		MembershipStatus, err := database.VerifyUserMembershipToGroup(Member, group_id_int)
+		if err != nil {
+			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			context.Abort()
+			return
+		} else if MembershipStatus {
+			//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Group membership already exists."})
+			context.Abort()
+			return
+		}
+
+		// Verify group is owned by requester
+		var group models.Group
+		grouprecord := database.Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", group_id_int).Where("`groups`.owner = ?", UserID).Find(&group)
+		if grouprecord.Error != nil {
+			//context.JSON(http.StatusInternalServerError, gin.H{"error": grouprecord.Error.Error()})
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Only owners can edit their group memberships."})
+			context.Abort()
+			return
+		}
+
+		groupmembershipdb.Group = group_id_int
+
+		// Add group membership to database
+		record := database.Instance.Create(&groupmembershipdb)
+		if record.Error != nil {
+			context.JSON(http.StatusInternalServerError, gin.H{"error": record.Error.Error()})
+			context.Abort()
+			return
+		}
+
+	}
+
+	// get new group list
+	groups_with_owner, err := GetGroupObjects(UserID)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	context.JSON(http.StatusCreated, gin.H{"message": "Group member joined.", "groups": groups_with_owner})
+}
+
+func RemoveFromGroup(context *gin.Context) {
+
+	// Create groupmembership request
+	var group_id = context.Param("group_id")
 	var groupmembership models.GroupMembership
 	if err := context.ShouldBindJSON(&groupmembership); err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -113,9 +206,9 @@ func JoinGroup(context *gin.Context) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
-	} else if MembershipStatus {
+	} else if !MembershipStatus {
 		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Group membership already exists."})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Group membership doesn't exist."})
 		context.Abort()
 		return
 	}
@@ -130,17 +223,85 @@ func JoinGroup(context *gin.Context) {
 		return
 	}
 
-	groupmembership.Group = group_id_int
-
-	// Add group membership to database
-	record := database.Instance.Create(&groupmembership)
-	if record.Error != nil {
-		context.JSON(http.StatusInternalServerError, gin.H{"error": record.Error.Error()})
+	if UserID == groupmembership.Member {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Owner cannot be removed as member."})
 		context.Abort()
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Group joined."})
+	grouprmembershipecord := database.Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group = ?", group_id_int).Where("`group_memberships`.member = ?", groupmembership.Member).Find(&groupmembership)
+	if grouprmembershipecord.Error != nil {
+		//context.JSON(http.StatusInternalServerError, gin.H{"error": grouprecord.Error.Error()})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership."})
+		context.Abort()
+		return
+	}
+
+	err = database.DeleteGroupMembership(int(groupmembership.ID))
+	if grouprmembershipecord.Error != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// get new group list
+	groups_with_owner, err := GetGroupObjects(UserID)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	context.JSON(http.StatusCreated, gin.H{"message": "Group member removed.", "groups": groups_with_owner})
+}
+
+func DeleteGroup(context *gin.Context) {
+
+	// Create groupmembership request
+	var group_id = context.Param("group_id")
+	var groupmembership models.GroupMembership
+
+	// Parse group id
+	group_id_int, err := strconv.Atoi(group_id)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Verify group is owned by requester
+	var group models.Group
+	grouprecord := database.Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", groupmembership.Group).Where("`groups`.owner = ?", UserID).Find(&group)
+	if grouprecord.Error != nil {
+		//context.JSON(http.StatusInternalServerError, gin.H{"error": grouprecord.Error.Error()})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Only owners can edit their group memberships."})
+		context.Abort()
+		return
+	}
+
+	err = database.DeleteGroup(group_id_int)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// get new group list
+	groups_with_owner, err := GetGroupObjects(UserID)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	context.JSON(http.StatusCreated, gin.H{"message": "Group deleted.", "groups": groups_with_owner})
 }
 
 func GetGroups(context *gin.Context) {
@@ -171,7 +332,13 @@ func GetGroupObjects(user_id int) ([]models.GroupUser, error) {
 	var groups_with_owner []models.GroupUser
 
 	// Get groups
-	database.Instance.Where("`groups`.enabled = ?", 1).Joins("JOIN group_memberships on group_memberships.group = groups.id").Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member = ?", user_id).Find(&groups)
+	grouprecords := database.Instance.Where("`groups`.enabled = ?", 1).Joins("JOIN group_memberships on group_memberships.group = groups.id").Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member = ?", user_id).Find(&groups)
+
+	if grouprecords.Error != nil {
+		return []models.GroupUser{}, grouprecords.Error
+	} else if grouprecords.RowsAffected == 0 {
+		return []models.GroupUser{}, nil
+	}
 
 	// Add owner information to each group
 	for _, group := range groups {
@@ -239,7 +406,13 @@ func GetGroupObject(user_id int, group_id int) (models.GroupUser, error) {
 	var group_memberships []models.GroupMembership
 
 	// Get groups
-	database.Instance.Where("`groups`.enabled = ?", 1).Joins("JOIN group_memberships on group_memberships.group = groups.id").Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member = ?", user_id).Where("`group_memberships`.group = ?", group_id).Find(&group)
+	grouprecords := database.Instance.Where("`groups`.enabled = ?", 1).Joins("JOIN group_memberships on group_memberships.group = groups.id").Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member = ?", user_id).Where("`group_memberships`.group = ?", group_id).Find(&group)
+
+	if grouprecords.Error != nil {
+		return models.GroupUser{}, grouprecords.Error
+	} else if grouprecords.RowsAffected == 0 {
+		return models.GroupUser{}, nil
+	}
 
 	// Add owner information to group
 	user_object, err := database.GetUserInformation(group.Owner)
@@ -266,6 +439,7 @@ func GetGroupObject(user_id int, group_id int) (models.GroupUser, error) {
 
 		user_object, err := database.GetUserInformation(membership.Member)
 		if err != nil {
+			log.Println("Failed to get user information for group " + strconv.Itoa(group_id) + " members.")
 			return models.GroupUser{}, err
 		}
 
