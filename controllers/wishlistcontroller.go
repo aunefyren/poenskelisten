@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
 	"poenskelisten/database"
 	"poenskelisten/middlewares"
@@ -51,7 +52,14 @@ func RegisterWishlist(context *gin.Context) {
 		return
 	}
 
-	if now.After(wishlist.Date) {
+	wishlistdb.Date, err = time.Parse("2006-01-02T15:04:05.000Z", wishlist.Date)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	if now.After(wishlistdb.Date) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The date of the wishlist must be in the future."})
 		context.Abort()
 		return
@@ -71,7 +79,6 @@ func RegisterWishlist(context *gin.Context) {
 	// Finalize wishlist object
 	wishlistdb.Owner = UserID
 	wishlistdb.Group = wishlist.Group
-	wishlistdb.Date = wishlist.Date
 	wishlistdb.Description = wishlist.Description
 	wishlistdb.Name = wishlist.Name
 
@@ -92,14 +99,19 @@ func RegisterWishlist(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist created."})
+	wishlists_with_users, err := GetWishlistObjectsFromGroup(wishlist.Group, UserID)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist created.", "wishlists": wishlists_with_users})
 }
 
 func GetWishlistsFromGroup(context *gin.Context) {
 
 	// Create wishlist request
-	var wishlists []models.Wishlist
-	var wishlists_with_users []models.WishlistUser
 	var group = context.Param("group_id")
 
 	// Get user ID
@@ -131,24 +143,105 @@ func GetWishlistsFromGroup(context *gin.Context) {
 		return
 	}
 
+	wishlists_with_users, err := GetWishlistObjectsFromGroup(group_id_int, UserID)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	context.JSON(http.StatusOK, gin.H{"wishlists": wishlists_with_users, "message": "Wishlists retrieved."})
+
+}
+
+func DeleteWishlistsFromGroup(context *gin.Context) {
+
+	var wishlist = context.Param("wishlist_id")
+
+	// Get user ID
+	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Parse wishlist id
+	wishlist_id_int, err := strconv.Atoi(wishlist)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Get group from wishlist
+	group_id, err := database.GetWishlistGroup(wishlist_id_int)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Verify wishlist owner
+	MembershipStatus, err := database.VerifyUserOwnershipToWishlist(UserID, wishlist_id_int)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	} else if !MembershipStatus {
+		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not the owner of this wishlist."})
+		context.Abort()
+		return
+	}
+
+	err = database.DeleteWishlist(wishlist_id_int)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	wishlists_with_users, err := GetWishlistObjectsFromGroup(group_id, UserID)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	context.JSON(http.StatusOK, gin.H{"wishlists": wishlists_with_users, "message": "Wishlist deleted."})
+
+}
+
+func GetWishlistObjectsFromGroup(group_id int, user_id int) ([]models.WishlistUser, error) {
+
+	var wishlists []models.Wishlist
+	var wishlists_with_users []models.WishlistUser
+
 	// Verify group doesnt exist
-	database.Instance.Where("`wishlists`.enabled = ?", 1).Joins("JOIN group_memberships on group_memberships.id = wishlists.group").Where("`group_memberships`.group = ?", group).Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member = ?", UserID).Joins("JOIN groups on group_memberships.group = groups.id").Where("`groups`.enabled = ?", 1).Find(&wishlists)
+	wishlistrecords := database.Instance.Where("`wishlists`.enabled = ?", 1).Joins("JOIN group_memberships on group_memberships.group = wishlists.group").Where("`group_memberships`.group = ?", group_id).Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member = ?", user_id).Joins("JOIN groups on group_memberships.group = groups.id").Where("`groups`.enabled = ?", 1).Find(&wishlists)
+
+	// Debug line
+	log.Println(wishlists)
+	log.Println(group_id)
+
+	if wishlistrecords.Error != nil {
+		return []models.WishlistUser{}, wishlistrecords.Error
+	} else if wishlistrecords.RowsAffected == 0 {
+		return []models.WishlistUser{}, nil
+	}
 
 	// Add user information to each wishlist
 	for _, wishlist := range wishlists {
 
 		members, err := database.GetUserMembersFromGroup(wishlist.Group)
 		if err != nil {
-			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			context.Abort()
-			return
+			return []models.WishlistUser{}, err
 		}
 
 		owner, err := database.GetUserInformation(wishlist.Owner)
 		if err != nil {
-			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			context.Abort()
-			return
+			return []models.WishlistUser{}, err
 		}
 
 		var wishlist_with_user models.WishlistUser
@@ -169,9 +262,7 @@ func GetWishlistsFromGroup(context *gin.Context) {
 		wishlist_id_int := int(wishlist.ID)
 		wishes, err := database.GetWishesFromWishlist(wishlist_id_int)
 		if err != nil {
-			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			context.Abort()
-			return
+			return []models.WishlistUser{}, err
 		}
 		wishlist_with_user.Wishes = wishes
 
@@ -179,7 +270,8 @@ func GetWishlistsFromGroup(context *gin.Context) {
 
 	}
 
-	context.JSON(http.StatusOK, gin.H{"wishlists": wishlists_with_users, "message": "Wishlists retrieved."})
+	return wishlists_with_users, nil
+
 }
 
 func GetWishlist(context *gin.Context) {
@@ -198,7 +290,7 @@ func GetWishlist(context *gin.Context) {
 	}
 
 	// Verify group doesnt exist
-	database.Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", wishlist_id).Joins("JOIN group_memberships on group_memberships.id = wishlists.group").Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member = ?", UserID).Joins("JOIN groups on group_memberships.group = groups.id").Where("`groups`.enabled = ?", 1).Find(&wishlist)
+	database.Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", wishlist_id).Joins("JOIN group_memberships on group_memberships.group = wishlists.group").Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member = ?", UserID).Joins("JOIN groups on group_memberships.group = groups.id").Where("`groups`.enabled = ?", 1).Find(&wishlist)
 
 	// Add user information to each wishlist
 	members, err := database.GetUserMembersFromGroup(int(wishlist.Group))

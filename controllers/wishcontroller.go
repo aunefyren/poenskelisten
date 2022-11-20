@@ -16,7 +16,6 @@ func GetWishesFromWishlist(context *gin.Context) {
 
 	// Create wish request
 	var wishlist_id = context.Param("wishlist_id")
-	var group_id = context.Param("group_id")
 
 	// Get user ID
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
@@ -26,16 +25,15 @@ func GetWishesFromWishlist(context *gin.Context) {
 		return
 	}
 
-	// Parse group id
-	group_id_int, err := strconv.Atoi(group_id)
+	// Parse wishlist id
+	wishlist_id_int, err := strconv.Atoi(wishlist_id)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	// Parse wishlist id
-	wishlist_id_int, err := strconv.Atoi(wishlist_id)
+	group_id_int, err := database.GetWishlistGroup(wishlist_id_int)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
@@ -130,8 +128,8 @@ func RegisterWish(context *gin.Context) {
 		return
 	}
 
-	domain, _, err := parseRawURLFunction(wish.URL)
-	if (err != nil || domain == "") && wish.URL != "" {
+	domain, scheme, err := parseRawURLFunction(wish.URL)
+	if (err != nil || domain == "" || scheme == "") && wish.URL != "" {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL given."})
 		context.Abort()
 		return
@@ -160,6 +158,68 @@ func RegisterWish(context *gin.Context) {
 
 	// Return response
 	context.JSON(http.StatusCreated, gin.H{"message": "Wish saved.", "wishes": new_wishes})
+}
+
+func DeleteWish(context *gin.Context) {
+
+	// Create wish request
+	var wish_id = context.Param("wish_id")
+
+	// Get user ID
+	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Parse wish id
+	wish_id_int, err := strconv.Atoi(wish_id)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// get wishlist id
+	wishlist_id, err := database.GetWishlistFromWish(wish_id_int)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Verify ownership exists
+	MembershipStatus, err := database.VerifyUserOwnershipToWishlist(UserID, wishlist_id)
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	} else if !MembershipStatus {
+		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not an owner of this wishlist."})
+		context.Abort()
+		return
+	}
+
+	// delete wish
+	err = database.DeleteWish(wish_id_int)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	new_wishes, err := database.GetWishesFromWishlist(wishlist_id)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err})
+		context.Abort()
+		return
+	}
+
+	// Return response
+	context.JSON(http.StatusCreated, gin.H{"message": "Wish deleted.", "wishes": new_wishes})
+
 }
 
 func parseRawURLFunction(rawurl string) (domain string, scheme string, err error) {

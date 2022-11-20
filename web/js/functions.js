@@ -152,8 +152,8 @@ function showLoggedInMenu() {
     document.getElementById('groups').classList.add('enabled');
     document.getElementById('groups').classList.remove('disabled');
 
-    document.getElementById('account').classList.add('enabled');
-    document.getElementById('account').classList.remove('disabled');
+    document.getElementById('account').classList.add('disabled');
+    document.getElementById('account').classList.remove('enabled');
 
     document.getElementById('register').classList.add('disabled');
     document.getElementById('register').classList.remove('enabled');
@@ -232,7 +232,7 @@ function error(message) {
 // When log out button is pressed, remove cookie and redirect to home page
 function logout() {
     set_cookie("poenskelisten", "", 1);
-    window.location.href = './';
+    window.location.href = '../../';
 }
 
 // Return GET parameters in a given URL

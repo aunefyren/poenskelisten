@@ -39,7 +39,8 @@ function load_page(result) {
                         </div>
 
                         <div id="wish-input" class="wish-input">
-                            <form action="" onsubmit="event.preventDefault(); send_wish(` + wishlist_id + `,` + group_id + `,` + login_data.data.ID + `);">
+                            <form action="" onsubmit="event.preventDefault(); send_wish(` + wishlist_id + `,` + group_id + `,` + login_data.data.id + `);">
+                                <label for="wish_name">Add a new wish:</label><br>
                                 <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" autocomplete="off" required />
                                 <input type="text" name="wish_note" id="wish_note" placeholder="Wish note" autocomplete="off" />
                                 <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" autocomplete="off" />
@@ -106,7 +107,7 @@ function get_wishes(wishlist_id, group_id, user_id){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wish/get/" + group_id + "/" + wishlist_id);
+    xhttp.open("post", api_url + "auth/wish/get/" + wishlist_id);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -128,19 +129,21 @@ function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
         html += '</div>'
 
         html += '<div class="profile">'
-        if(wishes_array[i].url !== "") {
-            html += '<div class="profile-icon clickable" onclick="window.location = (\'' + wishes_array[i].url + '\')">'
-            html += '<img class="icon-img color-invert" src="../../assets/link.svg">'
-            html += '</div>'
-        }
+
         if(wishes_array[i].note !== "") {
             html += '<div class="profile-icon clickable" onclick="toggle_wish(' + wishes_array[i].ID + ')">'
-            html += '<img id="wish_' + wishes_array[i].ID + '_arrow" class="icon-img color-invert" src="../../assets/arrow-down.svg">'
+            html += '<img id="wish_' + wishes_array[i].ID + '_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">'
             html += '</div>'
         }
 
-        if(user_id = wishes_array[i].owner_id.ID) {
-            html += '<div class="profile-icon clickable" onclick="delete_wish(' + wishes_array[i].ID + ')">'
+        if(wishes_array[i].url !== "") {
+            html += '<div class="profile-icon clickable" onclick="window.open(\'' + wishes_array[i].url + '\', \'_blank\')">'
+            html += '<img class="icon-img color-invert" src="../../assets/link.svg">'
+            html += '</div>'
+        }
+
+        if(user_id == wishes_array[i].owner_id.ID) {
+            html += '<div class="profile-icon clickable" onclick="delete_wish(' + wishes_array[i].ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')">'
             html += '<img class="icon-img color-invert" src="../../assets/trash-2.svg">'
             html += '</div>'
         }
@@ -155,6 +158,10 @@ function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
         html += '</div>'
     }
 
+    if(wishes_array.length == 0) {
+        info("Looks like this list is empty...");
+    }
+
     wishlist_object = document.getElementById("wishes-box")
     wishlist_object.innerHTML = html
 }
@@ -167,12 +174,12 @@ function toggle_wish(wishid) {
         wishnote.classList.remove("collapsed")
         wishnote.classList.add("expanded")
         wishnote.style.display = "inline-block"
-        wishnotearrow.src = "../../assets/arrow-right.svg"
+        wishnotearrow.src = "../../assets/chevron-down.svg"
     } else {
         wishnote.classList.remove("expanded")
         wishnote.classList.add("collapsed")
         wishnote.style.display = "none"
-        wishnotearrow.src = "../../assets/arrow-down.svg"
+        wishnotearrow.src = "../../assets/chevron-right.svg"
     }
 }
 
@@ -216,6 +223,8 @@ function send_wish(wishlist_id, group_id, user_id){
                 success(result.message);
                 console.log(result);
 
+                console.log("user id " + user_id);
+
                 wishes = result.wishes;
                 place_wishes(wishes, wishlist_id, group_id, user_id);
                 clear_data();
@@ -239,4 +248,52 @@ function clear_data() {
     document.getElementById("wish_name").value = "";
     document.getElementById("wish_note").value = "";
     document.getElementById("wish_url").value = "";
+}
+
+function delete_wish(wish_id, wishlist_id, group_id, user_id) {
+
+    if(!confirm("Are you sure you want to delete this wish?")) {
+        return;
+    }
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message);
+                console.log(result);
+
+                console.log("user id " + user_id);
+
+                wishes = result.wishes;
+                place_wishes(wishes, wishlist_id, group_id, user_id);
+                clear_data();
+                
+               
+            }
+
+        } else {
+            info("Deleting wish...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wish/" + wish_id + "/delete");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
 }

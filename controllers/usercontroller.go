@@ -77,7 +77,7 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	// Return response
-	context.JSON(http.StatusCreated, gin.H{"userId": user.ID, "email": user.Email})
+	context.JSON(http.StatusCreated, gin.H{"message": "User created!"})
 }
 
 func GetUser(context *gin.Context) {

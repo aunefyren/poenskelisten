@@ -135,6 +135,8 @@
     border-top: 2px solid var(--grey);
     border-bottom: 2px solid var(--grey);
     text-align: center;
+    font-size: 0.8em;
+    font-weight:200;
   }
   
   .container{
@@ -310,7 +312,7 @@ form {
   width: -moz-available;
 }
 
-input[type=text], input[type=password], input[type=email] {
+input[type=text], input[type=password], input[type=email], input[type=date], select {
   width: 100%;
   height: 3em;
   padding: 0.5em;
@@ -320,6 +322,11 @@ input[type=text], input[type=password], input[type=email] {
   box-shadow: 0.1em 0.2em 0.5em rgba(0,0,0,.09); 
   background: var(--eggshell); 
   box-sizing: border-box;
+}
+
+select {
+  height: 10em;
+  overflow-y: scroll;
 }
 
 .btn-block {
@@ -368,6 +375,11 @@ button:disabled {
   align-content: center;
 }
 
+.wishlist:hover, .wish:hover, .group:hover {
+  background-color: var(--lightblue);
+  transition: 1s;
+}
+
 .clickable {
   cursor: pointer;
 }
@@ -381,7 +393,7 @@ button:disabled {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  justify-content: space-between;;
+  justify-content: center;
   align-items: center;
   align-content: center;
 }
@@ -467,9 +479,15 @@ button:disabled {
   justify-content: space-between;;
   align-items: center;
   align-content: center;
+  border-radius: 1em;
 }
 
-.wish-input, .group-input {
+.group-member:hover {
+  background-color: var(--mediumblue);
+  transition: 1s;
+}
+
+.wish-input, .group-input, .wishlist-input {
   display: none;
   width: 100%;
   width: -webkit-fill-available;
@@ -477,6 +495,6 @@ button:disabled {
   margin: 5em 1em 1em 1em;
 }
 
-.group-input {
+.group-input, .wishlist-input {
   display: inline-block !important;
 }
