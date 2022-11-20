@@ -113,7 +113,7 @@ function send_registration(){
             }
 
         } else {
-            info("Logging in...");
+            info("Registering...");
         }
     };
     xhttp.withCredentials = true;

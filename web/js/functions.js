@@ -1,4 +1,4 @@
-var api_url = "http://localhost:8080/api/"
+var api_url = window.location.origin + "/api/";
 
 // Load service worker
 window.addEventListener("load", () => {

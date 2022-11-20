@@ -154,7 +154,7 @@ func initRouter() *gin.Engine {
 	}
 
 	router.Use(cors.New(cors.Config{
-		AllowOrigins: []string{"http://localhost:8081", "http://localhost:8080"},
+		AllowOrigins: []string{"https://ponskelisten.no", "https://www.ponskelisten.no", "*"},
 		// AllowAllOrigins:  true,
 		AllowMethods:     []string{"GET", "POST"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Access-Control-Allow-Origin"},
