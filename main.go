@@ -195,7 +195,12 @@ func initRouter() *gin.Engine {
 	})
 
 	// Static endpoint for wishlist in your group
-	router.GET("/groups/:group_id/:wishlist_id", func(c *gin.Context) {
+	router.GET("/wishlists", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "wishlists.html", nil)
+	})
+
+	// Static endpoint for wishlist in your group
+	router.GET("/wishlists/:wishlist_id", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "wishlist.html", nil)
 	})
 
