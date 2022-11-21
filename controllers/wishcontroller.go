@@ -33,22 +33,22 @@ func GetWishesFromWishlist(context *gin.Context) {
 		return
 	}
 
-	group_id_int, err := database.GetWishlistGroup(wishlist_id_int)
+	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(UserID, wishlist_id_int)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	// Verify ownership exists
-	MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, group_id_int)
+	WishlistMembership, err := database.VerifyUserMembershipToGroupmembershipToWishlist(UserID, wishlist_id_int)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
-	} else if !MembershipStatus {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not a member of this group."})
+	}
+
+	if !WishlistOwnership && !WishlistMembership {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not a member of, or an owner of this group."})
 		context.Abort()
 		return
 	}
