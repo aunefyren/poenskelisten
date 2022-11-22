@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"poenskelisten/auth"
 	"poenskelisten/config"
 	"poenskelisten/controllers"
 	"poenskelisten/database"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/thanhpk/randstr"
 )
 
 func main() {
@@ -26,52 +28,54 @@ func main() {
 	// Create files directory
 	newpath := filepath.Join(".", "files")
 	err := os.MkdirAll(newpath, os.ModePerm)
+	if err != nil {
+		fmt.Println("Failed to create 'files' directory. Error: " + err.Error())
+
+		os.Exit(1)
+	}
+	fmt.Println("Directory 'files' valid.")
 
 	// Create and define file for logging
 	Log, err := os.OpenFile("files/poenskelisten.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
-		log.Println("Failed to load log file. Error: ")
-		log.Println(err)
-
-		fmt.Println("Failed to load log file. Error: ")
-		fmt.Println(err)
+		fmt.Println("Failed to load log file. Error: " + err.Error())
 
 		os.Exit(1)
 	}
 
 	// Set log file as log destination
 	log.SetOutput(Log)
+	log.Println("Log file set.")
+	fmt.Println("Log file set.")
 
 	// Load config file
 	Config, err := config.GetConfig()
 	if err != nil {
-		log.Println("Failed to load configuration file. Error: ")
-		log.Println(err)
-
-		fmt.Println("Failed to load configuration file. Error: ")
-		fmt.Println(err)
+		log.Println("Failed to load configuration file. Error: " + err.Error())
+		fmt.Println("Failed to load configuration file. Error: " + err.Error())
 
 		os.Exit(1)
 	}
+	log.Println("Configuration file loaded.")
+	fmt.Println("Configuration file loaded.")
 
 	// Set time zone from config if it is not empty
 	if Config.Timezone != "" {
 		loc, err := time.LoadLocation(Config.Timezone)
 		if err != nil {
-			fmt.Println("Failed to set time zone from config. Error: ")
+			fmt.Println("Failed to set time zone from config. Error: " + err.Error())
 			fmt.Println(err)
 			fmt.Println("Removing value...")
 
-			log.Println("Failed to set time zone from config. Error: ")
-			log.Println(err)
+			log.Println("Failed to set time zone from config. Error: " + err.Error())
 			log.Println("Removing value...")
 
 			Config.Timezone = ""
 			err = config.SaveConfig(Config)
 			if err != nil {
-				log.Println("Failed to set new time zone in the config. Error: ")
-				log.Println(err)
-				log.Println("Exiting...")
+				fmt.Println("Failed to set new time zone in the config. Error: " + err.Error())
+				log.Println("Failed to set new time zone in the config. Error: " + err.Error())
+
 				os.Exit(1)
 			}
 
@@ -79,12 +83,36 @@ func main() {
 			time.Local = loc
 		}
 	}
+	log.Println("Timezone set.")
+	fmt.Println("Timezone set.")
+
+	if Config.PrivateKey == "" || len(Config.PrivateKey) < 16 {
+		fmt.Println("Creating new private key.")
+		log.Println("Creating new private key.")
+
+		Config.PrivateKey = randstr.Hex(32)
+		config.SaveConfig(Config)
+	}
+
+	err = auth.SetPrivateKey(Config.PrivateKey)
+	if Config.PrivateKey == "" || len(Config.PrivateKey) < 16 {
+		fmt.Println("Failed to set private key. Error: " + err.Error())
+		log.Println("Failed to set private key. Error: " + err.Error())
+
+		os.Exit(1)
+	}
+	log.Println("Private key set.")
+	fmt.Println("Private key set.")
 
 	// Initialize Database
 	fmt.Println("Connecting to database...")
 	log.Println("Connecting to database...")
+
 	database.Connect(Config.DBUsername + ":" + Config.DBPassword + "@tcp(" + Config.DBIP + ":" + strconv.Itoa(Config.DBPort) + ")/" + Config.DBName + "?parseTime=true")
 	database.Migrate()
+
+	log.Println("Database connected.")
+	fmt.Println("Database connected.")
 
 	/*
 		fmt.Println("Sending e-mail...")
@@ -101,6 +129,10 @@ func main() {
 
 	// Initialize Router
 	router := initRouter()
+
+	log.Println("Router initialized.")
+	fmt.Println("Router initialized.")
+
 	log.Fatal(router.Run(":" + strconv.Itoa(Config.PoenskelistenPort)))
 
 }
