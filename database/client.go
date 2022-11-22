@@ -237,7 +237,7 @@ func GetWishlistOwner(WishlistID int) (int, error) {
 	return wishlist.Owner, nil
 }
 
-// Get user information
+// Get user information from wishlist
 func GetUserMembersFromWishlist(WishlistID int) ([]models.User, error) {
 	var users []models.User
 	var group_memberships []models.GroupMembership
@@ -260,6 +260,48 @@ func GetUserMembersFromWishlist(WishlistID int) ([]models.User, error) {
 	}
 
 	return users, nil
+}
+
+// Get user information from group
+func GetUserMembersFromGroup(GroupID int) ([]models.User, error) {
+	var users []models.User
+	var group_memberships []models.GroupMembership
+
+	membershiprecords := Instance.Where("`group_memberships`.enabled = ?", 1).Joins("JOIN `groups` on `group_memberships`.group = `groups`.id").Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", GroupID).Find(&group_memberships)
+	if membershiprecords.Error != nil {
+		return []models.User{}, membershiprecords.Error
+	}
+
+	for _, membership := range group_memberships {
+		user_object, err := GetUserInformation(membership.Member)
+		if err != nil {
+			return []models.User{}, err
+		}
+		users = append(users, user_object)
+	}
+
+	if len(users) == 0 {
+		users = []models.User{}
+	}
+
+	return users, nil
+}
+
+// Get group information from wishlist
+func GetGroupMembersFromWishlist(WishlistID int) ([]models.Group, error) {
+
+	var groups []models.Group
+
+	groupsrecords := Instance.Where("`groups`.enabled = ?", 1).Joins("JOIN `group_memberships` on `groups`.id = `group_memberships`.group").Where("`group_memberships`.enabled = ?", 1).Joins("JOIN `users` on `group_memberships`.member = `users`.id").Where("`users`.enabled = ?", 1).Find(&groups)
+	if groupsrecords.Error != nil {
+		return []models.Group{}, groupsrecords.Error
+	}
+
+	if len(groups) == 0 {
+		groups = []models.Group{}
+	}
+
+	return groups, nil
 }
 
 // Get all wishlists in groups
