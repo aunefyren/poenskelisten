@@ -152,6 +152,9 @@ function showLoggedInMenu() {
     document.getElementById('groups').classList.add('enabled');
     document.getElementById('groups').classList.remove('disabled');
 
+    document.getElementById('wishlists').classList.add('enabled');
+    document.getElementById('wishlists').classList.remove('disabled');
+
     document.getElementById('account').classList.add('disabled');
     document.getElementById('account').classList.remove('enabled');
 
@@ -169,6 +172,9 @@ function showLoggedOutMenu() {
 
     document.getElementById('groups').classList.add('disabled');
     document.getElementById('groups').classList.remove('enabled');
+
+    document.getElementById('wishlists').classList.add('disabled');
+    document.getElementById('wishlists').classList.remove('enabled');
 
     document.getElementById('account').classList.add('disabled');
     document.getElementById('account').classList.remove('enabled');

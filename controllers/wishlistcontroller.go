@@ -57,7 +57,7 @@ func RegisterWishlist(context *gin.Context) {
 		context.Abort()
 		return
 	} else if !unique_wish_name {
-		context.JSON(http.StatusBadRequest, gin.H{"error": "There is already a wishlist with that name in this group."})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "There is already a wishlist with that name on your profile."})
 		context.Abort()
 		return
 	}
@@ -67,15 +67,6 @@ func RegisterWishlist(context *gin.Context) {
 	wishlistdb.Description = wishlist.Description
 	wishlistdb.Name = wishlist.Name
 
-	// Verify wishlist doesnt exist
-	wishlistrecords := database.Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.name = ?", wishlistdb.Name).Where("`wishlists`.Owner = ?", wishlistdb.Owner).Find(&wishlistdb)
-	if wishlistrecords.RowsAffected > 0 {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": grouprecords.Error.Error()})
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "A wishlist with that name already exists."})
-		context.Abort()
-		return
-	}
-
 	// Create wishlist in DB
 	record := database.Instance.Create(&wishlistdb)
 	if record.Error != nil {
@@ -84,7 +75,7 @@ func RegisterWishlist(context *gin.Context) {
 		return
 	}
 
-	wishlists_with_users, err := database.GetOwnedWishlists(UserID)
+	wishlists_with_users, err := GetWishlistObjects(UserID)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
@@ -139,7 +130,7 @@ func GetWishlistsFromGroup(context *gin.Context) {
 
 }
 
-func DeleteWishlistsFromGroup(context *gin.Context) {
+func DeleteWishlist(context *gin.Context) {
 
 	var wishlist = context.Param("wishlist_id")
 
@@ -179,7 +170,7 @@ func DeleteWishlistsFromGroup(context *gin.Context) {
 		return
 	}
 
-	wishlists_with_users, err := database.GetOwnedWishlists(UserID)
+	wishlists_with_users, err := GetWishlistObjects(UserID)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
@@ -202,14 +193,45 @@ func GetWishlistObjectsFromGroup(group_id int) ([]models.WishlistUser, error) {
 	// Add user information to each wishlist
 	for _, wishlist := range wishlists {
 
-		members, err := database.GetUserMembersFromWishlist(int(wishlist.ID))
+		owner, err := database.GetUserInformation(wishlist.Owner)
 		if err != nil {
 			return []models.WishlistUser{}, err
 		}
 
-		owner, err := database.GetUserInformation(wishlist.Owner)
+		groups, err := database.GetGroupMembersFromWishlist(int(wishlist.ID))
 		if err != nil {
 			return []models.WishlistUser{}, err
+		}
+
+		var groups_with_users []models.GroupUser
+
+		for _, group := range groups {
+
+			var group_with_user models.GroupUser
+
+			members, err := database.GetUserMembersFromGroup(int(group.ID))
+			if err != nil {
+				return []models.WishlistUser{}, err
+			}
+
+			owner, err := database.GetUserInformation(group.Owner)
+			if err != nil {
+				return []models.WishlistUser{}, err
+			}
+
+			group_with_user.CreatedAt = group.CreatedAt
+			group_with_user.UpdatedAt = group.UpdatedAt
+			group_with_user.Description = group.Description
+			group_with_user.Enabled = group.Enabled
+			group_with_user.ID = group.ID
+			group_with_user.Members = members
+			group_with_user.Model = group.Model
+			group_with_user.Name = group.Name
+			group_with_user.Owner = owner
+			group_with_user.UpdatedAt = group.UpdatedAt
+
+			groups_with_users = append(groups_with_users, group_with_user)
+
 		}
 
 		var wishlist_with_user models.WishlistUser
@@ -219,7 +241,7 @@ func GetWishlistObjectsFromGroup(group_id int) ([]models.WishlistUser, error) {
 		wishlist_with_user.Description = wishlist.Description
 		wishlist_with_user.Enabled = wishlist.Enabled
 		wishlist_with_user.ID = wishlist.ID
-		wishlist_with_user.Members = members
+		wishlist_with_user.Members = groups_with_users
 		wishlist_with_user.Owner = owner
 		wishlist_with_user.Model = wishlist.Model
 		wishlist_with_user.Name = wishlist.Name
@@ -248,8 +270,6 @@ func GetWishlistObjectsFromGroup(group_id int) ([]models.WishlistUser, error) {
 func GetWishlist(context *gin.Context) {
 
 	// Create wishlist request
-	var wishlist models.Wishlist
-	var wishlist_with_user models.WishlistUser
 	var wishlist_id = context.Param("wishlist_id")
 
 	// Get user ID
@@ -288,21 +308,62 @@ func GetWishlist(context *gin.Context) {
 		return
 	}
 
-	wishlist, err = database.GetWishlist(wishlist_id_int)
-
-	// Add user information to each wishlist
-	members, err := database.GetUserMembersFromWishlist(int(wishlist.ID))
+	wishlist_with_user, err := GetWishlistObject(wishlist_id_int)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
+	context.JSON(http.StatusOK, gin.H{"wishlist": wishlist_with_user, "message": "Wishlist retrieved."})
+
+}
+
+func GetWishlistObject(WishlistID int) (models.WishlistUser, error) {
+
+	var wishlist_with_user models.WishlistUser
+
+	wishlist, err := database.GetWishlist(WishlistID)
+
+	groups, err := database.GetGroupMembersFromWishlist(int(wishlist.ID))
+	if err != nil {
+		return models.WishlistUser{}, err
+	}
+
+	var groups_with_users []models.GroupUser
+
+	for _, group := range groups {
+
+		var group_with_user models.GroupUser
+
+		members, err := database.GetUserMembersFromGroup(int(group.ID))
+		if err != nil {
+			return models.WishlistUser{}, err
+		}
+
+		owner, err := database.GetUserInformation(group.Owner)
+		if err != nil {
+			return models.WishlistUser{}, err
+		}
+
+		group_with_user.CreatedAt = group.CreatedAt
+		group_with_user.UpdatedAt = group.UpdatedAt
+		group_with_user.Description = group.Description
+		group_with_user.Enabled = group.Enabled
+		group_with_user.ID = group.ID
+		group_with_user.Members = members
+		group_with_user.Model = group.Model
+		group_with_user.Name = group.Name
+		group_with_user.Owner = owner
+		group_with_user.UpdatedAt = group.UpdatedAt
+
+		groups_with_users = append(groups_with_users, group_with_user)
+
+	}
+
 	owner, err := database.GetUserInformation(wishlist.Owner)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		context.Abort()
-		return
+		return models.WishlistUser{}, err
 	}
 
 	wishlist_with_user.CreatedAt = wishlist.CreatedAt
@@ -311,29 +372,25 @@ func GetWishlist(context *gin.Context) {
 	wishlist_with_user.Description = wishlist.Description
 	wishlist_with_user.Enabled = wishlist.Enabled
 	wishlist_with_user.ID = wishlist.ID
-	wishlist_with_user.Members = members
+	wishlist_with_user.Members = groups_with_users
 	wishlist_with_user.Owner = owner
 	wishlist_with_user.Model = wishlist.Model
 	wishlist_with_user.Name = wishlist.Name
 	wishlist_with_user.UpdatedAt = wishlist.UpdatedAt
 
 	// Get wishes
-	wishes, err := database.GetWishesFromWishlist(wishlist_id_int)
+	wishes, err := database.GetWishesFromWishlist(WishlistID)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		context.Abort()
-		return
+		return models.WishlistUser{}, err
 	}
+
 	wishlist_with_user.Wishes = wishes
 
-	context.JSON(http.StatusOK, gin.H{"wishlist": wishlist_with_user, "message": "Wishlist retrieved."})
+	return wishlist_with_user, nil
+
 }
 
 func GetWishlists(context *gin.Context) {
-
-	// Create wishlist request
-	var wishlists []models.Wishlist
-	var wishlists_with_users []models.WishlistUser
 
 	// Get user ID
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
@@ -343,28 +400,62 @@ func GetWishlists(context *gin.Context) {
 		return
 	}
 
-	wishlists, err = database.GetOwnedWishlists(UserID)
+	wishlists_with_users, err := GetWishlistObjects(UserID)
+
+	context.JSON(http.StatusOK, gin.H{"wishlists": wishlists_with_users, "message": "Wishlists retrieved."})
+}
+
+func GetWishlistObjects(UserID int) ([]models.WishlistUser, error) {
+
+	var wishlists_with_users []models.WishlistUser
+
+	wishlists, err := database.GetOwnedWishlists(UserID)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		context.Abort()
-		return
+		return []models.WishlistUser{}, err
 	}
 
 	// Add user information to each wishlist
 	for _, wishlist := range wishlists {
 
-		members, err := database.GetUserMembersFromWishlist(int(wishlist.ID))
+		groups, err := database.GetGroupMembersFromWishlist(int(wishlist.ID))
 		if err != nil {
-			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			context.Abort()
-			return
+			return []models.WishlistUser{}, err
+		}
+
+		var groups_with_users []models.GroupUser
+
+		for _, group := range groups {
+
+			var group_with_user models.GroupUser
+
+			members, err := database.GetUserMembersFromGroup(int(group.ID))
+			if err != nil {
+				return []models.WishlistUser{}, err
+			}
+
+			owner, err := database.GetUserInformation(group.Owner)
+			if err != nil {
+				return []models.WishlistUser{}, err
+			}
+
+			group_with_user.CreatedAt = group.CreatedAt
+			group_with_user.UpdatedAt = group.UpdatedAt
+			group_with_user.Description = group.Description
+			group_with_user.Enabled = group.Enabled
+			group_with_user.ID = group.ID
+			group_with_user.Members = members
+			group_with_user.Model = group.Model
+			group_with_user.Name = group.Name
+			group_with_user.Owner = owner
+			group_with_user.UpdatedAt = group.UpdatedAt
+
+			groups_with_users = append(groups_with_users, group_with_user)
+
 		}
 
 		owner, err := database.GetUserInformation(wishlist.Owner)
 		if err != nil {
-			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			context.Abort()
-			return
+			return []models.WishlistUser{}, err
 		}
 
 		var wishlist_with_user models.WishlistUser
@@ -374,7 +465,7 @@ func GetWishlists(context *gin.Context) {
 		wishlist_with_user.Description = wishlist.Description
 		wishlist_with_user.Enabled = wishlist.Enabled
 		wishlist_with_user.ID = wishlist.ID
-		wishlist_with_user.Members = members
+		wishlist_with_user.Members = groups_with_users
 		wishlist_with_user.Owner = owner
 		wishlist_with_user.Model = wishlist.Model
 		wishlist_with_user.Name = wishlist.Name
@@ -384,9 +475,7 @@ func GetWishlists(context *gin.Context) {
 		wishlist_id_int := int(wishlist.ID)
 		wishes, err := database.GetWishesFromWishlist(wishlist_id_int)
 		if err != nil {
-			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			context.Abort()
-			return
+			return []models.WishlistUser{}, err
 		}
 		wishlist_with_user.Wishes = wishes
 
@@ -394,5 +483,6 @@ func GetWishlists(context *gin.Context) {
 
 	}
 
-	context.JSON(http.StatusOK, gin.H{"wishlists": wishlists_with_users, "message": "Wishlists retrieved."})
+	return wishlists_with_users, nil
+
 }
