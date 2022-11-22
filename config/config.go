@@ -15,7 +15,8 @@ var config_path, _ = filepath.Abs("./files/config.json")
 func GetConfig() (*models.ConfigStruct, error) {
 	// Create config.json if it doesn't exist
 	if _, err := os.Stat(config_path); errors.Is(err, os.ErrNotExist) {
-		log.Println("Config file does not exist. Creating.")
+		log.Println("Config file does not exist. Creating...")
+		fmt.Println("Config file does not exist. Creating...")
 
 		err := CreateConfigFile()
 		if err != nil {
@@ -26,6 +27,7 @@ func GetConfig() (*models.ConfigStruct, error) {
 	file, err := os.Open(config_path)
 	if err != nil {
 		log.Println("Get config file threw error trying to open the file.")
+		fmt.Println("Get config file threw error trying to open the file.")
 		return nil, err
 	}
 	defer file.Close()
@@ -34,6 +36,7 @@ func GetConfig() (*models.ConfigStruct, error) {
 	err = decoder.Decode(&config)
 	if err != nil {
 		log.Println("Get config file threw error trying to parse the file.")
+		fmt.Println("Get config file threw error trying to parse the file.")
 		return nil, err
 	}
 
@@ -55,6 +58,8 @@ func CreateConfigFile() error {
 
 	err := SaveConfig(&config)
 	if err != nil {
+		log.Println("Create config file threw error trying to save the file.")
+		fmt.Println("Create config file threw error trying to save the file.")
 		return err
 	}
 
