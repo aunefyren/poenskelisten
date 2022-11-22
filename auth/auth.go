@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 var jwtKey = []byte("supersecretkey")
@@ -15,6 +15,15 @@ type JWTClaim struct {
 	Admin    bool   `json:"admin"`
 	UserID   int    `json:"id"`
 	jwt.StandardClaims
+}
+
+func SetPrivateKey(PrivateKey string) error {
+	if len(PrivateKey) < 16 {
+		return errors.New("Private key must be atleast 16 characters.")
+	}
+
+	jwtKey = []byte(PrivateKey)
+	return nil
 }
 
 func GenerateJWT(email string, userid int, admin bool) (tokenString string, err error) {
@@ -44,15 +53,15 @@ func ValidateToken(signedToken string, admin bool) (err error) {
 	}
 	claims, ok := token.Claims.(*JWTClaim)
 	if !ok {
-		err = errors.New("couldn't parse claims")
+		err = errors.New("Couldn't parse claims.")
 		return
 	}
 	if claims.ExpiresAt < time.Now().Local().Unix() {
-		err = errors.New("token expired")
+		err = errors.New("Token expired.")
 		return
 	}
 	if admin && !claims.Admin {
-		err = errors.New("token not admin")
+		err = errors.New("Token not an admin session.")
 		return
 	}
 	return
