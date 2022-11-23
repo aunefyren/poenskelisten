@@ -180,8 +180,8 @@ function place_groups(group_array, user_id) {
 
         if(owner_id == user_id) {
             html += '<form action="" onsubmit="event.preventDefault(); add_members(' + group_array[i].ID + ', ' + user_id + ');">';
-            html += '<label for="group_members' + group_array[i].ID + '">Select group members:</label><br>';
-            html += '<select name="group_members' + group_array[i].ID + '" id="group-input-members-' + group_array[i].ID + '" multiple>';
+            html += '<label for="group_members_' + group_array[i].ID + '">Select group members:</label><br>';
+            html += '<select name="group_members_' + group_array[i].ID + '" id="group-input-members-' + group_array[i].ID + '" multiple>';
             html += '</select>';
             html += '<button id="register-button" type="submit" href="/">Add members</button>';
             html += '</form>';
@@ -234,7 +234,6 @@ function toggle_group(group_id, owner_id, user_id, member_array) {
             }
         }
     }
-    
     
 }
 
