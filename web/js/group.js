@@ -120,7 +120,7 @@ function place_wishlists(wishlists_array, group_id, user_id) {
 
         html += '<div class="wishlist">'
         
-        html += '<div class="wishlist-title clickable" onclick="location.href = \'./' + group_id + "/" + wishlists_array[i].ID + '\'">'
+        html += '<div class="wishlist-title clickable" onclick="location.href = \'../wishlists/'+ wishlists_array[i].ID + '\'">'
         html += wishlists_array[i].name
         html += '</div>'
 

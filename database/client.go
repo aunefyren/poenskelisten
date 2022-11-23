@@ -292,7 +292,7 @@ func GetGroupMembersFromWishlist(WishlistID int) ([]models.Group, error) {
 
 	var groups []models.Group
 
-	groupsrecords := Instance.Where("`groups`.enabled = ?", 1).Joins("JOIN `group_memberships` on `groups`.id = `group_memberships`.group").Where("`group_memberships`.enabled = ?", 1).Joins("JOIN `users` on `group_memberships`.member = `users`.id").Where("`users`.enabled = ?", 1).Find(&groups)
+	groupsrecords := Instance.Where("`groups`.enabled = ?", 1).Joins("JOIN `group_memberships` on `groups`.id = `group_memberships`.group").Where("`group_memberships`.enabled = ?", 1).Joins("JOIN `users` on `group_memberships`.member = `users`.id").Where("`users`.enabled = ?", 1).Joins("JOIN `wishlist_memberships` on `groups`.id = `wishlist_memberships`.group").Where("`wishlist_memberships`.enabled = ?", 1).Find(&groups)
 	if groupsrecords.Error != nil {
 		return []models.Group{}, groupsrecords.Error
 	}

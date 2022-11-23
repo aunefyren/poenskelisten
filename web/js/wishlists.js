@@ -114,11 +114,13 @@ function place_wishlists(wishlists_array, user_id) {
 
     for(var i = 0; i < wishlists_array.length; i++) {
 
+        owner_id = wishlists_array[i].owner.ID
+
         html += '<div class="wishlist-wrapper">'
 
         html += '<div class="wishlist">'
         
-        html += '<div class="wishlist-title clickable" onclick="location.href = \'./' + wishlists_array[i].ID + '\'">'
+        html += '<div class="wishlist-title clickable" onclick="location.href = \'./wishlists/' + wishlists_array[i].ID + '\'">'
         html += wishlists_array[i].name
         html += '</div>'
 
@@ -130,19 +132,41 @@ function place_wishlists(wishlists_array, user_id) {
         html += '<img class="icon-img color-invert" src="../assets/user.svg">'
         html += '</div>'
 
-        var members_string = ""
-        if(wishlists_array[i].owner.ID == user_id) {
-            html += '<div class="profile-icon clickable" onclick="toggle_group(' + user_id + ', ' + members_string + ')">'
+        var members_string="["
+        for(var j = 0; j < wishlists_array[i].members.length; j++) {
+            if(j !== 0) {
+                members_string += ','
+            }
+            members_string += wishlists_array[i].members[j].ID
+            
+            console.log(wishlists_array[i].ID + " " + wishlists_array[i].members[j].ID)
+            console.log(wishlists_array[i].members)
+        }
+        members_string += ']'
+
+        if(owner_id == user_id) {
+            html += '<div class="profile-icon clickable" onclick="toggle_wishlist(' + user_id + ', ' + wishlists_array[i].ID + ', ' + owner_id + ', ' + members_string + ')">'
             html += '<img id="wishlist_' + wishlists_array[i].ID + '_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">'
             html += '</div>'
         }
 
-        if(wishlists_array[i].owner.ID == user_id) {
+        if(owner_id == user_id) {
             html += '<div class="profile-icon clickable" onclick="delete_wishlist(' + wishlists_array[i].ID + ', ' + user_id + ')">'
             html += '<img class="icon-img color-invert" src="../../assets/trash-2.svg">'
             html += '</div>'
         }
 
+        html += '</div>'
+
+        html += '<div class="group-members collapsed" id="wishlist_' + wishlists_array[i].ID + '_members">'
+        if(owner_id == user_id) {
+            html += '<form action="" onsubmit="event.preventDefault(); add_members(' + wishlists_array[i].ID + ', ' + user_id + ');">';
+            html += '<label for="wishlist_members_' + wishlists_array[i].ID + '">Select wishlist members:</label><br>';
+            html += '<select name="wishlist_members_' + wishlists_array[i].ID + '" id="wishlist-input-members-' + wishlists_array[i].ID + '" multiple>';
+            html += '</select>';
+            html += '<button id="register-button" type="submit" href="/">Add members</button>';
+            html += '</form>';
+        }
         html += '</div>'
 
         html += '</div>'
@@ -269,4 +293,103 @@ function delete_wishlist(wishlist_id, user_id) {
     xhttp.send();
     return false;
 
+}
+
+function toggle_wishlist(user_id, wishlist_id, owner_id, member_array) {
+    wishlist_members = document.getElementById("wishlist_" + wishlist_id + "_members");
+    wishlist_members_arrow = document.getElementById("wishlist_" + wishlist_id + "_arrow");
+
+    console.log(member_array);
+
+    if(wishlist_members.classList.contains("collapsed")) {
+        wishlist_members.classList.remove("collapsed")
+        wishlist_members.classList.add("expanded")
+        wishlist_members.style.display = "inline-block"
+        wishlist_members_arrow.src = "../../assets/chevron-down.svg"
+
+        if(user_id == owner_id) {
+            get_groups(owner_id, wishlist_id, user_id, member_array)
+        }
+    } else {
+        wishlist_members.classList.remove("expanded")
+        wishlist_members.classList.add("collapsed")
+        wishlist_members.style.display = "none"
+        wishlist_members_arrow.src = "../../assets/chevron-right.svg"
+
+        if(user_id == owner_id) {
+            var select_list = document.getElementById("wishlist-input-members-" + wishlist_id)
+            if(select_list.options.length > 0) {
+                var options = [];
+                for (var i = 0; i < select_list.options.length; i++) {
+                    options.push(select_list.options[i]);
+                }
+                for (var i = 0; i < options.length; i++) {
+                    select_list.remove(options[i]);
+                }
+            }
+        }
+    }
+    
+}
+
+function get_groups(owner_id, wishlist_id, user_id, member_array){
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                clearResponse();
+                groups = result.groups;
+                console.log(groups);
+                place_groups(groups, wishlist_id, owner_id, user_id, member_array);
+
+            }
+
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/group/get");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+}
+
+function place_groups(group_array, wishlist_id, owner_id, user_id, member_array) {
+    var select_list = document.getElementById("wishlist-input-members-" + wishlist_id)
+
+    console.log(group_array)
+
+    for(var i = 0; i < group_array.length; i++) {
+
+        var found = false;
+        for(var j = 0; j < group_array.length; j++) {
+            if(member_array[j] == group_array[i].ID) {
+                found = true;
+                break;
+            }
+        }
+        if(found) {
+            continue;
+        }
+
+        var option = document.createElement("option");
+        option.value = group_array[i].ID
+        option.text = group_array[i].name
+        select_list.add(option, select_list[0]);
+    }
 }
