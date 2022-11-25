@@ -161,10 +161,37 @@ function place_wishlists(wishlists_array, user_id) {
 
         html += '</div>'
 
+        html += '</div>'
+
         html += '<div class="group-members collapsed" id="wishlist_' + wishlists_array[i].ID + '_members">'
+        for(var j = 0; j < wishlists_array[i].members.length; j++) {
+            if(j == 0) {
+                html += '<div class="text-body">Available in these groups:</div>'
+            }
+
+            html += '<div class="group-member">'
+
+            html += '<div class="group-title">';
+
+            html += '<div class="profile-icon">'
+            html += '<img class="icon-img color-invert" src="../assets/users.svg">'
+            html += '</div>'
+
+            html += wishlists_array[i].members[j].name
+
+            html += '</div>'
+
+            if(owner_id == user_id) {
+                html += '<div class="profile-icon clickable" onclick="remove_member(' + wishlists_array[i].ID + ',' + wishlists_array[i].members[j].ID + ', ' + user_id +')">'
+                html += '<img class="icon-img color-invert" src="../../assets/x.svg">'
+                html += '</div>'
+            }
+            html += '</div>'
+        }
+
         if(owner_id == user_id) {
-            html += '<form action="" onsubmit="event.preventDefault(); add_members(' + wishlists_array[i].ID + ', ' + user_id + ');">';
-            html += '<label for="wishlist_members_' + wishlists_array[i].ID + '">Select groups:</label><br>';
+            html += '<form action="" onsubmit="event.preventDefault(); add_groups(' + wishlists_array[i].ID + ', ' + user_id + ');">';
+            html += '<label for="wishlist-input-members-' + wishlists_array[i].ID + '">Select groups:</label><br>';
             html += '<select name="wishlist_members_' + wishlists_array[i].ID + '" id="wishlist-input-members-' + wishlists_array[i].ID + '" multiple>';
             html += '</select>';
             html += '<button id="register-button" type="submit" href="/">Add wishlist to groups</button>';
@@ -395,4 +422,123 @@ function place_groups(group_array, wishlist_id, owner_id, user_id, member_array)
         option.text = group_array[i].name
         select_list.add(option, select_list[0]);
     }
+}
+
+function add_groups(wishlist_id, group_id) {
+
+    var selected_members = [];
+    var select_list = document.getElementById("wishlist-input-members-" + wishlist_id)
+
+    for (var i=0; i < select_list.options.length; i++) {
+        opt = select_list.options[i];
+    
+        if (opt.selected) {
+            selected_members.push(Number(opt.value));
+        }
+    }
+
+    var form_obj = { 
+                                    "groups": selected_members
+                                };
+
+    var form_data = JSON.stringify(form_obj);
+
+    console.log(form_data)
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message);
+                console.log(result);
+
+                wishlists = result.wishlists;
+
+                console.log("Placing wishlists after member is added: ")
+                place_wishlists(wishlists, user_id);
+                
+            }
+
+        } else {
+            info("Adding groups...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wishlist/" + wishlist_id + "/join");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
+
+}
+
+function remove_member(wishlist_id, group_id, user_id) {
+
+    if(!confirm("Are you sure you want to remove your wishlist from this group?")) {
+        return;
+    }
+
+    var form_obj = { 
+        "group_id" : group_id
+    };
+
+    var form_data = JSON.stringify(form_obj);
+
+    console.log(form_data)
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message);
+                console.log(result);
+
+                console.log("User ID: " + user_id);
+
+                wishlists = result.wishlists;
+
+                console.log("Placing groups after member is removed: ")
+                place_wishlists(wishlists, user_id);
+                
+            }
+
+        } else {
+            info("Removing member...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wishlist/" + wishlist_id + "/remove");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
+
 }

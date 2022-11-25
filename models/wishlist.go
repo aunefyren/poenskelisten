@@ -48,5 +48,5 @@ type WishlistMembershipObject struct {
 }
 
 type WishlistMembershipCreationRequest struct {
-	Groups []int `json:"group"`
+	Groups []int `json:"groups"`
 }

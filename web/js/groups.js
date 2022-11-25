@@ -15,7 +15,7 @@ function load_page(result) {
                             Groups
                         </div>
 
-                        <div class="body" style="text-align: center;">
+                        <div class="text-body" style="text-align: center;">
                             These are groups you either own or are member of. Groups allow people to share wishlists between eachother. You can create a new group at the bottom of this page.
                         </div>
 
@@ -153,6 +153,9 @@ function place_groups(group_array, user_id) {
 
         html += '<div class="group-members collapsed" id="group_' + group_array[i].ID + '_members">'
         for(var j = 0; j < group_array[i].members.length; j++) {
+            if(j == 0) {
+                html += '<div class="text-body">Members in this group:</div>'
+            }
             html += '<div class="group-member">'
 
             html += '<div class="group-title">';

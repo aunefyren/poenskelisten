@@ -36,6 +36,12 @@ func RegisterGroup(context *gin.Context) {
 	// Finalize group object
 	group.Owner = UserID
 
+	if len(group.Name) < 5 || group.Name == "" {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "The name of the group must be five or more letters."})
+		context.Abort()
+		return
+	}
+
 	// Verify group doesnt exist
 	grouprecords := database.Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.name = ?", group.Name).Where("`groups`.Owner = ?", group.Owner).Find(&group)
 	if grouprecords.RowsAffected > 0 {
