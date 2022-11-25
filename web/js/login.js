@@ -15,7 +15,7 @@ function load_page(result) {
                             Log in
                         </div>
 
-                        <div class="body">
+                        <div class="text-body">
                             To view your wishes you need to login in...
                         </div>
 

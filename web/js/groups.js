@@ -12,11 +12,11 @@ function load_page(result) {
                     <div class="module">
                     
                         <div class="title">
-                            Pønskelisten
+                            Groups
                         </div>
 
                         <div class="body" style="text-align: center;">
-                            Choose a group, yo.
+                            These are groups you either own or are member of. Groups allow people to share wishlists between eachother. You can create a new group at the bottom of this page.
                         </div>
 
                         <br>
@@ -183,7 +183,7 @@ function place_groups(group_array, user_id) {
             html += '<label for="group_members_' + group_array[i].ID + '">Select group members:</label><br>';
             html += '<select name="group_members_' + group_array[i].ID + '" id="group-input-members-' + group_array[i].ID + '" multiple>';
             html += '</select>';
-            html += '<button id="register-button" type="submit" href="/">Add members</button>';
+            html += '<button id="register-button" type="submit" href="/">Add members to group</button>';
             html += '</form>';
         }
         html += '</div>'

@@ -19,12 +19,15 @@ function load_page(result) {
                     
                     <div class="module">
                     
-                        <div class="title">
-                            Pønskelisten
+                        <div id="group-title" class="title">
+                            Group
                         </div>
 
-                        <div class="body" style="text-align: center;">
-                            Choose a wishlist, yo.
+                        <div class="text-body" id="group-description" style="text-align: center;">
+                        </div>
+
+                        <div class="text-body" style="text-align: center;">
+                            These are the wishlists shared to this group. Click on one to see the wishes inside.
                         </div>
 
                         <br>
@@ -36,7 +39,7 @@ function load_page(result) {
                         <div id="wishlist-input" class="wishlist-input">
                             <form action="" onsubmit="event.preventDefault(); create_wishlist(` + group_id + `, ` + login_data.data.id + `);">
                                 
-                                <label for="wishlist_name">Create a new wishlist:</label><br>
+                                <label for="wishlist_name">Create a new wishlist in this group:</label><br>
 
                                 <input type="text" name="wishlist_name" id="wishlist_name" placeholder="Wishlist name" autocomplete="off" required />
                                 
@@ -45,7 +48,7 @@ function load_page(result) {
                                 <label for="wishlist_date">When does your wishlist expire?</label><br>
                                 <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" autocomplete="off" required />
                                 
-                                <button id="register-button" type="submit" href="/">Create wishlist</button>
+                                <button id="register-button" type="submit" href="/">Create wishlist in this group</button>
 
                             </form>
                         </div>
@@ -121,6 +124,9 @@ function place_wishlists(wishlists_array, group_id, user_id) {
         html += '<div class="wishlist">'
         
         html += '<div class="wishlist-title clickable" onclick="location.href = \'../wishlists/'+ wishlists_array[i].ID + '\'">'
+        html += '<div class="profile-icon">'
+        html += '<img class="icon-img color-invert" src="../assets/list.svg">'
+        html += '</div>'
         html += wishlists_array[i].name
         html += '</div>'
 

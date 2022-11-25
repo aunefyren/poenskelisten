@@ -15,7 +15,7 @@ function load_page(result) {
                             Register
                         </div>
 
-                        <div class="body">
+                        <div class="text-body">
                             Did you get an invitation?
                         </div>
 

@@ -25,11 +25,11 @@ function load_page(result) {
                     <div class="module">
                     
                         <div class="title">
-                            Pønskelisten
+                            Wishes
                         </div>
 
-                        <div class="body" style="text-align: center;">
-                            Choose a wish, yo.
+                        <div class="text-body" style="text-align: center;">
+                            These are wishes.
                         </div>
 
                         <br>
@@ -125,6 +125,9 @@ function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
         html += '<div class="wish" id="wish_' + wishes_array[i].ID + '">'
         
         html += '<div class="wish-title">'
+        html += '<div class="profile-icon">'
+        html += '<img class="icon-img color-invert" src="../assets/gift.svg">'
+        html += '</div>'
         html += wishes_array[i].name
         html += '</div>'
 

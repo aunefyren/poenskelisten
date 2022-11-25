@@ -108,7 +108,13 @@ func main() {
 	fmt.Println("Connecting to database...")
 	log.Println("Connecting to database...")
 
-	database.Connect(Config.DBUsername + ":" + Config.DBPassword + "@tcp(" + Config.DBIP + ":" + strconv.Itoa(Config.DBPort) + ")/" + Config.DBName + "?parseTime=true&charset=utf8mb4_unicode_ci")
+	err = database.Connect(Config.DBUsername, Config.DBPassword, Config.DBIP, Config.DBPort, Config.DBName)
+	if err != nil {
+		fmt.Println("Failed to connect to database. Error: " + err.Error())
+		log.Println("Failed to connect to database. Error: " + err.Error())
+
+		os.Exit(1)
+	}
 	database.Migrate()
 
 	log.Println("Database connected.")
