@@ -18,11 +18,11 @@ function load_page(result) {
                     <div class="module">
                     
                         <div class="title">
-                            Pønskelisten
+                            Wishlists
                         </div>
 
-                        <div class="body" style="text-align: center;">
-                            These are your wishlists. You can add them to different groups.
+                        <div class="text-body" style="text-align: center;">
+                            These are your wishlists. You can add different wishlists to different groups, allowing others to see your wishes. At the bottom of this page you can create a new wishlist. Make sure to add it to a group afterward.
                         </div>
 
                         <br>
@@ -121,6 +121,9 @@ function place_wishlists(wishlists_array, user_id) {
         html += '<div class="wishlist">'
         
         html += '<div class="wishlist-title clickable" onclick="location.href = \'./wishlists/' + wishlists_array[i].ID + '\'">'
+        html += '<div class="profile-icon">'
+        html += '<img class="icon-img color-invert" src="../assets/list.svg">'
+        html += '</div>'
         html += wishlists_array[i].name
         html += '</div>'
 
@@ -161,10 +164,10 @@ function place_wishlists(wishlists_array, user_id) {
         html += '<div class="group-members collapsed" id="wishlist_' + wishlists_array[i].ID + '_members">'
         if(owner_id == user_id) {
             html += '<form action="" onsubmit="event.preventDefault(); add_members(' + wishlists_array[i].ID + ', ' + user_id + ');">';
-            html += '<label for="wishlist_members_' + wishlists_array[i].ID + '">Select wishlist members:</label><br>';
+            html += '<label for="wishlist_members_' + wishlists_array[i].ID + '">Select groups:</label><br>';
             html += '<select name="wishlist_members_' + wishlists_array[i].ID + '" id="wishlist-input-members-' + wishlists_array[i].ID + '" multiple>';
             html += '</select>';
-            html += '<button id="register-button" type="submit" href="/">Add members</button>';
+            html += '<button id="register-button" type="submit" href="/">Add wishlist to groups</button>';
             html += '</form>';
         }
         html += '</div>'

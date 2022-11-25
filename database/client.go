@@ -1,9 +1,13 @@
 package database
 
 import (
+	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"poenskelisten/models"
+	"strconv"
+	"strings"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -12,13 +16,49 @@ import (
 var Instance *gorm.DB
 var dbError error
 
-func Connect(connectionString string) {
-	Instance, dbError = gorm.Open(mysql.Open(connectionString), &gorm.Config{})
+func Connect(dbUsername string, dbPassword string, dbIP string, dbPort int, dbName string) error {
+
+	connStrDb := dbUsername + ":" + dbPassword + "@tcp(" + dbIP + ":" + strconv.Itoa(dbPort) + ")/" + dbName + "?parseTime=True&loc=Local&charset=utf8mb4"
+
+	// Connect to DB without DB Name
+	Instance, dbError = gorm.Open(mysql.Open(connStrDb), &gorm.Config{})
 	if dbError != nil {
-		log.Fatal(dbError)
-		panic("Cannot connect to DB")
+
+		if strings.Contains(dbError.Error(), "Unknown database '"+dbName+"'") {
+			err := CreateTable(dbUsername, dbPassword, dbIP, dbPort, dbName)
+			if err != nil {
+				return err
+			} else {
+				Instance, dbError = gorm.Open(mysql.Open(connStrDb), &gorm.Config{})
+				if dbError != nil {
+					return dbError
+				}
+			}
+		} else {
+			return dbError
+		}
 	}
-	log.Println("Connected to Database!")
+
+	log.Println("Connected to database.")
+	fmt.Println("Connected to database.")
+
+	return nil
+}
+
+func CreateTable(dbUsername string, dbPassword string, dbIP string, dbPort int, dbName string) error {
+	url := fmt.Sprintf("host=%s port=%s user=%s password=%s sslmode=disable TimeZone=%s", dbIP, strconv.Itoa(dbPort), dbUsername, dbUsername, "local")
+	db, err := sql.Open("mysql", url)
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(fmt.Sprintf("CREATE DATABASE %s;", dbName))
+	if err != nil {
+		panic(err)
+	}
+
+	return nil
 }
 
 func Migrate() {

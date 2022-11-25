@@ -197,6 +197,7 @@
     display: block;
     text-align: center;
     z-index: 9;
+    box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2), 0 3px 10px 0 rgba(0, 0, 0, 0.19);
   }
   
   .nav-item {
@@ -370,7 +371,7 @@ button:disabled {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  justify-content: space-between;;
+  justify-content: space-between;
   align-items: center;
   align-content: center;
 }
@@ -389,7 +390,7 @@ button:disabled {
 
 .group-title, .wishlist-title, .wish-title {
   max-width: 50%;
-  margin: 0;
+  margin: 0.5em 0;
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
@@ -434,7 +435,7 @@ button:disabled {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  justify-content: space-between;;
+  justify-content: space-between;
   align-items: center;
   align-content: center;
 }
@@ -451,7 +452,7 @@ button:disabled {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  justify-content: space-between;;
+  justify-content: space-between;
   align-items: center;
   align-content: center;
   margin: 1em 1em;
@@ -497,4 +498,58 @@ button:disabled {
 
 .group-input, .wishlist-input {
   display: inline-block !important;
+}
+
+.text-body{
+  margin: 0.5em 0;
+}
+
+.title{
+  font-weight: 200;
+  font-size: 1.25em;
+  margin-bottom: 0.25;
+}
+
+/* When the screen is less than 600 pixels wide, hide all links, except for the first one ("Home"). Show the link that contains should open and close the topnav (.icon) */
+@media screen and (max-width: 65em) {
+  .nav-item.enabled {
+      display: none !important;
+  }
+  .nav-title {
+      text-align: center;
+      margin: auto;
+      float: none;
+  }
+  .nav-icon {
+      float: right;
+      display: block;
+  }
+  .nav-bar {
+      position: relative !important;
+  }
+  .nav-logo{
+      position: fixed;
+  }
+}
+
+/* The "responsive" class is added to the topnav with JavaScript when the user clicks on the icon. This class makes the topnav look good on small screens (display the links vertically instead of horizontally) */
+@media screen and (max-width: 65em) {
+.navbar.responsive {position: fixed !important;}
+.navbar.responsive .nav-icon {
+  position: fixed !important;
+  right: 0;
+  top: 0;
+}
+.navbar.responsive .nav-item.enabled {
+  float: none;
+  display: block !important;
+  text-align: left;
+  width: 100%;
+}
+.navbar {
+  position: fixed;
+}
+.nav-logo.responsive {
+  position: fixed;
+}
 }

@@ -324,6 +324,9 @@ func GetWishlistObject(WishlistID int) (models.WishlistUser, error) {
 	var wishlist_with_user models.WishlistUser
 
 	wishlist, err := database.GetWishlist(WishlistID)
+	if err != nil {
+		return models.WishlistUser{}, err
+	}
 
 	groups, err := database.GetGroupMembersFromWishlist(int(wishlist.ID))
 	if err != nil {
@@ -359,6 +362,10 @@ func GetWishlistObject(WishlistID int) (models.WishlistUser, error) {
 
 		groups_with_users = append(groups_with_users, group_with_user)
 
+	}
+
+	if len(groups_with_users) < 1 {
+		groups_with_users = []models.GroupUser{}
 	}
 
 	owner, err := database.GetUserInformation(wishlist.Owner)
@@ -451,6 +458,10 @@ func GetWishlistObjects(UserID int) ([]models.WishlistUser, error) {
 
 			groups_with_users = append(groups_with_users, group_with_user)
 
+		}
+
+		if len(groups_with_users) < 1 {
+			groups_with_users = []models.GroupUser{}
 		}
 
 		owner, err := database.GetUserInformation(wishlist.Owner)

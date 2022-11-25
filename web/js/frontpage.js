@@ -11,22 +11,16 @@ function load_page(result) {
                     
                     <div class="module">
                     
-                        <div class="news_post">
-                    
-                            <div class="title">
-                                Pønskelisten
-                            </div>
+                        <div class="title">
+                            Pønskelisten
+                        </div>
 
-                            <div class="body" style="text-align: center;">
-                                Make a wish.
-                            </div>
+                        <div class="text-body" style="text-align: center;">
+                            Make a wish.
 
                             <br>
                             <br>
-
-                            <div id="banner">
-                            </div>
-                            
+                            Welcome to the front page. Not much to see here currently. Use to navigation bar and head to 'Wishlists' to manage your wishlists. Head to 'Groups' to manage and view wishlists in groups.
                         </div>
                         
                     </div>
@@ -40,7 +34,6 @@ function load_page(result) {
 
     if(result !== false) {
         showLoggedInMenu();
-        info('Logged in.');
     } else {
         showLoggedOutMenu();
     }

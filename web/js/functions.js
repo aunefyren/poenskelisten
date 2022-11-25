@@ -3,7 +3,7 @@ var api_url = window.location.origin + "/api/";
 // Load service worker
 window.addEventListener("load", () => {
     if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("jss/service-worker.js");
+        navigator.serviceWorker.register("js/service-worker.js");
     }
 });
 
@@ -187,12 +187,16 @@ function showLoggedOutMenu() {
 function toggle_navbar() {
     var x = document.getElementById("navbar");
     var y = document.getElementById("nav-logo");
-    if (x.className === "navbar") {
-      x.className += " responsive";
-      y.className += " responsive";
+    if (!x.classList.contains("responsive")) {
+        x.classList.add("responsive");
+        x.classList.add("responsive");
+        x.classList.remove("unresponsive");
+        x.classList.remove("unresponsive");
     } else {
-      x.className = "navbar";
-      y.className = "nav-logo";
+        x.classList.add("unresponsive");
+        x.classList.add("unresponsive");
+        x.classList.remove("responsive");
+        x.classList.remove("responsive");
     }
 }
 
