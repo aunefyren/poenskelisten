@@ -2,8 +2,10 @@ function load_page(result) {
 
     if(result !== false) {
         var login_data = JSON.parse(result);
+        user_id = login_data.id
     } else {
         var login_data = false;
+        user_id = 0
     }
 
     var html = `
@@ -26,7 +28,7 @@ function load_page(result) {
                         </div>
 
                         <div id="group-input" class="group-input">
-                            <form action="" onsubmit="event.preventDefault(); create_group(` + login_data.data.id + `);">
+                            <form action="" onsubmit="event.preventDefault(); create_group(` + user_id + `);">
                                 
                                 <label for="group_name">Create a new group:</label><br>
 

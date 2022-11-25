@@ -2,8 +2,11 @@ function load_page(result) {
 
     if(result !== false) {
         var login_data = JSON.parse(result);
+        user_id = login_data.data.id
     } else {
         var login_data = false;
+        group_id = 0;
+        user_id = 0
     }
 
     try {
@@ -37,7 +40,7 @@ function load_page(result) {
                         </div>
 
                         <div id="wishlist-input" class="wishlist-input">
-                            <form action="" onsubmit="event.preventDefault(); create_wishlist(` + group_id + `, ` + login_data.data.id + `);">
+                            <form action="" onsubmit="event.preventDefault(); create_wishlist(` + group_id + `, ` + user_id + `);">
                                 
                                 <label for="wishlist_name">Create a new wishlist in this group:</label><br>
 

@@ -40,6 +40,7 @@ func GenerateJWT(email string, userid int, admin bool) (tokenString string, err 
 	tokenString, err = token.SignedString(jwtKey)
 	return
 }
+
 func ValidateToken(signedToken string, admin bool) (err error) {
 	token, err := jwt.ParseWithClaims(
 		signedToken,
