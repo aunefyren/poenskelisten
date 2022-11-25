@@ -311,6 +311,7 @@ form {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
+  margin: 1em 0;
 }
 
 input[type=text], input[type=password], input[type=email], input[type=date], select {
@@ -399,12 +400,12 @@ button:disabled {
   align-content: center;
 }
 
-.wish-title, .group-title {
+.wish-title, .group-title, .wishlist-title {
   margin: 0 !important;
   padding: 0.5em 0 !important;
 }
 
-.wish, .group {
+.wish, .group, .wishlist {
   margin: 0 !important;
   border: none;
 }
@@ -448,7 +449,7 @@ button:disabled {
   filter: invert(100%);
 }
 
-.wish-wrapper, .group-wrapper {
+.wish-wrapper, .group-wrapper, .wishlist-wrapper {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
@@ -502,6 +503,7 @@ button:disabled {
 
 .text-body{
   margin: 0.5em 0;
+  text-align: center;
 }
 
 .title{

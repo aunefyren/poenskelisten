@@ -10,9 +10,7 @@ function load_page(result) {
         string_index = document.URL.lastIndexOf('/');
         wishlist_id = document.URL.substring(string_index+1);
 
-        var url_array = document.URL.split("/");
-        var array_lenght = url_array.length;
-        var group_id = url_array[array_lenght-2];
+        group_id = 0
     }
     catch {
         group_id = 0
