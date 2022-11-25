@@ -2,8 +2,10 @@ function load_page(result) {
 
     if(result !== false) {
         var login_data = JSON.parse(result);
+        user_id = login_data.data.id
     } else {
         var login_data = false;
+        user_id = 0
     }
 
     try {
@@ -37,7 +39,7 @@ function load_page(result) {
                         </div>
 
                         <div id="wish-input" class="wish-input">
-                            <form action="" onsubmit="event.preventDefault(); send_wish(` + wishlist_id + `,` + group_id + `,` + login_data.data.id + `);">
+                            <form action="" onsubmit="event.preventDefault(); send_wish(` + wishlist_id + `,` + group_id + `,` + user_id + `);">
                                 <label for="wish_name">Add a new wish:</label><br>
                                 <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" autocomplete="off" required />
                                 <input type="text" name="wish_note" id="wish_note" placeholder="Wish note" autocomplete="off" />
