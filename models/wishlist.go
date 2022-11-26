@@ -20,6 +20,7 @@ type WishlistCreationRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Date        string `json:"date"`
+	Group       int    `json:"group"`
 }
 
 type WishlistUser struct {

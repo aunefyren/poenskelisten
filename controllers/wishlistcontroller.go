@@ -32,6 +32,28 @@ func RegisterWishlist(context *gin.Context) {
 		return
 	}
 
+	group_membership := false
+	group_id := 0
+	if wishlist.Group != 0 {
+		group_membership = true
+
+		// Parse group id
+		group_id = wishlist.Group
+
+		MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, group_id)
+		if err != nil {
+			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			context.Abort()
+			return
+		} else if !MembershipStatus {
+			//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not a member of this group."})
+			context.Abort()
+			return
+		}
+
+	}
+
 	if len(wishlist.Name) < 5 || wishlist.Name == "" {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The name of the wishlist must be five or more letters."})
 		context.Abort()
@@ -75,11 +97,38 @@ func RegisterWishlist(context *gin.Context) {
 		return
 	}
 
-	wishlists_with_users, err := GetWishlistObjects(UserID)
-	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		context.Abort()
-		return
+	var wishlists_with_users []models.WishlistUser
+
+	// If a group was referenced, create the wishlist membership
+	if group_membership == true {
+		var wishlistmembershipdb models.WishlistMembership
+		wishlistmembershipdb.Group = group_id
+		wishlistmembershipdb.Wishlist = int(wishlistdb.ID)
+
+		// Add group membership to database
+		record := database.Instance.Create(&wishlistmembershipdb)
+		if record.Error != nil {
+			context.JSON(http.StatusInternalServerError, gin.H{"error": record.Error.Error()})
+			context.Abort()
+			return
+		}
+
+		wishlists_with_users, err = GetWishlistObjectsFromGroup(group_id)
+		if err != nil {
+			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			context.Abort()
+			return
+		}
+
+	} else {
+
+		wishlists_with_users, err = GetWishlistObjects(UserID)
+		if err != nil {
+			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			context.Abort()
+			return
+		}
+
 	}
 
 	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist created.", "wishlists": wishlists_with_users})
@@ -523,7 +572,7 @@ func JoinWishlist(context *gin.Context) {
 		return
 	}
 
-	// Parse group id
+	// Parse wishlist id
 	wishlist_id_int, err := strconv.Atoi(wishlist_id)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -557,7 +606,7 @@ func JoinWishlist(context *gin.Context) {
 			return
 		}
 
-		// Verify group is owned by requester
+		// Verify wishlist is owned by requester
 		var wishlist models.Wishlist
 		wishlistrecord := database.Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", wishlist_id_int).Where("`wishlists`.owner = ?", UserID).Find(&wishlist)
 		if wishlistrecord.Error != nil {

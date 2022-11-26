@@ -158,7 +158,6 @@ function place_wishlists(wishlists_array, group_id, user_id) {
         info("Looks like this group is empty...");
     }
 
-
     wishlist_object = document.getElementById("wishlists-box")
     wishlist_object.innerHTML = html
 }
@@ -171,11 +170,18 @@ function create_wishlist(group_id, user_id) {
     var wishlist_date_object = new Date(wishlist_date)
     var wishlist_date_string = wishlist_date_object.toISOString();
 
+    try {
+        group_id_int = parseInt(group_id);
+    } catch {
+        alert("Failed. Invalid group")
+        return
+    }
+
     var form_obj = { 
                                     "name" : wishlist_name,
                                     "description" : wishlist_description,
                                     "date": wishlist_date_string,
-                                    "group_id": group_id
+                                    "group": group_id_int
                                 };
 
     var form_data = JSON.stringify(form_obj);

@@ -3,7 +3,7 @@ var api_url = window.location.origin + "/api/";
 // Load service worker
 window.addEventListener("load", () => {
     if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("js/service-worker.js");
+        navigator.serviceWorker.register("/js/service-worker.js");
     }
 });
 
