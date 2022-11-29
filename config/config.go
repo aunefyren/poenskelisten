@@ -1,13 +1,13 @@
 package config
 
 import (
+	"aunefyren/poenskelisten/models"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
-	"poenskelisten/models"
 )
 
 var wrapperr_version_parameter = "v0.0.1"

@@ -1,10 +1,10 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/middlewares"
+	"aunefyren/poenskelisten/models"
 	"net/http"
-	"poenskelisten/database"
-	"poenskelisten/middlewares"
-	"poenskelisten/models"
 	"strconv"
 	"time"
 

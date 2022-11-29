@@ -1,4 +1,4 @@
-package poeutilities
+package utilities
 
 import (
 	"fmt"
