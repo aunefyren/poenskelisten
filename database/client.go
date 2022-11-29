@@ -1,11 +1,11 @@
 package database
 
 import (
+	"aunefyren/poenskelisten/models"
 	"database/sql"
 	"errors"
 	"fmt"
 	"log"
-	"poenskelisten/models"
 	"strconv"
 	"strings"
 

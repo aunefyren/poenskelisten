@@ -1,12 +1,12 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/auth"
+	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/middlewares"
+	"aunefyren/poenskelisten/models"
 	"fmt"
 	"net/http"
-	"poenskelisten/auth"
-	"poenskelisten/database"
-	"poenskelisten/middlewares"
-	"poenskelisten/models"
 
 	"github.com/gin-gonic/gin"
 )

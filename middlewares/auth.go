@@ -1,8 +1,8 @@
 package middlewares
 
 import (
+	"aunefyren/poenskelisten/auth"
 	"errors"
-	"poenskelisten/auth"
 
 	"github.com/gin-gonic/gin"
 )

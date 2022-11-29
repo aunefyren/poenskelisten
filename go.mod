@@ -1,4 +1,4 @@
-module poenskelisten
+module aunefyren/poenskelisten
 
 go 1.19
 

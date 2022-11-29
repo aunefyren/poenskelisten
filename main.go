@@ -1,17 +1,17 @@
 package main
 
 import (
+	"aunefyren/poenskelisten/auth"
+	"aunefyren/poenskelisten/config"
+	"aunefyren/poenskelisten/controllers"
+	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/middlewares"
+	"aunefyren/poenskelisten/utilities"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
-	"poenskelisten/auth"
-	"poenskelisten/config"
-	"poenskelisten/controllers"
-	"poenskelisten/database"
-	"poenskelisten/middlewares"
-	"poenskelisten/poeutilities"
 
 	"strconv"
 	"time"
@@ -23,7 +23,7 @@ import (
 
 func main() {
 
-	poeutilities.PrintASCII()
+	utilities.PrintASCII()
 
 	// Create files directory
 	newpath := filepath.Join(".", "files")

@@ -1,9 +1,9 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/models"
 	"net/http"
-	"poenskelisten/database"
-	"poenskelisten/models"
 
 	"github.com/gin-gonic/gin"
 )
