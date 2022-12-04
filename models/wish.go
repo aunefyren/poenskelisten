@@ -22,10 +22,29 @@ type WishCreationRequest struct {
 
 type WishUser struct {
 	gorm.Model
-	Name       string `json:"name"`
-	Note       string `json:"note"`
-	Enabled    bool   `json:"enabled"`
-	Owner      User   `json:"owner_id"`
-	URL        string `json:"url"`
-	WishlistID int    `json:"wishlist_id"`
+	Name       string            `json:"name"`
+	Note       string            `json:"note"`
+	Enabled    bool              `json:"enabled"`
+	Owner      User              `json:"owner_id"`
+	URL        string            `json:"url"`
+	WishlistID int               `json:"wishlist_id"`
+	WishClaim  []WishClaimObject `json:"wishclaim"`
+}
+
+type WishClaim struct {
+	gorm.Model
+	Wish    int  `json:"wish_id" gorm:"not null"`
+	User    int  `json:"user_id" gorm:"not null"`
+	Enabled bool `json:"enabled" gorm:"not null;default: true"`
+}
+
+type WishClaimObject struct {
+	gorm.Model
+	Wish    int  `json:"wish_id"`
+	User    User `json:"user"`
+	Enabled bool `json:"enabled"`
+}
+
+type WishClaimCreationRequest struct {
+	WishlistID int `json:"wishlist_id"`
 }

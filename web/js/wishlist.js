@@ -120,7 +120,15 @@ function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
 
     for(var i = 0; i < wishes_array.length; i++) {
 
-        html += '<div class="wish-wrapper">'
+        owner_id = wishes_array[i].owner_id.ID
+
+        if(wishes_array[i].wishclaim.length > 0 && user_id != owner_id) {
+            var transparent = " transparent"
+        } else {
+            var transparent = ""
+        }
+
+        html += '<div class="wish-wrapper ' + transparent + '">'
 
         html += '<div class="wish" id="wish_' + wishes_array[i].ID + '">'
         
@@ -145,9 +153,25 @@ function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
             html += '</div>'
         }
 
-        if(user_id == wishes_array[i].owner_id.ID) {
+        if(user_id == owner_id) {
             html += '<div class="profile-icon clickable" onclick="delete_wish(' + wishes_array[i].ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')">'
             html += '<img class="icon-img color-invert" src="../../assets/trash-2.svg">'
+            html += '</div>'
+        } else if(wishes_array[i].wishclaim.length > 0) {
+            for(var j = 0; j < wishes_array[i].wishclaim.length; j++) {
+                if(user_id !== wishes_array[i].wishclaim[j].user.ID) {
+                    html += '<div class="profile-icon" title="Claimed by ' + wishes_array[i].wishclaim[j].user.first_name + ' ' + wishes_array[i].wishclaim[j].user.last_name + '.">'
+                    html += '<img class="icon-img color-invert" src="../../assets/lock.svg">'
+                    html += '</div>'
+                } else {
+                    html += '<div class="profile-icon clickable" title="Claimed by you, click to unclaim.">'
+                    html += '<img class="icon-img color-invert" src="../../assets/unlock.svg" onclick="unclaim_wish(' + wishes_array[i].ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')")>'
+                    html += '</div>'
+                }
+            }
+        } else {
+            html += '<div class="profile-icon clickable" title="Claim this gift." onclick="claim_wish(' + wishes_array[i].ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')">'
+            html += '<img class="icon-img color-invert" src="../../assets/check.svg">'
             html += '</div>'
         }
         html += '</div>'
@@ -298,5 +322,113 @@ function delete_wish(wish_id, wishlist_id, group_id, user_id) {
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
+    return false;
+}
+
+function claim_wish(wish_id, wishlist_id, group_id, user_id) {
+
+    if(!confirm("Are you sure you want to claim this wish? Other users will not be able to gift the recipient this wish.")) {
+        return;
+    }
+
+    var form_obj = { 
+        "wishlist_id" : wishlist_id
+    };
+
+    var form_data = JSON.stringify(form_obj);
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message);
+                console.log(result);
+
+                console.log("user id " + user_id);
+
+                wishes = result.wishes;
+                place_wishes(wishes, wishlist_id, group_id, user_id);
+                clear_data();
+                
+               
+            }
+
+        } else {
+            info("Claiming wish...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wish/" + wish_id + "/claim");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
+}
+
+function unclaim_wish(wish_id, wishlist_id, group_id, user_id) {
+
+    if(!confirm("Are you sure you want to unclaim this wish?")) {
+        return;
+    }
+
+    var form_obj = { 
+        "wishlist_id" : wishlist_id
+    };
+
+    var form_data = JSON.stringify(form_obj);
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message);
+                console.log(result);
+
+                console.log("user id " + user_id);
+
+                wishes = result.wishes;
+                place_wishes(wishes, wishlist_id, group_id, user_id);
+                clear_data();
+                
+               
+            }
+
+        } else {
+            info("Un-claiming wish...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wish/" + wish_id + "/unclaim");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
     return false;
 }
