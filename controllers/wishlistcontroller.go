@@ -113,7 +113,7 @@ func RegisterWishlist(context *gin.Context) {
 			return
 		}
 
-		wishlists_with_users, err = GetWishlistObjectsFromGroup(group_id)
+		wishlists_with_users, err = GetWishlistObjectsFromGroup(group_id, UserID)
 		if err != nil {
 			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			context.Abort()
@@ -168,7 +168,7 @@ func GetWishlistsFromGroup(context *gin.Context) {
 		return
 	}
 
-	wishlists_with_users, err := GetWishlistObjectsFromGroup(group_id_int)
+	wishlists_with_users, err := GetWishlistObjectsFromGroup(group_id_int, UserID)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
@@ -230,7 +230,7 @@ func DeleteWishlist(context *gin.Context) {
 
 }
 
-func GetWishlistObjectsFromGroup(group_id int) ([]models.WishlistUser, error) {
+func GetWishlistObjectsFromGroup(group_id int, RequestUserID int) ([]models.WishlistUser, error) {
 
 	var wishlists_with_users []models.WishlistUser
 
@@ -298,7 +298,7 @@ func GetWishlistObjectsFromGroup(group_id int) ([]models.WishlistUser, error) {
 
 		// Get wishes
 		wishlist_id_int := int(wishlist.ID)
-		wishes, err := database.GetWishesFromWishlist(wishlist_id_int)
+		wishes, err := database.GetWishesFromWishlist(wishlist_id_int, RequestUserID)
 		if err != nil {
 			return []models.WishlistUser{}, err
 		}
@@ -357,7 +357,7 @@ func GetWishlist(context *gin.Context) {
 		return
 	}
 
-	wishlist_with_user, err := GetWishlistObject(wishlist_id_int)
+	wishlist_with_user, err := GetWishlistObject(wishlist_id_int, UserID)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
@@ -368,7 +368,7 @@ func GetWishlist(context *gin.Context) {
 
 }
 
-func GetWishlistObject(WishlistID int) (models.WishlistUser, error) {
+func GetWishlistObject(WishlistID int, RequestUserID int) (models.WishlistUser, error) {
 
 	var wishlist_with_user models.WishlistUser
 
@@ -435,7 +435,7 @@ func GetWishlistObject(WishlistID int) (models.WishlistUser, error) {
 	wishlist_with_user.UpdatedAt = wishlist.UpdatedAt
 
 	// Get wishes
-	wishes, err := database.GetWishesFromWishlist(WishlistID)
+	wishes, err := database.GetWishesFromWishlist(WishlistID, RequestUserID)
 	if err != nil {
 		return models.WishlistUser{}, err
 	}
@@ -533,7 +533,7 @@ func GetWishlistObjects(UserID int) ([]models.WishlistUser, error) {
 
 		// Get wishes
 		wishlist_id_int := int(wishlist.ID)
-		wishes, err := database.GetWishesFromWishlist(wishlist_id_int)
+		wishes, err := database.GetWishesFromWishlist(wishlist_id_int, UserID)
 		if err != nil {
 			return []models.WishlistUser{}, err
 		}

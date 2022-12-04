@@ -555,3 +555,7 @@ button:disabled {
   position: fixed;
 }
 }
+
+.transparent {
+  opacity: 0.5;
+}

@@ -53,7 +53,7 @@ func GetWishesFromWishlist(context *gin.Context) {
 		return
 	}
 
-	wishes, err := database.GetWishesFromWishlist(wishlist_id_int)
+	wishes, err := database.GetWishesFromWishlist(wishlist_id_int, UserID)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err})
 		context.Abort()
@@ -149,7 +149,7 @@ func RegisterWish(context *gin.Context) {
 		return
 	}
 
-	new_wishes, err := database.GetWishesFromWishlist(wishlist_id_int)
+	new_wishes, err := database.GetWishesFromWishlist(wishlist_id_int, UserID)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err})
 		context.Abort()
@@ -210,7 +210,7 @@ func DeleteWish(context *gin.Context) {
 		return
 	}
 
-	new_wishes, err := database.GetWishesFromWishlist(wishlist_id)
+	new_wishes, err := database.GetWishesFromWishlist(wishlist_id, UserID)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err})
 		context.Abort()
@@ -238,4 +238,201 @@ func parseRawURLFunction(rawurl string) (domain string, scheme string, err error
 	domain = u.Host
 	scheme = u.Scheme
 	return
+}
+
+func RegisterWishClaim(context *gin.Context) {
+	// Create wish request
+	var wish_id = context.Param("wish_id")
+	var wishclaim models.WishClaimCreationRequest
+	var db_wishclaim models.WishClaim
+
+	if err := context.ShouldBindJSON(&wishclaim); err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Get user ID
+	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Parse wishlist id
+	wish_id_int, err := strconv.Atoi(wish_id)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	db_wishlist_id, err := database.GetWishlistFromWish(wish_id_int)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(UserID, db_wishlist_id)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	WishlistMembership, err := database.VerifyUserMembershipToGroupmembershipToWishlist(UserID, db_wishlist_id)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	if !WishlistOwnership && !WishlistMembership {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not a member of, or an owner of this wishlist group."})
+		context.Abort()
+		return
+	}
+
+	// Verify if ownership of wish exists or not
+	MembershipStatus, err := database.VerifyUserOwnershipToWish(UserID, wish_id_int)
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	} else if MembershipStatus {
+		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You cannot claim your own wish."})
+		context.Abort()
+		return
+	}
+
+	// Verify if wish is claimed or not
+	ClaimStatus, err := database.VerifyWishIsClaimed(wish_id_int)
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	} else if ClaimStatus {
+		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Wish is already claimed."})
+		context.Abort()
+		return
+	}
+
+	db_wishclaim.User = UserID
+	db_wishclaim.Wish = wish_id_int
+
+	// Create wish is claimed
+	record := database.Instance.Create(&db_wishclaim)
+	if record.Error != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": record.Error.Error()})
+		context.Abort()
+		return
+	}
+
+	if wishclaim.WishlistID != 0 {
+		new_wishes, err := database.GetWishesFromWishlist(wishclaim.WishlistID, UserID)
+		if err != nil {
+			context.JSON(http.StatusBadRequest, gin.H{"error": err})
+			context.Abort()
+			return
+		}
+
+		// Return response
+		context.JSON(http.StatusCreated, gin.H{"message": "Wish claimed.", "wishes": new_wishes})
+	} else {
+		context.JSON(http.StatusCreated, gin.H{"message": "Wish claimed."})
+	}
+}
+
+func RemoveWishClaim(context *gin.Context) {
+	// Create wish request
+	var wish_id = context.Param("wish_id")
+	var wishclaim models.WishClaimCreationRequest
+
+	if err := context.ShouldBindJSON(&wishclaim); err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Get user ID
+	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Parse wishlist id
+	wish_id_int, err := strconv.Atoi(wish_id)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	db_wishlist_id, err := database.GetWishlistFromWish(wish_id_int)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(UserID, db_wishlist_id)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	WishlistMembership, err := database.VerifyUserMembershipToGroupmembershipToWishlist(UserID, db_wishlist_id)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	if !WishlistOwnership && !WishlistMembership {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not a member of, or an owner of this wishlist group."})
+		context.Abort()
+		return
+	}
+
+	// Verify if ownership of wish exists or not
+	OwnershipStatus, err := database.VerifyUserOwnershipToWishClaimByWish(UserID, wish_id_int)
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	} else if !OwnershipStatus {
+		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You cannot unclaim a wish you haven't claimed."})
+		context.Abort()
+		return
+	}
+
+	// Delete the membership
+	err = database.DeleteWishClaimByUserAndWish(wish_id_int, UserID)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	if wishclaim.WishlistID != 0 {
+		new_wishes, err := database.GetWishesFromWishlist(wishclaim.WishlistID, UserID)
+		if err != nil {
+			context.JSON(http.StatusBadRequest, gin.H{"error": err})
+			context.Abort()
+			return
+		}
+
+		// Return response
+		context.JSON(http.StatusCreated, gin.H{"message": "Wish claimed.", "wishes": new_wishes})
+	} else {
+		context.JSON(http.StatusCreated, gin.H{"message": "Wish claimed."})
+	}
 }
