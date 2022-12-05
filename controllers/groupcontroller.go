@@ -11,174 +11,214 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// The RegisterGroup function creates a new group with the specified name and owner, and adds the specified members to the group.
+// It returns a response indicating whether the group was created successfully and, if so, the updated list of groups with the current user as the owner.
 func RegisterGroup(context *gin.Context) {
-
-	// Create group request
+	// Create a new instance of the Group and GroupCreationRequest models
 	var group models.Group
-	var group_creation_request models.GroupCreationRequest
-	if err := context.ShouldBindJSON(&group_creation_request); err != nil {
+	var groupCreationRequest models.GroupCreationRequest
+
+	// Bind the incoming request body to the GroupCreationRequest model
+	if err := context.ShouldBindJSON(&groupCreationRequest); err != nil {
+		// If there is an error binding the request, return a Bad Request response
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	group.Description = group_creation_request.Description
-	group.Name = group_creation_request.Name
+	// Copy the data from the GroupCreationRequest model to the Group model
+	group.Description = groupCreationRequest.Description
+	group.Name = groupCreationRequest.Name
 
-	// Get user ID
-	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	// Get the user ID from the Authorization header of the request
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
+		// If there is an error getting the user ID, return a Bad Request response
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	// Finalize group object
-	group.Owner = UserID
+	// Set the group owner to the user ID we obtained
+	group.Owner = userID
 
+	// Verify that the group name is not empty and has at least 5 characters
 	if len(group.Name) < 5 || group.Name == "" {
+		// If the group name is not valid, return a Bad Request response
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The name of the group must be five or more letters."})
 		context.Abort()
 		return
 	}
 
-	// Verify group doesnt exist
-	grouprecords := database.Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.name = ?", group.Name).Where("`groups`.Owner = ?", group.Owner).Find(&group)
-	if grouprecords.RowsAffected > 0 {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": grouprecords.Error.Error()})
+	// Verify that a group with the same name and owner does not already exist
+	groupRecords := database.Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.name = ?", group.Name).Where("`groups`.Owner = ?", group.Owner).Find(&group)
+	if groupRecords.RowsAffected > 0 {
+		// If a group with the same name and owner already exists, return an Internal Server Error response
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "A group with that name already exists."})
 		context.Abort()
 		return
 	}
 
-	// Create group in DB
+	// Create the group in the database
 	record := database.Instance.Create(&group)
 	if record.Error != nil {
+		// If there is an error creating the group, return an Internal Server Error response
 		context.JSON(http.StatusInternalServerError, gin.H{"error": record.Error.Error()})
 		context.Abort()
 		return
 	}
 
-	// Create group membership
-	var groupmembership models.GroupMembership
-	groupmembership.Member = UserID
-	groupmembership.Group = int(group.ID)
-	membershiprecord := database.Instance.Create(&groupmembership)
-	if record.Error != nil {
-		context.JSON(http.StatusInternalServerError, gin.H{"error": membershiprecord.Error.Error()})
+	// Create a new instance of the GroupMembership model
+	var groupMembership models.GroupMembership
+
+	// Set the member and group ID for the new group membership
+	groupMembership.Member = userID
+	groupMembership.Group = int(group.ID)
+
+	// Create the group membership in the database
+	membershipRecord := database.Instance.Create(&groupMembership)
+	if membershipRecord.Error != nil {
+		// If there is an error creating the group membership, return an Internal Server Error response
+		context.JSON(http.StatusInternalServerError, gin.H{"error": membershipRecord.Error.Error()})
 		context.Abort()
 		return
 	}
 
-	for _, member := range group_creation_request.Members {
-		// Create group membership
-		var groupmembership models.GroupMembership
-		groupmembership.Member = member
-		groupmembership.Group = int(group.ID)
-		_ = database.Instance.Create(&groupmembership)
+	// Create group memberships for all members in the group_creation_request.Members slice
+	for _, member := range groupCreationRequest.Members {
+		// Create a new instance of the GroupMembership model
+		var groupMembership models.GroupMembership
+
+		// Set the member and group ID for the new group membership
+		groupMembership.Member = member
+		groupMembership.Group = int(group.ID)
+
+		// Create the group membership in the database
+		_ = database.Instance.Create(&groupMembership)
 	}
 
-	// get new group list
-	groups_with_owner, err := GetGroupObjects(UserID)
+	// Get a list of groups with the current user as the owner
+	groupsWithOwner, err := GetGroupObjects(userID)
 	if err != nil {
+		// If there is an error getting the list of groups, return a Bad Request response
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Group created.", "groups": groups_with_owner})
+	// Return a response indicating that the group was created, along with the updated list of groups
+	context.JSON(http.StatusCreated, gin.H{"message": "Group created.", "groups": groupsWithOwner})
 }
 
+// The JoinGroup function adds the specified members to the group with the given ID.
+// It returns a response indicating whether the members were added successfully and, if so, the updated list of groups with the current user as the owner.
 func JoinGroup(context *gin.Context) {
+	// Get the group ID from the URL parameters
+	var groupID = context.Param("group_id")
 
-	// Create groupmembership request
-	var group_id = context.Param("group_id")
-	var groupmembership models.GroupMembershipCreationRequest
+	// Create a new instance of the GroupMembershipCreationRequest model
+	var groupMembership models.GroupMembershipCreationRequest
 
-	if err := context.ShouldBindJSON(&groupmembership); err != nil {
+	// Bind the incoming request body to the GroupMembershipCreationRequest model
+	if err := context.ShouldBindJSON(&groupMembership); err != nil {
+		// If there is an error binding the request, return a Bad Request response
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	if len(groupmembership.Members) < 1 {
+	// Verify that the Members slice in the request contains at least one user
+	if len(groupMembership.Members) < 1 {
+		// If the Members slice is empty, return a Bad Request response
 		context.JSON(http.StatusBadRequest, gin.H{"error": "You must provide one or more users."})
 		context.Abort()
 		return
 	}
 
-	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	// Get the user ID from the Authorization header of the request
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
+		// If there is an error getting the user ID, return a Bad Request response
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	// Parse group id
-	group_id_int, err := strconv.Atoi(group_id)
+	// Parse the group ID from string to int
+	groupIDInt, err := strconv.Atoi(groupID)
 	if err != nil {
+		// If there is an error parsing the group ID, return a Bad Request response
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	for _, Member := range groupmembership.Members {
+	// Iterate over the members in the groupMembership.Members slice
+	for _, member := range groupMembership.Members {
+		// Create a new instance of the GroupMembership model
+		var groupMembershipDB models.GroupMembership
 
-		var groupmembershipdb models.GroupMembership
-		groupmembershipdb.Member = Member
+		// Set the member ID for the new group membership
+		groupMembershipDB.Member = member
 
-		// Verify user exists
-		_, err := database.GetUserInformation(Member)
+		// Verify that the user exists
+		_, err := database.GetUserInformation(member)
 		if err != nil {
+			// If the user does not exist, return a Bad Request response
 			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			context.Abort()
 			return
 		}
 
-		// Verify membership doesnt exist
-		MembershipStatus, err := database.VerifyUserMembershipToGroup(Member, group_id_int)
+		// Verify that the user is not already a member of the group
+		membershipStatus, err := database.VerifyUserMembershipToGroup(member, groupIDInt)
 		if err != nil {
+			// If there is an error verifying the user's membership, return a Bad Request response
 			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			context.Abort()
 			return
-		} else if MembershipStatus {
-			//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
+		} else if membershipStatus {
+			// If the user is already a member of the group, return a Bad Request response
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Group membership already exists."})
 			context.Abort()
 			return
 		}
 
-		// Verify group is owned by requester
+		// Verify that the group is owned by the current user
 		var group models.Group
-		grouprecord := database.Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", group_id_int).Where("`groups`.owner = ?", UserID).Find(&group)
-		if grouprecord.Error != nil {
-			//context.JSON(http.StatusInternalServerError, gin.H{"error": grouprecord.Error.Error()})
+		groupRecord := database.Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", groupIDInt).Where("`groups`.owner = ?", userID).Find(&group)
+		if groupRecord.Error != nil {
+			// If the group is not owned by the current user, return a Bad Request response
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Only owners can edit their group memberships."})
 			context.Abort()
 			return
 		}
 
-		groupmembershipdb.Group = group_id_int
+		// Set the group ID for the new group membership
+		groupMembershipDB.Group = groupIDInt
 
-		// Add group membership to database
-		record := database.Instance.Create(&groupmembershipdb)
+		// Add the group membership to the database
+		record := database.Instance.Create(&groupMembershipDB)
 		if record.Error != nil {
+			// If there is an error adding the group membership to the database, return an Internal Server Error response
 			context.JSON(http.StatusInternalServerError, gin.H{"error": record.Error.Error()})
 			context.Abort()
 			return
 		}
-
 	}
 
-	// get new group list
-	groups_with_owner, err := GetGroupObjects(UserID)
+	// Get the updated list of groups with the current user as the owner
+	groupsWithOwner, err := GetGroupObjects(userID)
 	if err != nil {
+		// If there is an error getting the updated list of groups, return a Bad Request response
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Group member joined.", "groups": groups_with_owner})
+	// Return a Created response with a message indicating that the group member(s) joined successfully, and the updated list of groups
+	context.JSON(http.StatusCreated, gin.H{"message": "Group member(s) joined.", "groups": groupsWithOwner})
+
 }
 
 func RemoveFromGroup(context *gin.Context) {
