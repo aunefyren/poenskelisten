@@ -1,0 +1,15 @@
+{
+	"timezone": "Europe/Oslo",
+	"private_key": "",
+	"db_username": "",
+	"db_password": "",
+	"db_name": "poenskelisten",
+	"db_ip": ",
+	"db_port": 3306,
+	"poenskelisten_port": 8080,
+	"smtp_host": "",
+	"smtp_port": 0,
+	"smtp_username": "",
+	"smtp_password": "",
+	"smtp_from": ""
+}
