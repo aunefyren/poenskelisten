@@ -84,7 +84,7 @@ Once again, there is no admin interface. To create invitation codes (needed to s
 
 I recommend installing PHPMyAdmin (DB interface) either as a Docker image or locally (it comes pre-packaged in XAMPP).
 
-After by accessing the DB through an interface, or by just running SQL commands, add an invitation code to the table ```inviations```. You should now be able to sign up.
+After accessing the DB through an interface, or by just running SQL commands, add an invitation code to the table ```inviations```. You should now be able to sign up.
 
 You need an invitation code for every user.
 
