@@ -4,7 +4,7 @@
 	"db_username": "",
 	"db_password": "",
 	"db_name": "poenskelisten",
-	"db_ip": ",
+	"db_ip": "",
 	"db_port": 3306,
 	"poenskelisten_port": 8080,
 	"smtp_host": "",
