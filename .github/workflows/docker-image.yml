@@ -21,4 +21,4 @@ jobs:
       with:
         push: true
         context: .
-        tags: latest, ${{ github.ref }}
+        tags: aunefyren/poenskelisten:latest, aunefyren/poenskelisten:${{ github.ref }}
