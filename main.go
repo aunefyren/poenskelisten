@@ -122,7 +122,7 @@ func main() {
 
 	/*
 		fmt.Println("Sending e-mail...")
-		toList := []string{"oystein.sverre@gmail.com"}
+		toList := []string{"test@gmail.com"}
 		auth := smtp.PlainAuth(Config.SMTPFrom, Config.SMTPUsername, Config.SMTPPassword, Config.SMTPHost)
 		msg := "Hello geeks!!!"
 		body := []byte(msg)
@@ -196,7 +196,7 @@ func initRouter() *gin.Engine {
 	}
 
 	router.Use(cors.New(cors.Config{
-		AllowOrigins: []string{"https://ponskelisten.no", "https://www.ponskelisten.no", "*"},
+		AllowOrigins: []string{"*"},
 		// AllowAllOrigins:  true,
 		AllowMethods:     []string{"GET", "POST"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Access-Control-Allow-Origin"},
