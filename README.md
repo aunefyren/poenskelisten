@@ -89,7 +89,7 @@ Once again, there is no admin interface. To create invitation codes (needed to s
 
 I recommend installing PHPMyAdmin (DB interface) either as a Docker image or locally (it comes pre-packaged in XAMPP).
 
-After accessing the DB through an interface, or by just running SQL commands, add an invitation code to the table ```inviations```. You should now be able to sign up using the code at Pønskelisten frontend.
+After accessing the DB through an interface, or by just running SQL commands, add an invitation code to the table ```invitations```. You should now be able to sign up using the code at Pønskelisten frontend.
 
 By default you can find the frontend at ```localhost:8080```.
 
