@@ -113,7 +113,7 @@ Be prepared to access the DB every time a user manages to screw up their e-mail 
 <br>
 
 ## Docker-Compose example
-It has Pønskelisten , MySQL DB and PHPMyAdmin.
+It has Pønskelisten, MySQL DB and PHPMyAdmin.
 ```
 version: '3.3'
 services:
