@@ -16,9 +16,14 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
         registry: docker.io
+    # https://github.com/docker/setup-qemu-action#usage
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2.1.0
     - name: Build and push
       uses: docker/build-push-action@v3
       with:
         push: true
         context: .
+        #platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
+        platforms: linux/amd64,linux/arm/v7,linux/arm64
         tags: aunefyren/poenskelisten:latest, aunefyren/poenskelisten:${{ github.ref_name }}
