@@ -1,11 +1,12 @@
 var api_url = window.location.origin + "/api/";
 
 // Load service worker
-window.addEventListener("load", () => {
-    if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/js/service-worker.js");
-    }
-});
+if('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/js/service-worker.js')
+.then((reg) => {
+    // registration worked
+    console.log('Registration succeeded. Scope is ' + reg.scope);
+})};
 
 // Make XHTTP requests
 function makeRequest (method, url, data) {
