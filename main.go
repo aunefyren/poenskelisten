@@ -211,6 +211,7 @@ func initRouter() *gin.Engine {
 	router.Static("/assets", "./web/assets")
 	router.Static("/css", "./web/css")
 	router.Static("/js", "./web/js")
+	router.Static("/json", "./web/json")
 
 	// Static endpoint for homepage
 	router.GET("/", func(c *gin.Context) {
