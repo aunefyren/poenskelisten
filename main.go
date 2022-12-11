@@ -193,6 +193,7 @@ func initRouter() *gin.Engine {
 		{
 			admin.POST("/invite/register", controllers.RegisterInvite)
 		}
+
 	}
 
 	router.Use(cors.New(cors.Config{
