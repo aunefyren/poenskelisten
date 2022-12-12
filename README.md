@@ -109,7 +109,7 @@ The exception is ```generateinvite```, which will generate a new, random invitat
 To use a flag, just start the compiled Go program with additonal values. Such as:
 
 ```
-$ ./poenskelisten -p 7679
+$ ./poenskelisten -port 7679
 ```
 
 <br>
