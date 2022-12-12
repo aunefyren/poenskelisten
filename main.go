@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"strconv"
 	"time"
@@ -62,13 +63,15 @@ func main() {
 	fmt.Println("Configuration file loaded.")
 
 	// Change the config to respect flags
-	Config, err = parseFlags(Config)
+	Config, generateInvite, err := parseFlags(Config)
 	if err != nil {
 		log.Println("Failed to parse input flags. Error: " + err.Error())
 		fmt.Println("Failed to parse input flags. Error: " + err.Error())
 
 		os.Exit(1)
 	}
+	log.Println("Flags parsed.")
+	fmt.Println("Flags parsed.")
 
 	// Set time zone from config if it is not empty
 	if Config.Timezone != "" {
@@ -129,6 +132,18 @@ func main() {
 
 	log.Println("Database connected.")
 	fmt.Println("Database connected.")
+
+	if generateInvite {
+		invite, err := database.GenrateRandomInvite()
+		if err != nil {
+			fmt.Println("Failed to generate random invitation code. Error: " + err.Error())
+			log.Println("Failed to generate random invitation code. Error: " + err.Error())
+
+			os.Exit(1)
+		}
+		fmt.Println("Generated new invite code. Code: " + invite)
+		log.Println("Generated new invite code. Code: " + invite)
+	}
 
 	/*
 		fmt.Println("Sending e-mail...")
@@ -261,7 +276,7 @@ func initRouter() *gin.Engine {
 	return router
 }
 
-func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, error) {
+func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, error) {
 
 	// Define flag variables with the configuration file as default values
 	var port int
@@ -284,6 +299,10 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, error) {
 
 	var dbIP string
 	flag.StringVar(&dbIP, "dbip", Config.DBIP, "The IP address used to reach the database.")
+
+	var generateInvite string
+	var generateInviteBool bool
+	flag.StringVar(&generateInvite, "generateinvite", "false", "If an invite code should be automatically generate on startup.")
 
 	// Parse the flags from input
 	flag.Parse()
@@ -323,6 +342,13 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, error) {
 		Config.DBIP = dbIP
 	}
 
+	// Respect the flag if string is true
+	if strings.ToLower(generateInvite) == "true" {
+		generateInviteBool = true
+	} else {
+		generateInviteBool = false
+	}
+
 	// Failsafe, if port is 0, set to default 8080
 	if Config.PoenskelistenPort == 0 {
 		Config.PoenskelistenPort = 8080
@@ -331,9 +357,9 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, error) {
 	// Save the new config
 	err := config.SaveConfig(Config)
 	if err != nil {
-		return &models.ConfigStruct{}, err
+		return &models.ConfigStruct{}, false, err
 	}
 
-	return Config, nil
+	return Config, generateInviteBool, nil
 
 }
