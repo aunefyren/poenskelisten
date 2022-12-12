@@ -221,39 +221,44 @@ func JoinGroup(context *gin.Context) {
 
 }
 
+// RemoveFromGroup creates a groupmembership request, gets the group ID from the URL parameter, and binds the request to a groupMembership variable.
+// It then gets the user ID from the authorization header and parses the group ID as an integer.
+// It then verifies the user's membership to the group, checks if the group is owned by the user, and verifies that the user is not trying to remove themselves as the group owner.
+// It then deletes the group membership and gets an updated list of groups with the owner. It returns a success message and the updated list of groups.
 func RemoveFromGroup(context *gin.Context) {
 
-	// Create groupmembership request
-	var group_id = context.Param("group_id")
-	var groupmembership models.GroupMembership
-	if err := context.ShouldBindJSON(&groupmembership); err != nil {
+	// Bind groupmembership request and get group ID from URL parameter
+	var groupMembership models.GroupMembership
+	groupID := context.Param("group_id")
+	if err := context.ShouldBindJSON(&groupMembership); err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
-	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	// Get user ID from authorization header
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	// Parse group id
-	group_id_int, err := strconv.Atoi(group_id)
+	// Parse group ID as integer
+	groupIDInt, err := strconv.Atoi(groupID)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	// Verify membership doesnt exist
-	MembershipStatus, err := database.VerifyUserMembershipToGroup(groupmembership.Member, group_id_int)
+	// Verify user membership to group
+	membershipStatus, err := database.VerifyUserMembershipToGroup(groupMembership.Member, groupIDInt)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
-	} else if !MembershipStatus {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
+	} else if !membershipStatus {
+		// Return error if membership does not exist
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Group membership doesn't exist."})
 		context.Abort()
 		return
@@ -261,61 +266,150 @@ func RemoveFromGroup(context *gin.Context) {
 
 	// Verify group is owned by requester
 	var group models.Group
-	grouprecord := database.Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", groupmembership.Group).Where("`groups`.owner = ?", UserID).Find(&group)
-	if grouprecord.Error != nil {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": grouprecord.Error.Error()})
+	groupRecord := database.Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", groupMembership.Group).Where("`groups`.owner = ?", userID).Find(&group)
+	if groupRecord.Error != nil {
+		// Return error if user is not owner of group
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Only owners can edit their group memberships."})
 		context.Abort()
 		return
 	}
 
-	if UserID == groupmembership.Member {
+	if userID == groupMembership.Member {
+		// Return error if user is owner and trying to remove themselves
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Owner cannot be removed as member."})
 		context.Abort()
 		return
 	}
 
-	grouprmembershipecord := database.Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group = ?", group_id_int).Where("`group_memberships`.member = ?", groupmembership.Member).Find(&groupmembership)
-	if grouprmembershipecord.Error != nil {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": grouprecord.Error.Error()})
+	// Verify membership exists
+	groupMembershipRecord := database.Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group = ?", groupIDInt).Where("`group_memberships`.member = ?", groupMembership.Member).Find(&groupMembership)
+	if groupMembershipRecord.Error != nil {
+		// Return error if membership does not exist
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership."})
 		context.Abort()
 		return
 	}
 
-	err = database.DeleteGroupMembership(int(groupmembership.ID))
-	if grouprmembershipecord.Error != nil {
+	// Delete group membership
+	err = database.DeleteGroupMembership(int(groupMembership.ID))
+	if groupMembershipRecord.Error != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	// get new group list
-	groups_with_owner, err := GetGroupObjects(UserID)
+	// Get updated list of groups with owner
+	groupsWithOwner, err := GetGroupObjects(userID)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Group member removed.", "groups": groups_with_owner})
+	// Return success message and updated list of groups
+	context.JSON(http.StatusCreated, gin.H{"message": "Group member removed.", "groups": groupsWithOwner})
+
 }
 
-func DeleteGroup(context *gin.Context) {
+// The function is an API endpoint that allows the authenticated user to remove themselves from a group.
+// The user's membership to the group is verified, and the user's ownership of the group is also verified to ensure that the user is not the owner of the group.
+// If everything checks out, the function deletes the user's membership record from the database and returns a success message along with an updated list of groups with the owner to the caller.
+func RemoveSelfFromGroup(context *gin.Context) {
+	// Bind groupmembership request and get group ID from URL parameter
+	var groupMembership models.GroupMembership
+	groupID := context.Param("group_id")
 
-	// Create groupmembership request
-	var group_id = context.Param("group_id")
-	var groupmembership models.GroupMembership
-
-	// Parse group id
-	group_id_int, err := strconv.Atoi(group_id)
+	// Get user ID from authorization header
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	// Parse group ID as integer
+	groupIDInt, err := strconv.Atoi(groupID)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Verify user membership to group
+	membershipStatus, err := database.VerifyUserMembershipToGroup(userID, groupIDInt)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	} else if !membershipStatus {
+		// Return error if membership does not exist
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Group membership doesn't exist."})
+		context.Abort()
+		return
+	}
+
+	// Verify group is not owned by requester
+	ownershipStatus, err := database.VerifyUserOwnershipToGroup(groupMembership.Member, groupIDInt)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	} else if ownershipStatus {
+		// Return error if membership does not exist
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Owners cannot remove themselves as members."})
+		context.Abort()
+		return
+	}
+
+	// Verify membership exists
+	groupMembershipRecord := database.Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group = ?", groupIDInt).Where("`group_memberships`.member = ?", userID).Find(&groupMembership)
+	if groupMembershipRecord.Error != nil {
+		// Return error if membership does not exist
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership."})
+		context.Abort()
+		return
+	}
+
+	// Delete group membership
+	err = database.DeleteGroupMembership(int(groupMembership.ID))
+	if groupMembershipRecord.Error != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Get updated list of groups with owner
+	groupsWithOwner, err := GetGroupObjects(userID)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Return success message and updated list of groups
+	context.JSON(http.StatusCreated, gin.H{"message": "Group left.", "groups": groupsWithOwner})
+
+}
+
+// The function is an API endpoint that allows the authenticated user to delete a group.
+// The function first verifies that the group is owned by the user by checking the groups database table.
+// If the user is the owner of the group, the function then proceeds to delete the group from the database.
+// Finally, the function retrieves an updated list of groups with the owner using the GetGroupObjects function and returns a success message along with the updated list of groups to the caller.
+func DeleteGroup(context *gin.Context) {
+
+	// Bind groupmembership request and get group ID from URL parameter
+	groupID := context.Param("group_id")
+
+	// Parse group ID as integer
+	groupIDInt, err := strconv.Atoi(groupID)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Get user ID from authorization header
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
@@ -323,242 +417,261 @@ func DeleteGroup(context *gin.Context) {
 	}
 
 	// Verify group is owned by requester
-	var group models.Group
-	grouprecord := database.Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", groupmembership.Group).Where("`groups`.owner = ?", UserID).Find(&group)
-	if grouprecord.Error != nil {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": grouprecord.Error.Error()})
+	ownershipStatus, err := database.VerifyUserOwnershipToGroup(userID, groupIDInt)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	} else if !ownershipStatus {
+		// Return error if membership does not exist
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Only owners can edit their group memberships."})
 		context.Abort()
 		return
 	}
 
-	err = database.DeleteGroup(group_id_int)
+	// Set the group to disabled in the database
+	err = database.DeleteGroup(groupIDInt)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	// get new group list
-	groups_with_owner, err := GetGroupObjects(UserID)
+	// Get updated list of groups with owner
+	groupsWithOwner, err := GetGroupObjects(userID)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Group deleted.", "groups": groups_with_owner})
+	context.JSON(http.StatusCreated, gin.H{"message": "Group deleted.", "groups": groupsWithOwner})
+
 }
 
+// The function retrieves a list of groups that the authenticated user owns or is a member of.
 func GetGroups(context *gin.Context) {
 
-	// Get user ID
-	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	// Get user ID from authorization header
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	groups_with_owner, err := GetGroupObjects(UserID)
+	// Retrieve list of groups with owner
+	groupsWithOwner, err := GetGroupObjects(userID)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	// Reply
-	context.JSON(http.StatusOK, gin.H{"groups": groups_with_owner, "message": "Groups retrieved."})
+	// Return list of groups with owner and success message
+	context.JSON(http.StatusOK, gin.H{"groups": groupsWithOwner, "message": "Groups retrieved."})
+
 }
 
-func GetGroupObjects(user_id int) ([]models.GroupUser, error) {
+// The function retrieves a list of groups that the given user owns or is a member of.
+func GetGroupObjects(userID int) ([]models.GroupUser, error) {
 
-	// Create group request
+	// Create groups slice and groups with owner slice
 	var groups []models.Group
-	var groups_with_owner []models.GroupUser
+	var groupsWithOwner []models.GroupUser
 
-	// Get groups
-	grouprecords := database.Instance.Where("`groups`.enabled = ?", 1).Joins("JOIN group_memberships on group_memberships.group = groups.id").Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member = ?", user_id).Find(&groups)
-
-	if grouprecords.Error != nil {
-		return []models.GroupUser{}, grouprecords.Error
-	} else if grouprecords.RowsAffected == 0 {
-		return []models.GroupUser{}, nil
+	// Retrieve groups that the user is a member of
+	groups, err := database.GetGroupsAUserIsAMemberOf(userID)
+	if err != nil {
+		return []models.GroupUser{}, err
 	}
 
 	// Add owner information to each group
 	for _, group := range groups {
-
-		group_with_owner, err := GetGroupObject(user_id, int(group.ID))
+		// Retrieve group object with owner
+		groupWithOwner, err := GetGroupObject(userID, int(group.ID))
 		if err != nil {
 			return []models.GroupUser{}, err
 		}
 
-		groups_with_owner = append(groups_with_owner, group_with_owner)
-
+		// Append group with owner to list
+		groupsWithOwner = append(groupsWithOwner, groupWithOwner)
 	}
 
-	return groups_with_owner, nil
+	return groupsWithOwner, nil
+
 }
 
+// GetGroup retrieves the specified group that the authenticated user is a member of.
 func GetGroup(context *gin.Context) {
-	// Create group request
-	var group_id = context.Param("group_id")
 
-	// Get user ID
-	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	// Bind group ID from URL parameter
+	groupID := context.Param("group_id")
+
+	// Get user ID from authorization header
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	// Parse group id
-	group_id_int, err := strconv.Atoi(group_id)
+	// Parse group ID as integer
+	groupIDInt, err := strconv.Atoi(groupID)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	// Verify membership doesnt exist
-	MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, group_id_int)
+	// Verify user membership to group
+	membershipStatus, err := database.VerifyUserMembershipToGroup(userID, groupIDInt)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
-	} else if !MembershipStatus {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not a member of this group."})
+	} else if !membershipStatus {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not a member of this group."})
 		context.Abort()
 		return
 	}
 
-	group_with_owner, err := GetGroupObject(UserID, group_id_int)
+	// Retrieve group object with owner
+	groupWithOwner, err := GetGroupObject(userID, groupIDInt)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	// Reply
-	context.JSON(http.StatusOK, gin.H{"group": group_with_owner, "message": "Group retrieved."})
+	// Return group with owner and success message
+	context.JSON(http.StatusOK, gin.H{"group": groupWithOwner, "message": "Group retrieved."})
 
 }
 
-func GetGroupObject(user_id int, group_id int) (models.GroupUser, error) {
-
+// GetGroupObject retrieves the specified group that the authenticated user is a member of,
+// along with the group's owner and members.
+func GetGroupObject(userID int, groupID int) (models.GroupUser, error) {
 	var group models.Group
-	var group_memberships []models.GroupMembership
 
-	// Get groups
-	grouprecords := database.Instance.Where("`groups`.enabled = ?", 1).Joins("JOIN group_memberships on group_memberships.group = groups.id").Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member = ?", user_id).Where("`group_memberships`.group = ?", group_id).Find(&group)
+	// Get group
+	groupRecord := database.Instance.Where("`groups`.enabled = ?", 1).
+		Joins("JOIN group_memberships on group_memberships.group = groups.id").
+		Where("`group_memberships`.enabled = ?", 1).
+		Where("`group_memberships`.member = ?", userID).
+		Where("`group_memberships`.group = ?", groupID).
+		Find(&group)
 
-	if grouprecords.Error != nil {
-		return models.GroupUser{}, grouprecords.Error
-	} else if grouprecords.RowsAffected == 0 {
+	if groupRecord.Error != nil {
+		return models.GroupUser{}, groupRecord.Error
+	} else if groupRecord.RowsAffected == 0 {
 		return models.GroupUser{}, nil
 	}
 
 	// Add owner information to group
-	user_object, err := database.GetUserInformation(group.Owner)
+	userObject, err := database.GetUserInformation(group.Owner)
 	if err != nil {
 		return models.GroupUser{}, err
 	}
 
-	var group_with_owner models.GroupUser
-	group_with_owner.CreatedAt = group.CreatedAt
-	group_with_owner.DeletedAt = group.DeletedAt
-	group_with_owner.Description = group.Description
-	group_with_owner.Enabled = group.Enabled
-	group_with_owner.ID = group.ID
-	group_with_owner.Model = group.Model
-	group_with_owner.Name = group.Name
-	group_with_owner.Owner = user_object
-	group_with_owner.UpdatedAt = group.UpdatedAt
+	var groupWithOwner models.GroupUser
+	groupWithOwner.CreatedAt = group.CreatedAt
+	groupWithOwner.DeletedAt = group.DeletedAt
+	groupWithOwner.Description = group.Description
+	groupWithOwner.Enabled = group.Enabled
+	groupWithOwner.ID = group.ID
+	groupWithOwner.Model = group.Model
+	groupWithOwner.Name = group.Name
+	groupWithOwner.Owner = userObject
+	groupWithOwner.UpdatedAt = group.UpdatedAt
 
 	// Get group members
-	database.Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group = ?", group_id).Find(&group_memberships)
+	groupMemberships, err := database.GetGroupMembershipsFromGroup(groupID)
+	if err != nil {
+		log.Println("Failed to get group memberships for group " + strconv.Itoa(groupID) + ".")
+		return models.GroupUser{}, err
+	}
 
 	// Add user information to each membership
-	for _, membership := range group_memberships {
-
-		user_object, err := database.GetUserInformation(membership.Member)
+	for _, membership := range groupMemberships {
+		userObject, err := database.GetUserInformation(membership.Member)
 		if err != nil {
-			log.Println("Failed to get user information for group " + strconv.Itoa(group_id) + " members.")
+			log.Println("Failed to get user information for group " + strconv.Itoa(groupID) + " members.")
 			return models.GroupUser{}, err
 		}
 
-		group_with_owner.Members = append(group_with_owner.Members, user_object)
-
+		groupWithOwner.Members = append(groupWithOwner.Members, userObject)
 	}
 
-	return group_with_owner, nil
+	return groupWithOwner, nil
 }
 
 func GetGroupMembers(context *gin.Context) {
 
-	// Create group request
-	var group_memberships []models.GroupMembership
-	var group_memberships_user []models.GroupMembershipUser
+	// Create group request variables
+	var groupMembershipsWithUser []models.GroupMembershipUser
 	var group = context.Param("group_id")
 
-	// Get user ID
-	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	// Get user ID from header
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	// Parse group id
-	group_id_int, err := strconv.Atoi(group)
+	// Parse group id for usage
+	groupIDInt, err := strconv.Atoi(group)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	// Verify membership doesnt exist
-	MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, group_id_int)
+	// Verify membership does exist
+	MembershipStatus, err := database.VerifyUserMembershipToGroup(userID, groupIDInt)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	} else if !MembershipStatus {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not a member of this group."})
 		context.Abort()
 		return
 	}
 
-	// Get groups
-	database.Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group = ?", group).Find(&group_memberships)
+	// Get group members from the group
+	groupMemberships, err := database.GetGroupMembershipsFromGroup(groupIDInt)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
 
 	// Add user information to each membership
-	for _, membership := range group_memberships {
+	for _, membership := range groupMemberships {
 
-		user_object, err := database.GetUserInformation(membership.Member)
+		userObject, err := database.GetUserInformation(membership.Member)
 		if err != nil {
 			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			context.Abort()
 			return
 		}
 
-		var groupmembership_with_user models.GroupMembershipUser
-		groupmembership_with_user.Members = user_object
-		groupmembership_with_user.CreatedAt = membership.CreatedAt
-		groupmembership_with_user.DeletedAt = membership.DeletedAt
-		groupmembership_with_user.Enabled = membership.Enabled
-		groupmembership_with_user.Group = membership.Group
-		groupmembership_with_user.ID = membership.ID
-		groupmembership_with_user.Model = membership.Model
-		groupmembership_with_user.UpdatedAt = membership.UpdatedAt
+		var groupmembershipWithUser models.GroupMembershipUser
+		groupmembershipWithUser.Members = userObject
+		groupmembershipWithUser.CreatedAt = membership.CreatedAt
+		groupmembershipWithUser.DeletedAt = membership.DeletedAt
+		groupmembershipWithUser.Enabled = membership.Enabled
+		groupmembershipWithUser.Group = membership.Group
+		groupmembershipWithUser.ID = membership.ID
+		groupmembershipWithUser.Model = membership.Model
+		groupmembershipWithUser.UpdatedAt = membership.UpdatedAt
 
-		group_memberships_user = append(group_memberships_user, groupmembership_with_user)
+		groupMembershipsWithUser = append(groupMembershipsWithUser, groupmembershipWithUser)
 
 	}
 
 	// Reply
-	context.JSON(http.StatusOK, gin.H{"group_members": group_memberships_user, "message": "Group members retrieved."})
+	context.JSON(http.StatusOK, gin.H{"group_members": groupMembershipsWithUser, "message": "Group members retrieved."})
 }
