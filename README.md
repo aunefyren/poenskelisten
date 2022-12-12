@@ -150,6 +150,9 @@ services:
     ports:
       - '8080:8080'
     environment:
+      # Generate an unused invite code on startup
+      # Remove this value to avoid continuous code-generation
+      generateinvite: true
       # The container will only respect these ENV if they are empty in the config.json
       # Useful for first setup
       port: 8080
@@ -201,4 +204,4 @@ Yeah yeah, it's coming.
 <br>
 
 ## The End - Does it work? 🪛
-Well, this is in early development and making it user-friendly and worth hosting is hard and takes time. It is certainly functional, but it isn't neccasserly what you need or want. Feel free to add feedback or feature requests in the from of GitHub Issues.
+Well, this is in early development and making it user-friendly and worth hosting is hard and takes time. It is certainly functional, but it isn't necessarily what you need or want. Feel free to add feedback or feature requests in the form of GitHub Issues.

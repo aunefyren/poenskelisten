@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thanhpk/randstr"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -71,6 +72,21 @@ func Migrate() {
 	Instance.AutoMigrate(&models.Wish{})
 	Instance.AutoMigrate(&models.WishClaim{})
 	log.Println("Database Migration Completed!")
+}
+
+// Genrate a random invite code an return ut
+func GenrateRandomInvite() (string, error) {
+	var invite models.Invite
+
+	randomString := randstr.String(16)
+	invite.InviteCode = strings.ToUpper(randomString)
+
+	record := Instance.Create(&invite)
+	if record.Error != nil {
+		return "", record.Error
+	}
+
+	return invite.InviteCode, nil
 }
 
 // Verify e-mail is not in use
