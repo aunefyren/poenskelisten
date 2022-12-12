@@ -93,15 +93,15 @@ The exception is ```generateinvite```, which will generate a new, random invitat
 <br>
 
 | Flag | Type | Explaination |
-|:--|:-:|--:|
-| port | integer | Which port Pønskelisten starts on |
-| timezone | string | The timezone Pønskelisten uses. Given in the TZ database name format. List can be found [here](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) |
-| generateinvite | string (true/false) | If Pønskelisten should generate an invitation code on startup |
-| dbip | string | The connection address Pønskelisten uses to reach the database |
-| dbport | integer | The port Pønskelisten can reach the database at |
-| dbname | string | The name of the table within the database |
-| dbusername | string | The username used to autnenicate with the database |
-| dbpassword | string | The password used to autnenicate with the database |
+|:-:|:-:|--:|
+| port | integer | Which port Pønskelisten starts on. |
+| timezone | string | The timezone Pønskelisten uses. Given in the TZ database name format. List can be found [here](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones). |
+| generateinvite | string (true/false) | If Pønskelisten should generate an invitation code on startup. |
+| dbip | string | The connection address Pønskelisten uses to reach the database. |
+| dbport | integer | The port Pønskelisten can reach the database at. |
+| dbname | string | The name of the table within the database. |
+| dbusername | string | The username used to autnenicate with the database. |
+| dbpassword | string | The password used to autnenicate with the database. |
 
 <br>
 <br>
