@@ -93,7 +93,7 @@ The exception is ```generateinvite```, which will generate a new, random invitat
 <br>
 
 | Flag | Type | Explaination |
-|-|:-:|-:|
+|:--|:-:|--:|
 | port | integer | Which port Pønskelisten starts on |
 | timezone | string | The timezone Pønskelisten uses. Given in the TZ database name format. List can be found [here](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) |
 | generateinvite | string (true/false) | If Pønskelisten should generate an invitation code on startup |
