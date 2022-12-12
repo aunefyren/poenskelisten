@@ -6,7 +6,9 @@ import (
 	"aunefyren/poenskelisten/controllers"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/middlewares"
+	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -59,12 +61,20 @@ func main() {
 	log.Println("Configuration file loaded.")
 	fmt.Println("Configuration file loaded.")
 
+	// Change the config to respect flags
+	Config, err = parseFlags(Config)
+	if err != nil {
+		log.Println("Failed to parse input flags. Error: " + err.Error())
+		fmt.Println("Failed to parse input flags. Error: " + err.Error())
+
+		os.Exit(1)
+	}
+
 	// Set time zone from config if it is not empty
 	if Config.Timezone != "" {
 		loc, err := time.LoadLocation(Config.Timezone)
 		if err != nil {
 			fmt.Println("Failed to set time zone from config. Error: " + err.Error())
-			fmt.Println(err)
 			fmt.Println("Removing value...")
 
 			log.Println("Failed to set time zone from config. Error: " + err.Error())
@@ -249,4 +259,81 @@ func initRouter() *gin.Engine {
 	})
 
 	return router
+}
+
+func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, error) {
+
+	// Define flag variables with the configuration file as default values
+	var port int
+	flag.IntVar(&port, "port", Config.PoenskelistenPort, "The port Pønskelisten is listening on.")
+
+	var timezone string
+	flag.StringVar(&timezone, "timezone", Config.Timezone, "The timezone Pønskelisten is running in.")
+
+	var dbPort int
+	flag.IntVar(&dbPort, "dbport", Config.DBPort, "The port the database is listening on.")
+
+	var dbUsername string
+	flag.StringVar(&dbUsername, "dbusername", Config.DBUsername, "The username used to interact with the database.")
+
+	var dbPassword string
+	flag.StringVar(&dbPassword, "dbpassword", Config.DBPassword, "The password used to interact with the database.")
+
+	var dbName string
+	flag.StringVar(&dbName, "dbname", Config.DBName, "The database table used within the database.")
+
+	var dbIP string
+	flag.StringVar(&dbIP, "dbip", Config.DBIP, "The IP address used to reach the database.")
+
+	// Parse the flags from input
+	flag.Parse()
+
+	// Respect the flag if config is empty
+	if Config.PoenskelistenPort == 0 {
+		Config.PoenskelistenPort = port
+	}
+
+	// Respect the flag if config is empty
+	if Config.Timezone == "" {
+		Config.Timezone = timezone
+	}
+
+	// Respect the flag if config is empty
+	if Config.DBPort == 0 {
+		Config.DBPort = dbPort
+	}
+
+	// Respect the flag if config is empty
+	if Config.DBUsername == "" {
+		Config.DBUsername = dbUsername
+	}
+
+	// Respect the flag if config is empty
+	if Config.DBPassword == "" {
+		Config.DBPassword = dbPassword
+	}
+
+	// Respect the flag if config is empty
+	if Config.DBName == "" {
+		Config.DBName = dbName
+	}
+
+	// Respect the flag if config is empty
+	if Config.DBIP == "" {
+		Config.DBIP = dbIP
+	}
+
+	// Failsafe, if port is 0, set to default 8080
+	if Config.PoenskelistenPort == 0 {
+		Config.PoenskelistenPort = 8080
+	}
+
+	// Save the new config
+	err := config.SaveConfig(Config)
+	if err != nil {
+		return &models.ConfigStruct{}, err
+	}
+
+	return Config, nil
+
 }
