@@ -83,9 +83,46 @@ It should say whether or not it started and managed to connect to the database. 
 <br>
 <br>
 
+#### Startup flags
+
+You can use startup flags to generate values to populate the configuration file with. They are only used if the configuration file doesn't have a value to prioritize. The moment the configuration file has values, these flags are useless. 
+
+The exception is ```generateinvite```, which will generate a new, random invitation code at each usage.
+
+<br>
+<br>
+
+| Flag | Type | Explaination |
+|-|:-:|-:|
+| port | integer | Which port Pønskelisten starts on |
+| timezone | string | The timezone Pønskelisten uses. Given in the TZ database name format. List can be found [here](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) |
+| generateinvite | string (true/false) | If Pønskelisten should generate an invitation code on startup |
+| dbip | string | The connection address Pønskelisten uses to reach the database |
+| dbport | integer | The port Pønskelisten can reach the database at |
+| dbname | string | The name of the table within the database |
+| dbusername | string | The username used to autnenicate with the database |
+| dbpassword | string | The password used to autnenicate with the database |
+
+<br>
+<br>
+
+To use a flag, just start the compiled Go program with additonal values. Such as:
+
+```
+$ ./poenskelisten -p 7679
+```
+
+<br>
+<br>
+
 ### 4. Be able to alter the DB
 
-Once again, there is no admin interface. To create invitation codes (needed to sign up currently), you need to add them to the database table. Cumbersome, I know. 
+Once again, there is no admin interface. To sign up for the website you need an invitation code. If you used the ```generateinvite``` flag you can find an invitation code in the log/console. 
+
+ If not, you need to alter the database table to add the invitation code. Cumbersome, I know. 
+
+<br>
+<br>
 
 I recommend installing PHPMyAdmin (DB interface) either as a Docker image or locally (it comes pre-packaged in XAMPP).
 
@@ -96,7 +133,7 @@ By default you can find the frontend at ```localhost:8080```.
 <br>
 <br>
 
-You need an invitation code for every user.
+You need an invitation code for every user who wants to sign up.
 
 <br>
 <br>
@@ -112,7 +149,18 @@ Be prepared to access the DB every time a user manages to screw up their e-mail 
 <br>
 <br>
 
-## Docker-Compose example
+## Docker
+
+### Environment variables
+
+All the startup flags in the table given previously can be used as environment variables. Do keep in mind that the flags, and in turn the environment variables, are only used if the value is not already defined in the configuration file. 
+
+The only exception is the ```generateinvite```, but consider removing this environment variable after usage so you don't generate a new code at every restart.
+
+<br>
+<br>
+
+### Docker-Compose example
 It has Pønskelisten, MySQL DB and PHPMyAdmin.
 ```
 version: '3.3'
