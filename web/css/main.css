@@ -502,14 +502,13 @@ button:disabled {
 }
 
 .text-body{
-  margin: 0.5em 0;
   text-align: center;
+  margin: 0 0 2em 0;
 }
 
 .title{
   font-weight: 200;
   font-size: 1.25em;
-  margin-bottom: 0.25;
 }
 
 /* When the screen is less than 600 pixels wide, hide all links, except for the first one ("Home"). Show the link that contains should open and close the topnav (.icon) */
