@@ -21,14 +21,18 @@ function load_page(result) {
                 <div class="" id="front-page">
                     
                     <div class="module">
-                    
-                        <div id="group-title" class="title">
-                        </div>
 
-                        <div class="text-body" id="group-description">
-                        </div>
+                        <div class="group-info">
 
-                        <div class="text-body" id="group-info">
+                            <div id="group-title" class="title">
+                            </div>
+
+                            <div class="text-body" id="group-description">
+                            </div>
+
+                            <div class="text-body" id="group-info">
+                            </div>
+
                         </div>
 
                         <div id="wishlists-title" class="title">

@@ -24,13 +24,17 @@ function load_page(result) {
                     
                     <div class="module">
                     
-                    <div id="wishlist-title" class="title">
-                    </div>
+                    <div class="wishlist-info">
 
-                    <div class="text-body" id="wishlist-description">
-                    </div>
+                        <div id="wishlist-title" class="title">
+                        </div>
 
-                    <div class="text-body" id="wishlist-info">
+                        <div class="text-body" id="wishlist-description">
+                        </div>
+
+                        <div class="text-body" id="wishlist-info">
+                        </div>
+
                     </div>
 
                     <div id="wishlists-title" class="title">
