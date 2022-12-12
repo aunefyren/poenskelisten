@@ -24,16 +24,18 @@ function load_page(result) {
                     
                     <div class="module">
                     
-                        <div class="title">
-                            Wishes
-                        </div>
+                    <div id="wishlist-title" class="title">
+                    </div>
 
-                        <div class="text-body" style="text-align: center;">
-                            These are wishes.
-                        </div>
+                    <div class="text-body" id="wishlist-description">
+                    </div>
 
-                        <br>
-                        <br>
+                    <div class="text-body" id="wishlist-info">
+                    </div>
+
+                    <div id="wishlists-title" class="title">
+                        Wishes:
+                    </div>
 
                         <div id="wishes-box" class="wishes">
                         </div>
@@ -60,15 +62,66 @@ function load_page(result) {
     if(result !== false) {
         showLoggedInMenu();
         
-
         console.log(wishlist_id);
         console.log(group_id);
 
+        get_wishlist(wishlist_id)
         get_wishes(wishlist_id, group_id, login_data.data.id);
     } else {
         showLoggedOutMenu();
         invalid_session();
     }
+}
+
+function get_wishlist(wishlist_id){
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                console.log(result);
+                place_wishlist(result.wishlist);
+
+            }
+
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wishlist/get/" + wishlist_id);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+}
+
+function place_wishlist(wishlist_object) {
+
+    document.getElementById("wishlist-title").innerHTML = wishlist_object.name
+    document.getElementById("wishlist-description").innerHTML = wishlist_object.description
+    document.getElementById("wishlist-info").innerHTML += "<br>By: " + wishlist_object.owner.first_name + " " + wishlist_object.owner.last_name
+
+    try {
+        var expiration = new Date(Date.parse(wishlist_object.date));
+        expiration_string = expiration.toLocaleDateString();
+        document.getElementById("wishlist-info").innerHTML += "<br>Expires: " + expiration_string
+    } catch(err) {
+        console.log("Failed to parse datetime. Error: " + err)
+    }
+
 }
 
 function get_wishes(wishlist_id, group_id, user_id){

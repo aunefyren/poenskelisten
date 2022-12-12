@@ -23,18 +23,17 @@ function load_page(result) {
                     <div class="module">
                     
                         <div id="group-title" class="title">
-                            Group
                         </div>
 
-                        <div class="text-body" id="group-description" style="text-align: center;">
+                        <div class="text-body" id="group-description">
                         </div>
 
-                        <div class="text-body" style="text-align: center;">
-                            These are the wishlists shared to this group. Click on one to see the wishes inside.
+                        <div class="text-body" id="group-info">
                         </div>
 
-                        <br>
-                        <br>
+                        <div id="wishlists-title" class="title">
+                            Wishlists:
+                        </div>
 
                         <div id="wishlists-box" class="wishlists">
                         </div>
@@ -68,11 +67,55 @@ function load_page(result) {
     if(result !== false) {
         showLoggedInMenu();
         
+        get_group(group_id);
         get_wishlists(group_id, login_data.data.id);
     } else {
         showLoggedOutMenu();
         invalid_session();
     }
+}
+
+function get_group(group_id){
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                console.log(result);
+                place_group(result.group);
+
+            }
+
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/group/get/" + group_id);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+}
+
+function place_group(group_object) {
+
+    document.getElementById("group-title").innerHTML = group_object.name
+    document.getElementById("group-description").innerHTML = group_object.description
+    document.getElementById("group-info").innerHTML += "<br>Owner: " + group_object.owner.first_name + " " + group_object.owner.last_name
+
 }
 
 function get_wishlists(group_id, user_id){
