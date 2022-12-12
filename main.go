@@ -191,6 +191,7 @@ func initRouter() *gin.Engine {
 			auth.POST("/group/register", controllers.RegisterGroup)
 			auth.POST("/group/:group_id/delete", controllers.DeleteGroup)
 			auth.POST("/group/:group_id/join", controllers.JoinGroup)
+			auth.POST("/group/:group_id/leave", controllers.RemoveSelfFromGroup)
 			auth.POST("/group/:group_id/remove", controllers.RemoveFromGroup)
 			auth.POST("/group/get", controllers.GetGroups)
 			auth.POST("/group/get/:group_id", controllers.GetGroup)

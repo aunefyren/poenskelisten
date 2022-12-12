@@ -175,7 +175,7 @@ function place_groups(group_array, user_id) {
                 html += '<img class="icon-img color-invert" src="../../assets/x.svg">'
                 html += '</div>'
             } else if(group_array[i].members[j].ID == user_id && owner_id !== user_id){
-                html += '<div class="profile-icon clickable" onclick="leave_group(' + group_array[i].ID + ',' + group_array[i].members[j].ID + ', ' + user_id +')">'
+                html += '<div class="profile-icon clickable" onclick="leave_group(' + group_array[i].ID + ',' + user_id +')">'
                 html += '<img class="icon-img color-invert" src="../../assets/log-out.svg">'
                 html += '</div>'
             }
@@ -600,6 +600,51 @@ function add_members(group_id, user_id) {
 
 }
 
-function leave_group() {
-    alert("Sorry, this button doesn't work yet.")
+function leave_group(group_id, user_id) {
+    
+    if(!confirm("Are you sure you want to leave this group?")) {
+        return;
+    }
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message);
+                console.log(result);
+
+                console.log("User ID: " + user_id);
+
+                groups = result.groups;
+
+                console.log("Placing groups after member is removed: ")
+                place_groups(groups, user_id);
+                
+            }
+
+        } else {
+            info("Leaving group...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/group/" + group_id + "/leave");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+
 }
