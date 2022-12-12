@@ -30,6 +30,8 @@
     font-family: Arial;
     margin: auto;
     width: 100%;
+    width: -webkit-fill-available;
+    width: -moz-available;
     height: 100%;
     min-height: 2em;
     line-height: 120%;
@@ -80,6 +82,8 @@
 
   .image {
     width: 100%;
+    width: -webkit-fill-available;
+    width: -moz-available;
     display: inline-block;
     margin: auto;
     object-fit: cover;
@@ -509,6 +513,7 @@ button:disabled {
 .title{
   font-weight: 200;
   font-size: 1.25em;
+  text-align: center;
 }
 
 /* When the screen is less than 600 pixels wide, hide all links, except for the first one ("Home"). Show the link that contains should open and close the topnav (.icon) */
@@ -546,6 +551,8 @@ button:disabled {
   display: block !important;
   text-align: left;
   width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
 }
 .navbar {
   position: fixed;
@@ -557,4 +564,15 @@ button:disabled {
 
 .transparent {
   opacity: 0.5;
+}
+
+.wishlist-info, .group-info {
+  border-radius: 1em;
+  padding: 2em;
+  margin: 2em 1em;
+  background-color: var(--mediumblue);
+  border: 2px solid var(--eggshell);
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
 }
