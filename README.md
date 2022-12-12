@@ -123,7 +123,7 @@ services:
     restart: unless-stopped
     environment:
       # The table name you chose
-      MYSQL_DATABASE: 'db'
+      MYSQL_DATABASE: 'ponske'
       # User, so you don't have to use root 
       MYSQL_USER: 'myuser'
       # Please switch this password
@@ -149,13 +149,23 @@ services:
       - ./data/:/app/files/
     ports:
       - '8080:8080'
+    environment:
+      # The container will only respect these ENV if they are empty in the config.json
+      # Useful for first setup
+      port: 8080
+      timezone: Europe/Oslo
+      dbip: db
+      dbport: 3306
+      dbname: ponske
+      dbusername: myuser
+      dbpassword: mystrongpassword
   phpmyadmin:
     image: phpmyadmin:latest
     restart: unless-stopped
     environment:
       - PMA_ARBITRARY=1
       # DB table
-      - PMA_HOST:db 
+      - PMA_HOST:ponske 
       # Root password
       - MYSQL_ROOT_PASSWORD:root 
       # Timezone
