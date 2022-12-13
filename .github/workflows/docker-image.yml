@@ -18,7 +18,7 @@ jobs:
           aunefyren/poenskelisten
           ghcr.io/${{ github.repository_owner }}/poenskelisten
         tags: |
-          type-raw,value=github.ref_name
+          type-raw,value=${{ github.ref_name }}
         flavor: |
           latest=true
     - name: Set up QEMU
