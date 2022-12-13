@@ -507,14 +507,7 @@ button:disabled {
 
 .text-body{
   text-align: center;
-  margin: 0;
-}
-
-.text-date{
-  text-align: center;
-  margin: 0 0 2em 0;
-  text-align: end;
-  font-size: 0.75em;
+  margin: 0.5em 1em;
 }
 
 .text-date{
