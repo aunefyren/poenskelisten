@@ -29,7 +29,6 @@ Notable features:
 Known issues:
 - There currently is no admin interface to add invitation codes
 - No email account confirmation through SMTP
-- Can't leave groups someone else added you too
 - Can't add additional wishlist owners
 - Can't edit group/wishlist/wish details
 - Can't change account information
