@@ -29,4 +29,4 @@ jobs:
           project_path: "./"
           binary_name: "poenskelisten"
           ldflags: "-s -w"
-          extra_files: README.md auth config controllers database files middlewares models utilities web Dockerfile
+          extra_files: README.md auth config controllers database middlewares models utilities web Dockerfile
