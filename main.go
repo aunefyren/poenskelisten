@@ -213,6 +213,9 @@ func initRouter() *gin.Engine {
 			auth.POST("/wish/:wish_id/claim", controllers.RegisterWishClaim)
 			auth.POST("/wish/:wish_id/unclaim", controllers.RemoveWishClaim)
 
+			auth.POST("/news/get", controllers.GetNews)
+			auth.POST("/news/get/:news_id", controllers.GetNewsPost)
+
 			auth.POST("/user/get/:user_id", controllers.GetUser)
 			auth.POST("/user/get", controllers.GetUsers)
 		}
@@ -220,6 +223,8 @@ func initRouter() *gin.Engine {
 		admin := api.Group("/admin").Use(middlewares.Auth(true))
 		{
 			admin.POST("/invite/register", controllers.RegisterInvite)
+			admin.POST("/news/register", controllers.RegisterNewsPost)
+			admin.POST("/news/:news_id/delete", controllers.DeleteNewsPost)
 		}
 
 	}

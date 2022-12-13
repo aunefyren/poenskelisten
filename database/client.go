@@ -71,6 +71,7 @@ func Migrate() {
 	Instance.AutoMigrate(&models.WishlistMembership{})
 	Instance.AutoMigrate(&models.Wish{})
 	Instance.AutoMigrate(&models.WishClaim{})
+	Instance.AutoMigrate(&models.News{})
 	log.Println("Database Migration Completed!")
 }
 
@@ -124,6 +125,19 @@ func SetUsedUserInviteCode(providedCode string) error {
 	}
 	if inviterecords.RowsAffected != 1 {
 		return errors.New("Code not changed in database.")
+	}
+	return nil
+}
+
+// Set news post to disabled
+func DeleteNewsPost(newsID int) error {
+	var news models.News
+	newsRecords := Instance.Model(news).Where("`news`.ID= ?", newsID).Update("enabled", 0)
+	if newsRecords.Error != nil {
+		return newsRecords.Error
+	}
+	if newsRecords.RowsAffected != 1 {
+		return errors.New("Failed to delete news post in database.")
 	}
 	return nil
 }
@@ -474,6 +488,42 @@ func GetGroupMembershipsFromGroup(GroupID int) ([]models.GroupMembership, error)
 	}
 
 	return groupMemberships, nil
+
+}
+
+func GetNewsPosts() ([]models.News, error) {
+
+	var newsPosts []models.News
+
+	newsPostsRecords := Instance.Where("`news`.enabled = ?", 1).Find(&newsPosts)
+
+	if newsPostsRecords.Error != nil {
+		return []models.News{}, newsPostsRecords.Error
+	} else if newsPostsRecords.RowsAffected == 0 {
+		return []models.News{}, nil
+	}
+
+	if len(newsPosts) == 0 {
+		newsPosts = []models.News{}
+	}
+
+	return newsPosts, nil
+
+}
+
+func GetNewsPostByNewsID(newsID int) (models.News, error) {
+
+	var newsPost models.News
+
+	newsPostRecords := Instance.Where("`news`.enabled = ?", 1).Where("`news`.id = ?", newsID).Find(&newsPost)
+
+	if newsPostRecords.Error != nil {
+		return models.News{}, newsPostRecords.Error
+	} else if newsPostRecords.RowsAffected != 1 {
+		return models.News{}, errors.New("News post was not found.")
+	}
+
+	return newsPost, nil
 
 }
 
