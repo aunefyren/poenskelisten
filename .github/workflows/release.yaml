@@ -27,3 +27,5 @@ jobs:
         binary_name: "poenskelisten"
         ldflags: "-s -w"
         extra_files: README.md auth config controllers database middlewares models utilities web Dockerfile
+        retry: 10
+        overwrite: true
