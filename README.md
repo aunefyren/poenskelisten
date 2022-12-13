@@ -61,14 +61,7 @@ Create a table for Pønskelisten (Docker image does this automatically), and use
 <br>
 <br>
 
-### 2. Configure the ```/files/config.json``` file
-
-Edit the config file so it can reach the MySQL database. There is no admin interface currently so this must be done manually in the file. The timezone is also necessary, but the private key should populate automatically. The SMTP settings do nothing currently.
-
-<br>
-<br>
-
-### 3. Start Pønskelisten
+### 2. Start Pønskelisten
 
 Either compile your chosen branch/tag with Go:
 
@@ -78,7 +71,9 @@ $ ./poenskelisten
 ```
 ... or download a pre-compiled release and start the application.
 
-It should say whether or not it started and managed to connect to the database. Pønskelisten is now up and running.
+If you want to edit the configuration file manually, start up Pønskelisten and then let it complain a bunch. The configuration file is empty so it cannot reach the database. Then go to step 2 to fix it.
+
+If you want to start up Pønskelisten with some startup flags it can populate the configuration file for you.
 
 <br>
 <br>
@@ -112,6 +107,23 @@ To use a flag, just start the compiled Go program with additonal values. Such as
 $ ./poenskelisten -port 7679
 ```
 
+```
+$ ./poenskelisten -port 7679 -dbip 127.0.0.1 -dbname mycooltable
+```
+
+<br>
+<br>
+
+### 3. Configure the ```/files/config.json``` file
+
+You can skip this step if you utilized the start up flags in the previous step. The flags is just a way to give startup parameters to put in the ```config.json``` file.
+
+Edit the config file so it can reach the MySQL database. There is no admin interface currently so this must be done manually in the file. The timezone is also necessary, but the private key should populate automatically. The SMTP settings do nothing currently.
+
+Restart Pønskelisten for the changes to take effect.
+
+You should not be able to access Pønskelisten. By default you can find the frontend at ```localhost:8080```.
+
 <br>
 <br>
 
@@ -119,7 +131,7 @@ $ ./poenskelisten -port 7679
 
 Once again, there is no admin interface. To sign up for the website you need an invitation code. If you used the ```generateinvite``` flag you can find an invitation code in the log/console. 
 
- If not, you need to alter the database table to add the invitation code. Cumbersome, I know. 
+If not, you need to alter the database table to add the invitation code. Cumbersome, I know. 
 
 <br>
 <br>
@@ -127,8 +139,6 @@ Once again, there is no admin interface. To sign up for the website you need an 
 I recommend installing PHPMyAdmin (DB interface) either as a Docker image or locally (it comes pre-packaged in XAMPP).
 
 After accessing the DB through an interface, or by just running SQL commands, add an invitation code to the table ```invitations```. You should now be able to sign up using the code at Pønskelisten frontend.
-
-By default you can find the frontend at ```localhost:8080```.
 
 <br>
 <br>
