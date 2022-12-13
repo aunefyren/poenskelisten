@@ -507,7 +507,7 @@ button:disabled {
 
 .text-body{
   text-align: center;
-  margin: 0 0 2em 0;
+  margin: 0;
 }
 
 .title{
@@ -568,7 +568,7 @@ button:disabled {
 
 .wishlist-info, .group-info {
   border-radius: 1em;
-  padding: 2em;
+  padding: 1em;
   margin: 2em 1em;
   background-color: var(--mediumblue);
   border: 2px solid var(--eggshell);
