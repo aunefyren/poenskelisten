@@ -21,8 +21,9 @@ function load_page(result) {
                             These are groups you either own or are member of. Groups allow people to share wishlists between eachother. You can create a new group at the bottom of this page.
                         </div>
 
-                        <br>
-                        <br>
+                        <div id="groups-title" class="title">
+                            Groups:
+                        </div>
 
                         <div id="groups-box" class="groups">
                         </div>

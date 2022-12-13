@@ -510,6 +510,20 @@ button:disabled {
   margin: 0;
 }
 
+.text-date{
+  text-align: center;
+  margin: 0 0 2em 0;
+  text-align: end;
+  font-size: 0.75em;
+}
+
+.text-date{
+  text-align: center;
+  margin: 0 0 2em 0;
+  text-align: end;
+  font-size: 0.75em;
+}
+
 .title{
   font-weight: 200;
   font-size: 1.25em;
@@ -569,10 +583,30 @@ button:disabled {
 .wishlist-info, .group-info {
   border-radius: 1em;
   padding: 1em;
-  margin: 2em 1em;
+  margin: 0 1em 2em 1em;
   background-color: var(--mediumblue);
   border: 2px solid var(--eggshell);
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
+}
+
+
+hr {
+  border: 0.1em solid var(--eggshell);
+  opacity: 0.5;
+  border-radius: 1em;
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+}
+
+.divider {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+}
+
+.news-post {
+  margin: 1em 0;
 }
