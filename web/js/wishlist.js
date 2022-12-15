@@ -24,22 +24,26 @@ function load_page(result) {
                     
                     <div class="module">
                     
-                    <div class="wishlist-info">
+                        <div class="wishlist-info">
 
-                        <div id="wishlist-title" class="title">
-                        </div>
+                            <div id="wishlist-title" class="title">
+                            </div>
 
-                        <div class="text-body" id="wishlist-description">
-                        </div>
+                            <div class="text-body" id="wishlist-description">
+                            </div>
 
-                        <div class="text-body" id="wishlist-info">
+                            <div class="text-body" id="wishlist-info">
+                            </div>
+
                         </div>
 
                     </div>
 
-                    <div id="wishlists-title" class="title">
-                        Wishes:
-                    </div>
+                    <div class="module">
+
+                        <div id="wishlists-title" class="title">
+                            Wishes:
+                        </div>
 
                         <div id="wishes-box" class="wishes">
                         </div>
@@ -53,7 +57,7 @@ function load_page(result) {
                                 <button id="register-button" type="submit" href="/">Add wish</button>
                             </form>
                         </div>
-      
+
                     </div>
 
                 </div>

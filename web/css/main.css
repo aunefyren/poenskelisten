@@ -295,6 +295,7 @@
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
+  margin: 2em 0;
 }
 
 .action-block {

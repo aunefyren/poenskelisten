@@ -25,6 +25,10 @@ function load_page(result) {
                             These are your wishlists. You can add different wishlists to different groups, allowing others to see your wishes. At the bottom of this page you can create a new wishlist. Make sure to add it to a group afterward.
                         </div>
 
+                    </div>
+
+                    <div class="module">
+
                         <div id="wishlists-title" class="title">
                             Wishlists:
                         </div>
