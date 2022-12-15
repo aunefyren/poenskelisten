@@ -261,6 +261,11 @@ func initRouter() *gin.Engine {
 		c.HTML(http.StatusOK, "register.html", nil)
 	})
 
+	// Static endpoint for your own account
+	router.GET("/account", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "account.html", nil)
+	})
+
 	// Static endpoint for selecting your group
 	router.GET("/groups", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "groups.html", nil)

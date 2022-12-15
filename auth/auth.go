@@ -10,10 +10,11 @@ import (
 var jwtKey = []byte("supersecretkey")
 
 type JWTClaim struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Admin    bool   `json:"admin"`
-	UserID   int    `json:"id"`
+	Firstname string `json:"first_name"`
+	Lastname  string `json:"last_name"`
+	Email     string `json:"email"`
+	Admin     bool   `json:"admin"`
+	UserID    int    `json:"id"`
 	jwt.StandardClaims
 }
 
@@ -26,12 +27,14 @@ func SetPrivateKey(PrivateKey string) error {
 	return nil
 }
 
-func GenerateJWT(email string, userid int, admin bool) (tokenString string, err error) {
+func GenerateJWT(firstname string, lastname string, email string, userid int, admin bool) (tokenString string, err error) {
 	expirationTime := time.Now().Add(1 * time.Hour * 24 * 7)
 	claims := &JWTClaim{
-		Email:  email,
-		Admin:  admin,
-		UserID: userid,
+		Firstname: firstname,
+		Lastname:  lastname,
+		Email:     email,
+		Admin:     admin,
+		UserID:    userid,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},
