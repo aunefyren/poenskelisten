@@ -24,9 +24,14 @@ function load_page(result) {
                             Welcome to the front page. Not much to see here currently. Use to navigation bar and head to 'Wishlists' to manage your wishlists. Head to 'Groups' to manage and view wishlists in groups.
                         </div>
 
+                    </div>
+
+                    <div class="module">
+
                         <div id="divider-1" class="divider" style="display: none;">
                             <hr></hr>
                         </div>
+
 
                         <div id="news-title" class="title" style="display: none;">
                             News:

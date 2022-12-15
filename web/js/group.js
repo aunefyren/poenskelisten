@@ -35,6 +35,10 @@ function load_page(result) {
 
                         </div>
 
+                    </div>
+
+                    <div class="module">
+
                         <div id="wishlists-title" class="title">
                             Wishlists:
                         </div>
