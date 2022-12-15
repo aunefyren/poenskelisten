@@ -156,8 +156,8 @@ function showLoggedInMenu() {
     document.getElementById('wishlists').classList.add('enabled');
     document.getElementById('wishlists').classList.remove('disabled');
 
-    document.getElementById('account').classList.add('disabled');
-    document.getElementById('account').classList.remove('enabled');
+    document.getElementById('account').classList.add('enabled');
+    document.getElementById('account').classList.remove('disabled');
 
     document.getElementById('register').classList.add('disabled');
     document.getElementById('register').classList.remove('enabled');
