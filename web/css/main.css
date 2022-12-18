@@ -321,6 +321,8 @@ form {
 
 input[type=text], input[type=password], input[type=email], input[type=date], select {
   width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
   height: 3em;
   padding: 0.5em;
   margin: 1em;
@@ -342,6 +344,8 @@ select {
 }
 button {
   width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
   padding: 0.75em 0;
   margin: 1em;
   border-radius: 5px; 
