@@ -147,19 +147,6 @@ func main() {
 		log.Println("Generated new invite code. Code: " + invite)
 	}
 
-	/*
-		fmt.Println("Sending e-mail...")
-		toList := []string{"test@gmail.com"}
-		auth := smtp.PlainAuth(Config.SMTPFrom, Config.SMTPUsername, Config.SMTPPassword, Config.SMTPHost)
-		msg := "Hello geeks!!!"
-		body := []byte(msg)
-		smt_port_int := strconv.Itoa(Config.SMTPPort)
-		err = smtp.SendMail(Config.SMTPHost+":"+smt_port_int, auth, Config.SMTPFrom, toList, body)
-		if err != nil {
-			fmt.Println(err)
-		}
-	*/
-
 	// Initialize Router
 	router := initRouter()
 

@@ -1,8 +1,10 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
 	"net/http"
 	"strconv"
 
@@ -28,6 +30,21 @@ func RegisterUser(context *gin.Context) {
 	user.Password = usercreationrequest.Password
 	user.FirstName = usercreationrequest.FirstName
 	user.LastName = usercreationrequest.LastName
+
+	// Get configuration
+	config, err := config.GetConfig()
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// If SMTP is disabled, create the user as verified
+	if config.SMTPEnabled {
+		user.Verified = false
+	} else {
+		user.Verified = true
+	}
 
 	// Hash the selected password
 	if err := user.HashPassword(user.Password); err != nil {
@@ -74,6 +91,16 @@ func RegisterUser(context *gin.Context) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
+	}
+
+	// If user is not verified, send verification e-mail
+	if !user.Verified {
+		err = utilities.SendSMTPVerificationEmail(user)
+		if err != nil {
+			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			context.Abort()
+			return
+		}
 	}
 
 	// Return response
