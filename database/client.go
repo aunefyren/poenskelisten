@@ -117,7 +117,7 @@ func VerifyUnusedUserInviteCode(providedCode string) (bool, error) {
 }
 
 // Set invite code to used
-func SetUsedUserInviteCode(providedCode string) error {
+func SetUsedUserInviteCode(providedCode string, userIDClaimer int) error {
 	var invitestruct models.Invite
 	inviterecords := Instance.Model(invitestruct).Where("`invites`.invite_code= ?", providedCode).Update("invite_used", 1)
 	if inviterecords.Error != nil {
@@ -126,6 +126,15 @@ func SetUsedUserInviteCode(providedCode string) error {
 	if inviterecords.RowsAffected != 1 {
 		return errors.New("Code not changed in database.")
 	}
+
+	inviterecords = Instance.Model(invitestruct).Where("`invites`.invite_code= ?", providedCode).Update("invite_recipient", userIDClaimer)
+	if inviterecords.Error != nil {
+		return inviterecords.Error
+	}
+	if inviterecords.RowsAffected != 1 {
+		return errors.New("Recipient not changed in database.")
+	}
+
 	return nil
 }
 

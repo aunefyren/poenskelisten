@@ -36,7 +36,7 @@ function load_page(result) {
                             <input onclick="change_password_toggle();" style="margin-top: 2em;" type="checkbox" id="password-toggle" name="confirm" value="confirm" >
                             <label for="confirm">Change my password.</label><br>
 
-                            <div id="change-password-box" style="display:none; transition: 2s;">
+                            <div id="change-password-box" style="display:none;">
 
                                 <label id="form-input-icon" for="password"></label>
                                 <input type="password" name="password" id="password" placeholder="New password" />
