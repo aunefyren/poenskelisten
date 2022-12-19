@@ -4,8 +4,8 @@ import (
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/models"
 	"log"
-	"net/smtp"
-	"strconv"
+
+	"github.com/go-mail/mail"
 )
 
 func SendSMTPVerificationEmail(user models.User) error {
@@ -18,20 +18,16 @@ func SendSMTPVerificationEmail(user models.User) error {
 
 	log.Println("Sending e-mail to user " + user.FirstName + " " + user.LastName + ".")
 
-	toEmailAddress := user.Email
-	to := []string{toEmailAddress}
+	m := mail.NewMessage()
+	m.SetHeader("From", "Pønskelisten <"+config.SMTPFrom+">")
+	m.SetHeader("To", user.Email)
+	m.SetHeader("Subject", "Please verify your account")
+	m.SetBody("text/html", "Hello <b> + user.FirstName + </b>!<br><br>This is a test alert saying to verify your account.")
 
-	auth := smtp.PlainAuth("", config.SMTPUsername, config.SMTPPassword, config.SMTPHost)
+	d := mail.NewDialer(config.SMTPHost, config.SMTPPort, config.SMTPUsername, config.SMTPPassword)
 
-	subject := "Subject: This is the subject of the mail\n"
-	body := "Verify your Pønskeliste account"
-	message := []byte(subject + body)
-
-	smt_port_int := strconv.Itoa(config.SMTPPort)
-	host := "smtp.gmail.com"
-	address := host + ":" + smt_port_int
-
-	err = smtp.SendMail(address, auth, config.SMTPFrom, to, message)
+	// Send the email
+	err = d.DialAndSend(m)
 	if err != nil {
 		return err
 	}
