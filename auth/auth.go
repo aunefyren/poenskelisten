@@ -14,6 +14,7 @@ type JWTClaim struct {
 	Lastname  string `json:"last_name"`
 	Email     string `json:"email"`
 	Admin     bool   `json:"admin"`
+	Verified  bool   `json:"verified"`
 	UserID    int    `json:"id"`
 	jwt.StandardClaims
 }
@@ -27,7 +28,7 @@ func SetPrivateKey(PrivateKey string) error {
 	return nil
 }
 
-func GenerateJWT(firstname string, lastname string, email string, userid int, admin bool) (tokenString string, err error) {
+func GenerateJWT(firstname string, lastname string, email string, userid int, admin bool, verified bool) (tokenString string, err error) {
 	expirationTime := time.Now().Add(1 * time.Hour * 24 * 7)
 	claims := &JWTClaim{
 		Firstname: firstname,
@@ -35,6 +36,7 @@ func GenerateJWT(firstname string, lastname string, email string, userid int, ad
 		Email:     email,
 		Admin:     admin,
 		UserID:    userid,
+		Verified:  verified,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},

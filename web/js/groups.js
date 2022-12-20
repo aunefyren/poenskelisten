@@ -62,8 +62,8 @@ function load_page(result) {
 
     if(result !== false) {
         showLoggedInMenu();
-        get_groups(login_data.data.id);
-        get_users(login_data.data.id);
+        get_groups(user_id);
+        get_users(user_id);
     } else {
         showLoggedOutMenu();
         invalid_session();

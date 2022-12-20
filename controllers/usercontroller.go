@@ -5,6 +5,7 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -12,24 +13,31 @@ import (
 )
 
 func RegisterUser(context *gin.Context) {
+
+	// Initialize variables
 	var user models.User
 	var usercreationrequest models.UserCreationRequest
+
+	// Parse creation request
 	if err := context.ShouldBindJSON(&usercreationrequest); err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
+	// Make sure password match
 	if usercreationrequest.Password != usercreationrequest.PasswordRepeat {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Passwords must match."})
 		context.Abort()
 		return
 	}
 
+	// Move values from request to object
 	user.Email = usercreationrequest.Email
 	user.Password = usercreationrequest.Password
 	user.FirstName = usercreationrequest.FirstName
 	user.LastName = usercreationrequest.LastName
+	user.Enabled = true
 
 	// Get configuration
 	config, err := config.GetConfig()
@@ -93,8 +101,11 @@ func RegisterUser(context *gin.Context) {
 		return
 	}
 
-	// If user is not verified, send verification e-mail
-	if !user.Verified {
+	// If user is not verified and SMTP is enabled, send verification e-mail
+	if !user.Verified && config.SMTPEnabled {
+
+		log.Println("Sending verification e-mail to new user: " + user.FirstName + " " + user.LastName + ".")
+
 		err = utilities.SendSMTPVerificationEmail(user)
 		if err != nil {
 			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -105,6 +116,7 @@ func RegisterUser(context *gin.Context) {
 
 	// Return response
 	context.JSON(http.StatusCreated, gin.H{"message": "User created!"})
+
 }
 
 func GetUser(context *gin.Context) {
@@ -151,4 +163,9 @@ func GetUsers(context *gin.Context) {
 
 	// Reply
 	context.JSON(http.StatusOK, gin.H{"users": user_struct, "message": "Users retrieved."})
+}
+
+func VerifyUser(context *gin.Context) {
+	// Reply
+	context.JSON(http.StatusOK, gin.H{"message": "Not finished."})
 }

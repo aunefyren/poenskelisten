@@ -67,15 +67,13 @@ function get_cookie(cname) {
 function get_login(cookie) {
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
-        if (this.readyState == 4 && this.status == 200) {
+        if (this.readyState == 4) {
             var result;
             if(result = JSON.parse(this.responseText)) { 
                 load_page(this.responseText);
             } else {
                 load_page(false);
             }
-        } else if(this.readyState == 4 && this.status !== 200) {
-            load_page(false);
         }
     };
     xhttp.withCredentials = false;

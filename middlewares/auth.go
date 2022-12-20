@@ -2,7 +2,10 @@ package middlewares
 
 import (
 	"aunefyren/poenskelisten/auth"
+	"aunefyren/poenskelisten/config"
+	"aunefyren/poenskelisten/database"
 	"errors"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,12 +18,41 @@ func Auth(admin bool) gin.HandlerFunc {
 			context.Abort()
 			return
 		}
+
 		err := auth.ValidateToken(tokenString, admin)
 		if err != nil {
 			context.JSON(401, gin.H{"error": err.Error()})
 			context.Abort()
 			return
 		}
+
+		// Get configuration
+		config, err := config.GetConfig()
+		if err != nil {
+			context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			context.Abort()
+			return
+		}
+
+		// If SMTP is enabled, verify if user is enabled
+		if config.SMTPEnabled {
+
+			userID, err := GetAuthUsername(context.GetHeader("Authorization"))
+			if err != nil {
+				context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				context.Abort()
+				return
+			}
+
+			verified, err := database.VerifyUserIsVerified(userID)
+			if !verified {
+				context.JSON(http.StatusUnauthorized, gin.H{"error": "You must verify your account."})
+				context.Abort()
+				return
+			}
+
+		}
+
 		context.Next()
 	}
 }

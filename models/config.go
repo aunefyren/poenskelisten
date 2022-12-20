@@ -9,6 +9,7 @@ type ConfigStruct struct {
 	DBIP              string `json:"db_ip"`
 	DBPort            int    `json:"db_port"`
 	PoenskelistenPort int    `json:"poenskelisten_port"`
+	PoenskelistenName string `json:"poenskelisten_name"`
 	SMTPEnabled       bool   `json:"smtp_enabled"`
 	SMTPHost          string `json:"smtp_host"`
 	SMTPPort          int    `json:"smtp_port"`

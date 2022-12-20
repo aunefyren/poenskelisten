@@ -16,13 +16,13 @@ func SendSMTPVerificationEmail(user models.User) error {
 		return err
 	}
 
-	log.Println("Sending e-mail to user " + user.FirstName + " " + user.LastName + ".")
+	log.Println("Sending e-mail to: " + user.Email + ".")
 
 	m := mail.NewMessage()
-	m.SetHeader("From", "Pønskelisten <"+config.SMTPFrom+">")
+	m.SetAddressHeader("From", config.SMTPFrom, config.PoenskelistenName)
 	m.SetHeader("To", user.Email)
 	m.SetHeader("Subject", "Please verify your account")
-	m.SetBody("text/html", "Hello <b> + user.FirstName + </b>!<br><br>This is a test alert saying to verify your account.")
+	m.SetBody("text/html", "Hello <b>"+user.FirstName+"</b>!<br><br>This is a test alert saying to verify your account.")
 
 	d := mail.NewDialer(config.SMTPHost, config.SMTPPort, config.SMTPUsername, config.SMTPPassword)
 

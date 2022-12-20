@@ -12,8 +12,8 @@ type User struct {
 	Email     string `json:"email" gorm:"unique; not null"`
 	Password  string `json:"password" gorm:"not null"`
 	Admin     *bool  `json:"admin" gorm:"not null; default: false"`
-	Enabled   bool   `json:"enabled" gorm:"not null; default: true"`
-	Verified  bool   `json:"verified" gorm:"not null; default: true"`
+	Enabled   bool   `json:"enabled" gorm:"not null; default: false"`
+	Verified  bool   `json:"verified" gorm:"not null; default: false"`
 }
 
 type UserCreationRequest struct {
