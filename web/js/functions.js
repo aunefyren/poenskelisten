@@ -65,18 +65,26 @@ function get_cookie(cname) {
 
 // Validate login token and get login details
 function get_login(cookie) {
+
+    if(jwt == "") {
+        load_page(false);
+        return
+    }
+
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
+
             var result;
             if(result = JSON.parse(this.responseText)) { 
                 load_page(this.responseText);
             } else {
                 load_page(false);
             }
+
         }
     };
-    xhttp.withCredentials = false;
+    xhttp.withCredentials = true;
     xhttp.open("post", api_url + "auth/token/validate");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", cookie);

@@ -169,7 +169,7 @@ func initRouter() *gin.Engine {
 		{
 			open.POST("/token/register", controllers.GenerateToken)
 			open.POST("/user/register", controllers.RegisterUser)
-			open.POST("/user/verify", controllers.VerifyUser)
+			open.POST("/user/verify/:code", controllers.VerifyUser)
 		}
 
 		auth := api.Group("/auth").Use(middlewares.Auth(false))
@@ -281,6 +281,9 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, error)
 	var port int
 	flag.IntVar(&port, "port", Config.PoenskelistenPort, "The port Pønskelisten is listening on.")
 
+	var externalURL string
+	flag.StringVar(&externalURL, "externalurl", Config.PoenskelistenExternalURL, "The URL others would use to access Pønskelisten.")
+
 	var timezone string
 	flag.StringVar(&timezone, "timezone", Config.Timezone, "The timezone Pønskelisten is running in.")
 
@@ -327,6 +330,11 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, error)
 	// Respect the flag if config is empty
 	if Config.PoenskelistenPort == 0 {
 		Config.PoenskelistenPort = port
+	}
+
+	// Respect the flag if config is empty
+	if Config.PoenskelistenExternalURL == "" {
+		Config.PoenskelistenExternalURL = externalURL
 	}
 
 	// Respect the flag if config is empty

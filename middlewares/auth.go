@@ -14,7 +14,7 @@ func Auth(admin bool) gin.HandlerFunc {
 	return func(context *gin.Context) {
 		tokenString := context.GetHeader("Authorization")
 		if tokenString == "" {
-			context.JSON(401, gin.H{"error": "request does not contain an access token"})
+			context.JSON(401, gin.H{"error": "Request does not contain an access token"})
 			context.Abort()
 			return
 		}
@@ -37,6 +37,7 @@ func Auth(admin bool) gin.HandlerFunc {
 		// If SMTP is enabled, verify if user is enabled
 		if config.SMTPEnabled {
 
+			// Get userID from header
 			userID, err := GetAuthUsername(context.GetHeader("Authorization"))
 			if err != nil {
 				context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -44,9 +45,30 @@ func Auth(admin bool) gin.HandlerFunc {
 				return
 			}
 
+			// Check if the user is verified
 			verified, err := database.VerifyUserIsVerified(userID)
 			if !verified {
-				context.JSON(http.StatusUnauthorized, gin.H{"error": "You must verify your account."})
+
+				// Verify user has verification code
+				hasVerficationCode, err := database.VerifyUserHasVerfificationCode(userID)
+				if err != nil {
+					context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					context.Abort()
+					return
+				}
+
+				// If the user doesn't have a code, set one
+				if !hasVerficationCode {
+					_, err := database.GenrateRandomVerificationCodeForuser(userID)
+					if err != nil {
+						context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+						context.Abort()
+						return
+					}
+				}
+
+				// Return error
+				context.JSON(http.StatusForbidden, gin.H{"error": "You must verify your account."})
 				context.Abort()
 				return
 			}

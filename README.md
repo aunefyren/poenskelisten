@@ -7,6 +7,12 @@
 
 <br>
 <br>
+
+[![Donate](https://img.shields.io/badge/PayPal-Buy%20me%20coffee-blue?style=for-the-badge)](https://www.paypal.com/donate/?hosted_button_id=YRKMNM4S8VNBS) 
+
+Like the project? Have too much money? Buy me a coffe or something! ☕️
+
+<br>
 <br>
 
 ## Introduction - What is this? 🎁
