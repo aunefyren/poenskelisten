@@ -2,8 +2,20 @@ function load_page(result) {
 
     if(result !== false) {
         var login_data = JSON.parse(result);
+
+        try {
+            var email = login_data.data.email
+            var first_name = login_data.data.first_name
+            var last_name = login_data.data.last_name
+        } catch {
+            var email = ""
+            var first_name = ""
+            var last_name = ""
+        }
     } else {
-        var login_data = {}
+        var email = ""
+        var first_name = ""
+        var last_name = ""
     }
 
     try {
@@ -25,13 +37,13 @@ function load_page(result) {
                         <form action="" onsubmit="event.preventDefault(); send_update();">
 
                             <label id="form-input-icon" for="email"></label>
-                            <input type="email" name="email" id="email" placeholder="Email" value="` + login_data.data.email + `" required/>
+                            <input type="email" name="email" id="email" placeholder="Email" value="` + email + `" required/>
 
                             <label id="form-input-icon" for="first_name"></label>
-                            <input type="text" name="first_name" id="first_name" placeholder="First name" value="` + login_data.data.first_name + `" required disabled />
+                            <input type="text" name="first_name" id="first_name" placeholder="First name" value="` + first_name + `" required disabled />
 
                             <label id="form-input-icon" for="last_name"></label>
-                            <input type="text" name="last_name" id="last_name" placeholder="Last name" value="` + login_data.data.last_name + `" disabled required/>
+                            <input type="text" name="last_name" id="last_name" placeholder="Last name" value="` + last_name + `" disabled required/>
 
                             <input onclick="change_password_toggle();" style="margin-top: 2em;" type="checkbox" id="password-toggle" name="confirm" value="confirm" >
                             <label for="confirm">Change my password.</label><br>

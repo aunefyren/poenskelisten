@@ -169,12 +169,11 @@ func initRouter() *gin.Engine {
 		{
 			open.POST("/token/register", controllers.GenerateToken)
 			open.POST("/user/register", controllers.RegisterUser)
+			open.POST("/user/verify", controllers.VerifyUser)
 		}
 
 		auth := api.Group("/auth").Use(middlewares.Auth(false))
 		{
-			auth.GET("/ping", controllers.Ping)
-
 			auth.POST("/token/validate", controllers.ValidateToken)
 
 			auth.POST("/group/register", controllers.RegisterGroup)
@@ -300,6 +299,24 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, error)
 	var dbIP string
 	flag.StringVar(&dbIP, "dbip", Config.DBIP, "The IP address used to reach the database.")
 
+	var smtpDisabled string
+	flag.StringVar(&smtpDisabled, "disableSMTP", "false", "Disables user verification using e-mail.")
+
+	var smtpHost string
+	flag.StringVar(&smtpHost, "smtpHost", Config.SMTPHost, "The SMTP server which sends e-mail.")
+
+	var smtpPort int
+	flag.IntVar(&smtpPort, "smtpPort", Config.SMTPPort, "The SMTP server port.")
+
+	var smtpUsername string
+	flag.StringVar(&smtpUsername, "smtpUsername", Config.SMTPUsername, "The username used to verify against the SMTP server.")
+
+	var smtpPassword string
+	flag.StringVar(&smtpPassword, "smtpPassword", Config.SMTPPassword, "The password used to verify against the SMTP server.")
+
+	var smtpFrom string
+	flag.StringVar(&smtpFrom, "smtpFrom", Config.SMTPFrom, "The sender address when sending e-mail from Pønskelisten.")
+
 	var generateInvite string
 	var generateInviteBool bool
 	flag.StringVar(&generateInvite, "generateinvite", "false", "If an invite code should be automatically generate on startup.")
@@ -340,6 +357,36 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, error)
 	// Respect the flag if config is empty
 	if Config.DBIP == "" {
 		Config.DBIP = dbIP
+	}
+
+	// Respect the flag if string is true
+	if strings.ToLower(smtpDisabled) == "true" {
+		Config.SMTPEnabled = false
+	}
+
+	// Respect the flag if config is empty
+	if Config.SMTPHost == "" {
+		Config.SMTPHost = smtpHost
+	}
+
+	// Respect the flag if config is empty
+	if Config.SMTPPort == 0 {
+		Config.SMTPPort = smtpPort
+	}
+
+	// Respect the flag if config is empty
+	if Config.SMTPUsername == "" {
+		Config.SMTPUsername = smtpUsername
+	}
+
+	// Respect the flag if config is empty
+	if Config.SMTPPassword == "" {
+		Config.SMTPPassword = smtpPassword
+	}
+
+	// Respect the flag if config is empty
+	if Config.SMTPFrom == "" {
+		Config.SMTPFrom = smtpFrom
 	}
 
 	// Respect the flag if string is true

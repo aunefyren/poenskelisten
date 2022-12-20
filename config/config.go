@@ -41,10 +41,32 @@ func GetConfig() (*models.ConfigStruct, error) {
 		return nil, err
 	}
 
-	// Save new version of config json
-	err = SaveConfig(&config)
-	if err != nil {
-		return nil, err
+	anythingChanged := false
+
+	if config.PoenskelistenName == "" {
+		// Set new value
+		config.PoenskelistenName = "Pønskelisten"
+		anythingChanged = true
+	}
+
+	if config.PoenskelistenPort == 0 {
+		// Set new value
+		config.PoenskelistenPort = 8080
+		anythingChanged = true
+	}
+
+	if config.DBPort == 0 {
+		// Set new value
+		config.DBPort = 3306
+		anythingChanged = true
+	}
+
+	if anythingChanged {
+		// Save new version of config json
+		err = SaveConfig(&config)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Return config object
@@ -56,6 +78,11 @@ func GetConfig() (*models.ConfigStruct, error) {
 func CreateConfigFile() error {
 
 	var config models.ConfigStruct
+
+	config.PoenskelistenPort = 8080
+	config.PoenskelistenName = "Pønskelisten"
+	config.DBPort = 3306
+	config.SMTPEnabled = true
 
 	err := SaveConfig(&config)
 	if err != nil {
