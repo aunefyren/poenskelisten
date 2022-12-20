@@ -1,15 +1,20 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/thanhpk/randstr"
 )
 
 func RegisterUser(context *gin.Context) {
@@ -38,6 +43,9 @@ func RegisterUser(context *gin.Context) {
 	user.FirstName = usercreationrequest.FirstName
 	user.LastName = usercreationrequest.LastName
 	user.Enabled = true
+
+	randomString := randstr.String(8)
+	user.VerificationCode = strings.ToUpper(randomString)
 
 	// Get configuration
 	config, err := config.GetConfig()
@@ -166,6 +174,66 @@ func GetUsers(context *gin.Context) {
 }
 
 func VerifyUser(context *gin.Context) {
+
+	// Get code from URL
+	var code = context.Param("code")
+
+	// Check if the string is empty
+	if code == "" {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "No code found."})
+		context.Abort()
+		return
+	}
+
+	// Get user ID
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Verify if code matches
+	match, err := database.VerifyUserVerfificationCodeMatches(userID, code)
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Check if code matches
+	if !match {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Verificaton code invalid."})
+		context.Abort()
+		return
+	}
+
+	// Set account to verified
+	err = database.SetUserVerified(userID)
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Get user object
+	var user models.User
+	record := database.Instance.Where("ID = ?", userID).First(&user)
+	if record.Error != nil {
+		fmt.Println("Invalid credentials. Error: " + record.Error.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details."})
+		context.Abort()
+		return
+	}
+
+	// Generate new JWT token
+	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, int(user.ID), *user.Admin, user.Verified)
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
 	// Reply
-	context.JSON(http.StatusOK, gin.H{"message": "Not finished."})
+	context.JSON(http.StatusOK, gin.H{"message": "User verified.", "token": tokenString})
 }

@@ -211,6 +211,7 @@ function place_groups(group_array, user_id) {
 }
 
 function toggle_group(group_id, owner_id, user_id, member_array) {
+    
     group_members = document.getElementById("group_" + group_id + "_members");
     group_members_arrow = document.getElementById("group_" + group_id + "_arrow");
 

@@ -90,10 +90,29 @@ func GenrateRandomInvite() (string, error) {
 	return invite.InviteCode, nil
 }
 
+// Genrate a random verification code an return ut
+func GenrateRandomVerificationCodeForuser(userID int) (string, error) {
+
+	randomString := randstr.String(8)
+	verificationCode := strings.ToUpper(randomString)
+
+	var user models.User
+	userrecord := Instance.Model(user).Where("`users`.enabled = ?", 1).Where("`users`.ID = ?", userID).Update("verification_code", verificationCode)
+	if userrecord.Error != nil {
+		return "", userrecord.Error
+	}
+	if userrecord.RowsAffected != 1 {
+		return "", errors.New("Verification code not changed in database.")
+	}
+
+	return verificationCode, nil
+
+}
+
 // Verify e-mail is not in use
 func VerifyUniqueUserEmail(providedEmail string) (bool, error) {
 	var user models.User
-	userrecords := Instance.Where("`users`.email= ?", providedEmail).Find(&user)
+	userrecords := Instance.Where("`users`.enabled = ?", 1).Where("`users`.email= ?", providedEmail).Find(&user)
 	if userrecords.Error != nil {
 		return false, userrecords.Error
 	}
@@ -101,6 +120,43 @@ func VerifyUniqueUserEmail(providedEmail string) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+// Verify if user has a verification code set
+func VerifyUserHasVerfificationCode(userID int) (bool, error) {
+	var user models.User
+	userrecords := Instance.Where("`users`.enabled = ?", 1).Where("`users`.ID= ?", userID).Find(&user)
+	if userrecords.Error != nil {
+		return false, userrecords.Error
+	}
+	if userrecords.RowsAffected != 1 {
+		return false, errors.New("Couldn't find the user.")
+	}
+
+	if user.VerificationCode == "" {
+		return false, nil
+	} else {
+		return true, nil
+	}
+}
+
+// Verify if user has a verification code set
+func VerifyUserVerfificationCodeMatches(userID int, verificationCode string) (bool, error) {
+
+	var user models.User
+
+	userrecords := Instance.Where("`users`.enabled = ?", 1).Where("`users`.ID= ?", userID).Where("`users`.verification_code = ?", verificationCode).Find(&user)
+
+	if userrecords.Error != nil {
+		return false, userrecords.Error
+	}
+
+	if userrecords.RowsAffected != 1 {
+		return false, nil
+	} else {
+		return true, nil
+	}
+
 }
 
 // Verify if user is verified
@@ -148,6 +204,22 @@ func SetUsedUserInviteCode(providedCode string, userIDClaimer int) error {
 	}
 	if inviterecords.RowsAffected != 1 {
 		return errors.New("Recipient not changed in database.")
+	}
+
+	return nil
+}
+
+// Set user to verified
+func SetUserVerified(userID int) error {
+
+	var user models.User
+
+	userrecords := Instance.Model(user).Where("`users`.enabled = ?", 1).Where("`users`.ID = ?", userID).Update("verified", 1)
+	if userrecords.Error != nil {
+		return userrecords.Error
+	}
+	if userrecords.RowsAffected != 1 {
+		return errors.New("Verification not changed in database.")
 	}
 
 	return nil
