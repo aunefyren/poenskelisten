@@ -237,3 +237,42 @@ func VerifyUser(context *gin.Context) {
 	// Reply
 	context.JSON(http.StatusOK, gin.H{"message": "User verified.", "token": tokenString})
 }
+
+func SendUserVerificationCode(context *gin.Context) {
+
+	// Get user ID
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Create a new code
+	_, err = database.GenrateRandomVerificationCodeForuser(userID)
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Get user object
+	user, err := database.GetAllUserInformation(userID)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Send new e-mail
+	err = utilities.SendSMTPVerificationEmail(user)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Reply
+	context.JSON(http.StatusOK, gin.H{"message": "New verification code sent."})
+
+}
