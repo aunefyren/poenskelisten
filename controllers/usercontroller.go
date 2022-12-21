@@ -209,7 +209,7 @@ func VerifyUser(context *gin.Context) {
 	}
 
 	// Set account to verified
-	err = database.SetUserVerified(userID)
+	err = database.SetUserVerification(userID, true)
 	if err != nil {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		context.Abort()
@@ -236,6 +236,7 @@ func VerifyUser(context *gin.Context) {
 
 	// Reply
 	context.JSON(http.StatusOK, gin.H{"message": "User verified.", "token": tokenString})
+
 }
 
 func SendUserVerificationCode(context *gin.Context) {
@@ -274,5 +275,148 @@ func SendUserVerificationCode(context *gin.Context) {
 
 	// Reply
 	context.JSON(http.StatusOK, gin.H{"message": "New verification code sent."})
+
+}
+
+func UpdateUser(context *gin.Context) {
+
+	// Initialize variables
+	var userUpdateRequest models.UserUpdateRequest
+	var err error
+	emailChanged := false
+
+	// Parse creation request
+	if err := context.ShouldBindJSON(&userUpdateRequest); err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Make sure password match
+	if userUpdateRequest.Password != "" && userUpdateRequest.Password != userUpdateRequest.PasswordRepeat {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Passwords must match."})
+		context.Abort()
+		return
+	}
+
+	// Get user ID
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Get user object
+	var userOriginal models.User
+	record := database.Instance.Where("ID = ?", userID).First(&userOriginal)
+	if record.Error != nil {
+		fmt.Println("Invalid credentials. Error: " + record.Error.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details."})
+		context.Abort()
+		return
+	}
+
+	if userOriginal.Email != userUpdateRequest.Email {
+
+		// Verify e-mail is not in use
+		unique_email, err := database.VerifyUniqueUserEmail(userUpdateRequest.Email)
+		if err != nil {
+			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			context.Abort()
+			return
+		} else if !unique_email {
+			context.JSON(http.StatusBadRequest, gin.H{"error": "E-mail is already in use."})
+			context.Abort()
+			return
+		}
+
+		// Set account to not verified
+		err = database.SetUserVerification(userID, false)
+		if err != nil {
+			context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			context.Abort()
+			return
+		}
+
+		userOriginal.Email = userUpdateRequest.Email
+		emailChanged = true
+
+	}
+
+	// Hash the selected password
+	if userUpdateRequest.Password != "" {
+		if err := userOriginal.HashPassword(userUpdateRequest.Password); err != nil {
+			context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			context.Abort()
+			return
+		}
+	}
+
+	// Update user in database
+	err = database.UpdateUserValuesByUserID(int(userOriginal.ID), userOriginal.Email, userOriginal.Password)
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Get updated user object
+	var user models.User
+	record = database.Instance.Where("ID = ?", userID).First(&user)
+	if record.Error != nil {
+		fmt.Println("Invalid credentials. Error: " + record.Error.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details."})
+		context.Abort()
+		return
+	}
+
+	// Generate new JWT token
+	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, int(user.ID), *user.Admin, user.Verified)
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Get configuration
+	config, err := config.GetConfig()
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// If SMTP is disabled, create the user as verified
+	if config.SMTPEnabled {
+		user.Verified = false
+	} else {
+		user.Verified = true
+	}
+
+	// If user is not verified and SMTP is enabled, send verification e-mail
+	if !user.Verified && config.SMTPEnabled && emailChanged {
+
+		verificationCode, err := database.GenrateRandomVerificationCodeForuser(userID)
+		if err != nil {
+			context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			context.Abort()
+			return
+		}
+
+		user.VerificationCode = verificationCode
+
+		log.Println("Sending verification e-mail to new user: " + user.FirstName + " " + user.LastName + ".")
+
+		err = utilities.SendSMTPVerificationEmail(user)
+		if err != nil {
+			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			context.Abort()
+			return
+		}
+	}
+
+	// Reply
+	context.JSON(http.StatusOK, gin.H{"message": "Account updated.", "token": tokenString, "verified": user.Verified})
 
 }

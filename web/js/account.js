@@ -94,6 +94,58 @@ function change_password_toggle() {
 
 function send_update() {
 
-    alert("Not finished :(")
+    var email = document.getElementById("email").value;
+    var password = document.getElementById("password").value;
+    var password_repeat = document.getElementById("password_repeat").value;
+
+    var form_obj = { 
+                        "email" : email,
+                        "password" : password,
+                        "password_repeat": password_repeat
+                    };
+
+    var form_data = JSON.stringify(form_obj);
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message);
+
+                // store jwt to cookie
+                set_cookie("poenskelisten", result.token, 7);
+
+                if(result.verified) {
+                    location.reload();
+                } else {
+                    location.href = './';
+                }
+                
+            }
+
+        } else {
+            info("Updating account...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/user/update");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
 
 }
