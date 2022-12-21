@@ -26,6 +26,12 @@ type UserCreationRequest struct {
 	InviteCode     string `json:"invite_code"`
 }
 
+type UserUpdateRequest struct {
+	Email          string `json:"email"`
+	Password       string `json:"password"`
+	PasswordRepeat string `json:"password_repeat"`
+}
+
 func (user *User) HashPassword(password string) error {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	if err != nil {

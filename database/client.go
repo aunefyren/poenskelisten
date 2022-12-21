@@ -210,16 +210,47 @@ func SetUsedUserInviteCode(providedCode string, userIDClaimer int) error {
 }
 
 // Set user to verified
-func SetUserVerified(userID int) error {
+func SetUserVerification(userID int, verified bool) error {
 
 	var user models.User
+	var verInt int
 
-	userrecords := Instance.Model(user).Where("`users`.enabled = ?", 1).Where("`users`.ID = ?", userID).Update("verified", 1)
+	if verified {
+		verInt = 1
+	} else {
+		verInt = 0
+	}
+
+	userrecords := Instance.Model(user).Where("`users`.enabled = ?", 1).Where("`users`.ID = ?", userID).Update("verified", verInt)
 	if userrecords.Error != nil {
 		return userrecords.Error
 	}
 	if userrecords.RowsAffected != 1 {
 		return errors.New("Verification not changed in database.")
+	}
+
+	return nil
+}
+
+// Update user values
+func UpdateUserValuesByUserID(userID int, email string, password string) error {
+
+	var user models.User
+
+	userrecords := Instance.Model(user).Where("`users`.enabled = ?", 1).Where("`users`.ID = ?", userID).Update("email", email)
+	if userrecords.Error != nil {
+		return userrecords.Error
+	}
+	if userrecords.RowsAffected != 1 {
+		return errors.New("Email not changed in database.")
+	}
+
+	userrecords = Instance.Model(user).Where("`users`.enabled = ?", 1).Where("`users`.ID = ?", userID).Update("password", password)
+	if userrecords.Error != nil {
+		return userrecords.Error
+	}
+	if userrecords.RowsAffected != 1 {
+		return errors.New("Password not changed in database.")
 	}
 
 	return nil
