@@ -591,8 +591,8 @@ button:disabled {
 
 
 hr {
-  border: 0.1em solid var(--eggshell);
-  opacity: 0.5;
+  border: 0.025em solid var(--eggshell);
+  opacity: 0.25;
   border-radius: 1em;
   width: 100%;
   width: -webkit-fill-available;
@@ -607,4 +607,10 @@ hr {
 
 .news-post {
   margin: 1em 0;
+}
+
+.news {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
 }

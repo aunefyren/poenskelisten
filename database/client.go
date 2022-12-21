@@ -453,6 +453,19 @@ func GetUserInformation(UserID int) (models.User, error) {
 	return user, nil
 }
 
+// Get ALL user information
+func GetAllUserInformation(UserID int) (models.User, error) {
+	var user models.User
+	userrecord := Instance.Where("`users`.enabled = ?", 1).Where("`users`.id = ?", UserID).Find(&user)
+	if userrecord.Error != nil {
+		return models.User{}, userrecord.Error
+	} else if userrecord.RowsAffected != 1 {
+		return models.User{}, errors.New("Failed to find correct user in DB.")
+	}
+
+	return user, nil
+}
+
 // Get user information
 func GetGroupInformation(GroupID int) (models.Group, error) {
 	var group models.Group

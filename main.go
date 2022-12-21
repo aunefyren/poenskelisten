@@ -169,7 +169,6 @@ func initRouter() *gin.Engine {
 		{
 			open.POST("/token/register", controllers.GenerateToken)
 			open.POST("/user/register", controllers.RegisterUser)
-			open.POST("/user/verify/:code", controllers.VerifyUser)
 		}
 
 		auth := api.Group("/auth").Use(middlewares.Auth(false))
@@ -202,6 +201,8 @@ func initRouter() *gin.Engine {
 			auth.POST("/news/get", controllers.GetNews)
 			auth.POST("/news/get/:news_id", controllers.GetNewsPost)
 
+			open.POST("/user/verify/:code", controllers.VerifyUser)
+			open.POST("/user/verification", controllers.SendUserVerificationCode)
 			auth.POST("/user/get/:user_id", controllers.GetUser)
 			auth.POST("/user/get", controllers.GetUsers)
 		}

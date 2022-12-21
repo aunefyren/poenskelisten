@@ -186,6 +186,10 @@ function load_verify_account() {
 
                     </div>
 
+                    <div class="module">
+                        <a style="font-size:0.75em;cursor:pointer;" onclick="new_code();">Send me a new code!</i>
+                    </div>
+
                 </div>
 
     `;
@@ -232,6 +236,43 @@ function verify_account(){
     };
     xhttp.withCredentials = true;
     xhttp.open("post", api_url + "open/user/verify/" + email_code);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+    
+}
+
+function new_code(){
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message)
+
+            }
+
+        } else {
+            info("Sending new code...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "open/user/verification");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
