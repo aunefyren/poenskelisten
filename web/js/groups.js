@@ -2,10 +2,10 @@ function load_page(result) {
 
     if(result !== false) {
         var login_data = JSON.parse(result);
-        user_id = login_data.id
+        var user_id = login_data.data.id
     } else {
         var login_data = false;
-        user_id = 0
+        var user_id = 0
     }
 
     var html = `
@@ -61,12 +61,16 @@ function load_page(result) {
     clearResponse();
 
     if(result !== false) {
+
         showLoggedInMenu();
         get_groups(user_id);
         get_users(user_id);
+
     } else {
+
         showLoggedOutMenu();
         invalid_session();
+        
     }
 }
 
