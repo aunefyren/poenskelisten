@@ -498,6 +498,11 @@ func GetGroupObjects(userID int) ([]models.GroupUser, error) {
 		groupsWithOwner = append(groupsWithOwner, groupWithOwner)
 	}
 
+	// Turn array from null to empty
+	if len(groups) == 0 {
+		groupsWithOwner = []models.GroupUser{}
+	}
+
 	return groupsWithOwner, nil
 
 }
