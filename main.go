@@ -305,22 +305,22 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, error)
 	flag.StringVar(&dbIP, "dbip", Config.DBIP, "The IP address used to reach the database.")
 
 	var smtpDisabled string
-	flag.StringVar(&smtpDisabled, "disableSMTP", "false", "Disables user verification using e-mail.")
+	flag.StringVar(&smtpDisabled, "disablesmtp", "false", "Disables user verification using e-mail.")
 
 	var smtpHost string
-	flag.StringVar(&smtpHost, "smtpHost", Config.SMTPHost, "The SMTP server which sends e-mail.")
+	flag.StringVar(&smtpHost, "smtphost", Config.SMTPHost, "The SMTP server which sends e-mail.")
 
 	var smtpPort int
-	flag.IntVar(&smtpPort, "smtpPort", Config.SMTPPort, "The SMTP server port.")
+	flag.IntVar(&smtpPort, "smtpport", Config.SMTPPort, "The SMTP server port.")
 
 	var smtpUsername string
-	flag.StringVar(&smtpUsername, "smtpUsername", Config.SMTPUsername, "The username used to verify against the SMTP server.")
+	flag.StringVar(&smtpUsername, "smtpusername", Config.SMTPUsername, "The username used to verify against the SMTP server.")
 
 	var smtpPassword string
-	flag.StringVar(&smtpPassword, "smtpPassword", Config.SMTPPassword, "The password used to verify against the SMTP server.")
+	flag.StringVar(&smtpPassword, "smtppassword", Config.SMTPPassword, "The password used to verify against the SMTP server.")
 
 	var smtpFrom string
-	flag.StringVar(&smtpFrom, "smtpFrom", Config.SMTPFrom, "The sender address when sending e-mail from Pønskelisten.")
+	flag.StringVar(&smtpFrom, "smtpfrom", Config.SMTPFrom, "The sender address when sending e-mail from Pønskelisten.")
 
 	var generateInvite string
 	var generateInviteBool bool
