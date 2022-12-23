@@ -543,6 +543,10 @@ func GetWishlistObjects(UserID int) ([]models.WishlistUser, error) {
 
 	}
 
+	if len(wishlists_with_users) == 0 {
+		wishlists_with_users = []models.WishlistUser{}
+	}
+
 	return wishlists_with_users, nil
 
 }
