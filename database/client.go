@@ -480,6 +480,7 @@ func GetUserInformation(UserID int) (models.User, error) {
 	// Redact user information
 	user.Password = "REDACTED"
 	user.Email = "REDACTED"
+	user.VerificationCode = "REDACTED"
 
 	return user, nil
 }
