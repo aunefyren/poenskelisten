@@ -28,11 +28,11 @@ A website-based application for sharing and collaborating on wishlists and prese
 <br>
 
 Notable features:
-- Group people using, well, groups
-- Create wishlists, with wishes
+- Group people using, well, groups.
+- Create wishlists, with wishes.
 - Have multiple wishlists shared with multiple groups. 
 - Synchronize wishlists towards multiple groups.
-- Wish claiming. Someone can claim a gift on a wishlist they are allowed to see. Anyone else who can see that wishlist then knows that gift idea is taken. The owner can't see this of course
+- Wish claiming. Someone can claim a gift on a wishlist they are allowed to see. Anyone else who can see that wishlist then knows that gift idea is taken. The owner can't see this of course.
 
 Known issues:
 - There currently is no admin interface to add invitation codes
