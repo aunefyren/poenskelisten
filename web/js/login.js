@@ -4,58 +4,188 @@ function load_page(result) {
     set_cookie("poenskelisten", "", 1);
 
     var html = `
-                <div class="" id="forside">
+        <div class="" id="forside">
 
-                    <div class="module" id="news_feed">
-                    </div>
-                    
-                    <div class="module">
-                    
-                        <div class="title">
-                            Log in
-                        </div>
+            <div class="module" id="action">
+            </div>
 
-                        <div class="text-body">
-                            To view your wishes you need to login in...
-                        </div>
+            <div class="module" id="change_action">
+            </div>
 
-                        <br>
-                        <br>
-
-                        <div class="action-block">
-                            <form action="" onsubmit="event.preventDefault(); send_log_in();">
-
-                                <hr>
-
-                                <label id="form-input-icon" for="email"></label>
-                                <input type="email" name="email" id="email" placeholder="Email" required/>
-
-                                <label id="form-input-icon" for="password"></label>
-                                <input type="password" name="password" id="password" placeholder="Password" required/>
-                                
-                                <hr>
-
-                                <button id="log-in-button" type="submit" href="/">Log in</button>
-
-                            </form>
-                        </div>
-                        
-                    </div>
-
-                </div>
+        </div>
     `;
 
     document.getElementById('content').innerHTML = html;
     document.getElementById('card-header').innerHTML = 'What\'s the password?';
     clearResponse();
 
+    var reset_mode = false;
+    var reset_code = ""
+    try {
+        // Get parameters from URL string
+        var url_string = window.location.href
+        var url = new URL(url_string);
+        var reset_code = url.searchParams.get("reset_code");
+        if(reset_code !== null) {
+            reset_mode = true;
+        }
+    } catch(e) {
+        reset_mode = false;
+        reset_code = ""
+    }
+
     if(result !== false) {
         showLoggedInMenu();
-        info('Laster inn nyheter...');
-        get_news();
     } else {
         showLoggedOutMenu();
+
+        if(reset_mode) {
+            clearResponse();
+            action_resetpassword(reset_code);
+        } else {
+            clearResponse();
+            action_login();
+        }
     }
+}
+
+function action_login() {
+
+    try {
+        var email = document.getElementById("email").value;
+    } catch(e) {
+        var email = "";
+    }
+
+    var html = `
+    <div class="title">
+        Log in
+    </div>
+
+    <div class="text-body">
+        To make a wish you need to login...
+    </div>
+
+    <br>
+    <br>
+
+    <div class="action-block">
+        <form action="" onsubmit="event.preventDefault(); send_log_in();">
+
+            <hr>
+
+            <label id="form-input-icon" for="email"></label>
+            <input type="email" name="email" id="email" value="` + email + `" placeholder="Email" required/>
+
+            <label id="form-input-icon" for="password"></label>
+            <input type="password" name="password" id="password" placeholder="Password" required/>
+            
+            <hr>
+
+            <button id="log-in-button" type="submit" href="/">Log in</button>
+
+        </form>
+    </div>
+    `;
+
+    var html2 = `
+    <a style="font-size:0.75em;cursor:pointer;" onclick="action_newpassword();">I forgot my password!</i>
+    `;
+
+    document.getElementById("action").innerHTML = html;
+    document.getElementById("change_action").innerHTML = html2;
+
+}
+
+function action_newpassword() {
+
+    try {
+        var email = document.getElementById("email").value;
+    } catch(e) {
+        var email = "";
+    }
+
+    var html = `
+    <div class="title">
+        Reset password
+    </div>
+
+    <div class="text-body">
+        It's okay to forget.
+    </div>
+
+    <br>
+    <br>
+
+    <div class="action-block">
+        <form action="" onsubmit="event.preventDefault(); reset_password_request();">
+
+            <hr>
+
+            <label id="form-input-icon" for="email"></label>
+            <input type="email" name="email" id="email" value="` + email + `" placeholder="Email" required/>
+
+            <hr>
+
+            <button id="reset-button" type="submit" href="/">Reset password</button>
+
+        </form>
+    </div>
+    `;
+
+    var html2 = `
+    <a style="font-size:0.75em;cursor:pointer;" onclick="action_login();">Log in!</i>
+    `;
+
+    document.getElementById("action").innerHTML = html;
+    document.getElementById("change_action").innerHTML = html2;
+
+}
+
+function action_resetpassword(reset_code) {
+
+    clearResponse();
+
+    var html = `
+    <div class="title">
+        Change password
+    </div>
+
+    <div class="text-body">
+        Pick something you'll remember this time.
+    </div>
+
+    <br>
+    <br>
+
+    <div class="action-block">
+        <form action="" onsubmit="event.preventDefault(); reset_password();">
+
+            <hr>
+
+            <label id="form-input-icon" for="password"></label>
+            <input type="password" name="password" id="password" placeholder="New password" />
+
+            <label id="form-input-icon" for="password_repeat"></label>
+            <input type="password" name="password_repeat" id="password_repeat" placeholder="Repeat the password" />
+
+            <input type="hidden" name="reset_code" id="reset_code" value="` + reset_code + `" />
+
+            <hr>
+
+            <button id="reset-button" type="submit" href="/">Change password</button>
+
+        </form>
+    </div>
+    `;
+
+    var html2 = `
+    <a style="font-size:0.75em;cursor:pointer;" onclick="action_login();">Log in!</i>
+    `;
+
+    document.getElementById("action").innerHTML = html;
+    document.getElementById("change_action").innerHTML = html2;
+
 }
 
 function send_log_in(){
@@ -115,10 +245,123 @@ function send_log_in(){
 }
 
 function clear_data() {
-    document.getElementById("password").value = "";
-    document.getElementById("email").value = "";
+    try {
+        document.getElementById("password").value = "";
+    } catch(e) {
+        console.log(e)
+    }
+
+    try {
+        document.getElementById("password_repeat").value = "";
+    } catch(e) {
+        console.log(e)
+    }
+    
+    try {
+        document.getElementById("email").value = "";
+    } catch(e) {
+        console.log(e)
+    }
 }
 
 function disable_login_button() {
     document.getElementById("log-in-button").disabled = true;
+}
+
+function reset_password_request(){
+
+    var user_email = document.getElementById("email").value;
+
+    var form_obj = { 
+                                    "email" : user_email
+                                };
+
+    var form_data = JSON.stringify(form_obj);
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                clear_data();
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+                clear_data();
+
+            } else {
+
+                // store jwt to cookie
+                success(result.message)
+
+            }
+
+        } else {
+            info("Sending request...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "open/user/reset");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.send(form_data);
+    return false;
+}
+
+function reset_password(){
+
+    var password = document.getElementById("password").value;
+    var password_repeat = document.getElementById("password_repeat").value;
+    var reset_code = document.getElementById("reset_code").value;
+
+    var form_obj = { 
+                        "reset_code": reset_code,
+                        "password" : password,
+                        "password_repeat" : password_repeat
+                    };
+
+    var form_data = JSON.stringify(form_obj);
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                clear_data();
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+                clear_data();
+
+            } else {
+
+                // store jwt to cookie
+                success(result.message)
+                clear_data();
+                action_login();
+
+            }
+
+        } else {
+            info("Changing password...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "open/user/password");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.send(form_data);
+    return false;
 }

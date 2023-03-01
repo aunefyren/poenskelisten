@@ -467,24 +467,6 @@ func VerifyUniqueWishlistNameForUser(WishlistName string, UserID int) (bool, err
 	return true, nil
 }
 
-// Get user information
-func GetUserInformation(UserID int) (models.User, error) {
-	var user models.User
-	userrecord := Instance.Where("`users`.enabled = ?", 1).Where("`users`.id = ?", UserID).Find(&user)
-	if userrecord.Error != nil {
-		return models.User{}, userrecord.Error
-	} else if userrecord.RowsAffected != 1 {
-		return models.User{}, errors.New("Failed to find correct user in DB.")
-	}
-
-	// Redact user information
-	user.Password = "REDACTED"
-	user.Email = "REDACTED"
-	user.VerificationCode = "REDACTED"
-
-	return user, nil
-}
-
 // Get ALL user information
 func GetAllUserInformation(UserID int) (models.User, error) {
 	var user models.User
@@ -554,7 +536,7 @@ func GetUserMembersFromGroup(GroupID int) ([]models.User, error) {
 	var users []models.User
 	var group_memberships []models.GroupMembership
 
-	membershiprecords := Instance.Where("`group_memberships`.enabled = ?", 1).Joins("JOIN `groups` on `group_memberships`.group = `groups`.id").Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", GroupID).Find(&group_memberships)
+	membershiprecords := Instance.Where("`group_memberships`.enabled = ?", 1).Joins("JOIN `groups` on `group_memberships`.group = `groups`.id").Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", GroupID).Joins("JOIN `users` on `group_memberships`.member = `users`.id").Where("`users`.enabled = ?", 1).Find(&group_memberships)
 	if membershiprecords.Error != nil {
 		return []models.User{}, membershiprecords.Error
 	}
@@ -612,11 +594,12 @@ func GetGroupsAUserIsAMemberOf(UserID int) ([]models.Group, error) {
 
 }
 
+// Retrieve memberships from group using group ID. Check that users are enabled.
 func GetGroupMembershipsFromGroup(GroupID int) ([]models.GroupMembership, error) {
 
 	var groupMemberships []models.GroupMembership
 
-	groupmembershipRecords := Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group = ?", GroupID).Find(&groupMemberships)
+	groupmembershipRecords := Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group = ?", GroupID).Joins("JOIN `users` on `group_memberships`.member = `users`.ID").Where("`users`.enabled = ?", 1).Find(&groupMemberships)
 
 	if groupmembershipRecords.Error != nil {
 		return []models.GroupMembership{}, groupmembershipRecords.Error
@@ -671,7 +654,7 @@ func GetNewsPostByNewsID(newsID int) (models.News, error) {
 // Get all wishlists in groups
 func GetWishlistsFromGroup(GroupID int) ([]models.Wishlist, error) {
 	var wishlists []models.Wishlist
-	wishlistrecords := Instance.Where("`wishlists`.enabled = ?", 1).Joins("JOIN wishlist_memberships on wishlist_memberships.wishlist = wishlists.id").Where("`wishlist_memberships`.group = ?", GroupID).Where("`wishlist_memberships`.enabled = ?", 1).Find(&wishlists)
+	wishlistrecords := Instance.Where("`wishlists`.enabled = ?", 1).Joins("JOIN wishlist_memberships on wishlist_memberships.wishlist = wishlists.id").Where("`wishlist_memberships`.group = ?", GroupID).Where("`wishlist_memberships`.enabled = ?", 1).Joins("JOIN `groups` on `wishlist_memberships`.group = `groups`.ID").Where("`groups`.enabled = ?", 1).Joins("JOIN `users` on `wishlists`.owner = `users`.id").Where("`users`.enabled = ?", 1).Find(&wishlists)
 
 	if wishlistrecords.Error != nil {
 		return []models.Wishlist{}, wishlistrecords.Error
@@ -715,7 +698,7 @@ func GetWishesFromWishlist(WishlistID int, RequestUserID int) ([]models.WishUser
 	var wishes []models.Wish
 	var wishes_with_owner []models.WishUser
 
-	wishrecords := Instance.Where("`wishes`.enabled = ?", 1).Where("`wishes`.wishlist_id = ?", WishlistID).Find(&wishes)
+	wishrecords := Instance.Where("`wishes`.enabled = ?", 1).Where("`wishes`.wishlist_id = ?", WishlistID).Joins("JOIN `users` on `users`.id = `wishes`.owner").Where("`users`.enabled = ?", 1).Find(&wishes)
 	if wishrecords.Error != nil {
 		return []models.WishUser{}, wishrecords.Error
 	} else if wishrecords.RowsAffected < 1 {
@@ -725,11 +708,13 @@ func GetWishesFromWishlist(WishlistID int, RequestUserID int) ([]models.WishUser
 	for _, wish := range wishes {
 		user_object, err := GetUserInformation(wish.Owner)
 		if err != nil {
+			log.Println("Failed to get information about wish owner for wish'" + strconv.Itoa(int(wish.ID)) + "' and user '" + strconv.Itoa(int(wish.Owner)) + "'. Returning. Error: " + err.Error())
 			return []models.WishUser{}, err
 		}
 
 		wishclaimobject, err := GetWishClaimFromWish(int(wish.ID))
 		if err != nil {
+			log.Println("Failed to get wish claims wish'" + strconv.Itoa(int(wish.ID)) + "'. Returning. Error: " + err.Error())
 			return []models.WishUser{}, err
 		}
 
@@ -764,7 +749,7 @@ func GetWishClaimFromWish(WishID int) ([]models.WishClaimObject, error) {
 	var wish_with_user models.WishClaimObject
 	var wisharray_with_user []models.WishClaimObject
 
-	wishclaimrecords := Instance.Where("`wish_claims`.enabled = ?", 1).Where("`wish_claims`.wish = ?", WishID).Find(&wish_claim)
+	wishclaimrecords := Instance.Where("`wish_claims`.enabled = ?", 1).Where("`wish_claims`.wish = ?", WishID).Joins("JOIN `users` on `users`.id = `wish_claims`.user").Where("`users`.enabled = ?", 1).Find(&wish_claim)
 	if wishclaimrecords.Error != nil {
 		return []models.WishClaimObject{}, wishclaimrecords.Error
 	} else if wishclaimrecords.RowsAffected < 1 {

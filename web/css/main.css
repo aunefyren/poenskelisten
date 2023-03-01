@@ -386,7 +386,7 @@ button:disabled {
   align-content: center;
 }
 
-.wishlist:hover, .wish:hover, .group:hover {
+.wishlist:hover {
   background-color: var(--lightblue);
   transition: 1s;
 }

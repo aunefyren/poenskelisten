@@ -455,7 +455,8 @@ func GetGroups(context *gin.Context) {
 	// Get user ID from authorization header
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to verify login session. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Invalid session."})
 		context.Abort()
 		return
 	}
@@ -463,7 +464,8 @@ func GetGroups(context *gin.Context) {
 	// Retrieve list of groups with owner
 	groupsWithOwner, err := GetGroupObjects(userID)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to get your groups. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get your groups."})
 		context.Abort()
 		return
 	}
@@ -532,7 +534,8 @@ func GetGroup(context *gin.Context) {
 	// Verify user membership to group
 	membershipStatus, err := database.VerifyUserMembershipToGroup(userID, groupIDInt)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to verify membership to group. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership to group."})
 		context.Abort()
 		return
 	} else if !membershipStatus {
@@ -544,7 +547,8 @@ func GetGroup(context *gin.Context) {
 	// Retrieve group object with owner
 	groupWithOwner, err := GetGroupObject(userID, groupIDInt)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed process group object. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed process group object."})
 		context.Abort()
 		return
 	}
@@ -601,7 +605,7 @@ func GetGroupObject(userID int, groupID int) (models.GroupUser, error) {
 	for _, membership := range groupMemberships {
 		userObject, err := database.GetUserInformation(membership.Member)
 		if err != nil {
-			log.Println("Failed to get user information for group " + strconv.Itoa(groupID) + " members.")
+			log.Println("Failed to get user information for group '" + strconv.Itoa(groupID) + "' member '" + strconv.Itoa(membership.Member) + "'.")
 			return models.GroupUser{}, err
 		}
 

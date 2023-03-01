@@ -21,13 +21,13 @@ function load_page(result) {
                             Pønskelisten
                         </div>
 
-                        <div class="text-body" style="text-align: center;">
+                        <div class="text-body" id="main-text" style="text-align: center;">
                             Make a wish.
 
                             <br>
                             <br>
 
-                            Welcome to the front page. Not much to see here currently. Use to navigation bar and head to 'Wishlists' to manage your wishlists. Head to 'Groups' to manage and view wishlists in groups.
+                            Welcome to the front page. Use to navigation bar and head to 'Wishlists' to manage your wishlists. Head to 'Groups' to manage and view wishlists in groups.
                         </div>
 
                     </div>
@@ -64,6 +64,7 @@ function load_page(result) {
         get_news(login_data.admin);
     } else {
         showLoggedOutMenu();
+        document.getElementById('main-text').innerHTML = "You need to login.";
     }
 }
 
