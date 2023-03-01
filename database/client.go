@@ -434,7 +434,7 @@ func VerifyUserOwnershipToWishClaimByWish(UserID int, WishID int) (bool, error) 
 // Verify if a user ID is an owner of a wish
 func VerifyWishIsClaimed(WishID int) (bool, error) {
 	var wishclaim models.WishClaim
-	wishclaimrecord := Instance.Where("`wish_claims`.enabled = ?", 1).Where("`wish_claims`.wish = ?", WishID).Find(&wishclaim)
+	wishclaimrecord := Instance.Where("`wish_claims`.enabled = ?", 1).Where("`wish_claims`.wish = ?", WishID).Joins("JOIN `users` on `users`.id = `wish_claims`.user").Where("`users`.enabled = ?", 1).Find(&wishclaim)
 	if wishclaimrecord.Error != nil {
 		return false, wishclaimrecord.Error
 	} else if wishclaimrecord.RowsAffected != 1 {
