@@ -318,6 +318,19 @@ func UpdateUser(context *gin.Context) {
 		return
 	}
 
+	// Make password is strong enough
+	valid, requirements, err := utilities.ValidatePasswordFormat(userUpdateRequest.Password)
+	if err != nil {
+		log.Println("Failed to verify password quality. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify password quality."})
+		context.Abort()
+		return
+	} else if !valid {
+		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+		context.Abort()
+		return
+	}
+
 	// Get user ID
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
