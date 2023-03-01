@@ -386,8 +386,13 @@ button:disabled {
   align-content: center;
 }
 
-.wishlist:hover {
+.hoverable-light:hover {
   background-color: var(--lightblue);
+  transition: 1s;
+}
+
+.hoverable-dark:hover {
+  background-color: var(--mediumblue);
   transition: 1s;
 }
 
@@ -491,11 +496,6 @@ button:disabled {
   align-items: center;
   align-content: center;
   border-radius: 1em;
-}
-
-.group-member:hover {
-  background-color: var(--mediumblue);
-  transition: 1s;
 }
 
 .wish-input, .group-input, .wishlist-input {

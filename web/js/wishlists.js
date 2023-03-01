@@ -174,7 +174,7 @@ function place_wishlists(wishlists_array, user_id) {
                 html += '<div class="text-body">Available in these groups:</div>'
             }
 
-            html += '<div class="group-member">'
+            html += '<div class="group-member hoverable-dark">'
 
             html += '<div class="group-title">';
 
