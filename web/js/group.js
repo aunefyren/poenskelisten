@@ -175,7 +175,7 @@ function place_wishlists(wishlists_array, group_id, user_id) {
 
         html += '<div class="wishlist-wrapper">'
 
-        html += '<div class="wishlist">'
+        html += '<div class="wishlist hoverable-light">'
         
         html += '<div class="wishlist-title clickable" onclick="location.href = \'../wishlists/'+ wishlists_array[i].ID + '\'">'
         html += '<div class="profile-icon">'
