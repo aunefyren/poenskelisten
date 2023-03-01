@@ -325,7 +325,7 @@ func UpdateUser(context *gin.Context) {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify password quality."})
 		context.Abort()
 		return
-	} else if !valid {
+	} else if !valid && userUpdateRequest.Password != "" {
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
