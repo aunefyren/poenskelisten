@@ -169,6 +169,8 @@ func initRouter() *gin.Engine {
 		{
 			open.POST("/token/register", controllers.GenerateToken)
 			open.POST("/user/register", controllers.RegisterUser)
+			open.POST("/user/reset", controllers.APIResetPassword)
+			open.POST("/user/password", controllers.APIChangePassword)
 		}
 
 		auth := api.Group("/auth").Use(middlewares.Auth(false))

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/thanhpk/randstr"
@@ -37,6 +38,19 @@ func RegisterUser(context *gin.Context) {
 		return
 	}
 
+	// Make password is strong enough
+	valid, requirements, err := utilities.ValidatePasswordFormat(usercreationrequest.Password)
+	if err != nil {
+		log.Println("Failed to verify password quality. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify password quality."})
+		context.Abort()
+		return
+	} else if !valid {
+		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+		context.Abort()
+		return
+	}
+
 	// Move values from request to object
 	user.Email = usercreationrequest.Email
 	user.Password = usercreationrequest.Password
@@ -44,8 +58,13 @@ func RegisterUser(context *gin.Context) {
 	user.LastName = usercreationrequest.LastName
 	user.Enabled = true
 
+	user.ResetExpiration = time.Now()
+
 	randomString := randstr.String(8)
 	user.VerificationCode = strings.ToUpper(randomString)
+
+	randomString = randstr.String(8)
+	user.ResetCode = strings.ToUpper(randomString)
 
 	// Get configuration
 	config, err := config.GetConfig()
@@ -418,5 +437,157 @@ func UpdateUser(context *gin.Context) {
 
 	// Reply
 	context.JSON(http.StatusOK, gin.H{"message": "Account updated.", "token": tokenString, "verified": user.Verified})
+
+}
+
+func APIResetPassword(context *gin.Context) {
+
+	// Get configuration
+	config, err := config.GetConfig()
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	if !config.SMTPEnabled {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "The website administrator has not enabled SMTP."})
+		context.Abort()
+		return
+	}
+
+	if config.PoenskelistenExternalURL == "" {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "The website administrator has not setup an external website URL."})
+		context.Abort()
+		return
+	}
+
+	type resetRequest struct {
+		Email string `json:"email"`
+	}
+
+	var resetRequestVar resetRequest
+
+	// Parse reset request
+	if err := context.ShouldBindJSON(&resetRequestVar); err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	user, err := database.GetUserInformationByEmail(resetRequestVar.Email)
+	if err != nil {
+		log.Println("Failed to find user using email during password reset. Replied with okay 200. Error: " + err.Error())
+		context.JSON(http.StatusOK, gin.H{"message": "If the user exists, an email with a password reset has been sent."})
+		context.Abort()
+		return
+	}
+
+	_, err = database.GenrateRandomResetCodeForuser(int(user.ID))
+	if err != nil {
+		log.Println("Failed to generate reset code for user during password reset. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})
+		context.Abort()
+		return
+	}
+
+	user, err = database.GetAllUserInformation(int(user.ID))
+	if err != nil {
+		log.Println("Failed to retrieve data for user during password reset. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})
+		context.Abort()
+		return
+	}
+
+	err = utilities.SendSMTPResetEmail(user)
+	if err != nil {
+		log.Println("Failed to send email to user during password reset. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})
+		context.Abort()
+		return
+	}
+
+	context.JSON(http.StatusOK, gin.H{"message": "If the user exists, an email with a password reset has been sent."})
+
+}
+
+func APIChangePassword(context *gin.Context) {
+
+	// Initialize variables
+	var user models.User
+	var userUpdatePasswordRequest models.UserUpdatePasswordRequest
+
+	// Parse creation request
+	if err := context.ShouldBindJSON(&userUpdatePasswordRequest); err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Make sure password match
+	if userUpdatePasswordRequest.Password != userUpdatePasswordRequest.PasswordRepeat {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Passwords must match."})
+		context.Abort()
+		return
+	}
+
+	// Make password is strong enough
+	valid, requirements, err := utilities.ValidatePasswordFormat(userUpdatePasswordRequest.Password)
+	if err != nil {
+		log.Println("Failed to verify password quality. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify password quality."})
+		context.Abort()
+		return
+	} else if !valid {
+		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+		context.Abort()
+		return
+	}
+
+	// Get user object using reset code
+	user, err = database.GetAllUserInformationByResetCode(userUpdatePasswordRequest.ResetCode)
+	if err != nil {
+		log.Println("Failed to retrieve user using reset code. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Reset code has expired."})
+		context.Abort()
+		return
+	}
+
+	now := time.Now()
+
+	// Check if code has expired
+	if user.ResetExpiration.Before(now) {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Reset code has expired."})
+		context.Abort()
+		return
+	}
+
+	// Hash the selected password
+	if err = user.HashPassword(userUpdatePasswordRequest.Password); err != nil {
+		log.Println("Failed to hash password. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process password."})
+		context.Abort()
+		return
+	}
+
+	// Save new password
+	err = database.UpdateUserValuesByUserID(int(user.ID), user.Email, user.Password)
+	if err != nil {
+		log.Println("Failed to update password. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password."})
+		context.Abort()
+		return
+	}
+
+	// Change the reset code
+	_, err = database.GenrateRandomResetCodeForuser(int(user.ID))
+	if err != nil {
+		log.Println("Failed to generate reset code for user during password reset. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})
+		context.Abort()
+		return
+	}
+
+	context.JSON(http.StatusOK, gin.H{"message": "Password reset. You can now log in."})
 
 }
