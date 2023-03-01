@@ -315,7 +315,6 @@ func RegisterWishClaim(context *gin.Context) {
 		context.Abort()
 		return
 	} else if ClaimStatus {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Wish is already claimed."})
 		context.Abort()
 		return
