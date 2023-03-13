@@ -45,8 +45,8 @@ function load_page(result) {
                             <label id="form-input-icon" for="last_name"></label>
                             <input type="text" name="last_name" id="last_name" placeholder="Last name" value="` + last_name + `" disabled required/>
 
-                            <input onclick="change_password_toggle();" style="margin-top: 2em;" type="checkbox" id="password-toggle" name="confirm" value="confirm" >
-                            <label for="confirm">Change my password.</label><br>
+                            <input class="clickable" onclick="change_password_toggle();" style="margin-top: 2em;" type="checkbox" id="password-toggle" name="password-toggle" value="confirm" >
+                            <label for="password-toggle" class="clickable">Change my password.</label><br>
 
                             <div id="change-password-box" style="display:none;">
 
