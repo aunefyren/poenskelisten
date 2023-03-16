@@ -1,15 +1,35 @@
 function load_page(result) {
 
     if(result !== false) {
-        var login_data = JSON.parse(result);
 
-        if(login_data.error === "You must verify your account.") {
-            load_verify_account();
-            return;
+        try {
+
+            var login_data = JSON.parse(result);
+
+            if(login_data.error === "You must verify your account.") {
+                load_verify_account();
+                return;
+            }
+
+            var email = login_data.data.email
+            var first_name = login_data.data.first_name
+            var last_name = login_data.data.last_name
+            admin = login_data.data.admin;
+        } catch {
+            var email = ""
+            var first_name = ""
+            var last_name = ""
+            admin = false;
         }
+
+        showAdminMenu(admin)
 
     } else {
         var login_data = false;
+        var email = ""
+        var first_name = ""
+        var last_name = ""
+        admin = false;
     }
 
     var html = `
@@ -34,17 +54,8 @@ function load_page(result) {
 
                     <div class="module">
 
-                        <div id="divider-1" class="divider" style="display: none;">
-                            <hr></hr>
-                        </div>
-
-
                         <div id="news-title" class="title" style="display: none;">
                             News:
-                        </div>
-
-                        <div id="divider-2" class="divider" style="display: none;">
-                            <hr></hr>
                         </div>
 
                         <div id="news-box" class="news">
@@ -117,8 +128,6 @@ function place_news(news_array, admin) {
         return;
     } else {
         document.getElementById("news-title").style.display = "inline-block"
-        document.getElementById("divider-1").style.display = "inline-block"
-        document.getElementById("divider-2").style.display = "inline-block"
     }
 
     var html = ''
@@ -147,10 +156,6 @@ function place_news(news_array, admin) {
         html += date_string
         html += '</div>';
 
-        html += '</div>'
-
-        html += '<div class="divider">'
-        html += '<hr></hr>'
         html += '</div>'
 
     }

@@ -1,11 +1,35 @@
 function load_page(result) {
 
     if(result !== false) {
-        var login_data = JSON.parse(result);
-        var user_id = login_data.data.id
+
+        try {
+
+            var login_data = JSON.parse(result);
+
+            var email = login_data.data.email
+            var first_name = login_data.data.first_name
+            var last_name = login_data.data.last_name
+            user_id = login_data.data.id;
+            admin = login_data.data.admin;
+        } catch {
+            var email = ""
+            var first_name = ""
+            var last_name = ""
+            group_id = 0;
+            user_id = 0;
+            admin = false;
+        }
+
+        showAdminMenu(admin);
+
     } else {
         var login_data = false;
-        var user_id = 0
+        group_id = 0;
+        user_id = 0
+        var email = ""
+        var first_name = ""
+        var last_name = ""
+        admin = false;
     }
 
     var html = `
@@ -186,6 +210,10 @@ function place_groups(group_array, user_id) {
             } else if(group_array[i].members[j].ID == user_id && owner_id !== user_id){
                 html += '<div class="profile-icon clickable" onclick="leave_group(' + group_array[i].ID + ',' + user_id +')">'
                 html += '<img class="icon-img color-invert" src="../../assets/log-out.svg">'
+                html += '</div>'
+            } else if(group_array[i].members[j].ID == owner_id) {
+                html += '<div class="profile-icon">'
+                html += '<img class="icon-img color-invert" src="../../assets/star.svg">'
                 html += '</div>'
             }
 

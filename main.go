@@ -168,6 +168,7 @@ func initRouter() *gin.Engine {
 		open := api.Group("/open")
 		{
 			open.POST("/token/register", controllers.GenerateToken)
+
 			open.POST("/user/register", controllers.RegisterUser)
 			open.POST("/user/reset", controllers.APIResetPassword)
 			open.POST("/user/password", controllers.APIChangePassword)
@@ -213,8 +214,13 @@ func initRouter() *gin.Engine {
 		admin := api.Group("/admin").Use(middlewares.Auth(true))
 		{
 			admin.POST("/invite/register", controllers.RegisterInvite)
+			admin.POST("/invite/get", controllers.APIGetAllInvites)
+			admin.POST("/invite/:invite_id/delete", controllers.APIDeleteInvite)
+
 			admin.POST("/news/register", controllers.RegisterNewsPost)
 			admin.POST("/news/:news_id/delete", controllers.DeleteNewsPost)
+
+			admin.POST("/server/info", controllers.APIGetServerInfo)
 		}
 
 	}
@@ -274,6 +280,11 @@ func initRouter() *gin.Engine {
 	// Static endpoint for wishlist in your group
 	router.GET("/wishlists/:wishlist_id", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "wishlist.html", nil)
+	})
+
+	// Static endpoint for admin panel
+	router.GET("/admin", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "admin.html", nil)
 	})
 
 	return router
