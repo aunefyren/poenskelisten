@@ -78,6 +78,8 @@
 
                 <a class="nav-item disabled" href="/wishlists" id='wishlists'>Wishlists</a>
                 <a class="nav-item disabled" href="/groups" id='groups'>Groups</a>
+
+                <a class="nav-item disabled" href="/admin" id='admin'>Admin</a>
        
                 <a class="nav-item disabled" href="/account" id='account'>Account</a>
                 <a class="nav-item enabled" href="/login" id='login'>Log in</a>
@@ -111,6 +113,7 @@
             var ignoreNav = document.getElementById('nav');
             var groups;
             var jwt;
+            var admin = false;
             info('Loading...');
             showLoggedOutMenu();
             jwt = get_cookie('poenskelisten');

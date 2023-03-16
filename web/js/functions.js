@@ -190,6 +190,16 @@ function showLoggedOutMenu() {
     document.getElementById('register').classList.remove('disabled');
 }
 
+function showAdminMenu(admin) {
+    if(admin) {
+        document.getElementById('admin').classList.add('enabled');
+        document.getElementById('admin').classList.remove('disabled');
+    } else {
+        document.getElementById('admin').classList.add('disabled');
+        document.getElementById('admin').classList.remove('enabled');
+    }
+}
+
 // Toggle navar expansion
 function toggle_navbar() {
     var x = document.getElementById("navbar");

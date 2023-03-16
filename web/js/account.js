@@ -1,17 +1,24 @@
 function load_page(result) {
 
     if(result !== false) {
-        var login_data = JSON.parse(result);
-
+        
         try {
+
+            var login_data = JSON.parse(result);
+            
             var email = login_data.data.email
             var first_name = login_data.data.first_name
             var last_name = login_data.data.last_name
+            admin = login_data.data.admin;
         } catch {
             var email = ""
             var first_name = ""
             var last_name = ""
+            admin = false;
         }
+
+        showAdminMenu(admin)
+
     } else {
         var email = ""
         var first_name = ""

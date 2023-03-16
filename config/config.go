@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 )
 
-var wrapperr_version_parameter = "v0.0.1"
+var poenskelisten_version_parameter = "v1.0.10"
 var config_path, _ = filepath.Abs("./files/config.json")
 
 func GetConfig() (*models.ConfigStruct, error) {
@@ -61,6 +61,12 @@ func GetConfig() (*models.ConfigStruct, error) {
 		anythingChanged = true
 	}
 
+	if config.PoenskelistenVersion == "" {
+		// Set new value
+		config.PoenskelistenVersion = poenskelisten_version_parameter
+		anythingChanged = true
+	}
+
 	if anythingChanged {
 		// Save new version of config json
 		err = SaveConfig(&config)
@@ -83,6 +89,7 @@ func CreateConfigFile() error {
 	config.PoenskelistenName = "Pønskelisten"
 	config.DBPort = 3306
 	config.SMTPEnabled = true
+	config.PoenskelistenVersion = poenskelisten_version_parameter
 
 	err := SaveConfig(&config)
 	if err != nil {

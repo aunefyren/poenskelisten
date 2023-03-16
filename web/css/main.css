@@ -3,6 +3,7 @@
     --yellow: #ffd500;
     --green: #003e1f;
     --eggshell: #e0e1dd;
+    --blue: #1c87c9;
     --lightblue: #778da9;
     --mediumblue: #415a77;
     --darkblue: #0d1b2a;
@@ -342,6 +343,7 @@ select {
   margin-top: 1em;
   text-align: center;
 }
+
 button {
   width: 100%;
   width: -webkit-fill-available;
@@ -350,14 +352,22 @@ button {
   margin: 1em;
   border-radius: 5px; 
   border: none;
-  background: #1c87c9; 
+  background: var(--blue); 
   font-size: 1em;
   font-weight: 600;
-  color: var(--eggshell);
+  color: var(--white);
   cursor: pointer;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  align-items: center;
 }
+
 button:hover {
-  background: #26a9e0;
+  opacity: 0.5;
+  cursor: pointer;
 }
 button:disabled {
   cursor:default;
@@ -515,13 +525,6 @@ button:disabled {
   margin: 0.5em 1em;
 }
 
-.text-date{
-  text-align: center;
-  margin: 0 0 2em 0;
-  text-align: end;
-  font-size: 0.75em;
-}
-
 .title{
   font-weight: 200;
   font-size: 1.25em;
@@ -606,11 +609,85 @@ hr {
 }
 
 .news-post {
-  margin: 1em 0;
+  margin: 2em 0;
+  padding: 0.5em;
+  background-color: var(--mediumblue);
+  border: 2px solid var(--eggshell);
+  border-radius: 1em;
 }
 
 .news {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
+}
+
+.server-info {
+  border-radius: 1em;
+  padding: 1em;
+  margin: 0 1em 2em 1em;
+  background-color: var(--mediumblue);
+  border: 2px solid var(--eggshell);
+  width: auto;
+}
+
+.invites {
+  width: auto;
+  max-width: 100%;
+  margin: 1em;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-content: center;
+  align-items: center;
+  border-radius: 0.5em;
+  width: 20em;
+  height: auto;
+  padding: 1em;
+  max-height: 30em;
+  max-width: 100%;
+  max-width: -webkit-fill-available;
+  max-width: -moz-available;
+  background-color: var(--mediumblue);
+  border: 2px solid var(--eggshell);
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.invitation-object {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  justify-content: space-between;
+  align-items: flex-start;
+  box-sizing: border-box;
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  border: solid 2px var(--eggshell);
+  border-radius: 0.5em;
+  padding: 0.5em;
+  margin: 0.5em;
+}
+
+.invite-list {
+  overflow-y: scroll;
+}
+
+.unselectable {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.text-date{
+  text-align: center;
+  margin: 0;
+  text-align: end;
+  font-size: 0.75em;
 }

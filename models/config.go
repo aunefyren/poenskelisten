@@ -11,6 +11,7 @@ type ConfigStruct struct {
 	PoenskelistenPort        int    `json:"poenskelisten_port"`
 	PoenskelistenName        string `json:"poenskelisten_name"`
 	PoenskelistenExternalURL string `json:"poenskelisten_external_url"`
+	PoenskelistenVersion     string `json:"poenskelisten_version"`
 	SMTPEnabled              bool   `json:"smtp_enabled"`
 	SMTPHost                 string `json:"smtp_host"`
 	SMTPPort                 int    `json:"smtp_port"`

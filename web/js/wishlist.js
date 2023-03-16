@@ -1,11 +1,30 @@
 function load_page(result) {
 
     if(result !== false) {
-        var login_data = JSON.parse(result);
-        user_id = login_data.data.id
+        
+        try {
+
+            var login_data = JSON.parse(result);
+            
+            var email = login_data.data.email
+            var first_name = login_data.data.first_name
+            var last_name = login_data.data.last_name
+            var user_id = login_data.data.id;
+            admin = login_data.data.admin;
+        } catch {
+            var email = ""
+            var first_name = ""
+            var last_name = ""
+            var user_id = 0;
+            admin = false;
+        }
+
+        showAdminMenu(admin)
+
     } else {
-        var login_data = false;
-        user_id = 0
+        var email = ""
+        var first_name = ""
+        var last_name = ""
     }
 
     try {
@@ -74,7 +93,7 @@ function load_page(result) {
         console.log(group_id);
 
         get_wishlist(wishlist_id)
-        get_wishes(wishlist_id, group_id, login_data.data.id);
+        get_wishes(wishlist_id, group_id, user_id);
     } else {
         showLoggedOutMenu();
         invalid_session();
