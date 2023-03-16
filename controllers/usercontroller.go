@@ -7,7 +7,6 @@ import (
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -239,7 +238,7 @@ func VerifyUser(context *gin.Context) {
 	var user models.User
 	record := database.Instance.Where("ID = ?", userID).First(&user)
 	if record.Error != nil {
-		fmt.Println("Invalid credentials. Error: " + record.Error.Error())
+		log.Println("Invalid credentials. Error: " + record.Error.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details."})
 		context.Abort()
 		return
@@ -343,7 +342,7 @@ func UpdateUser(context *gin.Context) {
 	var userOriginal models.User
 	record := database.Instance.Where("ID = ?", userID).First(&userOriginal)
 	if record.Error != nil {
-		fmt.Println("Invalid credentials. Error: " + record.Error.Error())
+		log.Println("Invalid credentials. Error: " + record.Error.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details."})
 		context.Abort()
 		return
@@ -397,7 +396,7 @@ func UpdateUser(context *gin.Context) {
 	var user models.User
 	record = database.Instance.Where("ID = ?", userID).First(&user)
 	if record.Error != nil {
-		fmt.Println("Invalid credentials. Error: " + record.Error.Error())
+		log.Println("Invalid credentials. Error: " + record.Error.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details."})
 		context.Abort()
 		return
