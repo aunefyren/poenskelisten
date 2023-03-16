@@ -3,7 +3,6 @@ package controllers
 import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -99,7 +98,7 @@ func APIGetAllInvites(context *gin.Context) {
 
 	invites, err := database.GetAllEnabledInvites()
 	if err != nil {
-		fmt.Println("Failed to get invites from database. Error: " + err.Error())
+		log.Println("Failed to get invites from database. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get invites from database."})
 		context.Abort()
 		return

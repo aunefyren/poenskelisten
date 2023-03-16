@@ -5,7 +5,7 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
-	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -30,7 +30,7 @@ func GenerateToken(context *gin.Context) {
 	// check if email exists and password is correct
 	record := database.Instance.Where("email = ?", request.Email).First(&user)
 	if record.Error != nil {
-		fmt.Println("Invalid credentials. Error: " + record.Error.Error())
+		log.Println("Invalid credentials. Error: " + record.Error.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid credentials."})
 		context.Abort()
 		return
@@ -38,7 +38,7 @@ func GenerateToken(context *gin.Context) {
 
 	credentialError := user.CheckPassword(request.Password)
 	if credentialError != nil {
-		fmt.Println("Invalid credentials")
+		log.Println("Invalid credentials")
 		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
 		context.Abort()
 		return
