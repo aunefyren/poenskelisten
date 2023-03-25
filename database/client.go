@@ -668,7 +668,7 @@ func GetWishlistsFromGroup(GroupID int) ([]models.Wishlist, error) {
 // Get all wishlists a user is an owner of
 func GetOwnedWishlists(UserID int) ([]models.Wishlist, error) {
 	var wishlists []models.Wishlist
-	wishlistrecords := Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.owner = ?", UserID).Joins("JOIN users on users.id = wishlists.owner").Where("`users`.enabled = ?", 1).Find(&wishlists)
+	wishlistrecords := Instance.Order("`wishlists`.date desc, `wishlists`.name").Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.owner = ?", UserID).Joins("JOIN users on users.id = wishlists.owner").Where("`users`.enabled = ?", 1).Find(&wishlists)
 
 	if wishlistrecords.Error != nil {
 		return []models.Wishlist{}, wishlistrecords.Error
