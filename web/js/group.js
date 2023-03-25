@@ -68,6 +68,20 @@ function load_page(result) {
                         <div id="wishlists-box" class="wishlists">
                         </div>
 
+                        <div id="wishlists-box-expired-wrapper" class="wishlist-wrapper wishlist-expired" style="display: none;">
+                            <div class="wishlist-title">
+                                <div class="profile-icon">
+                                    <img class="icon-img color-invert" src="../assets/list.svg">
+                                </div>
+                                Expired wishlists
+                            </div>
+                            <div class="profile-icon clickable" onclick="toggle_expired_wishlists()">
+                                <img id="wishlist_expired_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">
+                            </div>
+                            <div id="wishlists-box-expired" class="wishlists collapsed" style="display:none;">
+                            </div>
+                        </div>
+
                         <div id="wishlist-input" class="wishlist-input">
                             <form action="" onsubmit="event.preventDefault(); create_wishlist(` + group_id + `, ` + user_id + `);">
                                 
@@ -191,9 +205,32 @@ function get_wishlists(group_id, user_id){
 
 function place_wishlists(wishlists_array, group_id, user_id) {
 
+    var html_regular = ''
+    var html_expired = ''
     var html = ''
+    var wishlists_array_length = wishlists_array.length
+    var wishlists_expired_length = 0
 
     for(var i = 0; i < wishlists_array.length; i++) {
+
+        var expired = false;
+        html = ''
+
+        try {
+            var expiration = new Date(Date.parse(wishlists_array[i].date));
+            var now = new Date
+            console.log("Times: " + expiration.toISOString() + " & " + now.toISOString())
+            if(expiration.getTime() < now.getTime()) {
+                console.log("Expired wishlist.")
+                expired = true;
+                wishlists_array_length -= 1
+                wishlists_expired_length += 1
+            } else {
+                console.log("Not skipping wishlist.")
+            }
+        } catch(err) {
+            console.log("Failed to parse datetime. Error: " + err)
+        }
 
         html += '<div class="wishlist-wrapper">'
 
@@ -225,14 +262,31 @@ function place_wishlists(wishlists_array, group_id, user_id) {
         html += '</div>'
 
         html += '</div>'
+
+        if(expired) {
+            html_expired += html;
+        } else {
+            html_regular += html;
+        }
+
     }
 
-    if(wishlists_array.length == 0) {
-        info("Looks like this group is empty...");
+    if(wishlists_array_length < 1) {
+        info("Looks like this list is empty...");
+    }
+
+    if(wishlists_expired_length > 0) {
+        document.getElementById("wishlists-box-expired-wrapper").style.display = "flex"
+    } else {
+        document.getElementById("wishlists-box-expired-wrapper").style.display = "none"
     }
 
     wishlist_object = document.getElementById("wishlists-box")
-    wishlist_object.innerHTML = html
+    wishlist_object.innerHTML = html_regular
+
+    wishlist_object_expired = document.getElementById("wishlists-box-expired")
+    wishlist_object_expired.innerHTML = html_expired
+
 }
 
 function create_wishlist(group_id, user_id) {
@@ -354,4 +408,22 @@ function delete_wishlist(wishlist_id, group_id, user_id) {
     xhttp.send();
     return false;
 
+}
+
+function toggle_expired_wishlists() {
+
+    wishlist_expired = document.getElementById("wishlists-box-expired");
+    wishlist_expired_arrow = document.getElementById("wishlist_expired_arrow");
+
+    if(wishlist_expired.classList.contains("collapsed")) {
+        wishlist_expired.classList.remove("collapsed")
+        wishlist_expired.classList.add("expanded")
+        wishlist_expired.style.display = "inline-block"
+        wishlist_expired_arrow.src = "../../assets/chevron-down.svg"
+    } else {
+        wishlist_expired.classList.remove("expanded")
+        wishlist_expired.classList.add("collapsed")
+        wishlist_expired.style.display = "none"
+        wishlist_expired_arrow.src = "../../assets/chevron-right.svg"
+    }
 }

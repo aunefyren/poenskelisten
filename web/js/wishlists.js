@@ -277,6 +277,8 @@ function place_wishlists(wishlists_array, user_id) {
 
     if(wishlists_expired_length > 0) {
         document.getElementById("wishlists-box-expired-wrapper").style.display = "flex"
+    } else {
+        document.getElementById("wishlists-box-expired-wrapper").style.display = "none"
     }
 
     wishlist_object = document.getElementById("wishlists-box")
