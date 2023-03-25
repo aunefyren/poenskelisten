@@ -3,6 +3,7 @@ package models
 type ConfigStruct struct {
 	Timezone                 string `json:"timezone"`
 	PrivateKey               string `json:"private_key"`
+	DBType                   string `json:"db_type"`
 	DBUsername               string `json:"db_username"`
 	DBPassword               string `json:"db_password"`
 	DBName                   string `json:"db_name"`

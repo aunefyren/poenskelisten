@@ -17,27 +17,33 @@ import (
 var Instance *gorm.DB
 var dbError error
 
-func Connect(dbUsername string, dbPassword string, dbIP string, dbPort int, dbName string) error {
+func Connect(dbType string, timezone string, dbUsername string, dbPassword string, dbIP string, dbPort int, dbName string) error {
 
-	connStrDb := dbUsername + ":" + dbPassword + "@tcp(" + dbIP + ":" + strconv.Itoa(dbPort) + ")/" + dbName + "?parseTime=True&loc=Local&charset=utf8mb4"
+	if strings.ToLower(dbType) == "postgresql" {
+		return errors.New("Database type not supported.")
+	} else if strings.ToLower(dbType) == "mysql" {
+		connStrDb := dbUsername + ":" + dbPassword + "@tcp(" + dbIP + ":" + strconv.Itoa(dbPort) + ")/" + dbName + "?parseTime=True&loc=Local&charset=utf8mb4"
 
-	// Connect to DB without DB Name
-	Instance, dbError = gorm.Open(mysql.Open(connStrDb), &gorm.Config{})
-	if dbError != nil {
+		// Connect to DB without DB Name
+		Instance, dbError = gorm.Open(mysql.Open(connStrDb), &gorm.Config{})
+		if dbError != nil {
 
-		if strings.Contains(dbError.Error(), "Unknown database '"+dbName+"'") {
-			err := CreateTable(dbUsername, dbPassword, dbIP, dbPort, dbName)
-			if err != nil {
-				return err
-			} else {
-				Instance, dbError = gorm.Open(mysql.Open(connStrDb), &gorm.Config{})
-				if dbError != nil {
-					return dbError
+			if strings.Contains(dbError.Error(), "Unknown database '"+dbName+"'") {
+				err := CreateTable(dbUsername, dbPassword, dbIP, dbPort, dbName)
+				if err != nil {
+					return err
+				} else {
+					Instance, dbError = gorm.Open(mysql.Open(connStrDb), &gorm.Config{})
+					if dbError != nil {
+						return dbError
+					}
 				}
+			} else {
+				return dbError
 			}
-		} else {
-			return dbError
 		}
+	} else {
+		return errors.New("Database type not recognized.")
 	}
 
 	log.Println("Connected to database.")
