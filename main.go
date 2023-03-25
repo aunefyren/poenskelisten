@@ -123,7 +123,7 @@ func main() {
 	fmt.Println("Connecting to database...")
 	log.Println("Connecting to database...")
 
-	err = database.Connect(Config.DBUsername, Config.DBPassword, Config.DBIP, Config.DBPort, Config.DBName)
+	err = database.Connect(Config.DBType, Config.Timezone, Config.DBUsername, Config.DBPassword, Config.DBIP, Config.DBPort, Config.DBName)
 	if err != nil {
 		fmt.Println("Failed to connect to database. Error: " + err.Error())
 		log.Println("Failed to connect to database. Error: " + err.Error())
@@ -305,6 +305,9 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, error)
 	var dbPort int
 	flag.IntVar(&dbPort, "dbport", Config.DBPort, "The port the database is listening on.")
 
+	var dbType string
+	flag.StringVar(&dbType, "dbtype", Config.DBType, "The type of database Pønskelisten is interacting with.")
+
 	var dbUsername string
 	flag.StringVar(&dbUsername, "dbusername", Config.DBUsername, "The username used to interact with the database.")
 
@@ -360,6 +363,11 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, error)
 	// Respect the flag if config is empty
 	if Config.DBPort == 0 {
 		Config.DBPort = dbPort
+	}
+
+	// Respect the flag if config is empty
+	if Config.DBType == "" {
+		Config.DBType = dbUsername
 	}
 
 	// Respect the flag if config is empty

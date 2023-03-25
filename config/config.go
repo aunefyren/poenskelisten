@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var poenskelisten_version_parameter = "v1.0.10"
@@ -67,6 +68,12 @@ func GetConfig() (*models.ConfigStruct, error) {
 		anythingChanged = true
 	}
 
+	if config.DBType == "" || (strings.ToLower(config.DBType) != "mysql" && strings.ToLower(config.DBType) != "postgresql") {
+		// Set new value
+		config.DBType = "mysql"
+		anythingChanged = true
+	}
+
 	if anythingChanged {
 		// Save new version of config json
 		err = SaveConfig(&config)
@@ -88,6 +95,7 @@ func CreateConfigFile() error {
 	config.PoenskelistenPort = 8080
 	config.PoenskelistenName = "Pønskelisten"
 	config.DBPort = 3306
+	config.DBType = "mysql"
 	config.SMTPEnabled = true
 	config.PoenskelistenVersion = poenskelisten_version_parameter
 
