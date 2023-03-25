@@ -53,7 +53,7 @@ function load_page(result) {
                         <div id="wishlists-box" class="wishlists">
                         </div>
 
-                        <div id="wishlists-box-expired-wrapper" class="wishlist-wrapper wishlist-expired">
+                        <div id="wishlists-box-expired-wrapper" class="wishlist-wrapper wishlist-expired" style="display: none;">
                             <div class="wishlist-title">
                                 <div class="profile-icon">
                                     <img class="icon-img color-invert" src="../assets/list.svg">
@@ -150,6 +150,7 @@ function place_wishlists(wishlists_array, user_id) {
     var html_expired = ''
     var html = ''
     var wishlists_array_length = wishlists_array.length
+    var wishlists_expired_length = 0
 
     for(var i = 0; i < wishlists_array.length; i++) {
 
@@ -163,6 +164,8 @@ function place_wishlists(wishlists_array, user_id) {
             if(expiration.getTime() < now.getTime()) {
                 console.log("Expired wishlist.")
                 expired = true;
+                wishlists_array_length -= 1
+                wishlists_expired_length += 1
             } else {
                 console.log("Not skipping wishlist.")
             }
@@ -270,6 +273,10 @@ function place_wishlists(wishlists_array, user_id) {
 
     if(wishlists_array_length < 1) {
         info("Looks like this list is empty...");
+    }
+
+    if(wishlists_expired_length > 0) {
+        document.getElementById("wishlists-box-expired-wrapper").style.display = "flex"
     }
 
     wishlist_object = document.getElementById("wishlists-box")
