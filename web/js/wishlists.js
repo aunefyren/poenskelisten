@@ -53,6 +53,20 @@ function load_page(result) {
                         <div id="wishlists-box" class="wishlists">
                         </div>
 
+                        <div id="wishlists-box-expired-wrapper" class="wishlist-wrapper wishlist-expired">
+                            <div class="wishlist-title">
+                                <div class="profile-icon">
+                                    <img class="icon-img color-invert" src="../assets/list.svg">
+                                </div>
+                                Expired wishlists
+                            </div>
+                            <div class="profile-icon clickable" onclick="toggle_expired_wishlists()">
+                                <img id="wishlist_expired_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">
+                            </div>
+                            <div id="wishlists-box-expired" class="wishlists collapsed" style="display:none;">
+                            </div>
+                        </div>
+
                         <div id="wishlist-input" class="wishlist-input">
                             <form action="" onsubmit="event.preventDefault(); create_wishlist(` + user_id + `);">
                                 
@@ -132,9 +146,31 @@ function get_wishlists(user_id){
 
 function place_wishlists(wishlists_array, user_id) {
 
+    var html_regular = ''
+    var html_expired = ''
     var html = ''
+    var wishlists_array_length = wishlists_array.length
 
     for(var i = 0; i < wishlists_array.length; i++) {
+
+        var expired = false;
+        html = ''
+
+        try {
+            var expiration = new Date(Date.parse(wishlists_array[i].date));
+            var now = new Date
+            console.log("Times: " + expiration.toISOString() + " & " + now.toISOString())
+            if(expiration.getTime() < now.getTime()) {
+                console.log("Expired wishlist.")
+                expired = true;
+            } else {
+                console.log("Not skipping wishlist.")
+            }
+        } catch(err) {
+            console.log("Failed to parse datetime. Error: " + err)
+        }
+
+        console.log("Wishlist ID: " + wishlists_array[i].ID)
 
         owner_id = wishlists_array[i].owner.ID
 
@@ -224,14 +260,23 @@ function place_wishlists(wishlists_array, user_id) {
         html += '</div>'
 
         html += '</div>'
+
+        if(expired) {
+            html_expired += html;
+        } else {
+            html_regular += html;
+        }
     }
 
-    if(wishlists_array.length == 0) {
+    if(wishlists_array_length < 1) {
         info("Looks like this list is empty...");
     }
 
     wishlist_object = document.getElementById("wishlists-box")
-    wishlist_object.innerHTML = html
+    wishlist_object.innerHTML = html_regular
+
+    wishlist_object_expired = document.getElementById("wishlists-box-expired")
+    wishlist_object_expired.innerHTML = html_expired
 }
 
 function create_wishlist(user_id) {
@@ -381,7 +426,24 @@ function toggle_wishlist(user_id, wishlist_id, owner_id, member_array) {
             }
         }
     }
-    
+}
+
+function toggle_expired_wishlists() {
+
+    wishlist_expired = document.getElementById("wishlists-box-expired");
+    wishlist_expired_arrow = document.getElementById("wishlist_expired_arrow");
+
+    if(wishlist_expired.classList.contains("collapsed")) {
+        wishlist_expired.classList.remove("collapsed")
+        wishlist_expired.classList.add("expanded")
+        wishlist_expired.style.display = "inline-block"
+        wishlist_expired_arrow.src = "../../assets/chevron-down.svg"
+    } else {
+        wishlist_expired.classList.remove("expanded")
+        wishlist_expired.classList.add("collapsed")
+        wishlist_expired.style.display = "none"
+        wishlist_expired_arrow.src = "../../assets/chevron-right.svg"
+    }
 }
 
 function get_groups(owner_id, wishlist_id, user_id, member_array){
@@ -446,7 +508,7 @@ function place_groups(group_array, wishlist_id, owner_id, user_id, member_array)
     }
 }
 
-function add_groups(wishlist_id, group_id) {
+function add_groups(wishlist_id, user_id) {
 
     var selected_members = [];
     var select_list = document.getElementById("wishlist-input-members-" + wishlist_id)

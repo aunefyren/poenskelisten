@@ -691,3 +691,10 @@ hr {
   text-align: end;
   font-size: 0.75em;
 }
+
+.wishlist-expired {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  opacity: 0.5;
+}
