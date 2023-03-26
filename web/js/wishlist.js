@@ -43,7 +43,7 @@ function load_page(result) {
                     
                     <div class="module">
                     
-                        <div class="wishlist-info">
+                        <div class="wishlist-info" id="wishlist-info-box">
 
                             <div id="wishlist-title" class="title">
                             </div>
@@ -52,6 +52,10 @@ function load_page(result) {
                             </div>
 
                             <div class="text-body" id="wishlist-info">
+                            </div>
+
+                            <div class="bottom-right-button" id="edit-wishlist" style="display: none;" onclick="wishlist_edit(${user_id}, ${wishlist_id}, '{wishlist_expiration_date}');">
+                                <img class="icon-img color-invert clickable" src="../assets/edit.svg">
                             </div>
 
                         </div>
@@ -145,6 +149,9 @@ function place_wishlist(wishlist_object) {
         var expiration = new Date(Date.parse(wishlist_object.date));
         expiration_string = expiration.toLocaleDateString();
         document.getElementById("wishlist-info").innerHTML += "<br>Expires: " + expiration_string
+        
+        var innerHTML = document.getElementById("wishlist-info-box").innerHTML
+        document.getElementById("wishlist-info-box").innerHTML = innerHTML.replace('{wishlist_expiration_date}', wishlist_object.date)
     } catch(err) {
         console.log("Failed to parse datetime. Error: " + err)
     }
@@ -177,7 +184,7 @@ function get_wishes(wishlist_id, group_id, user_id){
                 place_wishes(wishes, wishlist_id, group_id, user_id);
 
                 if(result.owner_id == user_id) {
-                    show_wish_input();
+                    show_owner_inputs();
                 }
 
             }
@@ -290,9 +297,11 @@ function toggle_wish(wishid) {
     }
 }
 
-function show_wish_input() {
+function show_owner_inputs() {
     wishinput = document.getElementById("wish-input");
     wishinput.style.display = "inline-block"
+    wishlistedit = document.getElementById("edit-wishlist");
+    wishlistedit.style.display = "flex"
 }
 
 function send_wish(wishlist_id, group_id, user_id){
@@ -511,4 +520,120 @@ function unclaim_wish(wish_id, wishlist_id, group_id, user_id) {
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
     return false;
+}
+
+function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date) {
+
+    var wishlist_title = document.getElementById("wishlist-title").innerHTML;
+    var wishlist_description = document.getElementById("wishlist-description").innerHTML;
+    var wishlist_expiration = getDateString(wishlist_expiration_date)
+
+    var html = '';
+
+    html += `
+        <form action="" onsubmit="event.preventDefault(); update_wishlist(${wishlist_id}, ` + user_id + `);">
+                                
+            <label for="wishlist_name">Edit wishlist:</label><br>
+            <input type="text" name="wishlist_name" id="wishlist_name" placeholder="Wishlist name" value="${wishlist_title}" autocomplete="off" required />
+            
+            <input type="text" name="wishlist_description" id="wishlist_description" placeholder="Wishlist description" value="${wishlist_description}" autocomplete="off" required />
+
+            <label for="wishlist_date">When does the wishlist expire?</label><br>
+            <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" value="${wishlist_expiration}" autocomplete="off" required />
+            
+            <button id="register-button" type="submit" href="/">Save wishlist</button>
+
+        </form>
+    `;
+
+    document.getElementById("wishlist-info-box").innerHTML = html;
+
+}
+
+function getDateString(date_string) {
+    var today = new Date(date_string);
+    var dd = String(today.getDate()).padStart(2, '0');
+    var mm = String(today.getMonth() + 1).padStart(2, '0');
+    var yyyy = today.getFullYear();
+
+    today =  yyyy + '-' + mm + '-' + dd;
+    return today
+}
+
+function update_wishlist(wishlist_id, user_id) {
+
+    if(!confirm("Are you sure you want to update this wishlist?")) {
+        return;
+    }
+
+    var wishlist_name = document.getElementById("wishlist_name").value;
+    var wishlist_description = document.getElementById("wishlist_description").value;
+    var wishlist_date = document.getElementById("wishlist_date").value;
+    var wishlist_date_object = new Date(wishlist_date)
+    var wishlist_date_string = wishlist_date_object.toISOString();
+
+    var form_obj = { 
+        "name" : wishlist_name,
+        "description" : wishlist_description,
+        "date": wishlist_date_string
+    };
+
+    var form_data = JSON.stringify(form_obj);
+
+    console.log(form_data)
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message);
+                reset_wishlist_info_box(user_id, wishlist_id);
+                place_wishlist(result.wishlist);
+
+            }
+
+        } else {
+            info("Updating wishlist...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wishlist/" + wishlist_id + "/update");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
+
+}
+
+function reset_wishlist_info_box(user_id, wishlist_id) {
+    var html = `
+    <div id="wishlist-title" class="title">
+    </div>
+
+    <div class="text-body" id="wishlist-description">
+    </div>
+
+    <div class="text-body" id="wishlist-info">
+    </div>
+
+    <div class="bottom-right-button" id="edit-wishlist" style="display: none;" onclick="wishlist_edit(${user_id}, ${wishlist_id}, '{wishlist_expiration_date}');">
+        <img class="icon-img color-invert clickable" src="../assets/edit.svg">
+    </div>
+    `;
+
+    document.getElementById("wishlist-info-box").innerHTML = html;
 }

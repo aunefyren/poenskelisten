@@ -23,6 +23,13 @@ type WishlistCreationRequest struct {
 	Group       int    `json:"group"`
 }
 
+type WishlistUpdateRequest struct {
+	gorm.Model
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Date        string `json:"date"`
+}
+
 type WishlistUser struct {
 	gorm.Model
 	Name        string      `json:"name" gorm:"not null"`

@@ -698,3 +698,16 @@ hr {
   width: -moz-available;
   opacity: 0.5;
 }
+
+.bottom-right-button {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: flex-end;
+  justify-content: space-between;
+  align-items: flex-start;
+  box-sizing: border-box;
+}
