@@ -742,3 +742,110 @@ func RemoveFromWishlist(context *gin.Context) {
 
 	context.JSON(http.StatusCreated, gin.H{"message": "Group member removed.", "wishlists": wishlists_with_users})
 }
+
+func APIUpdateWishlist(context *gin.Context) {
+
+	// Create wishlist request
+	var wishlist_id = context.Param("wishlist_id")
+	var wishlist models.WishlistUpdateRequest
+	var wishlistdb models.Wishlist
+
+	if err := context.ShouldBindJSON(&wishlist); err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Parse group id
+	wishlist_id_int, err := strconv.Atoi(wishlist_id)
+	if err != nil {
+		log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
+		context.Abort()
+		return
+	}
+
+	// Get user ID
+	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(UserID, wishlist_id_int)
+	if err != nil {
+		log.Println("Failed to verify ownership of group. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of group."})
+		context.Abort()
+		return
+	} else if !WishlistOwnership {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You can only edit wishlists you own."})
+		context.Abort()
+		return
+	}
+
+	// Get original wishlist from DB
+	wishlistOriginal, err := GetWishlistObject(int(wishlist_id_int), UserID)
+	if err != nil {
+		log.Println("Failed to get wishlist object. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist object."})
+		context.Abort()
+		return
+	}
+
+	// Validate if name has changed
+	if wishlistOriginal.Name != wishlist.Name {
+
+		if len(wishlist.Name) < 5 || wishlist.Name == "" {
+			context.JSON(http.StatusBadRequest, gin.H{"error": "The name of the wishlist must be five or more letters."})
+			context.Abort()
+			return
+		}
+
+		unique_wish_name, err := database.VerifyUniqueWishlistNameForUser(wishlist.Name, UserID)
+		if err != nil {
+			log.Println("Failed to verify unique wishlist name. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify unique wishlist name."})
+			context.Abort()
+			return
+		} else if !unique_wish_name {
+			context.JSON(http.StatusBadRequest, gin.H{"error": "There is already a wishlist with that name on your profile."})
+			context.Abort()
+			return
+		}
+	}
+
+	// Parse expiration date
+	wishlistdb.Date, err = time.Parse("2006-01-02T15:04:05.000Z", wishlist.Date)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Finalize wishlist object
+	wishlistdb.Owner = UserID
+	wishlistdb.Description = wishlist.Description
+	wishlistdb.Name = wishlist.Name
+
+	// Update wishlist in DB
+	err = database.UpdateWishlistValuesByID(wishlist_id_int, wishlistdb.Name, wishlistdb.Description, wishlistdb.Date)
+	if err != nil {
+		log.Println("Failed to update wishlist. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update wishlist."})
+		context.Abort()
+		return
+	}
+
+	// Get updated wishlist from DB
+	wishlist_with_user, err := GetWishlistObject(int(wishlist_id_int), UserID)
+	if err != nil {
+		log.Println("Failed to get wishlist object. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist object."})
+		context.Abort()
+		return
+	}
+
+	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist updated.", "wishlist": wishlist_with_user})
+}
