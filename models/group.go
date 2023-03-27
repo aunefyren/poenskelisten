@@ -16,6 +16,11 @@ type GroupCreationRequest struct {
 	Members     []int  `json:"members"`
 }
 
+type GroupUpdateRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
 type GroupUser struct {
 	gorm.Model
 	Name        string `json:"name"`

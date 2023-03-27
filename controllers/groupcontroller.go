@@ -684,3 +684,117 @@ func GetGroupMembers(context *gin.Context) {
 	// Reply
 	context.JSON(http.StatusOK, gin.H{"group_members": groupMembershipsWithUser, "message": "Group members retrieved."})
 }
+
+func APIUpdateGroup(context *gin.Context) {
+
+	// Create a new instance of the Group and GroupCreationRequest models
+	var group models.Group
+	var groupUpdateRequest models.GroupUpdateRequest
+	var groupID = context.Param("group_id")
+
+	// Bind the incoming request body to the GroupCreationRequest model
+	if err := context.ShouldBindJSON(&groupUpdateRequest); err != nil {
+		// If there is an error binding the request, return a Bad Request response
+		log.Println(("Failed to parse request. Error: " + err.Error()))
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
+		context.Abort()
+		return
+	}
+
+	// Parse group id for usage
+	groupIDInt, err := strconv.Atoi(groupID)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
+		context.Abort()
+		return
+	}
+
+	// Get the user ID from the Authorization header of the request
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		// If there is an error getting the user ID, return a Bad Request response
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Verify group is owned by requester
+	ownershipStatus, err := database.VerifyUserOwnershipToGroup(userID, groupIDInt)
+	if err != nil {
+		log.Println(("Failed to verify group ownership. Error: " + err.Error()))
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify group ownership."})
+		context.Abort()
+		return
+	} else if !ownershipStatus {
+		// Return error if membership does not exist
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You don't own this group."})
+		context.Abort()
+		return
+	}
+
+	// Copy the data from the GroupUpdateRequest model to the Group model
+	group.Description = groupUpdateRequest.Description
+	group.Name = groupUpdateRequest.Name
+	group.Owner = userID
+
+	groupOriginal, err := database.GetGroupInformation(groupIDInt)
+	if err != nil {
+		log.Println(("Failed to find group. Error: " + err.Error()))
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find group."})
+		context.Abort()
+		return
+	}
+
+	if group.Name != groupOriginal.Name {
+
+		// Verify that the group name is not empty and has at least 5 characters
+		if len(group.Name) < 5 || group.Name == "" {
+			// If the group name is not valid, return a Bad Request response
+			context.JSON(http.StatusBadRequest, gin.H{"error": "The name of the group must be five or more letters."})
+			context.Abort()
+			return
+		}
+
+		// Verify that a group with the same name and owner does not already exist
+		groupExists, _, err := database.VerifyGroupExistsByNameForUser(group.Name, group.Owner)
+		if err != nil {
+			log.Println(("Failed verify group name. Error: " + err.Error()))
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed verify group name."})
+			context.Abort()
+			return
+		} else if groupExists {
+			context.JSON(http.StatusBadRequest, gin.H{"error": "That group name is already in use."})
+			context.Abort()
+			return
+		}
+
+	}
+
+	if group.Description != groupOriginal.Description {
+		if len(group.Description) < 5 || group.Description == "" {
+			// If the group desc is not valid, return a Bad Request response
+			context.JSON(http.StatusBadRequest, gin.H{"error": "The description of the group must be five or more letters."})
+			context.Abort()
+			return
+		}
+	}
+
+	err = database.UpdateGroupValuesByID(groupIDInt, group.Name, group.Description)
+	if err != nil {
+		log.Println(("Failed update group. Error: " + err.Error()))
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed update group."})
+		context.Abort()
+		return
+	}
+
+	groupObjectNew, err := GetGroupObject(userID, groupIDInt)
+	if err != nil {
+		log.Println(("Failed convert group to group object. Error: " + err.Error()))
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed convert group to group object."})
+		context.Abort()
+		return
+	}
+
+	// Return a response indicating that the group was update, along with the updated group
+	context.JSON(http.StatusCreated, gin.H{"message": "Group updated.", "group": groupObjectNew})
+}

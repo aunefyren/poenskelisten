@@ -280,3 +280,13 @@ function get_url_parameters(url) {
 
     return parameters;
 }
+
+function getDateString(date_string) {
+    var today = new Date(date_string);
+    var dd = String(today.getDate()).padStart(2, '0');
+    var mm = String(today.getMonth() + 1).padStart(2, '0');
+    var yyyy = today.getFullYear();
+
+    today =  yyyy + '-' + mm + '-' + dd;
+    return today
+}

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Genrate a random reset code and return it
+// Update values in wishlist object in DB
 func UpdateWishlistValuesByID(wishlistID int, wishlistName string, wishlistDesc string, wishlistExpiration time.Time) error {
 
 	var wishlist models.Wishlist

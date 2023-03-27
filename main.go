@@ -186,6 +186,7 @@ func initRouter() *gin.Engine {
 			auth.POST("/group/get", controllers.GetGroups)
 			auth.POST("/group/get/:group_id", controllers.GetGroup)
 			auth.POST("/group/get/:group_id/members", controllers.GetGroupMembers)
+			auth.POST("/group/:group_id/update", controllers.APIUpdateGroup)
 
 			auth.POST("/wishlist/register", controllers.RegisterWishlist)
 			auth.POST("/wishlist/get", controllers.GetWishlists)

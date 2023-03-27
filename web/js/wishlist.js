@@ -550,16 +550,6 @@ function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date) {
 
 }
 
-function getDateString(date_string) {
-    var today = new Date(date_string);
-    var dd = String(today.getDate()).padStart(2, '0');
-    var mm = String(today.getMonth() + 1).padStart(2, '0');
-    var yyyy = today.getFullYear();
-
-    today =  yyyy + '-' + mm + '-' + dd;
-    return today
-}
-
 function update_wishlist(wishlist_id, user_id) {
 
     if(!confirm("Are you sure you want to update this wishlist?")) {
