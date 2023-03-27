@@ -44,7 +44,7 @@ function load_page(result) {
                     
                     <div class="module">
 
-                        <div class="group-info">
+                        <div class="group-info" id="group-info-box">
 
                             <div id="group-title" class="title">
                             </div>
@@ -53,6 +53,10 @@ function load_page(result) {
                             </div>
 
                             <div class="text-body" id="group-info">
+                            </div>
+
+                            <div class="bottom-right-button" id="edit-group" style="display: none;" onclick="group_edit(${user_id}, ${group_id});">
+                                <img class="icon-img color-invert clickable" src="../assets/edit.svg">
                             </div>
 
                         </div>
@@ -141,6 +145,10 @@ function get_group(group_id){
 
                 console.log(result);
                 place_group(result.group);
+
+                if(result.group.owner.ID == user_id) {
+                    show_owner_inputs();
+                }
 
             }
 
@@ -426,4 +434,108 @@ function toggle_expired_wishlists() {
         wishlist_expired.style.display = "none"
         wishlist_expired_arrow.src = "../../assets/chevron-right.svg"
     }
+}
+
+function reset_group_info_box(user_id, group_id) {
+    var html = `
+    <div id="group-title" class="title">
+    </div>
+
+    <div class="text-body" id="group-description">
+    </div>
+
+    <div class="text-body" id="group-info">
+    </div>
+
+    <div class="bottom-right-button" id="edit-group" style="display: none;" onclick="group_edit(${user_id}, ${group_id});">
+        <img class="icon-img color-invert clickable" src="../assets/edit.svg">
+    </div>
+    `;
+
+    document.getElementById("group-info-box").innerHTML = html;
+}
+
+function show_owner_inputs() {
+    wishlistedit = document.getElementById("edit-group");
+    wishlistedit.style.display = "flex"
+}
+
+function group_edit(user_id, group_id) {
+
+    var group_title = document.getElementById("group-title").innerHTML;
+    var group_description = document.getElementById("group-description").innerHTML;
+
+    var html = '';
+
+    html += `
+        <form action="" onsubmit="event.preventDefault(); update_group(${group_id}, ` + user_id + `);">
+                                
+            <label for="group_name">Edit group:</label><br>
+            <input type="text" name="group_name" id="group_name" placeholder="Group name" value="${group_title}" autocomplete="off" required />
+            
+            <input type="text" name="group_description" id="group_description" placeholder="Group description" value="${group_description}" autocomplete="off" required />
+
+            <button id="register-button" type="submit" href="/">Save group</button>
+
+        </form>
+    `;
+
+    document.getElementById("group-info-box").innerHTML = html;
+
+}
+
+function update_group(group_id, user_id) {
+
+    if(!confirm("Are you sure you want to update this group?")) {
+        return;
+    }
+
+    var group_title = document.getElementById("group_name").value;
+    var group_description = document.getElementById("group_description").value;
+
+    var form_obj = { 
+        "name" : group_title,
+        "description" : group_description
+    };
+
+    var form_data = JSON.stringify(form_obj);
+
+    console.log(form_data)
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message);
+                reset_group_info_box(user_id, group_id);
+                place_group(result.group);
+                show_owner_inputs();
+
+            }
+
+        } else {
+            info("Updating group...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/group/" + group_id + "/update");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
+
 }

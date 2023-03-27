@@ -389,18 +389,6 @@ func VerifyUserMembershipToGroupmembershipToWishlist(UserID int, WishlistID int)
 	return true, nil
 }
 
-// Verify if a user ID is an owner of a group
-func VerifyUserOwnershipToGroup(UserID int, GroupID int) (bool, error) {
-	var group models.Group
-	grouprecord := Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", GroupID).Where("`groups`.owner = ?", UserID).Find(&group)
-	if grouprecord.Error != nil {
-		return false, grouprecord.Error
-	} else if grouprecord.RowsAffected != 1 {
-		return false, nil
-	}
-	return true, nil
-}
-
 // Verify if a user ID is an owner of a wishlist
 func VerifyUserOwnershipToWishlist(UserID int, WishlistID int) (bool, error) {
 	var wishlist models.Wishlist
@@ -484,19 +472,6 @@ func GetAllUserInformation(UserID int) (models.User, error) {
 	}
 
 	return user, nil
-}
-
-// Get user information
-func GetGroupInformation(GroupID int) (models.Group, error) {
-	var group models.Group
-	grouprecord := Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", GroupID).Find(&group)
-	if grouprecord.Error != nil {
-		return models.Group{}, grouprecord.Error
-	} else if grouprecord.RowsAffected != 1 {
-		return models.Group{}, errors.New("Failed to find correct group in DB.")
-	}
-
-	return group, nil
 }
 
 // Get owner id of wishlist
