@@ -675,53 +675,18 @@ func GetWishlist(WishlistID int) (models.Wishlist, error) {
 }
 
 // Get wishes from wishlist
-func GetWishesFromWishlist(WishlistID int, RequestUserID int) ([]models.WishUser, error) {
+func GetWishesFromWishlist(WishlistID int) (bool, []models.Wish, error) {
+
 	var wishes []models.Wish
-	var wishes_with_owner []models.WishUser
 
 	wishrecords := Instance.Where("`wishes`.enabled = ?", 1).Where("`wishes`.wishlist_id = ?", WishlistID).Joins("JOIN `users` on `users`.id = `wishes`.owner").Where("`users`.enabled = ?", 1).Find(&wishes)
 	if wishrecords.Error != nil {
-		return []models.WishUser{}, wishrecords.Error
+		return false, []models.Wish{}, wishrecords.Error
 	} else if wishrecords.RowsAffected < 1 {
-		return []models.WishUser{}, nil
+		return false, []models.Wish{}, nil
 	}
 
-	for _, wish := range wishes {
-		user_object, err := GetUserInformation(wish.Owner)
-		if err != nil {
-			log.Println("Failed to get information about wish owner for wish'" + strconv.Itoa(int(wish.ID)) + "' and user '" + strconv.Itoa(int(wish.Owner)) + "'. Returning. Error: " + err.Error())
-			return []models.WishUser{}, err
-		}
-
-		wishclaimobject, err := GetWishClaimFromWish(int(wish.ID))
-		if err != nil {
-			log.Println("Failed to get wish claims wish'" + strconv.Itoa(int(wish.ID)) + "'. Returning. Error: " + err.Error())
-			return []models.WishUser{}, err
-		}
-
-		// Purge the reply if the requester is the owner
-		if wish.Owner == RequestUserID {
-			wishclaimobject = []models.WishClaimObject{}
-		}
-
-		var wish_with_owner models.WishUser
-		wish_with_owner.CreatedAt = wish.CreatedAt
-		wish_with_owner.DeletedAt = wish.DeletedAt
-		wish_with_owner.Enabled = wish.Enabled
-		wish_with_owner.ID = wish.ID
-		wish_with_owner.Model = wish.Model
-		wish_with_owner.Name = wish.Name
-		wish_with_owner.Note = wish.Note
-		wish_with_owner.Owner = user_object
-		wish_with_owner.WishClaim = wishclaimobject
-		wish_with_owner.URL = wish.URL
-		wish_with_owner.UpdatedAt = wish.UpdatedAt
-		wish_with_owner.WishlistID = wish.WishlistID
-
-		wishes_with_owner = append(wishes_with_owner, wish_with_owner)
-	}
-
-	return wishes_with_owner, nil
+	return true, wishes, nil
 }
 
 // get wish claims from wish, returns empty array without error if none are found.
@@ -754,17 +719,4 @@ func GetWishClaimFromWish(WishID int) ([]models.WishClaimObject, error) {
 	wisharray_with_user = append(wisharray_with_user, wish_with_user)
 
 	return wisharray_with_user, err
-}
-
-// get wishlist id from wish id
-func GetWishlistFromWish(WishID int) (int, error) {
-	var wish models.Wish
-	wishrecord := Instance.Where("`wishes`.enabled = ?", 1).Where("`wishes`.id = ?", WishID).Find(&wish)
-	if wishrecord.Error != nil {
-		return 0, wishrecord.Error
-	} else if wishrecord.RowsAffected != 1 {
-		return 0, errors.New("Failed to find correct wish in DB.")
-	}
-
-	return wish.WishlistID, nil
 }

@@ -310,12 +310,20 @@ func GetWishlistObjectsFromGroup(group_id int, RequestUserID int) ([]models.Wish
 
 		// Get wishes
 		wishlist_id_int := int(wishlist.ID)
-		wishes, err := database.GetWishesFromWishlist(wishlist_id_int, RequestUserID)
+
+		_, wishes, err := database.GetWishesFromWishlist(wishlist_id_int)
 		if err != nil {
-			log.Println("Failed to get wishes for wishlist '" + strconv.Itoa(wishlist_id_int) + "'. Returning. Error: " + err.Error())
+			log.Println("Failed to get wishes for wishlist '" + strconv.Itoa(wishlist_id_int) + "' from database. Returning. Error: " + err.Error())
 			return []models.WishlistUser{}, err
 		}
-		wishlist_with_user.Wishes = wishes
+
+		wishObjects, err := ConvertWishesToWishObjects(wishes, RequestUserID)
+		if err != nil {
+			log.Println("Failed to convert wishes for wishlist '" + strconv.Itoa(wishlist_id_int) + "'  to wish objects. Returning. Error: " + err.Error())
+			return []models.WishlistUser{}, err
+		}
+
+		wishlist_with_user.Wishes = wishObjects
 
 		wishlists_with_users = append(wishlists_with_users, wishlist_with_user)
 
@@ -455,12 +463,19 @@ func GetWishlistObject(WishlistID int, RequestUserID int) (models.WishlistUser, 
 	wishlist_with_user.UpdatedAt = wishlist.UpdatedAt
 
 	// Get wishes
-	wishes, err := database.GetWishesFromWishlist(WishlistID, RequestUserID)
+	_, wishes, err := database.GetWishesFromWishlist(WishlistID)
 	if err != nil {
+		log.Println("Failed to get wishes from database. Returning. Error: " + err.Error())
 		return models.WishlistUser{}, err
 	}
 
-	wishlist_with_user.Wishes = wishes
+	wishObjects, err := ConvertWishesToWishObjects(wishes, RequestUserID)
+	if err != nil {
+		log.Println("Failed to convert wishes to wish objects. Returning. Error: " + err.Error())
+		return models.WishlistUser{}, err
+	}
+
+	wishlist_with_user.Wishes = wishObjects
 
 	return wishlist_with_user, nil
 
@@ -558,12 +573,20 @@ func GetWishlistObjects(UserID int) ([]models.WishlistUser, error) {
 
 		// Get wishes
 		wishlist_id_int := int(wishlist.ID)
-		wishes, err := database.GetWishesFromWishlist(wishlist_id_int, UserID)
+
+		_, wishes, err := database.GetWishesFromWishlist(wishlist_id_int)
 		if err != nil {
-			log.Println("Failed to get wishes for wishlist '" + strconv.Itoa(int(wishlist_id_int)) + "'. Returning. Error: " + err.Error())
-			return []models.WishlistUser{}, err
+			log.Println("Failed to get wishes from database. Skipping. Error: " + err.Error())
+			continue
 		}
-		wishlist_with_user.Wishes = wishes
+
+		wishObjects, err := ConvertWishesToWishObjects(wishes, UserID)
+		if err != nil {
+			log.Println("Failed to convert wishes to wish objects. Skipping. Error: " + err.Error())
+			continue
+		}
+
+		wishlist_with_user.Wishes = wishObjects
 
 		wishlists_with_users = append(wishlists_with_users, wishlist_with_user)
 
