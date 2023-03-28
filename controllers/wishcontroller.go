@@ -696,5 +696,5 @@ func APIUpdateWish(context *gin.Context) {
 	}
 
 	// Return response
-	context.JSON(http.StatusCreated, gin.H{"message": "Wish saved.", "wish": wishObject})
+	context.JSON(http.StatusCreated, gin.H{"message": "Wish updated.", "wish": wishObject})
 }
