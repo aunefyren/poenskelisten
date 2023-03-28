@@ -202,6 +202,7 @@ func initRouter() *gin.Engine {
 			auth.POST("/wish/:wish_id/delete", controllers.DeleteWish)
 			auth.POST("/wish/:wish_id/claim", controllers.RegisterWishClaim)
 			auth.POST("/wish/:wish_id/unclaim", controllers.RemoveWishClaim)
+			auth.POST("/wish/:wish_id/update", controllers.APIUpdateWish)
 
 			auth.POST("/news/get", controllers.GetNews)
 			auth.POST("/news/get/:news_id", controllers.GetNewsPost)

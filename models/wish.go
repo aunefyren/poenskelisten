@@ -20,7 +20,13 @@ type WishCreationRequest struct {
 	URL  string `json:"url"`
 }
 
-type WishUser struct {
+type WishUpdateRequest struct {
+	Name string `json:"name"`
+	Note string `json:"note"`
+	URL  string `json:"url"`
+}
+
+type WishObject struct {
 	gorm.Model
 	Name       string            `json:"name"`
 	Note       string            `json:"note"`

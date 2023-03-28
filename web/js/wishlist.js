@@ -207,69 +207,8 @@ function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
 
     for(var i = 0; i < wishes_array.length; i++) {
 
-        owner_id = wishes_array[i].owner_id.ID
-
-        if(wishes_array[i].wishclaim.length > 0 && user_id != owner_id) {
-            var transparent = " transparent"
-        } else {
-            var transparent = ""
-        }
-
-        html += '<div class="wish-wrapper ' + transparent + '">'
-
-        html += '<div class="wish" id="wish_' + wishes_array[i].ID + '">'
+        html += generate_wish_html(wishes_array[i], wishlist_id, group_id, user_id);
         
-        html += '<div class="wish-title">'
-        html += '<div class="profile-icon">'
-        html += '<img class="icon-img color-invert" src="../assets/gift.svg">'
-        html += '</div>'
-        html += wishes_array[i].name
-        html += '</div>'
-
-        html += '<div class="profile">'
-
-        if(wishes_array[i].note !== "") {
-            html += '<div class="profile-icon clickable" onclick="toggle_wish(' + wishes_array[i].ID + ')">'
-            html += '<img id="wish_' + wishes_array[i].ID + '_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">'
-            html += '</div>'
-        }
-
-        if(wishes_array[i].url !== "") {
-            html += '<div class="profile-icon clickable" onclick="window.open(\'' + wishes_array[i].url + '\', \'_blank\')">'
-            html += '<img class="icon-img color-invert" src="../../assets/link.svg">'
-            html += '</div>'
-        }
-
-        if(user_id == owner_id) {
-            html += '<div class="profile-icon clickable" onclick="delete_wish(' + wishes_array[i].ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')">'
-            html += '<img class="icon-img color-invert" src="../../assets/trash-2.svg">'
-            html += '</div>'
-        } else if(wishes_array[i].wishclaim.length > 0) {
-            for(var j = 0; j < wishes_array[i].wishclaim.length; j++) {
-                if(user_id !== wishes_array[i].wishclaim[j].user.ID) {
-                    html += '<div class="profile-icon" title="Claimed by ' + wishes_array[i].wishclaim[j].user.first_name + ' ' + wishes_array[i].wishclaim[j].user.last_name + '.">'
-                    html += '<img class="icon-img color-invert" src="../../assets/lock.svg">'
-                    html += '</div>'
-                } else {
-                    html += '<div class="profile-icon clickable" title="Claimed by you, click to unclaim.">'
-                    html += '<img class="icon-img color-invert" src="../../assets/unlock.svg" onclick="unclaim_wish(' + wishes_array[i].ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')")>'
-                    html += '</div>'
-                }
-            }
-        } else {
-            html += '<div class="profile-icon clickable" title="Claim this gift." onclick="claim_wish(' + wishes_array[i].ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')">'
-            html += '<img class="icon-img color-invert" src="../../assets/check.svg">'
-            html += '</div>'
-        }
-        html += '</div>'
-
-        html += '</div>'
-
-        html += '<div class="wish-note collapsed" id="wish_' + wishes_array[i].ID + '_note">'
-        html += wishes_array[i].note
-        html += '</div>'
-
-        html += '</div>'
     }
 
     if(wishes_array.length == 0) {
@@ -278,6 +217,82 @@ function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
 
     wishlist_object = document.getElementById("wishes-box")
     wishlist_object.innerHTML = html
+}
+
+function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
+
+    var html = '';
+
+    owner_id = wish_object.owner_id.ID
+
+    if(wish_object.wishclaim.length > 0 && user_id != owner_id) {
+        var transparent = " transparent"
+    } else {
+        var transparent = ""
+    }
+
+    html += '<div class="wish-wrapper ' + transparent + '" id="wish_wrapper_' + wish_object.ID + '">'
+
+    html += '<div class="wish" id="wish_' + wish_object.ID + '">'
+    
+    html += '<div class="wish-title">'
+    html += '<div class="profile-icon">'
+    html += '<img class="icon-img color-invert" src="../assets/gift.svg">'
+    html += '</div>'
+    html += wish_object.name
+    html += '</div>'
+
+    html += '<div class="profile">'
+
+    if(wish_object.note !== "") {
+        html += '<div class="profile-icon clickable" onclick="toggle_wish(' + wish_object.ID + ')">'
+        html += '<img id="wish_' + wish_object.ID + '_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">'
+        html += '</div>'
+    }
+
+    if(wish_object.url !== "") {
+        html += '<div class="profile-icon clickable" onclick="window.open(\'' + wish_object.url + '\', \'_blank\')">'
+        html += '<img class="icon-img color-invert" src="../../assets/link.svg">'
+        html += '</div>'
+    }
+
+    if(user_id == owner_id) {
+        html += '<div class="profile-icon clickable" onclick="edit_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ", '" + wish_object.name + "', '" + wish_object.note + "', '" + wish_object.url + '\')">'
+        html += '<img class="icon-img color-invert" src="../../assets/edit.svg">'
+        html += '</div>'
+
+        html += '<div class="profile-icon clickable" onclick="delete_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')">'
+        html += '<img class="icon-img color-invert" src="../../assets/trash-2.svg">'
+        html += '</div>'
+    } else if(wish_object.wishclaim.length > 0) {
+        for(var j = 0; j < wish_object.wishclaim.length; j++) {
+            if(user_id !== wish_object.wishclaim[j].user.ID) {
+                html += '<div class="profile-icon" title="Claimed by ' + wish_object.wishclaim[j].user.first_name + ' ' + wish_object.wishclaim[j].user.last_name + '.">'
+                html += '<img class="icon-img color-invert" src="../../assets/lock.svg">'
+                html += '</div>'
+            } else {
+                html += '<div class="profile-icon clickable" title="Claimed by you, click to unclaim.">'
+                html += '<img class="icon-img color-invert" src="../../assets/unlock.svg" onclick="unclaim_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')")>'
+                html += '</div>'
+            }
+        }
+    } else {
+        html += '<div class="profile-icon clickable" title="Claim this gift." onclick="claim_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')">'
+        html += '<img class="icon-img color-invert" src="../../assets/check.svg">'
+        html += '</div>'
+    }
+    html += '</div>'
+
+    html += '</div>'
+
+    html += '<div class="wish-note collapsed" id="wish_' + wish_object.ID + '_note">'
+    html += wish_object.note
+    html += '</div>'
+
+    html += '</div>'
+
+    return html;
+
 }
 
 function toggle_wish(wishid) {
@@ -626,4 +641,84 @@ function reset_wishlist_info_box(user_id, wishlist_id) {
     `;
 
     document.getElementById("wishlist-info-box").innerHTML = html;
+}
+
+function edit_wish(wish_id, wishlist_id, group_id, user_id, wish_name, wish_note, wish_url) {
+
+    var html = '';
+
+    html += `
+        <form action="" onsubmit="event.preventDefault(); update_wish(${wish_id}, ${user_id}, ${wishlist_id}, ${group_id});">
+                                
+            <label for="wish_name_${wish_id}">Edit wish:</label><br>
+            <input type="text" name="wish_name_${wish_id}" id="wish_name_${wish_id}" placeholder="Wish name" value="${wish_name}" autocomplete="off" required />
+            
+            <input type="text" name="wish_note" id="wish_note" placeholder="Wish note" value="${wish_note}" autocomplete="off" />
+
+            <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" value="${wish_url}" autocomplete="off" />
+            
+            <button id="register-button" type="submit" href="/">Save wish</button>
+
+        </form>
+    `;
+
+    document.getElementById("wish_wrapper_" + wish_id).innerHTML = html;
+
+}
+
+function update_wish(wish_id, user_id, wishlist_id, group_id) {
+
+    if(!confirm("Are you sure you want to update this wish?")) {
+        return;
+    }
+
+    var wish_name = document.getElementById("wish_name_" + wish_id).value;
+    var wish_note = document.getElementById("wish_note").value;
+    var wish_url = document.getElementById("wish_url").value;
+
+    var form_obj = { 
+        "name" : wish_name,
+        "note" : wish_note,
+        "url": wish_url
+    };
+
+    var form_data = JSON.stringify(form_obj);
+
+    console.log(form_data)
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message);
+                var wish_html = generate_wish_html(result.wish, wishlist_id, group_id, user_id);
+                document.getElementById("wish_wrapper_" + wish_id).outerHTML = wish_html;
+
+            }
+
+        } else {
+            info("Updating wishlist...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wish/" + wish_id + "/update");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
+
 }
