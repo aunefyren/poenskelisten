@@ -468,6 +468,10 @@ function group_edit(user_id, group_id) {
     var html = '';
 
     html += `
+        <div class="bottom-right-button" id="edit-group" style="" onclick="cancel_edit_group(${group_id}, ${user_id});">
+            <img class="icon-img color-invert clickable" style="" src="../assets/x.svg">
+        </div>
+
         <form action="" onsubmit="event.preventDefault(); update_group(${group_id}, ` + user_id + `);">
                                 
             <label for="group_name">Edit group:</label><br>
@@ -538,4 +542,40 @@ function update_group(group_id, user_id) {
     xhttp.send(form_data);
     return false;
 
+}
+
+function cancel_edit_group(group_id, user_id){
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                reset_group_info_box(user_id, group_id);
+                place_group(result.group);
+                show_owner_inputs();
+
+            }
+
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/group/" + group_id);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
 }
