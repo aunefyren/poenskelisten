@@ -257,7 +257,7 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     }
 
     if(user_id == owner_id) {
-        html += '<div class="profile-icon clickable" onclick="edit_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ", '" + wish_object.name + "', '" + wish_object.note + "', '" + wish_object.url + '\')">'
+        html += '<div class="profile-icon clickable" onclick="edit_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ", '" + wish_object.name + "', '" + wish_object.note + "', '" + wish_object.url + "', '" + owner_id + '\')">'
         html += '<img class="icon-img color-invert" src="../../assets/edit.svg">'
         html += '</div>'
 
@@ -546,6 +546,10 @@ function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date) {
     var html = '';
 
     html += `
+        <div class="bottom-right-button" id="edit-wishlist" style="" onclick="cancel_edit_wishlist(${wishlist_id}, ${user_id});">
+            <img class="icon-img color-invert clickable" style="" src="../assets/x.svg">
+        </div>
+
         <form action="" onsubmit="event.preventDefault(); update_wishlist(${wishlist_id}, ` + user_id + `);">
                                 
             <label for="wishlist_name">Edit wishlist:</label><br>
@@ -608,6 +612,7 @@ function update_wishlist(wishlist_id, user_id) {
                 success(result.message);
                 reset_wishlist_info_box(user_id, wishlist_id);
                 place_wishlist(result.wishlist);
+                show_owner_inputs();
 
             }
 
@@ -643,11 +648,16 @@ function reset_wishlist_info_box(user_id, wishlist_id) {
     document.getElementById("wishlist-info-box").innerHTML = html;
 }
 
-function edit_wish(wish_id, wishlist_id, group_id, user_id, wish_name, wish_note, wish_url) {
+function edit_wish(wish_id, wishlist_id, group_id, user_id, wish_name, wish_note, wish_url, owner_id) {
 
     var html = '';
 
     html += `
+
+        <div class="bottom-right-button" id="edit-wish" style="" onclick="cancel_edit_wish(${wish_id}, ${wishlist_id}, ${group_id}, ${user_id});">
+            <img class="icon-img color-invert clickable" style="margin: 1em 1em 0 0;" src="../assets/x.svg">
+        </div>
+
         <form action="" onsubmit="event.preventDefault(); update_wish(${wish_id}, ${user_id}, ${wishlist_id}, ${group_id});">
                                 
             <label for="wish_name_${wish_id}">Edit wish:</label><br>
@@ -719,6 +729,79 @@ function update_wish(wish_id, user_id, wishlist_id, group_id) {
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
+    return false;
+
+}
+
+function cancel_edit_wish(wish_id, wishlist_id, group_id, user_id) {
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                var wish_html = generate_wish_html(result.wish, wishlist_id, group_id, user_id);
+                document.getElementById("wish_wrapper_" + wish_id).outerHTML = wish_html;
+
+            }
+
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wish/" + wish_id);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+
+}
+
+function cancel_edit_wishlist(wishlist_id, user_id) {
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                reset_wishlist_info_box(user_id, wishlist_id);
+                place_wishlist(result.wishlist);
+                show_owner_inputs();
+
+            }
+
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wishlist/" + wishlist_id);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
     return false;
 
 }

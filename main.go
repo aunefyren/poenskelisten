@@ -185,6 +185,7 @@ func initRouter() *gin.Engine {
 			auth.POST("/group/:group_id/remove", controllers.RemoveFromGroup)
 			auth.POST("/group/get", controllers.GetGroups)
 			auth.POST("/group/get/:group_id", controllers.GetGroup)
+			auth.POST("/group/:group_id", controllers.GetGroup)
 			auth.POST("/group/get/:group_id/members", controllers.GetGroupMembers)
 			auth.POST("/group/:group_id/update", controllers.APIUpdateGroup)
 
@@ -196,6 +197,7 @@ func initRouter() *gin.Engine {
 			auth.POST("/wishlist/:wishlist_id/join", controllers.JoinWishlist)
 			auth.POST("/wishlist/:wishlist_id/remove", controllers.RemoveFromWishlist)
 			auth.POST("/wishlist/:wishlist_id/update", controllers.APIUpdateWishlist)
+			auth.POST("/wishlist/:wishlist_id", controllers.GetWishlist)
 
 			auth.POST("/wish/get/:wishlist_id", controllers.GetWishesFromWishlist)
 			auth.POST("/wish/register/:wishlist_id", controllers.RegisterWish)
@@ -203,6 +205,7 @@ func initRouter() *gin.Engine {
 			auth.POST("/wish/:wish_id/claim", controllers.RegisterWishClaim)
 			auth.POST("/wish/:wish_id/unclaim", controllers.RemoveWishClaim)
 			auth.POST("/wish/:wish_id/update", controllers.APIUpdateWish)
+			auth.POST("/wish/:wish_id", controllers.APIGetWish)
 
 			auth.POST("/news/get", controllers.GetNews)
 			auth.POST("/news/get/:news_id", controllers.GetNewsPost)

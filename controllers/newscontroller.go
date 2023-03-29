@@ -5,7 +5,6 @@ import (
 	"aunefyren/poenskelisten/models"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -50,6 +49,7 @@ func GetNewsPost(context *gin.Context) {
 }
 
 func RegisterNewsPost(context *gin.Context) {
+
 	// Create a new instance of the News and NewsCreationRequest models
 	var news models.News
 	var newsCreationRequest models.NewsCreationRequest
@@ -81,7 +81,7 @@ func RegisterNewsPost(context *gin.Context) {
 		return
 	}
 
-	news.Date = time.Now()
+	news.Date = newsCreationRequest.Date
 
 	// Create the news post in the database
 	newsRecord := database.Instance.Create(&news)
