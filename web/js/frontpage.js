@@ -351,7 +351,6 @@ function create_news() {
                 success(result.message);
 
                 news = result.news;
-
                 place_news(news);
                 
             }
