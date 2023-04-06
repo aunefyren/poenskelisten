@@ -35,11 +35,8 @@ Notable features:
 - Wish claiming. Someone can claim a gift on a wishlist they are allowed to see. Anyone else who can see that wishlist then knows that gift idea is taken. The owner can't see this of course.
 
 Known issues:
-- There currently is no admin interface to add invitation codes
 - Can't add additional wishlist owners
-- Can't edit group/wishlist/wish details
 - UI can be a bit cluttered on smaller screens such as phones
-- Wishlist expiration is not utilized yet
 
 <br>
 <br>
@@ -147,7 +144,7 @@ You should not be able to access Pønskelisten. By default, you can find the fro
 
 ### 4. Be able to alter the DB
 
-Once again, there is no admin interface. To sign up for the website you need an invitation code. If you used the `generateinvite` flag you can find an invitation code in the log file located within the files directory. 
+To sign up for the website you need an invitation code. If you used the `generateinvite` flag you can find an invitation code in the log file located within the files directory. 
 
 If not, you need to alter the database table to add the invitation code. Cumbersome, I know. 
 
@@ -173,6 +170,11 @@ INSERT INTO `invites` (`id`, `created_at`, `updated_at`, `deleted_at`, `invite_c
 ```
 
 Be prepared to access the DB every time a user manages to screw up their e-mail while signing up or someone needs an invitation code.
+
+<br>
+<br>
+
+The first user who sings up is automatically an admin.
 
 <br>
 <br>
