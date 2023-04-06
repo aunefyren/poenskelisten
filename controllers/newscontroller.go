@@ -3,6 +3,8 @@ package controllers
 import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -74,9 +76,35 @@ func RegisterNewsPost(context *gin.Context) {
 		return
 	}
 
+	stringMatch, requirements, err := utilities.ValidateTextCharacters(news.Title)
+	if err != nil {
+		log.Println("Failed to validate news title text string. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+		context.Abort()
+		return
+	} else if !stringMatch {
+		log.Println("News title text string failed validation.")
+		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+		context.Abort()
+		return
+	}
+
 	if len(news.Body) < 5 || news.Body == "" {
 		// If the News body is not valid, return a Bad Request response
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The body of the news post must be five or more letters."})
+		context.Abort()
+		return
+	}
+
+	stringMatch, requirements, err = utilities.ValidateTextCharacters(news.Body)
+	if err != nil {
+		log.Println("Failed to validate news body text string. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+		context.Abort()
+		return
+	} else if !stringMatch {
+		log.Println("News body text string failed validation.")
+		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
 	}

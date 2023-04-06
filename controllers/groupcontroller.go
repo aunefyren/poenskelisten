@@ -4,6 +4,7 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
 	"log"
 	"net/http"
 	"strconv"
@@ -46,6 +47,32 @@ func RegisterGroup(context *gin.Context) {
 	if len(group.Name) < 5 || group.Name == "" {
 		// If the group name is not valid, return a Bad Request response
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The name of the group must be five or more letters."})
+		context.Abort()
+		return
+	}
+
+	stringMatch, requirements, err := utilities.ValidateTextCharacters(group.Name)
+	if err != nil {
+		log.Println("Failed to validate group name text string. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+		context.Abort()
+		return
+	} else if !stringMatch {
+		log.Println("Group name text string failed validation.")
+		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+		context.Abort()
+		return
+	}
+
+	stringMatch, requirements, err = utilities.ValidateTextCharacters(group.Description)
+	if err != nil {
+		log.Println("Failed to validate group description text string. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+		context.Abort()
+		return
+	} else if !stringMatch {
+		log.Println("Group description text string failed validation.")
+		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
 	}
@@ -755,6 +782,19 @@ func APIUpdateGroup(context *gin.Context) {
 			return
 		}
 
+		stringMatch, requirements, err := utilities.ValidateTextCharacters(group.Name)
+		if err != nil {
+			log.Println("Failed to validate group name text string. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+			context.Abort()
+			return
+		} else if !stringMatch {
+			log.Println("Group name text string failed validation.")
+			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+			context.Abort()
+			return
+		}
+
 		// Verify that a group with the same name and owner does not already exist
 		groupExists, _, err := database.VerifyGroupExistsByNameForUser(group.Name, group.Owner)
 		if err != nil {
@@ -774,6 +814,19 @@ func APIUpdateGroup(context *gin.Context) {
 		if len(group.Description) < 5 || group.Description == "" {
 			// If the group desc is not valid, return a Bad Request response
 			context.JSON(http.StatusBadRequest, gin.H{"error": "The description of the group must be five or more letters."})
+			context.Abort()
+			return
+		}
+
+		stringMatch, requirements, err := utilities.ValidateTextCharacters(group.Description)
+		if err != nil {
+			log.Println("Failed to validate group description text string. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+			context.Abort()
+			return
+		} else if !stringMatch {
+			log.Println("Group description text string failed validation.")
+			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 			context.Abort()
 			return
 		}

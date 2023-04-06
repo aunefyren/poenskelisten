@@ -90,3 +90,17 @@ func GetAllUserInformationByResetCode(resetCode string) (models.User, error) {
 
 	return user, nil
 }
+
+// Retrieves the amount of enabled users in the user table
+func GetAmountOfEnabledUsers() (int, error) {
+
+	var users []models.User
+
+	userRecords := Instance.Where("`users`.enabled = ?", 1).Find(&users)
+	if userRecords.Error != nil {
+		return 0, userRecords.Error
+	}
+
+	return int(userRecords.RowsAffected), nil
+
+}

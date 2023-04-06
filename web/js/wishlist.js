@@ -257,7 +257,12 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     }
 
     if(user_id == owner_id) {
-        html += '<div class="profile-icon clickable" onclick="edit_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ", '" + wish_object.name + "', '" + wish_object.note + "', '" + wish_object.url + "', '" + owner_id + '\')">'
+
+        var b64_wish_name = btoa(wish_object.name)
+        var b64_wish_note = btoa(wish_object.note)
+        var b64_wish_url = btoa(wish_object.url)
+
+        html += '<div class="profile-icon clickable" onclick="edit_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ", '" + b64_wish_name + "', '" + b64_wish_note + "', '" + b64_wish_url + "', '" + owner_id + '\')">'
         html += '<img class="icon-img color-invert" src="../../assets/edit.svg">'
         html += '</div>'
 
@@ -648,7 +653,11 @@ function reset_wishlist_info_box(user_id, wishlist_id) {
     document.getElementById("wishlist-info-box").innerHTML = html;
 }
 
-function edit_wish(wish_id, wishlist_id, group_id, user_id, wish_name, wish_note, wish_url, owner_id) {
+function edit_wish(wish_id, wishlist_id, group_id, user_id, b64_wish_name, b64_wish_note, b64_wish_url, owner_id) {
+
+    var wish_name = atob(b64_wish_name)
+    var wish_note = atob(b64_wish_note)
+    var wish_url = atob(b64_wish_url)
 
     var html = '';
 
@@ -661,11 +670,11 @@ function edit_wish(wish_id, wishlist_id, group_id, user_id, wish_name, wish_note
         <form action="" onsubmit="event.preventDefault(); update_wish(${wish_id}, ${user_id}, ${wishlist_id}, ${group_id});">
                                 
             <label for="wish_name_${wish_id}">Edit wish:</label><br>
-            <input type="text" name="wish_name_${wish_id}" id="wish_name_${wish_id}" placeholder="Wish name" value="${wish_name}" autocomplete="off" required />
+            <input type="text" name="wish_name_${wish_id}" id="wish_name_${wish_id}" placeholder="Wish name" value="" autocomplete="off" required />
             
-            <input type="text" name="wish_note" id="wish_note" placeholder="Wish note" value="${wish_note}" autocomplete="off" />
+            <input type="text" name="wish_note_${wish_id}" id="wish_note_${wish_id}" placeholder="Wish note" value="" autocomplete="off" />
 
-            <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" value="${wish_url}" autocomplete="off" />
+            <input type="text" name="wish_url_${wish_id}" id="wish_url_${wish_id}" placeholder="Wish URL" value="" autocomplete="off" />
             
             <button id="register-button" type="submit" href="/">Save wish</button>
 
@@ -673,6 +682,10 @@ function edit_wish(wish_id, wishlist_id, group_id, user_id, wish_name, wish_note
     `;
 
     document.getElementById("wish_wrapper_" + wish_id).innerHTML = html;
+
+    document.getElementById("wish_name_" + wish_id).value = wish_name;
+    document.getElementById("wish_note_" + wish_id).value = wish_note;
+    document.getElementById("wish_url_" + wish_id).value = wish_url;
 
 }
 
@@ -683,8 +696,8 @@ function update_wish(wish_id, user_id, wishlist_id, group_id) {
     }
 
     var wish_name = document.getElementById("wish_name_" + wish_id).value;
-    var wish_note = document.getElementById("wish_note").value;
-    var wish_url = document.getElementById("wish_url").value;
+    var wish_note = document.getElementById("wish_note_" + wish_id).value;
+    var wish_url = document.getElementById("wish_url_" + wish_id).value;
 
     var form_obj = { 
         "name" : wish_name,
