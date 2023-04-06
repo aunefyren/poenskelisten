@@ -42,3 +42,17 @@ func ValidatePasswordFormat(password string) (bool, string, error) {
 
 	return true, requirements, nil
 }
+
+func ValidateTextCharacters(string string) (bool, string, error) {
+	requirements := `Text must not contain <, >, or ".`
+
+	match, err := regexp.Match(`^[^<>"\x60]+$`, []byte(string))
+	if err != nil {
+		return false, requirements, err
+	} else if !match {
+		return false, requirements, nil
+	}
+
+	return true, requirements, nil
+
+}

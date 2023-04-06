@@ -4,6 +4,7 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
 	"log"
 	"net/http"
 	"strconv"
@@ -57,6 +58,34 @@ func RegisterWishlist(context *gin.Context) {
 
 	if len(wishlist.Name) < 5 || wishlist.Name == "" {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The name of the wishlist must be five or more letters."})
+		context.Abort()
+		return
+	}
+
+	// Validate wishlist name format
+	stringMatch, requirements, err := utilities.ValidateTextCharacters(wishlist.Name)
+	if err != nil {
+		log.Println("Failed to validate wishlist name text string. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+		context.Abort()
+		return
+	} else if !stringMatch {
+		log.Println("Wishlist name text string failed validation.")
+		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+		context.Abort()
+		return
+	}
+
+	// Validate wishlist description format
+	stringMatch, requirements, err = utilities.ValidateTextCharacters(wishlist.Description)
+	if err != nil {
+		log.Println("Failed to validate description name text string. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+		context.Abort()
+		return
+	} else if !stringMatch {
+		log.Println("description name text string failed validation.")
+		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
 	}
@@ -826,6 +855,20 @@ func APIUpdateWishlist(context *gin.Context) {
 			return
 		}
 
+		// Validate wishlist name format
+		stringMatch, requirements, err := utilities.ValidateTextCharacters(wishlist.Name)
+		if err != nil {
+			log.Println("Failed to validate wishlist name text string. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+			context.Abort()
+			return
+		} else if !stringMatch {
+			log.Println("Wishlist name text string failed validation.")
+			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+			context.Abort()
+			return
+		}
+
 		unique_wish_name, err := database.VerifyUniqueWishlistNameForUser(wishlist.Name, UserID)
 		if err != nil {
 			log.Println("Failed to verify unique wishlist name. Error: " + err.Error())
@@ -837,6 +880,24 @@ func APIUpdateWishlist(context *gin.Context) {
 			context.Abort()
 			return
 		}
+	}
+
+	if wishlistOriginal.Description != wishlist.Description && wishlist.Description != "" {
+
+		// Validate wishlist description format
+		stringMatch, requirements, err := utilities.ValidateTextCharacters(wishlist.Description)
+		if err != nil {
+			log.Println("Failed to validate wishlist description text string. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+			context.Abort()
+			return
+		} else if !stringMatch {
+			log.Println("Wishlist description text string failed validation.")
+			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+			context.Abort()
+			return
+		}
+
 	}
 
 	// Parse expiration date

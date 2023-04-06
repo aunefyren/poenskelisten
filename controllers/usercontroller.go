@@ -54,7 +54,35 @@ func RegisterUser(context *gin.Context) {
 	user.Email = usercreationrequest.Email
 	user.Password = usercreationrequest.Password
 	user.FirstName = usercreationrequest.FirstName
+
+	stringMatch, requirements, err := utilities.ValidateTextCharacters(user.FirstName)
+	if err != nil {
+		log.Println("Failed to validate first name text string. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+		context.Abort()
+		return
+	} else if !stringMatch {
+		log.Println("First name text string failed validation.")
+		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+		context.Abort()
+		return
+	}
+
 	user.LastName = usercreationrequest.LastName
+
+	stringMatch, requirements, err = utilities.ValidateTextCharacters(user.LastName)
+	if err != nil {
+		log.Println("Failed to validate last name text string. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+		context.Abort()
+		return
+	} else if !stringMatch {
+		log.Println("Last name text string failed validation.")
+		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+		context.Abort()
+		return
+	}
+
 	user.Enabled = true
 
 	user.ResetExpiration = time.Now()
@@ -64,6 +92,18 @@ func RegisterUser(context *gin.Context) {
 
 	randomString = randstr.String(8)
 	user.ResetCode = strings.ToUpper(randomString)
+
+	// Check if any users exist, if not, make new user admin
+	userAmount, err := database.GetAmountOfEnabledUsers()
+	if err != nil {
+		log.Println("Failed to verify user amount. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify user amount."})
+		context.Abort()
+		return
+	} else if userAmount == 0 {
+		user.Admin = true
+		log.Println("No other users found. New user is set to admin.")
+	}
 
 	// Get configuration
 	config, err := config.GetConfig()
@@ -245,7 +285,7 @@ func VerifyUser(context *gin.Context) {
 	}
 
 	// Generate new JWT token
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, int(user.ID), *user.Admin, user.Verified)
+	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, int(user.ID), user.Admin, user.Verified)
 	if err != nil {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		context.Abort()
@@ -403,7 +443,7 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// Generate new JWT token
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, int(user.ID), *user.Admin, user.Verified)
+	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, int(user.ID), user.Admin, user.Verified)
 	if err != nil {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		context.Abort()

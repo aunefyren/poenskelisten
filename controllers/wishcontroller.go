@@ -4,6 +4,7 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
 	"fmt"
 	"log"
 	"net/http"
@@ -186,6 +187,49 @@ func RegisterWish(context *gin.Context) {
 		return
 	}
 
+	// Validate wish name format
+	stringMatch, requirements, err := utilities.ValidateTextCharacters(wish.Name)
+	if err != nil {
+		log.Println("Failed to validate wish name text string. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+		context.Abort()
+		return
+	} else if !stringMatch {
+		log.Println("Wish name text string failed validation.")
+		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+		context.Abort()
+		return
+	}
+
+	// Validate wish note format
+	stringMatch, requirements, err = utilities.ValidateTextCharacters(wish.Note)
+	if err != nil {
+		log.Println("Failed to validate wish note text string. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+		context.Abort()
+		return
+	} else if !stringMatch {
+		log.Println("Wish note text string failed validation.")
+		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+		context.Abort()
+		return
+	}
+
+	// Validate wish url format
+	stringMatch, requirements, err = utilities.ValidateTextCharacters(wish.URL)
+	if err != nil {
+		log.Println("Failed to validate wish URL text string. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+		context.Abort()
+		return
+	} else if !stringMatch {
+		log.Println("Wish URL text string failed validation.")
+		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+		context.Abort()
+		return
+	}
+
+	// Verify unique wish name in wishlist
 	unique_wish_name, err := database.VerifyUniqueWishNameinWishlist(wish.Name, wishlist_id_int)
 	if err != nil {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -197,6 +241,7 @@ func RegisterWish(context *gin.Context) {
 		return
 	}
 
+	// Validate valid URL
 	domain, scheme, err := parseRawURLFunction(wish.URL)
 	if (err != nil || domain == "" || scheme == "") && wish.URL != "" {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL given."})
@@ -642,6 +687,20 @@ func APIUpdateWish(context *gin.Context) {
 			return
 		}
 
+		// Validate wish name format
+		stringMatch, requirements, err := utilities.ValidateTextCharacters(wish.Name)
+		if err != nil {
+			log.Println("Failed to validate wish name text string. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+			context.Abort()
+			return
+		} else if !stringMatch {
+			log.Println("Wish name text string failed validation.")
+			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+			context.Abort()
+			return
+		}
+
 		unique_wish_name, err := database.VerifyUniqueWishNameinWishlist(wish.Name, wishlistID)
 		if err != nil {
 			log.Println("Failed to verify wish name. Error: " + err.Error())
@@ -657,12 +716,45 @@ func APIUpdateWish(context *gin.Context) {
 	}
 
 	if wish.URL != wishOriginal.URL && wishOriginal.URL != "" {
+
+		// Validate wish URL format
+		stringMatch, requirements, err := utilities.ValidateTextCharacters(wish.URL)
+		if err != nil {
+			log.Println("Failed to validate wish URL text string. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+			context.Abort()
+			return
+		} else if !stringMatch {
+			log.Println("Wish URL text string failed validation.")
+			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+			context.Abort()
+			return
+		}
+
 		domain, scheme, err := parseRawURLFunction(wish.URL)
 		if (err != nil || domain == "" || scheme == "") && wish.URL != "" {
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL given."})
 			context.Abort()
 			return
 		}
+	}
+
+	if wish.Note != wishOriginal.Note && wishOriginal.Note != "" {
+
+		// Validate wish note format
+		stringMatch, requirements, err := utilities.ValidateTextCharacters(wish.Note)
+		if err != nil {
+			log.Println("Failed to validate wish note text string. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+			context.Abort()
+			return
+		} else if !stringMatch {
+			log.Println("Wish note text string failed validation.")
+			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
+			context.Abort()
+			return
+		}
+
 	}
 
 	// Create user in DB
