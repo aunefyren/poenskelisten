@@ -185,6 +185,11 @@ function get_wishes(wishlist_id, group_id, user_id){
                 console.log(wishes);
 
                 currency = result.currency;
+                try {
+                    document.getElementById("wish_price").placeholder = "Wish price in " + currency
+                } catch(e) {
+                    console.log("Failed to update currency help text. Error: " + e)
+                }
 
                 place_wishes(wishes, wishlist_id, group_id, user_id);
 
