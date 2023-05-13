@@ -75,8 +75,10 @@ function load_page(result) {
                             <form action="" onsubmit="event.preventDefault(); send_wish(` + wishlist_id + `,` + group_id + `,` + user_id + `);">
                                 <label for="wish_name">Add a new wish:</label><br>
                                 <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" autocomplete="off" required />
+                                <label for="wish_note">Optional details:</label><br>
                                 <input type="text" name="wish_note" id="wish_note" placeholder="Wish note" autocomplete="off" />
                                 <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" autocomplete="off" />
+                                <input type="number" name="wish_price" id="wish_price" placeholder="Wish price in ${currency}" autocomplete="off" />
                                 <button id="register-button" type="submit" href="/">Add wish</button>
                             </form>
                         </div>
@@ -181,6 +183,9 @@ function get_wishes(wishlist_id, group_id, user_id){
                 clearResponse();
                 wishes = result.wishes;
                 console.log(wishes);
+
+                currency = result.currency;
+
                 place_wishes(wishes, wishlist_id, group_id, user_id);
 
                 if(result.owner_id == user_id) {
@@ -239,7 +244,15 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     html += '<div class="profile-icon">'
     html += '<img class="icon-img color-invert" src="../assets/gift.svg">'
     html += '</div>'
+
     html += wish_object.name
+
+    if(wish_object.price != 0) {
+        html += '<div class="wish-price">'
+        html += wish_object.price + currency
+        html += '</div>'
+    }
+
     html += '</div>'
 
     html += '<div class="profile">'
@@ -261,8 +274,9 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
         var b64_wish_name = btoa(wish_object.name)
         var b64_wish_note = btoa(wish_object.note)
         var b64_wish_url = btoa(wish_object.url)
+        var b64_wish_price = btoa(wish_object.price)
 
-        html += '<div class="profile-icon clickable" onclick="edit_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ", '" + b64_wish_name + "', '" + b64_wish_note + "', '" + b64_wish_url + "', '" + owner_id + '\')">'
+        html += '<div class="profile-icon clickable" onclick="edit_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ", '" + b64_wish_name + "', '" + b64_wish_note + "', '" + b64_wish_url + "', '" + b64_wish_price + "', '" + owner_id + '\')">'
         html += '<img class="icon-img color-invert" src="../../assets/edit.svg">'
         html += '</div>'
 
@@ -329,11 +343,13 @@ function send_wish(wishlist_id, group_id, user_id){
     var wish_name = document.getElementById("wish_name").value;
     var wish_note = document.getElementById("wish_note").value;
     var wish_url = document.getElementById("wish_url").value;
+    var wish_price = parseFloat(document.getElementById("wish_price").value);
 
     var form_obj = { 
                                     "name" : wish_name,
                                     "note" : wish_note,
-                                    "url": wish_url
+                                    "url": wish_url,
+                                    "price": wish_price
                                 };
 
     var form_data = JSON.stringify(form_obj);
@@ -653,11 +669,12 @@ function reset_wishlist_info_box(user_id, wishlist_id) {
     document.getElementById("wishlist-info-box").innerHTML = html;
 }
 
-function edit_wish(wish_id, wishlist_id, group_id, user_id, b64_wish_name, b64_wish_note, b64_wish_url, owner_id) {
+function edit_wish(wish_id, wishlist_id, group_id, user_id, b64_wish_name, b64_wish_note, b64_wish_url, b64_wish_price, owner_id) {
 
     var wish_name = atob(b64_wish_name)
     var wish_note = atob(b64_wish_note)
     var wish_url = atob(b64_wish_url)
+    var wish_price = atob(b64_wish_price)
 
     var html = '';
 
@@ -671,10 +688,14 @@ function edit_wish(wish_id, wishlist_id, group_id, user_id, b64_wish_name, b64_w
                                 
             <label for="wish_name_${wish_id}">Edit wish:</label><br>
             <input type="text" name="wish_name_${wish_id}" id="wish_name_${wish_id}" placeholder="Wish name" value="" autocomplete="off" required />
-            
+    
+            <label for="wish_note_${wish_id}">Optional details:</label><br>
+
             <input type="text" name="wish_note_${wish_id}" id="wish_note_${wish_id}" placeholder="Wish note" value="" autocomplete="off" />
 
             <input type="text" name="wish_url_${wish_id}" id="wish_url_${wish_id}" placeholder="Wish URL" value="" autocomplete="off" />
+
+            <input type="number" name="wish_price_${wish_id}" id="wish_price_${wish_id}" placeholder="Wish price in ${currency}" value="" autocomplete="off" />
             
             <button id="register-button" type="submit" href="/">Save wish</button>
 
@@ -686,6 +707,7 @@ function edit_wish(wish_id, wishlist_id, group_id, user_id, b64_wish_name, b64_w
     document.getElementById("wish_name_" + wish_id).value = wish_name;
     document.getElementById("wish_note_" + wish_id).value = wish_note;
     document.getElementById("wish_url_" + wish_id).value = wish_url;
+    document.getElementById("wish_price_" + wish_id).value = wish_price;
 
 }
 
@@ -698,11 +720,13 @@ function update_wish(wish_id, user_id, wishlist_id, group_id) {
     var wish_name = document.getElementById("wish_name_" + wish_id).value;
     var wish_note = document.getElementById("wish_note_" + wish_id).value;
     var wish_url = document.getElementById("wish_url_" + wish_id).value;
+    var wish_price = parseFloat(document.getElementById("wish_price_"+ wish_id).value);
 
     var form_obj = { 
         "name" : wish_name,
         "note" : wish_note,
-        "url": wish_url
+        "url": wish_url,
+        "price": wish_price
     };
 
     var form_data = JSON.stringify(form_obj);

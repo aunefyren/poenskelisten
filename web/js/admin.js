@@ -52,6 +52,16 @@ function load_page(result) {
                         <button type="submit" onclick="generate_invite();" id="generate_invite_button" style=""><img src="assets/plus.svg" class="btn_logo color-invert"><p2>Generate</p2></button>
                     
                     </div>
+
+                    <div class="currency-module" id="currency-module">
+
+                        <h3 id="currency-module-title">Currency:</h3>
+
+                        <input type="text" name="currency" id="currency" placeholder="What currency can wishes be listed in?" value="" autocomplete="off" required />
+
+                        <button type="submit" onclick="update_currency();" id="update_currency_button" style=""><img src="assets/check.svg" class="btn_logo color-invert"><p2>Update</p2></button>
+                    
+                    </div>
          
                 </div>
     `;
@@ -69,6 +79,7 @@ function load_page(result) {
         } else {
             get_server_info();
             get_invites();
+            get_currency();
         }
 
     } else {
@@ -268,6 +279,86 @@ function delete_invite(invide_id) {
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
+    return false;
+
+}
+
+function get_currency() {
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                //console.log(result)
+                document.getElementById('currency').value = result.currency;
+                
+            }
+
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/currency");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+
+}
+
+function update_currency() {
+
+    var currency = document.getElementById('currency').value;
+
+    var form_obj = { 
+        "poenskelisten_currency" : currency
+    };
+
+    var form_data = JSON.stringify(form_obj);
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message)
+                document.getElementById('currency').value = result.currency;
+                
+            }
+
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "admin/currency/update");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
     return false;
 
 }

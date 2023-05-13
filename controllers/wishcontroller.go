@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
@@ -23,6 +24,15 @@ func GetWishesFromWishlist(context *gin.Context) {
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	// Get configuration
+	config, err := config.GetConfig()
+	if err != nil {
+		log.Println("Failed to get config file. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
 		context.Abort()
 		return
 	}
@@ -78,7 +88,7 @@ func GetWishesFromWishlist(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"owner_id": owner_id, "wishes": wishObjects, "message": "Wishes retrieved."})
+	context.JSON(http.StatusOK, gin.H{"owner_id": owner_id, "wishes": wishObjects, "message": "Wishes retrieved.", "currency": config.PoenskelistenCurrency})
 }
 
 func ConvertWishToWishObject(wish models.Wish, requestUserID int) (models.WishObject, error) {
@@ -113,6 +123,7 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID int) (models.WishOb
 	wishObject.Owner = user_object
 	wishObject.WishClaim = wishclaimobject
 	wishObject.URL = wish.URL
+	wishObject.Price = wish.Price
 	wishObject.UpdatedAt = wish.UpdatedAt
 	wishObject.WishlistID = wish.WishlistID
 
@@ -254,6 +265,7 @@ func RegisterWish(context *gin.Context) {
 	db_wish.Name = wish.Name
 	db_wish.Note = wish.Note
 	db_wish.URL = wish.URL
+	db_wish.Price = wish.Price
 
 	// Create user in DB
 	record := database.Instance.Create(&db_wish)
@@ -758,7 +770,7 @@ func APIUpdateWish(context *gin.Context) {
 	}
 
 	// Create user in DB
-	err = database.UpdateWishValuesInDatabase(wishIDInt, wish.Name, wish.Note, wish.URL)
+	err = database.UpdateWishValuesInDatabase(wishIDInt, wish.Name, wish.Note, wish.URL, wish.Price)
 	if err != nil {
 		log.Println("Failed to update wish in database. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update wish in database."})
