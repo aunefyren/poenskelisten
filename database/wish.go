@@ -35,7 +35,7 @@ func GetWishByWishID(wishID int) (bool, models.Wish, error) {
 
 }
 
-func UpdateWishValuesInDatabase(wishID int, wishName string, wishNote string, wishURL string) error {
+func UpdateWishValuesInDatabase(wishID int, wishName string, wishNote string, wishURL string, wishprice float64) error {
 
 	var wish models.Wish
 
@@ -58,6 +58,13 @@ func UpdateWishValuesInDatabase(wishID int, wishName string, wishNote string, wi
 		return wishRecord.Error
 	} else if wishRecord.RowsAffected != 1 {
 		return errors.New("URL not changed in database.")
+	}
+
+	wishRecord = Instance.Model(wish).Where("`wishes`.enabled = ?", 1).Where("`wishes`.ID = ?", wishID).Update("price", wishprice)
+	if wishRecord.Error != nil {
+		return wishRecord.Error
+	} else if wishRecord.RowsAffected != 1 {
+		return errors.New("Price not changed in database.")
 	}
 
 	return nil

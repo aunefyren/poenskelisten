@@ -178,6 +178,8 @@ func initRouter() *gin.Engine {
 		{
 			auth.POST("/token/validate", controllers.ValidateToken)
 
+			auth.POST("/currency/", controllers.APIGetCurrency)
+
 			auth.POST("/group/register", controllers.RegisterGroup)
 			auth.POST("/group/:group_id/delete", controllers.DeleteGroup)
 			auth.POST("/group/:group_id/join", controllers.JoinGroup)
@@ -219,6 +221,8 @@ func initRouter() *gin.Engine {
 
 		admin := api.Group("/admin").Use(middlewares.Auth(true))
 		{
+			admin.POST("/currency/update", controllers.APIUpdateCurrency)
+
 			admin.POST("/invite/register", controllers.RegisterInvite)
 			admin.POST("/invite/get", controllers.APIGetAllInvites)
 			admin.POST("/invite/:invite_id/delete", controllers.APIDeleteInvite)

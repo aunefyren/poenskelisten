@@ -320,7 +320,7 @@ form {
   margin: 1em 0;
 }
 
-input[type=text], input[type=password], input[type=email], input[type=date], select {
+input[type=text], input[type=password], input[type=email], input[type=date], input[type=number], select {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
@@ -492,7 +492,7 @@ button:disabled {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
-  padding: 0;
+  padding: 0 0.5em;
   margin: 0.5em;
   border-radius: 0 0 1em 1em;
   transition: 2s;
@@ -631,7 +631,7 @@ hr {
   width: auto;
 }
 
-.invites {
+.invites, .currency-module {
   width: auto;
   max-width: 100%;
   margin: 1em;
@@ -710,4 +710,12 @@ hr {
   justify-content: space-between;
   align-items: flex-start;
   box-sizing: border-box;
+}
+
+.wish-price {
+  margin: 0 1em;
+  padding: 0.25em 0.5em;
+  background-color: var(--blue);
+  border-radius: 1em;
+  font-size: 0.75em;
 }

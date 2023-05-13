@@ -13,10 +13,15 @@ type ConfigStruct struct {
 	PoenskelistenName        string `json:"poenskelisten_name"`
 	PoenskelistenExternalURL string `json:"poenskelisten_external_url"`
 	PoenskelistenVersion     string `json:"poenskelisten_version"`
+	PoenskelistenCurrency    string `json:"poenskelisten_currency"`
 	SMTPEnabled              bool   `json:"smtp_enabled"`
 	SMTPHost                 string `json:"smtp_host"`
 	SMTPPort                 int    `json:"smtp_port"`
 	SMTPUsername             string `json:"smtp_username"`
 	SMTPPassword             string `json:"smtp_password"`
 	SMTPFrom                 string `json:"smtp_from"`
+}
+
+type UpdateCurrencyrequest struct {
+	PoenskelistenCurrency string `json:"poenskelisten_currency"`
 }

@@ -50,6 +50,10 @@ function load_page(result) {
                             Welcome to the front page. Use to navigation bar and head to 'Wishlists' to manage your wishlists. Head to 'Groups' to manage and view wishlists in groups.
                         </div>
 
+                        <div id="log-in-button" style="margin-top: 2em; display: none; width: 10em;">
+                            <button id="update-button" type="submit" href="#" onclick="window.location = './login';">Log in</button>
+                        </div>
+
                     </div>
 
                     <div class="module">
@@ -96,6 +100,7 @@ function load_page(result) {
     } else {
         showLoggedOutMenu();
         document.getElementById('main-text').innerHTML = "You need to login.";
+        document.getElementById('log-in-button').style.display = 'inline-block';
     }
 }
 

@@ -68,6 +68,12 @@ func GetConfig() (*models.ConfigStruct, error) {
 		anythingChanged = true
 	}
 
+	if config.PoenskelistenCurrency == "" {
+		// Set new value
+		config.PoenskelistenCurrency = "$"
+		anythingChanged = true
+	}
+
 	if config.DBType == "" || (strings.ToLower(config.DBType) != "mysql" && strings.ToLower(config.DBType) != "postgresql") {
 		// Set new value
 		config.DBType = "mysql"
