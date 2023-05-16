@@ -1,4 +1,4 @@
-FROM golang:1.19-bullseye
+FROM golang:1.20.4-bullseye
 
 LABEL org.opencontainers.image.source=https://github.com/aunefyren/poenskelisten
 
