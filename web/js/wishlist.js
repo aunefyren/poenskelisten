@@ -712,7 +712,7 @@ function edit_wish(wish_id, wishlist_id, group_id, user_id, b64_wish_name, b64_w
 
     html += `
 
-        <div class="bottom-right-button" id="edit-wish" style="" onclick="cancel_edit_wish(${wish_id}, ${wishlist_id}, ${group_id}, ${user_id});">
+        <div class="bottom-right-button" id="edit-wish" style="" onclick="cancel_edit_wish(${wish_id}, ${wishlist_id}, ${group_id}, ${user_id});" title="Cancel edit">
             <img class="icon-img color-invert clickable" style="margin: 1em 1em 0 0;" src="../assets/x.svg">
         </div>
 
