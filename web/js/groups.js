@@ -152,7 +152,7 @@ function place_groups(group_array, user_id) {
 
         html += '<div class="group">'
         
-        html += '<div class="group-title clickable" onclick="location.href = \'./groups/' + group_array[i].ID + '\'">'
+        html += '<div class="group-title clickable" onclick="location.href = \'./groups/' + group_array[i].ID + '\'" title="Go to group">'
         html += '<div class="profile-icon">'
         html += '<img class="icon-img color-invert" src="../assets/users.svg">'
         html += '</div>'
@@ -171,13 +171,13 @@ function place_groups(group_array, user_id) {
         members_string += ']'
 
         if(group_array[i].members.length > 0) {
-            html += '<div class="profile-icon clickable" onclick="toggle_group(' + group_array[i].ID + ', ' + group_array[i].owner.ID + ', ' + user_id + ', ' + members_string + ')">'
+            html += '<div class="profile-icon clickable" onclick="toggle_group(' + group_array[i].ID + ', ' + group_array[i].owner.ID + ', ' + user_id + ', ' + members_string + ')" title="Expandable">'
             html += '<img id="group_' + group_array[i].ID + '_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">'
             html += '</div>'
         }
 
         if(owner_id == user_id) {
-            html += '<div class="profile-icon clickable" onclick="delete_group(' + group_array[i].ID + ', ' + user_id + ')">'
+            html += '<div class="profile-icon clickable" onclick="delete_group(' + group_array[i].ID + ', ' + user_id + ')" title="Delete group">'
             html += '<img class="icon-img color-invert" src="../../assets/trash-2.svg">'
             html += '</div>'
         }
@@ -191,7 +191,7 @@ function place_groups(group_array, user_id) {
             if(j == 0) {
                 html += '<div class="text-body">Members in this group:</div>'
             }
-            html += '<div class="group-member hoverable-dark">'
+            html += '<div class="group-member hoverable-dark" title="Group member">'
 
             html += '<div class="group-title">';
 
@@ -204,15 +204,15 @@ function place_groups(group_array, user_id) {
             html += '</div>'
 
             if(owner_id == user_id && group_array[i].members[j].ID !== user_id) {
-                html += '<div class="profile-icon clickable" onclick="remove_member(' + group_array[i].ID + ',' + group_array[i].members[j].ID + ', ' + user_id +')">'
+                html += '<div class="profile-icon clickable" onclick="remove_member(' + group_array[i].ID + ',' + group_array[i].members[j].ID + ', ' + user_id +')" title="Remove member">'
                 html += '<img class="icon-img color-invert" src="../../assets/x.svg">'
                 html += '</div>'
             } else if(group_array[i].members[j].ID == user_id && owner_id !== user_id){
-                html += '<div class="profile-icon clickable" onclick="leave_group(' + group_array[i].ID + ',' + user_id +')">'
+                html += '<div class="profile-icon clickable" onclick="leave_group(' + group_array[i].ID + ',' + user_id +')" title="Leave group">'
                 html += '<img class="icon-img color-invert" src="../../assets/log-out.svg">'
                 html += '</div>'
             } else if(group_array[i].members[j].ID == owner_id) {
-                html += '<div class="profile-icon">'
+                html += '<div class="profile-icon" title="Group owner">'
                 html += '<img class="icon-img color-invert" src="../../assets/star.svg">'
                 html += '</div>'
             }

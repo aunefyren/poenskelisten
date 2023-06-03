@@ -60,7 +60,7 @@ function load_page(result) {
                                 </div>
                                 Expired wishlists
                             </div>
-                            <div class="profile-icon clickable" onclick="toggle_expired_wishlists()">
+                            <div class="profile-icon clickable" onclick="toggle_expired_wishlists()" title="Expandable">
                                 <img id="wishlist_expired_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">
                             </div>
                             <div id="wishlists-box-expired" class="wishlists collapsed" style="display:none;">
@@ -191,7 +191,7 @@ function place_wishlists(wishlists_array, user_id) {
         html += wishlists_array[i].name
         html += '</div>'
 
-        html += '<div class="profile">'
+        html += '<div class="profile" title="Wishlist owner">'
         html += '<div class="profile-name">'
         html += wishlists_array[i].owner.first_name + " " + wishlists_array[i].owner.last_name
         html += '</div>'
@@ -212,13 +212,13 @@ function place_wishlists(wishlists_array, user_id) {
         members_string += ']'
 
         if(owner_id == user_id) {
-            html += '<div class="profile-icon clickable" onclick="toggle_wishlist(' + user_id + ', ' + wishlists_array[i].ID + ', ' + owner_id + ', ' + members_string + ')">'
+            html += '<div class="profile-icon clickable" onclick="toggle_wishlist(' + user_id + ', ' + wishlists_array[i].ID + ', ' + owner_id + ', ' + members_string + ')" title="Expandable">'
             html += '<img id="wishlist_' + wishlists_array[i].ID + '_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">'
             html += '</div>'
         }
 
         if(owner_id == user_id) {
-            html += '<div class="profile-icon clickable" onclick="delete_wishlist(' + wishlists_array[i].ID + ', ' + user_id + ')">'
+            html += '<div class="profile-icon clickable" onclick="delete_wishlist(' + wishlists_array[i].ID + ', ' + user_id + ')" title="Delete wishlist">'
             html += '<img class="icon-img color-invert" src="../../assets/trash-2.svg">'
             html += '</div>'
         }
@@ -246,7 +246,7 @@ function place_wishlists(wishlists_array, user_id) {
             html += '</div>'
 
             if(owner_id == user_id) {
-                html += '<div class="profile-icon clickable" onclick="remove_member(' + wishlists_array[i].ID + ',' + wishlists_array[i].members[j].ID + ', ' + user_id +')">'
+                html += '<div class="profile-icon clickable" onclick="remove_member(' + wishlists_array[i].ID + ',' + wishlists_array[i].members[j].ID + ', ' + user_id +')" title="Remove wishlist from group">'
                 html += '<img class="icon-img color-invert" src="../../assets/x.svg">'
                 html += '</div>'
             }

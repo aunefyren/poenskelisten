@@ -63,3 +63,20 @@ func CreateWishlistInDB(wishlistdb models.Wishlist) error {
 	return nil
 
 }
+
+// Get wishlist by wishlist ID
+func GetWishlistByWishlistID(wishlistID int) (bool, models.Wishlist, error) {
+
+	var wishlist models.Wishlist
+
+	wishlistRecord := Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", wishlistID).Find(&wishlist)
+
+	if wishlistRecord.Error != nil {
+		return false, models.Wishlist{}, wishlistRecord.Error
+	} else if wishlistRecord.RowsAffected != 1 {
+		return false, models.Wishlist{}, nil
+	}
+
+	return true, wishlist, nil
+
+}
