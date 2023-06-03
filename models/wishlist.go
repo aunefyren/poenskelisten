@@ -13,6 +13,7 @@ type Wishlist struct {
 	Enabled     bool      `json:"enabled" gorm:"not null; default: true"`
 	Owner       int       `json:"owner_id" gorm:"not null"`
 	Date        time.Time `json:"date" gorm:"not null"`
+	Claimable   bool      `json:"claimable" gorm:"not null; default: false"`
 }
 
 type WishlistCreationRequest struct {
@@ -21,6 +22,7 @@ type WishlistCreationRequest struct {
 	Description string `json:"description"`
 	Date        string `json:"date"`
 	Group       int    `json:"group"`
+	Claimable   bool   `json:"claimable"`
 }
 
 type WishlistUpdateRequest struct {
@@ -28,6 +30,7 @@ type WishlistUpdateRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Date        string `json:"date"`
+	Claimable   bool   `json:"claimable"`
 }
 
 type WishlistUser struct {
@@ -37,6 +40,7 @@ type WishlistUser struct {
 	Enabled     bool         `json:"enabled" gorm:"not null; default: true"`
 	Owner       User         `json:"owner"`
 	Date        time.Time    `json:"date" gorm:"not null"`
+	Claimable   bool         `json:"claimable" gorm:"not null; default: false"`
 	Members     []GroupUser  `json:"members"`
 	Wishes      []WishObject `json:"wishes"`
 }

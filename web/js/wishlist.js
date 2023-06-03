@@ -54,7 +54,7 @@ function load_page(result) {
                             <div class="text-body" id="wishlist-info">
                             </div>
 
-                            <div class="bottom-right-button" id="edit-wishlist" style="display: none;" onclick="wishlist_edit(${user_id}, ${wishlist_id}, '{wishlist_expiration_date}');">
+                            <div class="bottom-right-button" id="edit-wishlist" style="display: none;" onclick="wishlist_edit(${user_id}, ${wishlist_id}, '{wishlist_expiration_date}', {wishlist_claimable});">
                                 <img class="icon-img color-invert clickable" src="../assets/edit.svg">
                             </div>
 
@@ -99,7 +99,7 @@ function load_page(result) {
         console.log(group_id);
 
         get_wishlist(wishlist_id)
-        get_wishes(wishlist_id, group_id, user_id);
+        //get_wishes(wishlist_id, group_id, user_id);
     } else {
         showLoggedOutMenu();
         invalid_session();
@@ -154,6 +154,17 @@ function place_wishlist(wishlist_object) {
         
         var innerHTML = document.getElementById("wishlist-info-box").innerHTML
         document.getElementById("wishlist-info-box").innerHTML = innerHTML.replace('{wishlist_expiration_date}', wishlist_object.date)
+
+        if(wishlist_object.claimable) {
+            document.getElementById("wishlist-info").innerHTML += "<br>Wishes are claimable";
+            innerHTML = document.getElementById("wishlist-info-box").innerHTML
+            document.getElementById("wishlist-info-box").innerHTML = innerHTML.replace('{wishlist_claimable}', "true");
+        } else {
+            document.getElementById("wishlist-info").innerHTML += "<br>Wishes are not claimable";
+            innerHTML = document.getElementById("wishlist-info-box").innerHTML
+            document.getElementById("wishlist-info-box").innerHTML = innerHTML.replace('{wishlist_claimable}', "false");
+        }
+
     } catch(err) {
         console.log("Failed to parse datetime. Error: " + err)
     }
@@ -229,13 +240,19 @@ function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
     wishlist_object.innerHTML = html
 }
 
-function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
+function generate_wish_html(wish_object, wishlist_id, group_id, user_id, wishlist_claimable) {
 
     var html = '';
 
     owner_id = wish_object.owner_id.ID
 
-    if(wish_object.wishclaim.length > 0 && user_id != owner_id) {
+    if(wishlist_claimable) {
+     console.log("Wishlist claimable: true")
+    } else {
+        console.log("Wishlist claimable: false")
+    }
+
+    if(wish_object.wishclaim.length > 0 && user_id != owner_id && wishlist_claimable) {
         var transparent = " transparent"
     } else {
         var transparent = ""
@@ -288,7 +305,7 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
         html += '<div class="profile-icon clickable" onclick="delete_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')">'
         html += '<img class="icon-img color-invert" src="../../assets/trash-2.svg">'
         html += '</div>'
-    } else if(wish_object.wishclaim.length > 0) {
+    } else if(wish_object.wishclaim.length > 0 && wishlist_claimable) {
         for(var j = 0; j < wish_object.wishclaim.length; j++) {
             if(user_id !== wish_object.wishclaim[j].user.ID) {
                 html += '<div class="profile-icon" title="Claimed by ' + wish_object.wishclaim[j].user.first_name + ' ' + wish_object.wishclaim[j].user.last_name + '.">'
@@ -300,7 +317,7 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
                 html += '</div>'
             }
         }
-    } else {
+    } else if(wishlist_claimable) {
         html += '<div class="profile-icon clickable" title="Claim this gift." onclick="claim_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')">'
         html += '<img class="icon-img color-invert" src="../../assets/check.svg">'
         html += '</div>'
@@ -563,11 +580,16 @@ function unclaim_wish(wish_id, wishlist_id, group_id, user_id) {
     return false;
 }
 
-function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date) {
+function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date, wishlist_claimable) {
 
     var wishlist_title = document.getElementById("wishlist-title").innerHTML;
     var wishlist_description = document.getElementById("wishlist-description").innerHTML;
     var wishlist_expiration = getDateString(wishlist_expiration_date)
+
+    var checked_string = ""
+    if(wishlist_claimable) {
+        checked_string = "checked"
+    }
 
     var html = '';
 
@@ -585,6 +607,9 @@ function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date) {
 
             <label for="wishlist_date">When does the wishlist expire?</label><br>
             <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" value="${wishlist_expiration}" autocomplete="off" required />
+
+            <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" ${checked_string}>
+            <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
             
             <button id="register-button" type="submit" href="/">Save wishlist</button>
 
@@ -606,11 +631,13 @@ function update_wishlist(wishlist_id, user_id) {
     var wishlist_date = document.getElementById("wishlist_date").value;
     var wishlist_date_object = new Date(wishlist_date)
     var wishlist_date_string = wishlist_date_object.toISOString();
+    var wishlist_claimable = document.getElementById("wishlist_claimable").checked;
 
     var form_obj = { 
         "name" : wishlist_name,
         "description" : wishlist_description,
-        "date": wishlist_date_string
+        "date": wishlist_date_string,
+        "claimable": wishlist_claimable
     };
 
     var form_data = JSON.stringify(form_obj);

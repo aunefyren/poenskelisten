@@ -78,6 +78,9 @@ function load_page(result) {
 
                                 <label for="wishlist_date">When does your wishlist expire?</label><br>
                                 <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" autocomplete="off" required />
+
+                                <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" checked>
+                                <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
                                 
                                 <button id="register-button" type="submit" href="/">Create wishlist</button>
 
@@ -295,11 +298,13 @@ function create_wishlist(user_id) {
     var wishlist_date = document.getElementById("wishlist_date").value;
     var wishlist_date_object = new Date(wishlist_date)
     var wishlist_date_string = wishlist_date_object.toISOString();
+    var wishlist_claimable = document.getElementById("wishlist_claimable").checked;
 
     var form_obj = { 
                                     "name" : wishlist_name,
                                     "description" : wishlist_description,
-                                    "date": wishlist_date_string
+                                    "date": wishlist_date_string,
+                                    "claimable": wishlist_claimable
                                 };
 
     var form_data = JSON.stringify(form_obj);
