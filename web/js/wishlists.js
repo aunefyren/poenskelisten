@@ -184,7 +184,7 @@ function place_wishlists(wishlists_array, user_id) {
 
         html += '<div class="wishlist">'
         
-        html += '<div class="wishlist-title clickable" onclick="location.href = \'./wishlists/' + wishlists_array[i].ID + '\'">'
+        html += '<div class="wishlist-title clickable" onclick="location.href = \'./wishlists/' + wishlists_array[i].ID + '\'" title="Go to wishlist">'
         html += '<div class="profile-icon">'
         html += '<img class="icon-img color-invert" src="../assets/list.svg">'
         html += '</div>'
@@ -233,7 +233,7 @@ function place_wishlists(wishlists_array, user_id) {
                 html += '<div class="text-body">Available in these groups:</div>'
             }
 
-            html += '<div class="group-member hoverable-dark">'
+            html += '<div class="group-member hoverable-dark" title="Group">'
 
             html += '<div class="group-title">';
 
