@@ -55,7 +55,7 @@ function load_page(result) {
                             <div class="text-body" id="group-info">
                             </div>
 
-                            <div class="bottom-right-button" id="edit-group" style="display: none;" onclick="group_edit(${user_id}, ${group_id});">
+                            <div class="bottom-right-button" id="edit-group" style="display: none;" onclick="group_edit(${user_id}, ${group_id});" title="Edit group">
                                 <img class="icon-img color-invert clickable" src="../assets/edit.svg">
                             </div>
 
@@ -79,7 +79,7 @@ function load_page(result) {
                                 </div>
                                 Expired wishlists
                             </div>
-                            <div class="profile-icon clickable" onclick="toggle_expired_wishlists()">
+                            <div class="profile-icon clickable" onclick="toggle_expired_wishlists()" title="Expandable">
                                 <img id="wishlist_expired_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">
                             </div>
                             <div id="wishlists-box-expired" class="wishlists collapsed" style="display:none;">
@@ -244,14 +244,14 @@ function place_wishlists(wishlists_array, group_id, user_id) {
 
         html += '<div class="wishlist hoverable-light">'
         
-        html += '<div class="wishlist-title clickable" onclick="location.href = \'../wishlists/'+ wishlists_array[i].ID + '\'">'
+        html += '<div class="wishlist-title clickable" onclick="location.href = \'../wishlists/'+ wishlists_array[i].ID + '\'" title="Go to wishlist">'
         html += '<div class="profile-icon">'
         html += '<img class="icon-img color-invert" src="../assets/list.svg">'
         html += '</div>'
         html += wishlists_array[i].name
         html += '</div>'
 
-        html += '<div class="profile">'
+        html += '<div class="profile" title="Wishlist owner">'
         html += '<div class="profile-name">'
         html += wishlists_array[i].owner.first_name + " " + wishlists_array[i].owner.last_name
         html += '</div>'
@@ -260,7 +260,7 @@ function place_wishlists(wishlists_array, group_id, user_id) {
         html += '</div>'
 
         if(wishlists_array[i].owner.ID == user_id) {
-            html += '<div class="profile-icon clickable" onclick="delete_wishlist(' + wishlists_array[i].ID + ', ' + group_id + ', ' + user_id + ')">'
+            html += '<div class="profile-icon clickable" onclick="delete_wishlist(' + wishlists_array[i].ID + ', ' + group_id + ', ' + user_id + ')" title="Delete wishlist">'
             html += '<img class="icon-img color-invert" src="../../assets/trash-2.svg">'
             html += '</div>'
         }
@@ -468,7 +468,7 @@ function group_edit(user_id, group_id) {
     var html = '';
 
     html += `
-        <div class="bottom-right-button" id="edit-group" style="" onclick="cancel_edit_group(${group_id}, ${user_id});">
+        <div class="bottom-right-button" id="edit-group" style="" onclick="cancel_edit_group(${group_id}, ${user_id});" title="Cancel edit">
             <img class="icon-img color-invert clickable" style="" src="../assets/x.svg">
         </div>
 
