@@ -7,7 +7,7 @@ import (
 )
 
 // Update values in wishlist object in DB
-func UpdateWishlistValuesByID(wishlistID int, wishlistName string, wishlistDesc string, wishlistExpiration time.Time) error {
+func UpdateWishlistValuesByID(wishlistID int, wishlistName string, wishlistDesc string, wishlistExpiration time.Time, wishlistClaimable bool) error {
 
 	var wishlist models.Wishlist
 
@@ -33,6 +33,31 @@ func UpdateWishlistValuesByID(wishlistID int, wishlistName string, wishlistDesc 
 	}
 	if wishlistRecord.RowsAffected != 1 {
 		return errors.New("Expiration not changed in database.")
+	}
+
+	wishlistRecord = Instance.Model(wishlist).Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.ID = ?", wishlistID).Update("claimable", wishlistClaimable)
+	if wishlistRecord.Error != nil {
+		return wishlistRecord.Error
+	}
+	if wishlistRecord.RowsAffected != 1 {
+		return errors.New("Claimability not changed in database.")
+	}
+
+	return nil
+
+}
+
+// Create wishlist in DB
+func CreateWishlistInDB(wishlistdb models.Wishlist) error {
+
+	record := Instance.Create(&wishlistdb)
+
+	if record.Error != nil {
+		return record.Error
+	}
+
+	if record.RowsAffected != 1 {
+		return errors.New("Wishlist not added to database.")
 	}
 
 	return nil

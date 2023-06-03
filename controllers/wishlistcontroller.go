@@ -119,11 +119,12 @@ func RegisterWishlist(context *gin.Context) {
 	wishlistdb.Owner = UserID
 	wishlistdb.Description = wishlist.Description
 	wishlistdb.Name = wishlist.Name
+	wishlistdb.Claimable = wishlist.Claimable
 
 	// Create wishlist in DB
-	record := database.Instance.Create(&wishlistdb)
-	if record.Error != nil {
-		log.Println("Failed to create wishlist in database. Error: " + record.Error.Error())
+	err = database.CreateWishlistInDB(wishlistdb)
+	if err != nil {
+		log.Println("Failed to create wishlist in database. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create wishlist in database."})
 		context.Abort()
 		return
@@ -490,6 +491,7 @@ func GetWishlistObject(WishlistID int, RequestUserID int) (models.WishlistUser, 
 	wishlist_with_user.Model = wishlist.Model
 	wishlist_with_user.Name = wishlist.Name
 	wishlist_with_user.UpdatedAt = wishlist.UpdatedAt
+	wishlist_with_user.Claimable = wishlist.Claimable
 
 	// Get wishes
 	_, wishes, err := database.GetWishesFromWishlist(WishlistID)
@@ -912,9 +914,10 @@ func APIUpdateWishlist(context *gin.Context) {
 	wishlistdb.Owner = UserID
 	wishlistdb.Description = wishlist.Description
 	wishlistdb.Name = wishlist.Name
+	wishlistdb.Claimable = wishlist.Claimable
 
 	// Update wishlist in DB
-	err = database.UpdateWishlistValuesByID(wishlist_id_int, wishlistdb.Name, wishlistdb.Description, wishlistdb.Date)
+	err = database.UpdateWishlistValuesByID(wishlist_id_int, wishlistdb.Name, wishlistdb.Description, wishlistdb.Date, wishlistdb.Claimable)
 	if err != nil {
 		log.Println("Failed to update wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update wishlist."})
