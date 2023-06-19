@@ -20,6 +20,7 @@ type WishCreationRequest struct {
 	Note  string  `json:"note"`
 	Price float64 `json:"price"`
 	URL   string  `json:"url"`
+	Image string  `json:"image_data"`
 }
 
 type WishUpdateRequest struct {
@@ -27,6 +28,7 @@ type WishUpdateRequest struct {
 	Note  string  `json:"note"`
 	Price float64 `json:"price"`
 	URL   string  `json:"url"`
+	Image string  `json:"image_data"`
 }
 
 type WishObject struct {
@@ -37,6 +39,7 @@ type WishObject struct {
 	Enabled       bool              `json:"enabled"`
 	Owner         User              `json:"owner_id"`
 	URL           string            `json:"url"`
+	Image         bool              `json:"image"`
 	WishlistID    int               `json:"wishlist_id"`
 	WishClaim     []WishClaimObject `json:"wishclaim"`
 	WishClaimable bool              `json:"wish_claimable"`

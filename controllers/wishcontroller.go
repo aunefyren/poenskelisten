@@ -114,6 +114,16 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID int) (models.WishOb
 		return models.WishObject{}, err
 	}
 
+	imageExists, err := CheckIfWishImageExists(int(wish.ID))
+	if err != nil {
+		log.Println("Failed to check if wish'" + strconv.Itoa(int(wish.ID)) + "' had image. Setting to false. Error: " + err.Error())
+		wishObject.Image = false
+	} else if imageExists {
+		wishObject.Image = true
+	} else {
+		wishObject.Image = false
+	}
+
 	// Purge the reply if the requester is the owner
 	if wish.Owner == requestUserID {
 		wishclaimobject = []models.WishClaimObject{}
@@ -280,6 +290,17 @@ func RegisterWish(context *gin.Context) {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": record.Error.Error()})
 		context.Abort()
 		return
+	}
+
+	// Save image
+	if wish.Image != "" {
+		err = SaveWishImage(int(db_wish.ID), wish.Image)
+		if err != nil {
+			log.Println("Failed to save wish image. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save wish image."})
+			context.Abort()
+			return
+		}
 	}
 
 	_, wishes, err := database.GetWishesFromWishlist(wishlist_id_int)
@@ -806,6 +827,17 @@ func APIUpdateWish(context *gin.Context) {
 			return
 		}
 
+	}
+
+	// Save image
+	if wish.Image != "" {
+		err = SaveWishImage(int(wishIDInt), wish.Image)
+		if err != nil {
+			log.Println("Failed to save wish image. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save wish image."})
+			context.Abort()
+			return
+		}
 	}
 
 	// Create user in DB

@@ -39,6 +39,13 @@ function load_page(result) {
     }
 
     var html = `
+                <!-- The Modal -->
+                <div id="myModal" class="modal">
+                    <span class="close selectable">&times;</span>
+                    <img class="modal-content" id="modal-img" src="/assets/loading.gif">
+                    <div id="caption"></div>
+                </div>
+
                 <div class="" id="front-page">
                     
                     <div class="module">
@@ -75,10 +82,12 @@ function load_page(result) {
                             <form action="" onsubmit="event.preventDefault(); send_wish(` + wishlist_id + `,` + group_id + `,` + user_id + `);">
                                 <label for="wish_name">Add a new wish:</label><br>
                                 <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" autocomplete="off" required />
-                                <label for="wish_note">Optional details:</label><br>
+                                <label for="wish_note" style="margin-top: 2em;">Optional details:</label><br>
                                 <input type="text" name="wish_note" id="wish_note" placeholder="Wish note" autocomplete="off" />
                                 <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" autocomplete="off" />
                                 <input type="number" name="wish_price" id="wish_price" placeholder="Wish price in ${currency}" autocomplete="off" />
+                                <label id="form-input-icon" for="wish_image" style="margin-top: 2em;">Optional image:</label>
+                                <input type="file" name="wish_image" id="wish_image" placeholder="" value="" accept="image/png, image/jpeg" />
                                 <button id="register-button" type="submit" href="/">Add wish</button>
                             </form>
                         </div>
@@ -91,6 +100,15 @@ function load_page(result) {
     document.getElementById('content').innerHTML = html;
     document.getElementById('card-header').innerHTML = 'Lists...';
     clearResponse();
+
+    // Get the <span> element that closes the modal
+    var span = document.getElementsByClassName("close")[0];
+
+    // When the user clicks on <span> (x), close the modal
+    span.onclick = function() { 
+        document.getElementById("myModal").style.display = "none";
+        document.getElementById("modal-img").src = "/assets/loading.gif"
+    }
 
     if(result !== false) {
         showLoggedInMenu();
@@ -291,6 +309,12 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
         html += '</div>'
     }
 
+    if(wish_object.image) {
+        html += '<div class="profile-icon clickable" onclick="toggle_wish_modal(' + wish_object.ID + ')" title="View image">'
+        html += '<img class="icon-img color-invert" src="../../assets/image.svg">'
+        html += '</div>'
+    }
+
     if(user_id == owner_id) {
 
         var b64_wish_name = toBASE64(wish_object.name)
@@ -366,15 +390,55 @@ function send_wish(wishlist_id, group_id, user_id){
     var wish_note = document.getElementById("wish_note").value;
     var wish_url = document.getElementById("wish_url").value;
     var wish_price = parseFloat(document.getElementById("wish_price").value);
+    var wish_image = document.getElementById('wish_image').files[0];
 
-    var form_obj = { 
-                                    "name" : wish_name,
-                                    "note" : wish_note,
-                                    "url": wish_url,
-                                    "price": wish_price
-                                };
+    if(wish_image) {
 
-    var form_data = JSON.stringify(form_obj);
+        if(wish_image.size > 10000000) {
+            error("Image exceeds 10MB size limit.")
+            return;
+        } else if(wish_image.size < 10000) {
+            error("Image smaller than 0.01MB size requirement.")
+            return;
+        }
+
+        wish_image = get_base64(wish_image);
+        
+        wish_image.then(function(result) {
+
+            var form_obj = { 
+                "name" : wish_name,
+                "note" : wish_note,
+                "url": wish_url,
+                "price": wish_price,
+                "image_data": result
+            };
+
+            var form_data = JSON.stringify(form_obj);
+
+            send_wish_two(form_data, wishlist_id, group_id, user_id);
+        
+        });
+
+    } else {
+
+        var form_obj = { 
+                "name" : wish_name,
+                "note" : wish_note,
+                "url": wish_url,
+                "price": wish_price,
+                "image_data": ""
+            };
+
+        var form_data = JSON.stringify(form_obj);
+
+        send_wish_two(form_data, wishlist_id, group_id, user_id);
+
+    }
+
+}
+
+function send_wish_two(form_data, wishlist_id, group_id, user_id) {
 
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -721,13 +785,16 @@ function edit_wish(wish_id, wishlist_id, group_id, user_id, b64_wish_name, b64_w
             <label for="wish_name_${wish_id}">Edit wish:</label><br>
             <input type="text" name="wish_name_${wish_id}" id="wish_name_${wish_id}" placeholder="Wish name" value="" autocomplete="off" required />
     
-            <label for="wish_note_${wish_id}">Optional details:</label><br>
+            <label for="wish_note_${wish_id}" style="margin-top: 2em;">Optional details:</label><br>
 
             <input type="text" name="wish_note_${wish_id}" id="wish_note_${wish_id}" placeholder="Wish note" value="" autocomplete="off" />
 
             <input type="text" name="wish_url_${wish_id}" id="wish_url_${wish_id}" placeholder="Wish URL" value="" autocomplete="off" />
 
             <input type="number" name="wish_price_${wish_id}" id="wish_price_${wish_id}" placeholder="Wish price in ${currency}" value="" autocomplete="off" />
+
+            <label id="form-input-icon" for="wish_image_${wish_id}" style="margin-top: 2em;">Replace optional image:</label>
+            <input type="file" name="wish_image_${wish_id}" id="wish_image_${wish_id}" placeholder="" value="" accept="image/png, image/jpeg" />
             
             <button id="register-button" type="submit" href="/">Save wish</button>
 
@@ -753,17 +820,54 @@ function update_wish(wish_id, user_id, wishlist_id, group_id) {
     var wish_note = document.getElementById("wish_note_" + wish_id).value;
     var wish_url = document.getElementById("wish_url_" + wish_id).value;
     var wish_price = parseFloat(document.getElementById("wish_price_"+ wish_id).value);
+    var wish_image = document.getElementById('wish_image_' + wish_id).files[0];
 
-    var form_obj = { 
-        "name" : wish_name,
-        "note" : wish_note,
-        "url": wish_url,
-        "price": wish_price
-    };
+    if(wish_image) {
 
-    var form_data = JSON.stringify(form_obj);
+        if(wish_image.size > 10000000) {
+            error("Image exceeds 10MB size limit.")
+            return;
+        } else if(wish_image.size < 10000) {
+            error("Image smaller than 0.01MB size requirement.")
+            return;
+        }
 
-    console.log(form_data)
+        wish_image = get_base64(wish_image);
+        
+        wish_image.then(function(result) {
+
+            var form_obj = { 
+                "name" : wish_name,
+                "note" : wish_note,
+                "url": wish_url,
+                "price": wish_price,
+                "image_data": result
+            };
+
+            var form_data = JSON.stringify(form_obj);
+
+            update_wish_two(form_data, wish_id, user_id, wishlist_id, group_id);
+        
+        });
+
+    } else {
+
+        var form_obj = { 
+            "name" : wish_name,
+            "note" : wish_note,
+            "url": wish_url,
+            "price": wish_price,
+            "image_data": ""
+        };
+
+        var form_data = JSON.stringify(form_obj);
+        update_wish_two(form_data, wish_id, user_id, wishlist_id, group_id)
+
+    }
+
+}
+
+function update_wish_two(form_data, wish_id, user_id, wishlist_id, group_id) {
 
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -872,5 +976,61 @@ function cancel_edit_wishlist(wishlist_id, user_id) {
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
     return false;
+
+}
+
+function toggle_wish_modal(wishID) {
+
+    document.getElementById("myModal").style.display = "block";
+    GetWishImage(wishID);
+
+}
+
+function GetWishImage(wishID) {
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+
+                // Disable modal
+                document.getElementById("myModal").style.display = "none";
+
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+                document.getElementById("myModal").style.display = "none";
+
+            } else {
+
+                PlaceWishImageInModal(result.image)
+                
+            }
+
+        } else {
+            // info("Loading week...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wish/" + wishID + "/image");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+
+    return;
+
+}
+
+function PlaceWishImageInModal(imageBase64) {
+
+    document.getElementById("modal-img").src = imageBase64
 
 }

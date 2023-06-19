@@ -327,7 +327,7 @@ function toBASE64(string) {
 }
 
 function fromBASE64(base64String) {
-    var binaryString = fromBASE64(base64String);
-    var string = atob(binaryString);
+    var binaryString = atob(base64String);
+    var string = fromBinary(binaryString);
     return string;
 }
