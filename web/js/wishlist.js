@@ -293,10 +293,10 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
 
     if(user_id == owner_id) {
 
-        var b64_wish_name = btoa(wish_object.name)
-        var b64_wish_note = btoa(wish_object.note)
-        var b64_wish_url = btoa(wish_object.url)
-        var b64_wish_price = btoa(wish_object.price)
+        var b64_wish_name = toBASE64(wish_object.name)
+        var b64_wish_note = toBASE64(wish_object.note)
+        var b64_wish_url = toBASE64(wish_object.url)
+        var b64_wish_price = toBASE64(wish_object.price)
 
         html += '<div class="profile-icon clickable" title="Edit wish" onclick="edit_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ", '" + b64_wish_name + "', '" + b64_wish_note + "', '" + b64_wish_url + "', '" + b64_wish_price + "', '" + owner_id + '\')">'
         html += '<img class="icon-img color-invert" src="../../assets/edit.svg">'
@@ -703,10 +703,10 @@ function reset_wishlist_info_box(user_id, wishlist_id) {
 
 function edit_wish(wish_id, wishlist_id, group_id, user_id, b64_wish_name, b64_wish_note, b64_wish_url, b64_wish_price, owner_id) {
 
-    var wish_name = atob(b64_wish_name)
-    var wish_note = atob(b64_wish_note)
-    var wish_url = atob(b64_wish_url)
-    var wish_price = atob(b64_wish_price)
+    var wish_name = fromBASE64(b64_wish_name)
+    var wish_note = fromBASE64(b64_wish_note)
+    var wish_url = fromBASE64(b64_wish_url)
+    var wish_price = fromBASE64(b64_wish_price)
 
     var html = '';
 
