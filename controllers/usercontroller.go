@@ -341,7 +341,6 @@ func UpdateUser(context *gin.Context) {
 	// Initialize variables
 	var userUpdateRequest models.UserUpdateRequest
 	var err error
-	emailChanged := false
 
 	// Parse creation request
 	if err := context.ShouldBindJSON(&userUpdateRequest); err != nil {
@@ -411,7 +410,6 @@ func UpdateUser(context *gin.Context) {
 		}
 
 		userOriginal.Email = userUpdateRequest.Email
-		emailChanged = true
 
 	}
 
@@ -419,6 +417,17 @@ func UpdateUser(context *gin.Context) {
 	if userUpdateRequest.Password != "" {
 		if err := userOriginal.HashPassword(userUpdateRequest.Password); err != nil {
 			context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			context.Abort()
+			return
+		}
+	}
+
+	// Update profile image
+	if userUpdateRequest.ProfileImage != "" {
+		err = UpdateUserProfileImage(int(userOriginal.ID), userUpdateRequest.ProfileImage)
+		if err != nil {
+			log.Println("Failed to update profile image. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile image."})
 			context.Abort()
 			return
 		}
@@ -458,15 +467,8 @@ func UpdateUser(context *gin.Context) {
 		return
 	}
 
-	// If SMTP is disabled, create the user as verified
-	if config.SMTPEnabled {
-		user.Verified = false
-	} else {
-		user.Verified = true
-	}
-
 	// If user is not verified and SMTP is enabled, send verification e-mail
-	if !user.Verified && config.SMTPEnabled && emailChanged {
+	if config.SMTPEnabled && !user.Verified {
 
 		verificationCode, err := database.GenrateRandomVerificationCodeForuser(userID)
 		if err != nil {
