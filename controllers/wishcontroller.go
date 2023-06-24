@@ -88,7 +88,7 @@ func GetWishesFromWishlist(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"owner_id": owner_id, "wishes": wishObjects, "message": "Wishes retrieved.", "currency": config.PoenskelistenCurrency})
+	context.JSON(http.StatusOK, gin.H{"owner_id": owner_id, "wishes": wishObjects, "message": "Wishes retrieved.", "currency": config.PoenskelistenCurrency, "padding": config.PoenskelistenCurrencyPad})
 }
 
 func ConvertWishToWishObject(wish models.Wish, requestUserID int) (models.WishObject, error) {

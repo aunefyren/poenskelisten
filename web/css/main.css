@@ -480,7 +480,7 @@ button:disabled {
   justify-content: space-between;
   align-items: center;
   align-content: center;
-  margin: 1em 1em;
+  margin: 1.5em 1em;
   border: 2px solid var(--eggshell);
   border-radius: 1em;
   background-color: var(--lightblue);
@@ -489,6 +489,11 @@ button:disabled {
 
 .wish-note, .group-members {
   display: none;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  align-content: center;
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
@@ -713,14 +718,14 @@ hr {
 }
 
 .wish-price {
-  margin: 0 1em;
+  margin: 1em;
   padding: 0.25em 0.5em;
   background-color: var(--blue);
   border-radius: 1em;
   font-size: 0.75em;
 }
 
-.user-active-profile-photo-img {
+.user-active-profile-photo-img, .wish-image-thumbnail-img {
   border-radius: 10em;
   object-fit: cover;
   overflow: hidden;
@@ -736,6 +741,21 @@ hr {
   max-height: 100%;
   border: solid 0.5em var(--mediumblue);
   background-color: var(--white);
+}
+
+.wish-image-thumbnail {
+  border-radius: 10em;
+  margin: 1em;
+  width: 10em;
+  height: 10em;
+  max-width: 100%;
+  max-height: 100%;
+  border: solid 0.5em var(--mediumblue);
+  background-color: var(--white);
+}
+
+.wish-note-text {
+  margin: 1em;
 }
 
 /* The Modal (background) */
