@@ -21,7 +21,7 @@ func APIGetCurrency(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"message": "Currency retrieved.", "currency": config.PoenskelistenCurrency})
+	context.JSON(http.StatusOK, gin.H{"message": "Currency retrieved.", "currency": config.PoenskelistenCurrency, "padding": config.PoenskelistenCurrencyPad})
 
 }
 
@@ -59,6 +59,7 @@ func APIUpdateCurrency(context *gin.Context) {
 	}
 
 	configFile.PoenskelistenCurrency = currency.PoenskelistenCurrency
+	configFile.PoenskelistenCurrencyPad = currency.PoenskelistenCurrencyPad
 
 	err = config.SaveConfig(configFile)
 	if err != nil {
@@ -68,6 +69,6 @@ func APIUpdateCurrency(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"message": "Currency updated.", "currency": configFile.PoenskelistenCurrency})
+	context.JSON(http.StatusOK, gin.H{"message": "Currency updated.", "currency": configFile.PoenskelistenCurrency, "padding": configFile.PoenskelistenCurrencyPad})
 
 }

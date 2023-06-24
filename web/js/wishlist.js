@@ -214,6 +214,7 @@ function get_wishes(wishlist_id, group_id, user_id){
                 console.log(wishes);
 
                 currency = result.currency;
+                currency_padding = result.padding;
                 try {
                     document.getElementById("wish_price").placeholder = "Wish price in " + currency
                 } catch(e) {
@@ -243,10 +244,19 @@ function get_wishes(wishlist_id, group_id, user_id){
 function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
 
     var html = ''
+    var wish_id_array = []
 
     for(var i = 0; i < wishes_array.length; i++) {
 
-        html += generate_wish_html(wishes_array[i], wishlist_id, group_id, user_id);
+        var function_result = generate_wish_html(wishes_array[i], wishlist_id, group_id, user_id);
+        var new_html = function_result[0]
+        var wish_image = function_result[1]
+
+        if(wish_image) {
+            wish_id_array.push(wishes_array[i].ID)
+        }
+
+        html += new_html
         
     }
 
@@ -256,19 +266,21 @@ function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
 
     wishlist_object = document.getElementById("wishes-box")
     wishlist_object.innerHTML = html
+
+    if(wish_id_array.length > 0) {
+        for(var i = 0; i < wish_id_array.length; i++) {
+            GetWishImageThumbail(wish_id_array[i])
+        }
+    }
+
 }
 
 function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
 
     var html = '';
+    var wish_with_image = false;
 
     owner_id = wish_object.owner_id.ID
-
-    if(wish_object.wish_claimable) {
-     console.log("Wishlist claimable: true")
-    } else {
-        console.log("Wishlist claimable: false")
-    }
 
     if(wish_object.wishclaim.length > 0 && user_id != owner_id && wish_object.wish_claimable) {
         var transparent = " transparent"
@@ -288,8 +300,14 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     html += wish_object.name
 
     if(wish_object.price != 0) {
-        html += '<div class="wish-price" title="Price">'
-        html += wish_object.price + currency
+
+        var currency_string = currency
+        if(currency_padding) {
+            currency_string = " " + currency_string;
+        }
+
+        html += '<div class="wish-price unselectable" title="Price">'
+        html += wish_object.price + currency_string
         html += '</div>'
     }
 
@@ -297,9 +315,15 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
 
     html += '<div class="profile">'
 
-    if(wish_object.note !== "") {
+    if(wish_object.note !== "" || wish_object.image) {
         html += '<div class="profile-icon clickable" onclick="toggle_wish(' + wish_object.ID + ')" title="Expandable">'
-        html += '<img id="wish_' + wish_object.ID + '_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">'
+
+        if(wish_object.image) {
+            html += '<img id="wish_' + wish_object.ID + '_arrow" class="icon-img color-invert" src="../../assets/chevron-down.svg">'
+        } else {
+            html += '<img id="wish_' + wish_object.ID + '_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">'
+        }
+
         html += '</div>'
     }
 
@@ -309,18 +333,12 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
         html += '</div>'
     }
 
-    if(wish_object.image) {
-        html += '<div class="profile-icon clickable" onclick="toggle_wish_modal(' + wish_object.ID + ')" title="View image">'
-        html += '<img class="icon-img color-invert" src="../../assets/image.svg">'
-        html += '</div>'
-    }
-
     if(user_id == owner_id) {
 
         var b64_wish_name = toBASE64(wish_object.name)
         var b64_wish_note = toBASE64(wish_object.note)
         var b64_wish_url = toBASE64(wish_object.url)
-        var b64_wish_price = toBASE64(wish_object.price)
+        var b64_wish_price = toBASE64(wish_object.price.toString())
 
         html += '<div class="profile-icon clickable" title="Edit wish" onclick="edit_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ", '" + b64_wish_name + "', '" + b64_wish_note + "', '" + b64_wish_url + "', '" + b64_wish_price + "', '" + owner_id + '\')">'
         html += '<img class="icon-img color-invert" src="../../assets/edit.svg">'
@@ -350,13 +368,29 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
 
     html += '</div>'
 
-    html += '<div class="wish-note collapsed" id="wish_' + wish_object.ID + '_note" title="Note">'
+    if(wish_object.image) {
+        html += '<div class="wish-note expanded" style="display: flex !important;" id="wish_' + wish_object.ID + '_note" title="Note">'
+    } else {
+        html += '<div class="wish-note collapsed" id="wish_' + wish_object.ID + '_note" title="Note">'
+    }
+
+    if(wish_object.image) {
+        html += '<div class="wish-image-thumbnail clickable" onclick="toggle_wish_modal(' + wish_object.ID + ')">';
+        html += '<img style="width: 100%; height: 100%;" class="wish-image-thumbnail-img" id="wish-image-thumbnail-img-' + wish_object.ID  + '" src="/assets/loading.gif">'
+        html += '</div>'
+
+        wish_with_image = true
+    }
+
+    html += '<div class="wish-note-text">'
     html += wish_object.note
     html += '</div>'
 
     html += '</div>'
 
-    return html;
+    html += '</div>'
+
+    return [html, wish_with_image];
 
 }
 
@@ -367,7 +401,7 @@ function toggle_wish(wishid) {
     if(wishnote.classList.contains("collapsed")) {
         wishnote.classList.remove("collapsed")
         wishnote.classList.add("expanded")
-        wishnote.style.display = "inline-block"
+        wishnote.style.display = "flex"
         wishnotearrow.src = "../../assets/chevron-down.svg"
     } else {
         wishnote.classList.remove("expanded")
@@ -888,8 +922,16 @@ function update_wish_two(form_data, wish_id, user_id, wishlist_id, group_id) {
             } else {
 
                 success(result.message);
-                var wish_html = generate_wish_html(result.wish, wishlist_id, group_id, user_id);
+
+                var wish_array = generate_wish_html(result.wish, wishlist_id, group_id, user_id);
+                var wish_html = wish_array[0];
+                var wish_image = wish_array[1];
+
                 document.getElementById("wish_wrapper_" + wish_id).outerHTML = wish_html;
+
+                if(wish_image) {
+                    GetWishImageThumbail(result.wish.ID)
+                }
 
             }
 
@@ -926,8 +968,15 @@ function cancel_edit_wish(wish_id, wishlist_id, group_id, user_id) {
 
             } else {
 
-                var wish_html = generate_wish_html(result.wish, wishlist_id, group_id, user_id);
+                var wish_array = generate_wish_html(result.wish, wishlist_id, group_id, user_id);
+                var wish_html = wish_array[0];
+                var wish_image = wish_array[1];
+
                 document.getElementById("wish_wrapper_" + wish_id).outerHTML = wish_html;
+
+                if(wish_image) {
+                    GetWishImageThumbail(result.wish.ID)
+                }
 
             }
 
@@ -1032,5 +1081,49 @@ function GetWishImage(wishID) {
 function PlaceWishImageInModal(imageBase64) {
 
     document.getElementById("modal-img").src = imageBase64
+
+}
+
+function GetWishImageThumbail(wishID) {
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                PlaceWishImageThumbail(result.image, wishID)
+                
+            }
+
+        } else {
+            // info("Loading week...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wish/" + wishID + "/image?thumbnail=true");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+
+    return;
+
+}
+
+function PlaceWishImageThumbail(imageBase64, wishID) {
+
+    document.getElementById("wish-image-thumbnail-img-" + wishID).src = imageBase64
 
 }
