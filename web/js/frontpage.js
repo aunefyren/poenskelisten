@@ -47,7 +47,7 @@ function load_page(result) {
                             <br>
                             <br>
 
-                            Welcome to the front page. Use to navigation bar and head to 'Wishlists' to manage your wishlists. Head to 'Groups' to manage and view wishlists in groups.
+                            Welcome to the front page. Use to navigation bar and head to <a href="/wishlists">Wishlists</a> to manage your wishlists. Head to <a href="/groups">Groups</a> to manage and view wishlists in groups.
                         </div>
 
                         <div id="log-in-button" style="margin-top: 2em; display: none; width: 10em;">

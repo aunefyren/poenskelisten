@@ -195,7 +195,7 @@ function place_invites(invites_array) {
                         <div class="leaderboard-object-user">
                             Not used
                         </div>
-                        <img class="icon-img clickable color-invert" onclick="delete_invite(` + invites_array[i].ID + `)" src="../../assets/trash-2.svg"></img>
+                        <img class="icon-img clickable color-invert" onclick="delete_invite(` + invites_array[i].ID + `)" src="/assets/trash-2.svg"></img>
                     `;
             }
 

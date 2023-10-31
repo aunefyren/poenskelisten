@@ -10,6 +10,7 @@ import (
 	"aunefyren/poenskelisten/utilities"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -27,8 +28,8 @@ import (
 )
 
 func main() {
-
 	utilities.PrintASCII()
+	gin.SetMode(gin.ReleaseMode)
 
 	// Create files directory
 	newpath := filepath.Join(".", "files")
@@ -41,7 +42,7 @@ func main() {
 	fmt.Println("Directory 'files' valid.")
 
 	// Create and define file for logging
-	Log, err := os.OpenFile("files/poenskelisten.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	logFile, err := os.OpenFile("files/poenskelisten.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		fmt.Println("Failed to load log file. Error: " + err.Error())
 
@@ -49,9 +50,23 @@ func main() {
 	}
 
 	// Set log file as log destination
-	log.SetOutput(Log)
-	log.Println("Log file set.")
+	log.SetOutput(logFile)
 	fmt.Println("Log file set.")
+
+	var mw io.Writer
+
+	out := os.Stdout
+	mw = io.MultiWriter(out, logFile)
+
+	// Get pipe reader and writer | writes to pipe writer come out pipe reader
+	_, w, _ := os.Pipe()
+
+	// Replace stdout,stderr with pipe writer | all writes to stdout, stderr will go through pipe instead (log.print, log)
+	os.Stdout = w
+	os.Stderr = w
+
+	// writes with log.Print should also write to mw
+	log.SetOutput(mw)
 
 	// Load config file
 	Config, err := config.GetConfig()

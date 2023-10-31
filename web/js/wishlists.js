@@ -56,12 +56,12 @@ function load_page(result) {
                         <div id="wishlists-box-expired-wrapper" class="wishlist-wrapper wishlist-expired" style="display: none;">
                             <div class="wishlist-title">
                                 <div class="profile-icon">
-                                    <img class="icon-img color-invert" src="../assets/list.svg">
+                                    <img class="icon-img color-invert" src="/assets/list.svg">
                                 </div>
                                 Expired wishlists
                             </div>
                             <div class="profile-icon clickable" onclick="toggle_expired_wishlists()" title="Expandable">
-                                <img id="wishlist_expired_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">
+                                <img id="wishlist_expired_arrow" class="icon-img color-invert" src="/assets/chevron-right.svg">
                             </div>
                             <div id="wishlists-box-expired" class="wishlists collapsed" style="display:none;">
                             </div>
@@ -186,17 +186,17 @@ function place_wishlists(wishlists_array, user_id) {
         
         html += '<div class="wishlist-title clickable" onclick="location.href = \'./wishlists/' + wishlists_array[i].ID + '\'" title="Go to wishlist">'
         html += '<div class="profile-icon">'
-        html += '<img class="icon-img color-invert" src="../assets/list.svg">'
-        html += '</div>'
+        html += '<img class="icon-img color-invert" src="/assets/list.svg">'
+        html += '</div><b>'
         html += wishlists_array[i].name
-        html += '</div>'
+        html += '</div></b>'
 
         html += '<div class="profile" title="Wishlist owner">'
         html += '<div class="profile-name">'
         html += wishlists_array[i].owner.first_name + " " + wishlists_array[i].owner.last_name
         html += '</div>'
-        html += '<div class="profile-icon">'
-        html += '<img class="icon-img color-invert" src="../assets/user.svg">'
+        html += `<div class="profile-icon" id="wishlist_owner_image_${owner_id}_${wishlists_array[i].ID}">`
+        html += `<img class="icon-img color-invert" src="/assets/user.svg" id="wishlist_owner_image_img_${owner_id}_${wishlists_array[i].ID}">`
         html += '</div>'
 
         var members_string="["
@@ -213,13 +213,13 @@ function place_wishlists(wishlists_array, user_id) {
 
         if(owner_id == user_id) {
             html += '<div class="profile-icon clickable" onclick="toggle_wishlist(' + user_id + ', ' + wishlists_array[i].ID + ', ' + owner_id + ', ' + members_string + ')" title="Expandable">'
-            html += '<img id="wishlist_' + wishlists_array[i].ID + '_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">'
+            html += '<img id="wishlist_' + wishlists_array[i].ID + '_arrow" class="icon-img color-invert" src="/assets/chevron-right.svg">'
             html += '</div>'
         }
 
         if(owner_id == user_id) {
             html += '<div class="profile-icon clickable" onclick="delete_wishlist(' + wishlists_array[i].ID + ', ' + user_id + ')" title="Delete wishlist">'
-            html += '<img class="icon-img color-invert" src="../../assets/trash-2.svg">'
+            html += '<img class="icon-img color-invert" src="/assets/trash-2.svg">'
             html += '</div>'
         }
 
@@ -238,7 +238,7 @@ function place_wishlists(wishlists_array, user_id) {
             html += '<div class="group-title">';
 
             html += '<div class="profile-icon">'
-            html += '<img class="icon-img color-invert" src="../assets/users.svg">'
+            html += '<img class="icon-img color-invert" src="/assets/users.svg">'
             html += '</div>'
 
             html += wishlists_array[i].members[j].name
@@ -247,7 +247,7 @@ function place_wishlists(wishlists_array, user_id) {
 
             if(owner_id == user_id) {
                 html += '<div class="profile-icon clickable" onclick="remove_member(' + wishlists_array[i].ID + ',' + wishlists_array[i].members[j].ID + ', ' + user_id +')" title="Remove wishlist from group">'
-                html += '<img class="icon-img color-invert" src="../../assets/x.svg">'
+                html += '<img class="icon-img color-invert" src="/assets/x.svg">'
                 html += '</div>'
             }
             html += '</div>'
@@ -289,6 +289,10 @@ function place_wishlists(wishlists_array, user_id) {
 
     wishlist_object_expired = document.getElementById("wishlists-box-expired")
     wishlist_object_expired.innerHTML = html_expired
+
+    for(var i = 0; i < wishlists_array.length; i++) {
+        GetProfileImage(wishlists_array[i].owner.ID, `wishlist_owner_image_${owner_id}_${wishlists_array[i].ID}`)
+    }
 }
 
 function create_wishlist(user_id) {
@@ -416,7 +420,7 @@ function toggle_wishlist(user_id, wishlist_id, owner_id, member_array) {
         wishlist_members.classList.remove("collapsed")
         wishlist_members.classList.add("expanded")
         wishlist_members.style.display = "inline-block"
-        wishlist_members_arrow.src = "../../assets/chevron-down.svg"
+        wishlist_members_arrow.src = "/assets/chevron-down.svg"
 
         if(user_id == owner_id) {
             get_groups(owner_id, wishlist_id, user_id, member_array)
@@ -425,7 +429,7 @@ function toggle_wishlist(user_id, wishlist_id, owner_id, member_array) {
         wishlist_members.classList.remove("expanded")
         wishlist_members.classList.add("collapsed")
         wishlist_members.style.display = "none"
-        wishlist_members_arrow.src = "../../assets/chevron-right.svg"
+        wishlist_members_arrow.src = "/assets/chevron-right.svg"
 
         if(user_id == owner_id) {
             var select_list = document.getElementById("wishlist-input-members-" + wishlist_id)
@@ -451,12 +455,12 @@ function toggle_expired_wishlists() {
         wishlist_expired.classList.remove("collapsed")
         wishlist_expired.classList.add("expanded")
         wishlist_expired.style.display = "inline-block"
-        wishlist_expired_arrow.src = "../../assets/chevron-down.svg"
+        wishlist_expired_arrow.src = "/assets/chevron-down.svg"
     } else {
         wishlist_expired.classList.remove("expanded")
         wishlist_expired.classList.add("collapsed")
         wishlist_expired.style.display = "none"
-        wishlist_expired_arrow.src = "../../assets/chevron-right.svg"
+        wishlist_expired_arrow.src = "/assets/chevron-right.svg"
     }
 }
 
@@ -638,5 +642,52 @@ function remove_member(wishlist_id, group_id, user_id) {
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
     return false;
+
+}
+
+function GetProfileImage(userID, divID) {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                if(!result.default) {
+                    PlaceProfileImage(result.image, divID)
+                }
+                
+            }
+
+        } else {
+            // info("Loading week...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/user/get/" + userID + "/image?thumbnail=true");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+
+    return;
+}
+
+function PlaceProfileImage(imageBase64, divID) {
+
+    var image = document.getElementById(divID)
+    image.style.backgroundSize = "cover"
+    image.innerHTML = ""
+    image.style.backgroundImage = `url('${imageBase64}')`
 
 }

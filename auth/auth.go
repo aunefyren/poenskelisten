@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var jwtKey = []byte("supersecretkey")
@@ -16,7 +16,7 @@ type JWTClaim struct {
 	Admin     bool   `json:"admin"`
 	Verified  bool   `json:"verified"`
 	UserID    int    `json:"id"`
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 }
 
 func SetPrivateKey(PrivateKey string) error {
@@ -37,8 +37,11 @@ func GenerateJWT(firstname string, lastname string, email string, userid int, ad
 		Admin:     admin,
 		UserID:    userid,
 		Verified:  verified,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: expirationTime.Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "Pønskelisten",
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -61,9 +64,17 @@ func ValidateToken(signedToken string, admin bool) (err error) {
 	if !ok {
 		err = errors.New("Couldn't parse claims.")
 		return
+	} else if claims.ExpiresAt == nil || claims.NotBefore == nil {
+		err = errors.New("Claims not present.")
+		return
 	}
-	if claims.ExpiresAt < time.Now().Local().Unix() {
-		err = errors.New("Token expired.")
+	now := time.Now()
+	if claims.ExpiresAt.Time.Before(now) {
+		err = errors.New("Token has expired.")
+		return
+	}
+	if claims.NotBefore.Time.After(now) {
+		err = errors.New("Token has not begun.")
 		return
 	}
 	if admin && !claims.Admin {
@@ -87,10 +98,6 @@ func ParseToken(signedToken string) (*JWTClaim, error) {
 	claims, ok := token.Claims.(*JWTClaim)
 	if !ok {
 		err = errors.New("couldn't parse claims")
-		return nil, err
-	}
-	if claims.ExpiresAt < time.Now().Local().Unix() {
-		err = errors.New("token expired")
 		return nil, err
 	}
 	return claims, nil

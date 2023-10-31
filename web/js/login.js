@@ -229,7 +229,7 @@ function send_log_in(){
                 clear_data();
                 disable_login_button();
 
-                window.location.href = '../../';
+                window.location.href = '/';
 
             }
 
