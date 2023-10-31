@@ -55,8 +55,8 @@ function load_page(result) {
                             <div class="text-body" id="group-info">
                             </div>
 
-                            <div class="bottom-right-button" id="edit-group" style="display: none;" onclick="group_edit(${user_id}, ${group_id});" title="Edit group">
-                                <img class="icon-img color-invert clickable" src="../assets/edit.svg">
+                            <div class="bottom-right-button" id="edit-group" style="display: none;">
+                                <img class="icon-img color-invert clickable" src="/assets/edit.svg" onclick="group_edit(${user_id}, ${group_id});" title="Edit group">
                             </div>
 
                         </div>
@@ -75,12 +75,12 @@ function load_page(result) {
                         <div id="wishlists-box-expired-wrapper" class="wishlist-wrapper wishlist-expired" style="display: none;">
                             <div class="wishlist-title">
                                 <div class="profile-icon">
-                                    <img class="icon-img color-invert" src="../assets/list.svg">
+                                    <img class="icon-img color-invert" src="/assets/list.svg">
                                 </div>
                                 Expired wishlists
                             </div>
                             <div class="profile-icon clickable" onclick="toggle_expired_wishlists()" title="Expandable">
-                                <img id="wishlist_expired_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">
+                                <img id="wishlist_expired_arrow" class="icon-img color-invert" src="/assets/chevron-right.svg">
                             </div>
                             <div id="wishlists-box-expired" class="wishlists collapsed" style="display:none;">
                             </div>
@@ -245,23 +245,23 @@ function place_wishlists(wishlists_array, group_id, user_id) {
         html += '<div class="wishlist hoverable-light">'
         
         html += '<div class="wishlist-title clickable" onclick="location.href = \'../wishlists/'+ wishlists_array[i].ID + '\'" title="Go to wishlist">'
-        html += '<div class="profile-icon">'
-        html += '<img class="icon-img color-invert" src="../assets/list.svg">'
+        html += `<div class="profile-icon">`
+        html += '<img class="icon-img color-invert" src="/assets/list.svg">'
         html += '</div>'
         html += wishlists_array[i].name
         html += '</div>'
 
         html += '<div class="profile" title="Wishlist owner">'
-        html += '<div class="profile-name">'
+        html += `<div class="profile-name">`
         html += wishlists_array[i].owner.first_name + " " + wishlists_array[i].owner.last_name
         html += '</div>'
-        html += '<div class="profile-icon">'
-        html += '<img class="icon-img color-invert" src="../assets/user.svg">'
+        html += `<div class="profile-icon" id="group_owner_image_${wishlists_array[i].owner.ID}_${wishlists_array[i].ID}">`
+        html += '<img class="icon-img color-invert" src="/assets/user.svg">'
         html += '</div>'
 
         if(wishlists_array[i].owner.ID == user_id) {
             html += '<div class="profile-icon clickable" onclick="delete_wishlist(' + wishlists_array[i].ID + ', ' + group_id + ', ' + user_id + ')" title="Delete wishlist">'
-            html += '<img class="icon-img color-invert" src="../../assets/trash-2.svg">'
+            html += '<img class="icon-img color-invert" src="/assets/trash-2.svg">'
             html += '</div>'
         }
 
@@ -295,6 +295,9 @@ function place_wishlists(wishlists_array, group_id, user_id) {
     wishlist_object_expired = document.getElementById("wishlists-box-expired")
     wishlist_object_expired.innerHTML = html_expired
 
+    for(var i = 0; i < wishlists_array.length; i++) {
+        GetProfileImage(wishlists_array[i].owner.ID, `group_owner_image_${wishlists_array[i].owner.ID}_${wishlists_array[i].ID}`)
+    }
 }
 
 function create_wishlist(group_id, user_id) {
@@ -427,12 +430,12 @@ function toggle_expired_wishlists() {
         wishlist_expired.classList.remove("collapsed")
         wishlist_expired.classList.add("expanded")
         wishlist_expired.style.display = "inline-block"
-        wishlist_expired_arrow.src = "../../assets/chevron-down.svg"
+        wishlist_expired_arrow.src = "/assets/chevron-down.svg"
     } else {
         wishlist_expired.classList.remove("expanded")
         wishlist_expired.classList.add("collapsed")
         wishlist_expired.style.display = "none"
-        wishlist_expired_arrow.src = "../../assets/chevron-right.svg"
+        wishlist_expired_arrow.src = "/assets/chevron-right.svg"
     }
 }
 
@@ -447,8 +450,8 @@ function reset_group_info_box(user_id, group_id) {
     <div class="text-body" id="group-info">
     </div>
 
-    <div class="bottom-right-button" id="edit-group" style="display: none;" onclick="group_edit(${user_id}, ${group_id});">
-        <img class="icon-img color-invert clickable" src="../assets/edit.svg">
+    <div class="bottom-right-button" id="edit-group" style="display: none;">
+        <img class="icon-img color-invert clickable" src="/assets/edit.svg" onclick="group_edit(${user_id}, ${group_id});">
     </div>
     `;
 
@@ -469,7 +472,7 @@ function group_edit(user_id, group_id) {
 
     html += `
         <div class="bottom-right-button" id="edit-group" style="" onclick="cancel_edit_group(${group_id}, ${user_id});" title="Cancel edit">
-            <img class="icon-img color-invert clickable" style="" src="../assets/x.svg">
+            <img class="icon-img color-invert clickable" style="" src="/assets/x.svg">
         </div>
 
         <form action="" onsubmit="event.preventDefault(); update_group(${group_id}, ` + user_id + `);">
@@ -578,4 +581,51 @@ function cancel_edit_group(group_id, user_id){
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
     return false;
+}
+
+function GetProfileImage(userID, divID) {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                if(!result.default) {
+                    PlaceProfileImage(result.image, divID)
+                }
+                
+            }
+
+        } else {
+            // info("Loading week...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/user/get/" + userID + "/image?thumbnail=true");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+
+    return;
+}
+
+function PlaceProfileImage(imageBase64, divID) {
+
+    var image = document.getElementById(divID)
+    image.style.backgroundSize = "cover"
+    image.innerHTML = ""
+    image.style.backgroundImage = `url('${imageBase64}')`
+
 }

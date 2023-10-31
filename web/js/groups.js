@@ -152,9 +152,9 @@ function place_groups(group_array, user_id) {
 
         html += '<div class="group">'
         
-        html += '<div class="group-title clickable" onclick="location.href = \'./groups/' + group_array[i].ID + '\'" title="Go to group">'
+        html += '<div class="group-title clickable" style="margin: auto;" onclick="location.href = \'./groups/' + group_array[i].ID + '\'" title="Go to group">'
         html += '<div class="profile-icon">'
-        html += '<img class="icon-img color-invert" src="../assets/users.svg">'
+        html += '<img class="icon-img color-invert" src="/assets/users.svg">'
         html += '</div>'
         html += group_array[i].name
         html += '</div>'
@@ -172,13 +172,13 @@ function place_groups(group_array, user_id) {
 
         if(group_array[i].members.length > 0) {
             html += '<div class="profile-icon clickable" onclick="toggle_group(' + group_array[i].ID + ', ' + group_array[i].owner.ID + ', ' + user_id + ', ' + members_string + ')" title="Expandable">'
-            html += '<img id="group_' + group_array[i].ID + '_arrow" class="icon-img color-invert" src="../../assets/chevron-right.svg">'
+            html += '<img id="group_' + group_array[i].ID + '_arrow" class="icon-img color-invert" src="/assets/chevron-right.svg">'
             html += '</div>'
         }
 
         if(owner_id == user_id) {
             html += '<div class="profile-icon clickable" onclick="delete_group(' + group_array[i].ID + ', ' + user_id + ')" title="Delete group">'
-            html += '<img class="icon-img color-invert" src="../../assets/trash-2.svg">'
+            html += '<img class="icon-img color-invert" src="/assets/trash-2.svg">'
             html += '</div>'
         }
 
@@ -195,8 +195,8 @@ function place_groups(group_array, user_id) {
 
             html += '<div class="group-title">';
 
-            html += '<div class="profile-icon">'
-            html += '<img class="icon-img color-invert" src="../assets/user.svg">'
+            html += `<div class="profile-icon" id="group_member_image_${group_array[i].members[j].ID}_${group_array[i].ID}">`
+            html += '<img class="icon-img color-invert" src="/assets/user.svg">'
             html += '</div>'
 
             html += group_array[i].members[j].first_name + " " + group_array[i].members[j].last_name
@@ -205,15 +205,15 @@ function place_groups(group_array, user_id) {
 
             if(owner_id == user_id && group_array[i].members[j].ID !== user_id) {
                 html += '<div class="profile-icon clickable" onclick="remove_member(' + group_array[i].ID + ',' + group_array[i].members[j].ID + ', ' + user_id +')" title="Remove member">'
-                html += '<img class="icon-img color-invert" src="../../assets/x.svg">'
+                html += '<img class="icon-img color-invert" src="/assets/x.svg">'
                 html += '</div>'
             } else if(group_array[i].members[j].ID == user_id && owner_id !== user_id){
                 html += '<div class="profile-icon clickable" onclick="leave_group(' + group_array[i].ID + ',' + user_id +')" title="Leave group">'
-                html += '<img class="icon-img color-invert" src="../../assets/log-out.svg">'
+                html += '<img class="icon-img color-invert" src="/assets/log-out.svg">'
                 html += '</div>'
             } else if(group_array[i].members[j].ID == owner_id) {
                 html += '<div class="profile-icon" title="Group owner">'
-                html += '<img class="icon-img color-invert" src="../../assets/star.svg">'
+                html += '<img class="icon-img color-invert" src="/assets/star.svg">'
                 html += '</div>'
             }
 
@@ -240,6 +240,12 @@ function place_groups(group_array, user_id) {
 
     group_object = document.getElementById("groups-box")
     group_object.innerHTML = html
+
+    for(var i = 0; i < group_array.length; i++) {
+        for(var j = 0; j < group_array[i].members.length; j++) {
+            GetProfileImage(group_array[i].members[j].ID, `group_member_image_${group_array[i].members[j].ID}_${group_array[i].ID}`)
+        }
+    }
 }
 
 function toggle_group(group_id, owner_id, user_id, member_array) {
@@ -253,7 +259,7 @@ function toggle_group(group_id, owner_id, user_id, member_array) {
         group_members.classList.remove("collapsed")
         group_members.classList.add("expanded")
         group_members.style.display = "inline-block"
-        group_members_arrow.src = "../../assets/chevron-down.svg"
+        group_members_arrow.src = "/assets/chevron-down.svg"
 
         if(user_id == owner_id) {
             get_users_group(group_id, owner_id, user_id, member_array)
@@ -262,7 +268,7 @@ function toggle_group(group_id, owner_id, user_id, member_array) {
         group_members.classList.remove("expanded")
         group_members.classList.add("collapsed")
         group_members.style.display = "none"
-        group_members_arrow.src = "../../assets/chevron-right.svg"
+        group_members_arrow.src = "/assets/chevron-right.svg"
 
         if(user_id == owner_id) {
             var select_list = document.getElementById("group-input-members-" + group_id)
@@ -684,5 +690,52 @@ function leave_group(group_id, user_id) {
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
     return false;
+
+}
+
+function GetProfileImage(userID, divID) {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                if(!result.default) {
+                    PlaceProfileImage(result.image, divID)
+                }
+                
+            }
+
+        } else {
+            // info("Loading week...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/user/get/" + userID + "/image?thumbnail=true");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+
+    return;
+}
+
+function PlaceProfileImage(imageBase64, divID) {
+
+    var image = document.getElementById(divID)
+    image.style.backgroundSize = "cover"
+    image.innerHTML = ""
+    image.style.backgroundImage = `url('${imageBase64}')`
 
 }

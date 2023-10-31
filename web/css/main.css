@@ -18,7 +18,7 @@
     color:var(--eggshell);
     text-align:left;
     background-color: var(--mediumblue);
-    /*background-image: url("../assets/pattern.png");*/
+    /*background-image: url("/assets/pattern.png");*/
     background-repeat: repeat;
     font-family: Arial;
     font-weight: normal;
@@ -172,7 +172,7 @@
     }
   }
   
-  .card-body{-webkit-box-flex:1;-ms-flex:1 1 auto;flex:1 1 auto;padding:1.25rem}
+  .card-body{-webkit-box-flex:1;-ms-flex:1 1 auto;flex:1 1 auto;padding:0.75em}
   
   hr{
     margin-top:1rem;
@@ -317,7 +317,7 @@ form {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
-  margin: 1em 0;
+  margin: 0.5em 0;
 }
 
 input[type=text], input[type=password], input[type=email], input[type=date], input[type=number], input[type=file], select {
@@ -413,7 +413,7 @@ button:disabled {
   opacity: 0.5;
 }
 
-.group-title, .wishlist-title, .wish-title {
+.group-title {
   max-width: 50%;
   margin: 0.5em 0;
   display: flex;
@@ -424,9 +424,21 @@ button:disabled {
   align-content: center;
 }
 
-.wish-title, .group-title, .wishlist-title {
-  margin: 0 !important;
-  padding: 0.5em 0 !important;
+.wish-title, .wishlist-title {
+  max-width: 50%;
+  margin: 0.5em auto;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  align-content: center;
+}
+
+.wish-title, .wishlist-title {
+  margin: 0.5em auto !important;
+  padding: 0 !important;
+  font-size: 1em;
 }
 
 .wish, .group, .wishlist {
@@ -441,7 +453,7 @@ button:disabled {
   justify-content: center;;
   align-items: center;
   align-content: center;
-  margin: 0;
+  margin: 0.5em auto;
   padding: 0;
   width: auto;
   max-width: 50%;
@@ -449,12 +461,13 @@ button:disabled {
  .profile-name {
   max-width: 75%;
   margin: 0 0.5em;
+  font-size: 0.75em;
  }
 
 .profile-icon {
   margin: 0 0.5em;
   border-radius: 100%;
-  border: 0.15em solid white;
+  border: 0.125em solid white;
   width: 2em;
   height: 2em;
   display: flex;
@@ -463,6 +476,7 @@ button:disabled {
   justify-content: space-between;
   align-items: center;
   align-content: center;
+  padding: 0.12em;
 }
 
 .icon-img {
@@ -480,7 +494,7 @@ button:disabled {
   justify-content: space-between;
   align-items: center;
   align-content: center;
-  margin: 1.5em 1em;
+  margin: 1.5em 0.5em;
   border: 2px solid var(--eggshell);
   border-radius: 1em;
   background-color: var(--lightblue);
@@ -518,7 +532,7 @@ button:disabled {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
-  margin: 5em 1em 1em 1em;
+  margin: 5em 0.5em 1em 0.5em;
 }
 
 .group-input, .wishlist-input {
@@ -589,7 +603,7 @@ button:disabled {
 .wishlist-info, .group-info {
   border-radius: 1em;
   padding: 1em;
-  margin: 0 1em 2em 1em;
+  margin: 0 0.5em 2em 0.5em;
   background-color: var(--mediumblue);
   border: 2px solid var(--eggshell);
   width: 100%;
@@ -614,7 +628,7 @@ hr {
 }
 
 .news-post {
-  margin: 2em 0;
+  margin: 2em 0.5em;
   padding: 0.5em;
   background-color: var(--mediumblue);
   border: 2px solid var(--eggshell);
@@ -745,7 +759,7 @@ hr {
 
 .wish-image-thumbnail {
   border-radius: 10em;
-  margin: 1em;
+  margin: 0.25em;
   width: 10em;
   height: 10em;
   max-width: 100%;

@@ -35,6 +35,7 @@ func APIGetUserProfileImage(context *gin.Context) {
 	var thumbnail = context.Query("thumbnail")
 	var imageWidth uint
 	var imageHeight uint
+	var defaultImage bool = false
 
 	if thumbnail == "true" {
 		imageWidth = uint(default_max_thumbnail_width)
@@ -76,6 +77,7 @@ func APIGetUserProfileImage(context *gin.Context) {
 			return
 		}
 		resize = false
+		defaultImage = true
 	}
 
 	if resize {
@@ -97,7 +99,7 @@ func APIGetUserProfileImage(context *gin.Context) {
 	}
 
 	// Reply
-	context.JSON(http.StatusOK, gin.H{"image": base64, "message": "Picture retrieved."})
+	context.JSON(http.StatusOK, gin.H{"image": base64, "default": defaultImage, "message": "Picture retrieved."})
 
 }
 
