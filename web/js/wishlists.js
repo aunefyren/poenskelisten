@@ -39,7 +39,7 @@ function load_page(result) {
                         </div>
 
                         <div class="text-body" style="text-align: center;">
-                            These are your wishlists. You can add different wishlists to different groups, allowing others to see your wishes. At the bottom of this page you can create a new wishlist. Make sure to add it to a group afterward.
+                            These are wishlists where you are an owner or collaborator. You can add different wishlists to different groups, allowing others to see your wishes. At the bottom of this page you can create a new wishlist. Make sure to add it to a group afterward.
                         </div>
 
                     </div>
@@ -54,7 +54,7 @@ function load_page(result) {
                         </div>
 
                         <div id="wishlists-box-expired-wrapper" class="wishlist-wrapper wishlist-expired" style="display: none;">
-                            <div class="wishlist-title">
+                            <div class="wishlist-title" style="margin: 0.5em 0 !important;">
                                 <div class="profile-icon">
                                     <img class="icon-img color-invert" src="/assets/list.svg">
                                 </div>
@@ -75,6 +75,9 @@ function load_page(result) {
                                 <input type="text" name="wishlist_name" id="wishlist_name" placeholder="Wishlist name" autocomplete="off" required />
                                 
                                 <input type="text" name="wishlist_description" id="wishlist_description" placeholder="Wishlist description" autocomplete="off" required />
+
+                                <input class="clickable" onclick="" style="margin-top: 2em;" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" checked>
+                                <label for="wishlist_expires" style="margin-bottom: 2em;" class="clickable">Does the wishlist expire?</label><br>
 
                                 <label for="wishlist_date">When does your wishlist expire?</label><br>
                                 <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" autocomplete="off" required />
@@ -164,7 +167,7 @@ function place_wishlists(wishlists_array, user_id) {
             var expiration = new Date(Date.parse(wishlists_array[i].date));
             var now = new Date
             console.log("Times: " + expiration.toISOString() + " & " + now.toISOString())
-            if(expiration.getTime() < now.getTime()) {
+            if(expiration.getTime() < now.getTime() && wishlists_array[i].expires) {
                 console.log("Expired wishlist.")
                 expired = true;
                 wishlists_array_length -= 1
@@ -199,7 +202,7 @@ function place_wishlists(wishlists_array, user_id) {
         html += `<img class="icon-img color-invert" src="/assets/user.svg" id="wishlist_owner_image_img_${owner_id}_${wishlists_array[i].ID}">`
         html += '</div>'
 
-        var members_string="["
+        var members_string="["  
         for(var j = 0; j < wishlists_array[i].members.length; j++) {
             if(j !== 0) {
                 members_string += ','
@@ -211,8 +214,20 @@ function place_wishlists(wishlists_array, user_id) {
         }
         members_string += ']'
 
+        var collaboratorsString="["
+        for(var j = 0; j < wishlists_array[i].collaborators.length; j++) {
+            if(j !== 0) {
+                collaboratorsString += ','
+            }
+            collaboratorsString += wishlists_array[i].collaborators[j].user.ID
+            
+            console.log(wishlists_array[i].ID + " " + wishlists_array[i].collaborators[j].user.ID)
+            console.log(wishlists_array[i].collaborators)
+        }
+        collaboratorsString += ']'
+
         if(owner_id == user_id) {
-            html += '<div class="profile-icon clickable" onclick="toggle_wishlist(' + user_id + ', ' + wishlists_array[i].ID + ', ' + owner_id + ', ' + members_string + ')" title="Expandable">'
+            html += '<div class="profile-icon clickable" onclick="toggle_wishlist(' + user_id + ', ' + wishlists_array[i].ID + ', ' + owner_id + ', ' + members_string + ', ' + collaboratorsString + ')" title="Expandable">'
             html += '<img id="wishlist_' + wishlists_array[i].ID + '_arrow" class="icon-img color-invert" src="/assets/chevron-right.svg">'
             html += '</div>'
         }
@@ -255,12 +270,49 @@ function place_wishlists(wishlists_array, user_id) {
 
         if(owner_id == user_id) {
             html += '<form action="" onsubmit="event.preventDefault(); add_groups(' + wishlists_array[i].ID + ', ' + user_id + ');">';
-            html += '<label for="wishlist-input-members-' + wishlists_array[i].ID + '">Select groups:</label><br>';
+            html += '<label for="wishlist-input-members-' + wishlists_array[i].ID + '">Add to groups:</label><br>';
             html += '<select name="wishlist_members_' + wishlists_array[i].ID + '" id="wishlist-input-members-' + wishlists_array[i].ID + '" multiple>';
             html += '</select>';
             html += '<button id="register-button" type="submit" href="/">Add wishlist to groups</button>';
             html += '</form>';
         }
+
+        html += '<hr>'
+
+        for(var j = 0; j < wishlists_array[i].collaborators.length; j++) {
+            if(j == 0) {
+                html += '<div class="text-body">Wishlist collaborators:</div>'
+            }
+
+            html += '<div class="group-member hoverable-dark" title="User">'
+
+            html += '<div class="group-title">';
+
+            html += `<div class="profile-icon" id="wishlist_${wishlists_array[i].ID}_collaborator_${wishlists_array[i].collaborators[j].user.ID}">`
+            html += '<img class="icon-img color-invert" src="/assets/user.svg">'
+            html += '</div>'
+
+            html += `${wishlists_array[i].collaborators[j].user.first_name} ${wishlists_array[i].collaborators[j].user.last_name}`
+
+            html += '</div>'
+
+            if(owner_id == user_id) {
+                html += '<div class="profile-icon clickable" onclick="removeCollaborator(' + wishlists_array[i].ID + ',' + wishlists_array[i].collaborators[j].user.ID + ', ' + user_id +')" title="Remove collaborator from wishlist">'
+                html += '<img class="icon-img color-invert" src="/assets/x.svg">'
+                html += '</div>'
+            }
+            html += '</div>'
+        }
+
+        if(owner_id == user_id) {
+            html += '<form action="" onsubmit="event.preventDefault(); addCollaborators(' + wishlists_array[i].ID + ', ' + user_id + ');">';
+            html += '<label for="wishlist-input-collaborators-' + wishlists_array[i].ID + '">Add users to wishlist as collaborators:</label><br>';
+            html += '<select name="wishlist_collaborators_' + wishlists_array[i].ID + '" id="wishlist-input-collaborators-' + wishlists_array[i].ID + '" multiple>';
+            html += '</select>';
+            html += '<button id="register-collaborators-button" type="submit" href="/">Add collaborators to wishlist</button>';
+            html += '</form>';
+        }
+
         html += '</div>'
 
         html += '</div>'
@@ -291,7 +343,12 @@ function place_wishlists(wishlists_array, user_id) {
     wishlist_object_expired.innerHTML = html_expired
 
     for(var i = 0; i < wishlists_array.length; i++) {
-        GetProfileImage(wishlists_array[i].owner.ID, `wishlist_owner_image_${owner_id}_${wishlists_array[i].ID}`)
+        GetProfileImage(wishlists_array[i].owner.ID, `wishlist_owner_image_${wishlists_array[i].owner.ID}_${wishlists_array[i].ID}`)
+    }
+    for(var i = 0; i < wishlists_array.length; i++) {
+        for(var j = 0; j < wishlists_array[i].collaborators.length; j++) {
+            GetProfileImage(wishlists_array[i].collaborators[j].user.ID, `wishlist_${wishlists_array[i].ID}_collaborator_${wishlists_array[i].collaborators[j].user.ID}`)
+        }
     }
 }
 
@@ -303,13 +360,15 @@ function create_wishlist(user_id) {
     var wishlist_date_object = new Date(wishlist_date)
     var wishlist_date_string = wishlist_date_object.toISOString();
     var wishlist_claimable = document.getElementById("wishlist_claimable").checked;
+    var wishlist_expires = document.getElementById("wishlist_expires").checked;
 
     var form_obj = { 
-                                    "name" : wishlist_name,
-                                    "description" : wishlist_description,
-                                    "date": wishlist_date_string,
-                                    "claimable": wishlist_claimable
-                                };
+        "name" : wishlist_name,
+        "description" : wishlist_description,
+        "date": wishlist_date_string,
+        "claimable": wishlist_claimable,
+        "expires": wishlist_expires
+    };
 
     var form_data = JSON.stringify(form_obj);
 
@@ -410,7 +469,7 @@ function delete_wishlist(wishlist_id, user_id) {
 
 }
 
-function toggle_wishlist(user_id, wishlist_id, owner_id, member_array) {
+function toggle_wishlist(user_id, wishlist_id, owner_id, member_array, collaboratorArray) {
     wishlist_members = document.getElementById("wishlist_" + wishlist_id + "_members");
     wishlist_members_arrow = document.getElementById("wishlist_" + wishlist_id + "_arrow");
 
@@ -424,6 +483,9 @@ function toggle_wishlist(user_id, wishlist_id, owner_id, member_array) {
 
         if(user_id == owner_id) {
             get_groups(owner_id, wishlist_id, user_id, member_array)
+        }
+        if(user_id == owner_id) {
+            getCollaborators(owner_id, wishlist_id, user_id, collaboratorArray)
         }
     } else {
         wishlist_members.classList.remove("expanded")
@@ -685,9 +747,191 @@ function GetProfileImage(userID, divID) {
 
 function PlaceProfileImage(imageBase64, divID) {
 
-    var image = document.getElementById(divID)
-    image.style.backgroundSize = "cover"
-    image.innerHTML = ""
-    image.style.backgroundImage = `url('${imageBase64}')`
+    try {
+        var image = document.getElementById(divID)
+        image.style.backgroundSize = "cover"
+        image.innerHTML = ""
+        image.style.backgroundImage = `url('${imageBase64}')`
+    } catch(e) {
+        console.log("Failed to place image at div ID: " + divID)
+        console.log("Error: " + e)
+    }
+}
+
+function getCollaborators(owner_id, wishlist_id, user_id, collaboratorArray){
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                clearResponse();
+                users = result.users;
+                console.log(users);
+                placeCollaborators(users, wishlist_id, owner_id, user_id, collaboratorArray);
+
+            }
+
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/user/get");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+}
+
+function placeCollaborators(userArray, wishlist_id, owner_id, user_id, collaboratorArray) {
+    var select_list = document.getElementById("wishlist-input-collaborators-" + wishlist_id)
+
+    console.log(userArray)
+
+    for(var i = 0; i < userArray.length; i++) {
+
+        var found = false;
+        for(var j = 0; j < userArray.length; j++) {
+            if(collaboratorArray[j] == userArray[i].ID) {
+                found = true;
+                break;
+            }
+        }
+        if(found || userArray[i].ID == owner_id) {
+            continue;
+        }
+
+        var option = document.createElement("option");
+        option.value = userArray[i].ID
+        option.text = `${userArray[i].first_name} ${userArray[i].last_name}`
+        select_list.add(option, select_list[0]);
+    }
+}
+
+function addCollaborators(wishlist_id, user_id) {
+    var selected_collaborators = [];
+    var select_list = document.getElementById("wishlist-input-collaborators-" + wishlist_id)
+
+    for (var i=0; i < select_list.options.length; i++) {
+        opt = select_list.options[i];
+    
+        if (opt.selected) {
+            selected_collaborators.push(Number(opt.value));
+        }
+    }
+
+    var form_obj = { 
+        "users": selected_collaborators
+    };
+
+    var form_data = JSON.stringify(form_obj);
+
+    console.log(form_data)
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message);
+                console.log(result);
+
+                wishlists = result.wishlists;
+
+                console.log("Placing wishlists after collaborator is added: ")
+                place_wishlists(wishlists, user_id);
+                
+            }
+
+        } else {
+            info("Adding users...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wishlist/" + wishlist_id + "/collaborate");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
+}
+
+function removeCollaborator(wishlist_id, collaborator_id, user_id) {
+
+    if(!confirm("Are you sure you want to remove this collaborator from your wishlist?")) {
+        return;
+    }
+
+    var form_obj = { 
+        "user_id" : collaborator_id
+    };
+
+    var form_data = JSON.stringify(form_obj);
+
+    console.log(form_data)
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message);
+                console.log(result);
+
+                console.log("User ID: " + user_id);
+
+                wishlists = result.wishlists;
+
+                console.log("Placing groups after member is removed: ")
+                place_wishlists(wishlists, user_id);
+                
+            }
+
+        } else {
+            info("Removing member...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wishlist/" + wishlist_id + "/un-collaborate");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
 
 }

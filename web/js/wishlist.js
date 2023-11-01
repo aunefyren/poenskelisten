@@ -62,7 +62,7 @@ function load_page(result) {
                             </div>
 
                             <div class="bottom-right-button" id="edit-wishlist" style="display: none;" title="Edit wishlist">
-                                <img class="icon-img color-invert clickable" src="/assets/edit.svg" onclick="wishlist_edit(${user_id}, ${wishlist_id}, '{wishlist_expiration_date}', {wishlist_claimable});">
+                                <img class="icon-img color-invert clickable" src="/assets/edit.svg" onclick="wishlist_edit(${user_id}, ${wishlist_id}, '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires});">
                             </div>
 
                         </div>
@@ -166,21 +166,29 @@ function place_wishlist(wishlist_object) {
     document.getElementById("wishlist-info").innerHTML += "<br>By: " + wishlist_object.owner.first_name + " " + wishlist_object.owner.last_name
 
     try {
+        
         var expiration = new Date(Date.parse(wishlist_object.date));
         expiration_string = expiration.toLocaleDateString();
-        document.getElementById("wishlist-info").innerHTML += "<br>Expires: " + expiration_string
-        
-        var innerHTML = document.getElementById("wishlist-info-box").innerHTML
-        document.getElementById("wishlist-info-box").innerHTML = innerHTML.replace('{wishlist_expiration_date}', wishlist_object.date)
+
+        if(wishlist_object.expires) {
+            document.getElementById("wishlist-info").innerHTML += "<br>Expires: " + expiration_string
+        } else {
+            document.getElementById("wishlist-info").innerHTML += "<br>Does not expire."
+        }
+
+        var box = document.getElementById("wishlist-info-box")
+
+        document.getElementById("wishlist-info-box").innerHTML = box.innerHTML.replace('{wishlist_expiration_date}', wishlist_object.date)
+        document.getElementById("wishlist-info-box").innerHTML = box.innerHTML.replace('{wishlist_expires}', wishlist_object.expires)
 
         if(wishlist_object.claimable) {
             document.getElementById("wishlist-info").innerHTML += "<br>Wishes are claimable.";
-            innerHTML = document.getElementById("wishlist-info-box").innerHTML
-            document.getElementById("wishlist-info-box").innerHTML = innerHTML.replace('{wishlist_claimable}', "true");
+            box = document.getElementById("wishlist-info-box")
+            document.getElementById("wishlist-info-box").innerHTML = box.innerHTML.replace('{wishlist_claimable}', "true");
         } else {
             document.getElementById("wishlist-info").innerHTML += "<br>Wishes are not claimable.";
-            innerHTML = document.getElementById("wishlist-info-box").innerHTML
-            document.getElementById("wishlist-info-box").innerHTML = innerHTML.replace('{wishlist_claimable}', "false");
+            box = document.getElementById("wishlist-info-box")
+            document.getElementById("wishlist-info-box").innerHTML = box.innerHTML.replace('{wishlist_claimable}', "false");
         }
 
     } catch(err) {
@@ -223,7 +231,14 @@ function get_wishes(wishlist_id, group_id, user_id){
 
                 place_wishes(wishes, wishlist_id, group_id, user_id);
 
-                if(result.owner_id == user_id) {
+                var collaborator = false;
+                for(var i = 0; i < result.collaborators.length; i++) {
+                    if(result.collaborators[i] == user_id) {
+                        collaborator = true;
+                    }
+                }
+
+                if(result.owner_id == user_id || collaborator) {
                     show_owner_inputs();
                 }
 
@@ -281,8 +296,16 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     var wish_with_image = false;
 
     owner_id = wish_object.owner_id.ID
+    
+    var collaborator = false;
+    for(var i = 0; i < wish_object.collaborators.length; i++) {
+        if(wish_object.collaborators[i].user.ID == user_id) {
+            collaborator = true;
+            break;
+        }
+    }
 
-    if(wish_object.wishclaim.length > 0 && user_id != owner_id && wish_object.wish_claimable) {
+    if(wish_object.wishclaim.length > 0 && user_id != owner_id && !collaborator && wish_object.wish_claimable) {
         var transparent = " transparent"
     } else {
         var transparent = ""
@@ -333,7 +356,7 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
         html += '</div>'
     }
 
-    if(user_id == owner_id) {
+    if(user_id == owner_id || collaborator) {
 
         var b64_wish_name = toBASE64(wish_object.name)
         var b64_wish_note = toBASE64(wish_object.note)
@@ -679,7 +702,7 @@ function unclaim_wish(wish_id, wishlist_id, group_id, user_id) {
     return false;
 }
 
-function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date, wishlist_claimable) {
+function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date, wishlist_claimable, wishlist_expires) {
 
     var wishlist_title = document.getElementById("wishlist-title").innerHTML;
     var wishlist_description = document.getElementById("wishlist-description").innerHTML;
@@ -688,6 +711,11 @@ function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date, wishlist_
     var checked_string = ""
     if(wishlist_claimable) {
         checked_string = "checked"
+    }
+
+    var expires_string = ""
+    if(wishlist_expires) {
+        expires_string = "checked"
     }
 
     var html = '';
@@ -703,6 +731,9 @@ function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date, wishlist_
             <input type="text" name="wishlist_name" id="wishlist_name" placeholder="Wishlist name" value="${wishlist_title}" autocomplete="off" required />
             
             <input type="text" name="wishlist_description" id="wishlist_description" placeholder="Wishlist description" value="${wishlist_description}" autocomplete="off" required />
+
+            <input class="clickable" onclick="" style="margin-top: 2em;" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" ${expires_string}>
+            <label for="wishlist_expires" style="margin-bottom: 2em;" class="clickable">Does the wishlist expire?</label><br>
 
             <label for="wishlist_date">When does the wishlist expire?</label><br>
             <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" value="${wishlist_expiration}" autocomplete="off" required />
@@ -731,12 +762,14 @@ function update_wishlist(wishlist_id, user_id) {
     var wishlist_date_object = new Date(wishlist_date)
     var wishlist_date_string = wishlist_date_object.toISOString();
     var wishlist_claimable = document.getElementById("wishlist_claimable").checked;
+    var wishlist_expires = document.getElementById("wishlist_expires").checked;
 
     var form_obj = { 
         "name" : wishlist_name,
         "description" : wishlist_description,
         "date": wishlist_date_string,
-        "claimable": wishlist_claimable
+        "claimable": wishlist_claimable,
+        "expires": wishlist_expires
     };
 
     var form_data = JSON.stringify(form_obj);
@@ -793,7 +826,7 @@ function reset_wishlist_info_box(user_id, wishlist_id) {
     </div>
 
     <div class="bottom-right-button" id="edit-wishlist" style="display: none;">
-        <img class="icon-img color-invert clickable" src="/assets/edit.svg" onclick="wishlist_edit(${user_id}, ${wishlist_id}, '{wishlist_expiration_date}', {wishlist_claimable});">
+        <img class="icon-img color-invert clickable" src="/assets/edit.svg" onclick="wishlist_edit(${user_id}, ${wishlist_id}, '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires});">
     </div>
     `;
 

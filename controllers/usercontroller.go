@@ -349,6 +349,30 @@ func UpdateUser(context *gin.Context) {
 		return
 	}
 
+	// Get user ID
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		context.Abort()
+		return
+	}
+
+	user, err := database.GetAllUserInformation(userID)
+	if err != nil {
+		log.Println("Failed to get user. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
+		context.Abort()
+		return
+	}
+
+	credentialError := user.CheckPassword(userUpdateRequest.PasswordOriginal)
+	if credentialError != nil {
+		log.Println("Invalid credentials")
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
+		context.Abort()
+		return
+	}
+
 	// Make sure password match
 	if userUpdateRequest.Password != "" && userUpdateRequest.Password != userUpdateRequest.PasswordRepeat {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Passwords must match."})
@@ -365,14 +389,6 @@ func UpdateUser(context *gin.Context) {
 		return
 	} else if !valid && userUpdateRequest.Password != "" {
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-		context.Abort()
-		return
-	}
-
-	// Get user ID
-	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
-	if err != nil {
-		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
@@ -442,11 +458,10 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// Get updated user object
-	var user models.User
-	record = database.Instance.Where("ID = ?", userID).First(&user)
-	if record.Error != nil {
-		log.Println("Invalid credentials. Error: " + record.Error.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details."})
+	user, err = database.GetAllUserInformation(userID)
+	if err != nil {
+		log.Println("Failed to get user. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
 		context.Abort()
 		return
 	}

@@ -75,6 +75,7 @@ func Migrate() {
 	Instance.AutoMigrate(&models.GroupMembership{})
 	Instance.AutoMigrate(&models.Wishlist{})
 	Instance.AutoMigrate(&models.WishlistMembership{})
+	Instance.AutoMigrate(&models.WishlistCollaborator{})
 	Instance.AutoMigrate(&models.Wish{})
 	Instance.AutoMigrate(&models.WishClaim{})
 	Instance.AutoMigrate(&models.News{})
@@ -524,7 +525,7 @@ func GetUserMembersFromGroup(GroupID int) ([]models.User, error) {
 	return users, nil
 }
 
-// Get group information from wishlist
+// Get groups who are members of wishlist
 func GetGroupMembersFromWishlist(WishlistID int) ([]models.Group, error) {
 
 	var groups []models.Group
