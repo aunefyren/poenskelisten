@@ -167,7 +167,7 @@ func GetWishlistsByUserIDThroughWishlistCollaborations(UserID int) (wishlists []
 	wishlists = []models.Wishlist{}
 	err = nil
 
-	wishlistRecords := Instance.Order("`wishlists`.date desc, `wishlists`.name").Where("`wishlists`.enabled = ?", 1).Joins("JOIN `wishlist_collaborators` on `wishlists`.id = `wishlist_collaborators`.wishlist").Where("`wishlist_collaborators`.enabled = ?", 1).Joins("JOIN users on wishlist_collaborators.user = users.id").Where("`users`.enabled = ?", 1).Find(&wishlists)
+	wishlistRecords := Instance.Order("`wishlists`.date desc, `wishlists`.name").Where("`wishlists`.enabled = ?", 1).Joins("JOIN `wishlist_collaborators` on `wishlists`.id = `wishlist_collaborators`.wishlist").Where("`wishlist_collaborators`.enabled = ?", 1).Joins("JOIN `users` on `wishlist_collaborators`.user = `users`.id").Where("`users`.enabled = ?", 1).Find(&wishlists)
 
 	if wishlistRecords.Error != nil {
 		return []models.Wishlist{}, wishlistRecords.Error
