@@ -76,7 +76,7 @@ function load_page(result) {
                             <input type="file" name="new_profile_image" id="new_profile_image" placeholder="" value="" accept="image/png, image/jpeg" />
 
                             <label id="form-input-icon" for="password_original"></label>
-                            <input type="password" name="password_original" id="password_original" placeholder="Your current password" />
+                            <input type="password" name="password_original" id="password_original" placeholder="Your current password" required />
 
                             <button id="update-button" style="margin-top: 2em;" type="submit" href="/">Update account</button>
 

@@ -627,5 +627,6 @@ function PlaceProfileImage(imageBase64, divID) {
     image.style.backgroundSize = "cover"
     image.innerHTML = ""
     image.style.backgroundImage = `url('${imageBase64}')`
+    image.style.backgroundPosition = "center center"
 
 }
