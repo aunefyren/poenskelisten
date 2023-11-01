@@ -31,10 +31,11 @@ type UserCreationRequest struct {
 }
 
 type UserUpdateRequest struct {
-	Email          string `json:"email"`
-	Password       string `json:"password"`
-	PasswordRepeat string `json:"password_repeat"`
-	ProfileImage   string `json:"profile_image"`
+	Email            string `json:"email"`
+	Password         string `json:"password"`
+	PasswordRepeat   string `json:"password_repeat"`
+	ProfileImage     string `json:"profile_image"`
+	PasswordOriginal string `json:"password_original"`
 }
 
 type UserUpdatePasswordRequest struct {

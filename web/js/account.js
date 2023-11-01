@@ -75,6 +75,9 @@ function load_page(result) {
                             <label id="form-input-icon" for="new_profile_image" style="margin-top: 2em;">Replace profile image:</label>
                             <input type="file" name="new_profile_image" id="new_profile_image" placeholder="" value="" accept="image/png, image/jpeg" />
 
+                            <label id="form-input-icon" for="password_original"></label>
+                            <input type="password" name="password_original" id="password_original" placeholder="Your current password" />
+
                             <button id="update-button" style="margin-top: 2em;" type="submit" href="/">Update account</button>
 
                         </form>
@@ -115,6 +118,7 @@ function send_update() {
     var email = document.getElementById("email").value;
     var password = document.getElementById("password").value;
     var password_repeat = document.getElementById("password_repeat").value;
+    var password_original = document.getElementById("password_original").value;
     var new_profile_image = document.getElementById('new_profile_image').files[0];
 
     if(new_profile_image) {
@@ -135,7 +139,8 @@ function send_update() {
                 "email" : email,
                 "password" : password,
                 "password_repeat": password_repeat,
-                "profile_image": result
+                "profile_image": result,
+                "password_original": password_original
             };
 
             var form_data = JSON.stringify(form_obj);
@@ -152,6 +157,7 @@ function send_update() {
                             "email" : email,
                             "password" : password,
                             "password_repeat": password_repeat,
+                            "password_original": password_original,
                             "profile_image": ""
                         };
 

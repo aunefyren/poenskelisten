@@ -33,16 +33,17 @@ type WishUpdateRequest struct {
 
 type WishObject struct {
 	gorm.Model
-	Name          string            `json:"name"`
-	Note          string            `json:"note"`
-	Price         float64           `json:"price"`
-	Enabled       bool              `json:"enabled"`
-	Owner         User              `json:"owner_id"`
-	URL           string            `json:"url"`
-	Image         bool              `json:"image"`
-	WishlistID    int               `json:"wishlist_id"`
-	WishClaim     []WishClaimObject `json:"wishclaim"`
-	WishClaimable bool              `json:"wish_claimable"`
+	Name          string                       `json:"name"`
+	Note          string                       `json:"note"`
+	Price         float64                      `json:"price"`
+	Enabled       bool                         `json:"enabled"`
+	Owner         User                         `json:"owner_id"`
+	Collaborators []WishlistCollaboratorObject `json:"collaborators"`
+	URL           string                       `json:"url"`
+	Image         bool                         `json:"image"`
+	WishlistID    int                          `json:"wishlist_id"`
+	WishClaim     []WishClaimObject            `json:"wishclaim"`
+	WishClaimable bool                         `json:"wish_claimable"`
 }
 
 type WishClaim struct {

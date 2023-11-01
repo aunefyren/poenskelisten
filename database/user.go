@@ -9,7 +9,7 @@ import (
 	"github.com/thanhpk/randstr"
 )
 
-// Get user information based on User ID
+// Get redacted user information based on User ID
 func GetUserInformation(UserID int) (models.User, error) {
 	var user models.User
 	userrecord := Instance.Where("`users`.enabled = ?", 1).Where("`users`.id = ?", UserID).Find(&user)
@@ -29,7 +29,7 @@ func GetUserInformation(UserID int) (models.User, error) {
 	return user, nil
 }
 
-// Get user information using email
+// Get redacted user information using email
 func GetUserInformationByEmail(email string) (models.User, error) {
 	var user models.User
 	userrecord := Instance.Where("`users`.enabled = ?", 1).Where("`users`.email = ?", email).Find(&user)

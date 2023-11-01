@@ -72,38 +72,30 @@ func main() {
 	Config, err := config.GetConfig()
 	if err != nil {
 		log.Println("Failed to load configuration file. Error: " + err.Error())
-		fmt.Println("Failed to load configuration file. Error: " + err.Error())
 
 		os.Exit(1)
 	}
 	log.Println("Configuration file loaded.")
-	fmt.Println("Configuration file loaded.")
 
 	// Change the config to respect flags
 	Config, generateInvite, err := parseFlags(Config)
 	if err != nil {
 		log.Println("Failed to parse input flags. Error: " + err.Error())
-		fmt.Println("Failed to parse input flags. Error: " + err.Error())
 
 		os.Exit(1)
 	}
 	log.Println("Flags parsed.")
-	fmt.Println("Flags parsed.")
 
 	// Set time zone from config if it is not empty
 	if Config.Timezone != "" {
 		loc, err := time.LoadLocation(Config.Timezone)
 		if err != nil {
-			fmt.Println("Failed to set time zone from config. Error: " + err.Error())
-			fmt.Println("Removing value...")
-
 			log.Println("Failed to set time zone from config. Error: " + err.Error())
 			log.Println("Removing value...")
 
 			Config.Timezone = ""
 			err = config.SaveConfig(Config)
 			if err != nil {
-				fmt.Println("Failed to set new time zone in the config. Error: " + err.Error())
 				log.Println("Failed to set new time zone in the config. Error: " + err.Error())
 
 				os.Exit(1)
@@ -114,10 +106,8 @@ func main() {
 		}
 	}
 	log.Println("Timezone set.")
-	fmt.Println("Timezone set.")
 
 	if Config.PrivateKey == "" || len(Config.PrivateKey) < 16 {
-		fmt.Println("Creating new private key.")
 		log.Println("Creating new private key.")
 
 		Config.PrivateKey = randstr.Hex(32)
@@ -126,21 +116,17 @@ func main() {
 
 	err = auth.SetPrivateKey(Config.PrivateKey)
 	if Config.PrivateKey == "" || len(Config.PrivateKey) < 16 {
-		fmt.Println("Failed to set private key. Error: " + err.Error())
 		log.Println("Failed to set private key. Error: " + err.Error())
 
 		os.Exit(1)
 	}
 	log.Println("Private key set.")
-	fmt.Println("Private key set.")
 
 	// Initialize Database
-	fmt.Println("Connecting to database...")
 	log.Println("Connecting to database...")
 
 	err = database.Connect(Config.DBType, Config.Timezone, Config.DBUsername, Config.DBPassword, Config.DBIP, Config.DBPort, Config.DBName)
 	if err != nil {
-		fmt.Println("Failed to connect to database. Error: " + err.Error())
 		log.Println("Failed to connect to database. Error: " + err.Error())
 
 		os.Exit(1)
@@ -148,17 +134,14 @@ func main() {
 	database.Migrate()
 
 	log.Println("Database connected.")
-	fmt.Println("Database connected.")
 
 	if generateInvite {
 		invite, err := database.GenrateRandomInvite()
 		if err != nil {
-			fmt.Println("Failed to generate random invitation code. Error: " + err.Error())
 			log.Println("Failed to generate random invitation code. Error: " + err.Error())
 
 			os.Exit(1)
 		}
-		fmt.Println("Generated new invite code. Code: " + invite)
 		log.Println("Generated new invite code. Code: " + invite)
 	}
 
@@ -166,7 +149,6 @@ func main() {
 	router := initRouter()
 
 	log.Println("Router initialized.")
-	fmt.Println("Router initialized.")
 
 	log.Fatal(router.Run(":" + strconv.Itoa(Config.PoenskelistenPort)))
 
@@ -212,7 +194,9 @@ func initRouter() *gin.Engine {
 			auth.POST("/wishlist/get/group/:group_id", controllers.GetWishlistsFromGroup)
 			auth.POST("/wishlist/:wishlist_id/delete", controllers.DeleteWishlist)
 			auth.POST("/wishlist/:wishlist_id/join", controllers.JoinWishlist)
+			auth.POST("/wishlist/:wishlist_id/collaborate", controllers.APICollaborateWishlist)
 			auth.POST("/wishlist/:wishlist_id/remove", controllers.RemoveFromWishlist)
+			auth.POST("/wishlist/:wishlist_id/un-collaborate", controllers.APIUnCollaborateWishlist)
 			auth.POST("/wishlist/:wishlist_id/update", controllers.APIUpdateWishlist)
 			auth.POST("/wishlist/:wishlist_id", controllers.GetWishlist)
 

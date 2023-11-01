@@ -5,6 +5,7 @@ import (
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -507,32 +508,21 @@ func GetGroupObjects(userID int) ([]models.GroupUser, error) {
 
 	// Create groups slice and groups with owner slice
 	var groups []models.Group
-	var groupsWithOwner []models.GroupUser
 
 	// Retrieve groups that the user is a member of
 	groups, err := database.GetGroupsAUserIsAMemberOf(userID)
 	if err != nil {
-		return []models.GroupUser{}, err
+		log.Println("Failed to get groups from database. Error: " + err.Error())
+		return []models.GroupUser{}, errors.New("Failed to get groups from database.")
 	}
 
-	// Add owner information to each group
-	for _, group := range groups {
-		// Retrieve group object with owner
-		groupWithOwner, err := GetGroupObject(userID, int(group.ID))
-		if err != nil {
-			return []models.GroupUser{}, err
-		}
-
-		// Append group with owner to list
-		groupsWithOwner = append(groupsWithOwner, groupWithOwner)
+	groupObjects, err := ConvertGroupsToGroupObjects(groups)
+	if err != nil {
+		log.Println("Failed to convert groups to group objects. Error: " + err.Error())
+		return []models.GroupUser{}, errors.New("Failed to convert groups to group objects.")
 	}
 
-	// Turn array from null to empty
-	if len(groups) == 0 {
-		groupsWithOwner = []models.GroupUser{}
-	}
-
-	return groupsWithOwner, nil
+	return groupObjects, nil
 
 }
 
@@ -604,42 +594,13 @@ func GetGroupObject(userID int, groupID int) (models.GroupUser, error) {
 		return models.GroupUser{}, nil
 	}
 
-	// Add owner information to group
-	userObject, err := database.GetUserInformation(group.Owner)
+	groupObject, err := ConvertGroupToGroupObject(group)
 	if err != nil {
-		return models.GroupUser{}, err
+		log.Println("Failed to convert group to group object. Error: " + err.Error())
+		return models.GroupUser{}, errors.New("Failed to convert group to group object.")
 	}
 
-	var groupWithOwner models.GroupUser
-	groupWithOwner.CreatedAt = group.CreatedAt
-	groupWithOwner.DeletedAt = group.DeletedAt
-	groupWithOwner.Description = group.Description
-	groupWithOwner.Enabled = group.Enabled
-	groupWithOwner.ID = group.ID
-	groupWithOwner.Model = group.Model
-	groupWithOwner.Name = group.Name
-	groupWithOwner.Owner = userObject
-	groupWithOwner.UpdatedAt = group.UpdatedAt
-
-	// Get group members
-	groupMemberships, err := database.GetGroupMembershipsFromGroup(groupID)
-	if err != nil {
-		log.Println("Failed to get group memberships for group " + strconv.Itoa(groupID) + ".")
-		return models.GroupUser{}, err
-	}
-
-	// Add user information to each membership
-	for _, membership := range groupMemberships {
-		userObject, err := database.GetUserInformation(membership.Member)
-		if err != nil {
-			log.Println("Failed to get user information for group '" + strconv.Itoa(groupID) + "' member '" + strconv.Itoa(membership.Member) + "'.")
-			return models.GroupUser{}, err
-		}
-
-		groupWithOwner.Members = append(groupWithOwner.Members, userObject)
-	}
-
-	return groupWithOwner, nil
+	return groupObject, nil
 }
 
 func GetGroupMembers(context *gin.Context) {
@@ -850,4 +811,62 @@ func APIUpdateGroup(context *gin.Context) {
 
 	// Return a response indicating that the group was update, along with the updated group
 	context.JSON(http.StatusCreated, gin.H{"message": "Group updated.", "group": groupObjectNew})
+}
+
+func ConvertGroupToGroupObject(group models.Group) (groupObject models.GroupUser, err error) {
+	err = nil
+	groupObject = models.GroupUser{}
+
+	// Add owner information to group
+	userObject, err := database.GetUserInformation(group.Owner)
+	if err != nil {
+		log.Println("Failed to get user object for user ID " + strconv.Itoa(int(group.ID)) + ". Returning. Error: " + err.Error())
+		return models.GroupUser{}, errors.New("Failed to get user object for user ID " + strconv.Itoa(int(group.ID)) + ".")
+	}
+
+	groupObject.CreatedAt = group.CreatedAt
+	groupObject.DeletedAt = group.DeletedAt
+	groupObject.Description = group.Description
+	groupObject.Enabled = group.Enabled
+	groupObject.ID = group.ID
+	groupObject.Model = group.Model
+	groupObject.Name = group.Name
+	groupObject.Owner = userObject
+	groupObject.UpdatedAt = group.UpdatedAt
+
+	// Get group members
+	groupMemberships, err := database.GetGroupMembershipsFromGroup(int(group.ID))
+	if err != nil {
+		log.Println("Failed to get group memberships for group " + strconv.Itoa(int(group.ID)) + ". Returning. Error: " + err.Error())
+		return groupObject, errors.New("Failed to get group memberships for group " + strconv.Itoa(int(group.ID)) + ".")
+	}
+
+	// Add user information to each membership
+	for _, membership := range groupMemberships {
+		userObject, err := database.GetUserInformation(membership.Member)
+		if err != nil {
+			log.Println("Failed to get user information for group '" + strconv.Itoa(int(group.ID)) + "' member '" + strconv.Itoa(membership.Member) + "'. Returning. Error: " + err.Error())
+			return models.GroupUser{}, errors.New("Failed to get user information for group '" + strconv.Itoa(int(group.ID)) + "' member '" + strconv.Itoa(membership.Member) + "'.")
+		}
+
+		groupObject.Members = append(groupObject.Members, userObject)
+	}
+
+	return
+}
+
+func ConvertGroupsToGroupObjects(groups []models.Group) (groupObjects []models.GroupUser, err error) {
+	err = nil
+	groupObjects = []models.GroupUser{}
+
+	for _, group := range groups {
+		groupObject, err := ConvertGroupToGroupObject(group)
+		if err != nil {
+			log.Println("Failed to get group object for '" + strconv.Itoa(int(group.ID)) + "'. Skipping. Error: " + err.Error())
+			continue
+		}
+		groupObjects = append(groupObjects, groupObject)
+	}
+
+	return
 }

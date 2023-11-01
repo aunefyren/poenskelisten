@@ -732,7 +732,7 @@ hr {
 }
 
 .wish-price {
-  margin: 1em;
+  margin: 1em 0.5em;
   padding: 0.25em 0.5em;
   background-color: var(--blue);
   border-radius: 1em;
@@ -850,4 +850,8 @@ hr {
   .modal-content {
     width: 100%;
   }
+}
+
+a {
+  color: var(--blue);
 }

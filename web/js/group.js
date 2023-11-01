@@ -73,7 +73,7 @@ function load_page(result) {
                         </div>
 
                         <div id="wishlists-box-expired-wrapper" class="wishlist-wrapper wishlist-expired" style="display: none;">
-                            <div class="wishlist-title">
+                            <div class="wishlist-title" style="margin: 0.5em 0 !important;">
                                 <div class="profile-icon">
                                     <img class="icon-img color-invert" src="/assets/list.svg">
                                 </div>
@@ -228,7 +228,7 @@ function place_wishlists(wishlists_array, group_id, user_id) {
             var expiration = new Date(Date.parse(wishlists_array[i].date));
             var now = new Date
             console.log("Times: " + expiration.toISOString() + " & " + now.toISOString())
-            if(expiration.getTime() < now.getTime()) {
+            if(expiration.getTime() < now.getTime() && wishlists_array[i].expires) {
                 console.log("Expired wishlist.")
                 expired = true;
                 wishlists_array_length -= 1
