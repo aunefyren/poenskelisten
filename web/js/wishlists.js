@@ -797,6 +797,7 @@ function getCollaborators(owner_id, wishlist_id, user_id, collaboratorArray){
 
 function placeCollaborators(userArray, wishlist_id, owner_id, user_id, collaboratorArray) {
     var select_list = document.getElementById("wishlist-input-collaborators-" + wishlist_id)
+    select_list.innerHTML = "";
 
     console.log(userArray)
 

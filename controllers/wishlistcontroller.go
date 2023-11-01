@@ -374,6 +374,12 @@ func GetWishlists(context *gin.Context) {
 	}
 
 	wishlists_with_users, err := GetWishlistObjects(UserID)
+	if err != nil {
+		log.Println("Failed to get wishlist objects for user. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist objects for user."})
+		context.Abort()
+		return
+	}
 
 	context.JSON(http.StatusOK, gin.H{"wishlists": wishlists_with_users, "message": "Wishlists retrieved."})
 }
@@ -385,13 +391,13 @@ func GetWishlistObjects(UserID int) (wishlistObjects []models.WishlistUser, err 
 	wishlists, err := database.GetOwnedWishlists(UserID)
 	if err != nil {
 		log.Println("Failed to get owned wishlists for user '" + strconv.Itoa(UserID) + "'. Returning. Error: " + err.Error())
-		return []models.WishlistUser{}, errors.New("Failed to get owned wishlists for user '" + strconv.Itoa(UserID) + "'.")
+		return wishlistObjects, errors.New("Failed to get owned wishlists for user '" + strconv.Itoa(UserID) + "'.")
 	}
 
 	wishlistsThroughCollab, err := database.GetWishlistsByUserIDThroughWishlistCollaborations(UserID)
 	if err != nil {
 		log.Println("Failed to get collaboration wishlists for user '" + strconv.Itoa(UserID) + "'. Returning. Error: " + err.Error())
-		return []models.WishlistUser{}, errors.New("Failed to get collaboration wishlists for user '" + strconv.Itoa(UserID) + "'.")
+		return wishlistObjects, errors.New("Failed to get collaboration wishlists for user '" + strconv.Itoa(UserID) + "'.")
 	}
 
 	for _, wishlistThroughCollab := range wishlistsThroughCollab {
