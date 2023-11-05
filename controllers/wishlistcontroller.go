@@ -94,16 +94,21 @@ func RegisterWishlist(context *gin.Context) {
 	wishlistdb.Expires = wishlist.Expires
 
 	wishlistdb.Date, err = time.Parse("2006-01-02T15:04:05.000Z", wishlist.Date)
-	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err != nil && *wishlistdb.Expires {
+		log.Println("Failed to parse date time. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse date time."})
 		context.Abort()
 		return
 	}
 
-	if now.After(wishlistdb.Date) && wishlistdb.Expires {
+	if now.After(wishlistdb.Date) && *wishlistdb.Expires {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The date of the wishlist must be in the future."})
 		context.Abort()
 		return
+	}
+
+	if !*wishlistdb.Expires {
+		wishlistdb.Date = time.Now()
 	}
 
 	unique_wish_name, err := database.VerifyUniqueWishlistNameForUser(wishlist.Name, UserID)
@@ -709,7 +714,7 @@ func APIUpdateWishlist(context *gin.Context) {
 	wishlistdb.Expires = wishlist.Expires
 
 	// Update wishlist in DB
-	err = database.UpdateWishlistValuesByID(wishlist_id_int, wishlistdb.Name, wishlistdb.Description, wishlistdb.Date, wishlistdb.Claimable, wishlistdb.Expires)
+	err = database.UpdateWishlistValuesByID(wishlist_id_int, wishlistdb.Name, wishlistdb.Description, wishlistdb.Date, *wishlistdb.Claimable, *wishlistdb.Expires)
 	if err != nil {
 		log.Println("Failed to update wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update wishlist."})

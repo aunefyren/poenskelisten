@@ -29,3 +29,4 @@ jobs:
         extra_files: README.md auth config controllers database middlewares models utilities web Dockerfile
         retry: 10
         overwrite: true
+        release_name: ${{ github.ref_name }}

@@ -56,7 +56,7 @@ function load_page(result) {
                             </div>
 
                             <div class="bottom-right-button" id="edit-group" style="display: none;">
-                                <img class="icon-img color-invert clickable" src="/assets/edit.svg" onclick="group_edit(${user_id}, ${group_id});" title="Edit group">
+                                <img class="icon-img  clickable" src="/assets/edit.svg" onclick="group_edit(${user_id}, ${group_id});" title="Edit group">
                             </div>
 
                         </div>
@@ -75,19 +75,19 @@ function load_page(result) {
                         <div id="wishlists-box-expired-wrapper" class="wishlist-wrapper wishlist-expired" style="display: none;">
                             <div class="wishlist-title" style="margin: 0.5em 0 !important;">
                                 <div class="profile-icon">
-                                    <img class="icon-img color-invert" src="/assets/list.svg">
+                                    <img class="icon-img " src="/assets/list.svg">
                                 </div>
                                 Expired wishlists
                             </div>
                             <div class="profile-icon clickable" onclick="toggle_expired_wishlists()" title="Expandable">
-                                <img id="wishlist_expired_arrow" class="icon-img color-invert" src="/assets/chevron-right.svg">
+                                <img id="wishlist_expired_arrow" class="icon-img " src="/assets/chevron-right.svg">
                             </div>
                             <div id="wishlists-box-expired" class="wishlists collapsed" style="display:none;">
                             </div>
                         </div>
 
                         <div id="wishlist-input" class="wishlist-input">
-                            <form action="" onsubmit="event.preventDefault(); create_wishlist(` + group_id + `, ` + user_id + `);">
+                            <form action="" class="icon-border" onsubmit="event.preventDefault(); create_wishlist(` + group_id + `, ` + user_id + `);">
                                 
                                 <label for="wishlist_name">Create a new wishlist in this group:</label><br>
 
@@ -244,9 +244,9 @@ function place_wishlists(wishlists_array, group_id, user_id) {
 
         html += '<div class="wishlist hoverable-light">'
         
-        html += '<div class="wishlist-title clickable" onclick="location.href = \'../wishlists/'+ wishlists_array[i].ID + '\'" title="Go to wishlist">'
+        html += '<div class="wishlist-title clickable underline" onclick="location.href = \'../wishlists/'+ wishlists_array[i].ID + '\'" title="Go to wishlist">'
         html += `<div class="profile-icon">`
-        html += '<img class="icon-img color-invert" src="/assets/list.svg">'
+        html += '<img class="icon-img " src="/assets/list.svg">'
         html += '</div>'
         html += wishlists_array[i].name
         html += '</div>'
@@ -255,13 +255,13 @@ function place_wishlists(wishlists_array, group_id, user_id) {
         html += `<div class="profile-name">`
         html += wishlists_array[i].owner.first_name + " " + wishlists_array[i].owner.last_name
         html += '</div>'
-        html += `<div class="profile-icon" id="group_owner_image_${wishlists_array[i].owner.ID}_${wishlists_array[i].ID}">`
-        html += '<img class="icon-img color-invert" src="/assets/user.svg">'
+        html += `<div class="profile-icon icon-border" id="group_owner_image_${wishlists_array[i].owner.ID}_${wishlists_array[i].ID}">`
+        html += '<img class="icon-img " src="/assets/user.svg">'
         html += '</div>'
 
         if(wishlists_array[i].owner.ID == user_id) {
             html += '<div class="profile-icon clickable" onclick="delete_wishlist(' + wishlists_array[i].ID + ', ' + group_id + ', ' + user_id + ')" title="Delete wishlist">'
-            html += '<img class="icon-img color-invert" src="/assets/trash-2.svg">'
+            html += '<img class="icon-img " src="/assets/trash-2.svg">'
             html += '</div>'
         }
 
@@ -451,7 +451,7 @@ function reset_group_info_box(user_id, group_id) {
     </div>
 
     <div class="bottom-right-button" id="edit-group" style="display: none;">
-        <img class="icon-img color-invert clickable" src="/assets/edit.svg" onclick="group_edit(${user_id}, ${group_id});">
+        <img class="icon-img  clickable" src="/assets/edit.svg" onclick="group_edit(${user_id}, ${group_id});">
     </div>
     `;
 
@@ -472,10 +472,10 @@ function group_edit(user_id, group_id) {
 
     html += `
         <div class="bottom-right-button" id="edit-group" style="" onclick="cancel_edit_group(${group_id}, ${user_id});" title="Cancel edit">
-            <img class="icon-img color-invert clickable" style="" src="/assets/x.svg">
+            <img class="icon-img  clickable" style="" src="/assets/x.svg">
         </div>
 
-        <form action="" onsubmit="event.preventDefault(); update_group(${group_id}, ` + user_id + `);">
+        <form action="" class="icon-border" onsubmit="event.preventDefault(); update_group(${group_id}, ` + user_id + `);">
                                 
             <label for="group_name">Edit group:</label><br>
             <input type="text" name="group_name" id="group_name" placeholder="Group name" value="${group_title}" autocomplete="off" required />

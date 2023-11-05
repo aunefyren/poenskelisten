@@ -111,7 +111,6 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *int) (models.WishO
 	wishObject := models.WishObject{}
 
 	user_object, err := database.GetUserInformation(wish.Owner)
-
 	if err != nil {
 		log.Println("Failed to get information about wish owner for wish'" + strconv.Itoa(int(wish.ID)) + "' and user '" + strconv.Itoa(int(wish.Owner)) + "'. Returning. Error: " + err.Error())
 		return models.WishObject{}, err
@@ -126,6 +125,12 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *int) (models.WishO
 	_, wishlist, err := database.GetWishlistByWishlistID(wish.WishlistID)
 	if err != nil {
 		log.Println("Failed to get wishlist for wish'" + strconv.Itoa(int(wish.ID)) + "'. Returning. Error: " + err.Error())
+		return models.WishObject{}, err
+	}
+
+	wishlistOwnerUser, err := database.GetUserInformation(wishlist.Owner)
+	if err != nil {
+		log.Println("Failed to get information about wishlist owner for wish'" + strconv.Itoa(int(wish.ID)) + "' and user '" + strconv.Itoa(int(wishlist.Owner)) + "'. Returning. Error: " + err.Error())
 		return models.WishObject{}, err
 	}
 
@@ -171,12 +176,13 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *int) (models.WishO
 	wishObject.Name = wish.Name
 	wishObject.Note = wish.Note
 	wishObject.Owner = user_object
+	wishObject.WishlistOwner = wishlistOwnerUser
 	wishObject.WishClaim = wishclaimobject
 	wishObject.URL = wish.URL
 	wishObject.Price = wish.Price
 	wishObject.UpdatedAt = wish.UpdatedAt
 	wishObject.WishlistID = wish.WishlistID
-	wishObject.WishClaimable = wishlist.Claimable
+	wishObject.WishClaimable = *wishlist.Claimable
 	wishObject.Collaborators = wishlistCollabObjects
 
 	return wishObject, nil
@@ -520,7 +526,7 @@ func RegisterWishClaim(context *gin.Context) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
 		context.Abort()
 		return
-	} else if !wishlistObject.Claimable {
+	} else if !*wishlistObject.Claimable {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Wishes in the wishlist are not marked as claimable."})
 		context.Abort()
 		return
@@ -671,7 +677,7 @@ func RemoveWishClaim(context *gin.Context) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
 		context.Abort()
 		return
-	} else if !wishlistObject.Claimable {
+	} else if !*wishlistObject.Claimable {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Wishes in the wishlist are not marked as claimable."})
 		context.Abort()
 		return
