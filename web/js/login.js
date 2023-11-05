@@ -70,7 +70,7 @@ function action_login() {
     <br>
 
     <div class="action-block">
-        <form action="" onsubmit="event.preventDefault(); send_log_in();">
+        <form action="" class="icon-border" onsubmit="event.preventDefault(); send_log_in();">
 
             <hr>
 
@@ -118,7 +118,7 @@ function action_newpassword() {
     <br>
 
     <div class="action-block">
-        <form action="" onsubmit="event.preventDefault(); reset_password_request();">
+        <form action="" class="icon-border" onsubmit="event.preventDefault(); reset_password_request();">
 
             <hr>
 
@@ -159,7 +159,7 @@ function action_resetpassword(reset_code) {
     <br>
 
     <div class="action-block">
-        <form action="" onsubmit="event.preventDefault(); reset_password();">
+        <form action="" class="icon-border" onsubmit="event.preventDefault(); reset_password();">
 
             <hr>
 
