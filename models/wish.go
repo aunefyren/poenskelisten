@@ -38,6 +38,7 @@ type WishObject struct {
 	Price         float64                      `json:"price"`
 	Enabled       bool                         `json:"enabled"`
 	Owner         User                         `json:"owner_id"`
+	WishlistOwner User                         `json:"wishlist_owner"`
 	Collaborators []WishlistCollaboratorObject `json:"collaborators"`
 	URL           string                       `json:"url"`
 	Image         bool                         `json:"image"`

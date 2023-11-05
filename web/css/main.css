@@ -17,7 +17,7 @@
     line-height:1.5;
     color:var(--eggshell);
     text-align:left;
-    background-color: var(--mediumblue);
+    background-color: var(--eggshell);
     /*background-image: url("/assets/pattern.png");*/
     background-repeat: repeat;
     font-family: Arial;
@@ -121,8 +121,9 @@
     flex-direction:column;
     min-width:0;
     word-wrap:break-word;
-    background-color: var(--darkblue);
-    background-clip:border-box;
+    background-color: var(--white);
+    color: var(--black);
+    background-clip: border-box;
     margin-bottom: 25%;
     border-radius: 1em;
     /*
@@ -135,13 +136,15 @@
   .card-header{
     padding:.75rem 1.25rem;
     margin-bottom:0;
-    background-color:var(--grey);
+    background-color:var(--darkblue);
     border-bottom:1px solid rgba(0,0,0,.125);
     border-top: 2px solid var(--grey);
     border-bottom: 2px solid var(--grey);
     text-align: center;
     font-size: 0.8em;
     font-weight:200;
+    border-radius: 1em 1em 0 0;
+    color: var(--white)
   }
   
   .container{
@@ -186,10 +189,10 @@
   
   .form-control:disabled,.form-control[readonly]{background-color:#e9ecef;opacity:1;box-sizing: border-box;}
   
-  .alert{position:relative;padding:.75rem 1.25rem;margin-bottom:1rem;border:1px solid transparent;border-radius:0.5em}
-  .alert-success{color:var(--green);background-color:#d4edda;border-color:#c3e6cb}
-  .alert-info{color:var(--black);background-color:var(--lightblue);border-color:var(--mediumblue)}
-  .alert-danger{color:var(--red);background-color:#f8d7da;border-color:#f5c6cb}
+  .alert{position:relative; padding:.75rem 1.25rem; margin-bottom:1rem; border:0.15em solid transparent; border-radius:0.5em}
+  .alert-success{color:var(--green);background-color:#d4edda;border-color:var(--darkblue);}
+  .alert-info{color:var(--black);background-color:var(--white);border-color:var(--darkblue);}
+  .alert-danger{color:var(--red);background-color:#f8d7da;border-color:var(--darkblue);}
   
   .navbar {
     background-color: var(--darkblue);
@@ -318,6 +321,8 @@ form {
   width: -webkit-fill-available;
   width: -moz-available;
   margin: 0.5em 0;
+  border-radius: 0.5em;
+  background-color: var(--eggshell);
 }
 
 input[type=text], input[type=password], input[type=email], input[type=date], input[type=number], input[type=file], select {
@@ -328,10 +333,13 @@ input[type=text], input[type=password], input[type=email], input[type=date], inp
   padding: 0.5em;
   margin: 1em;
   border-radius: 0.5em;
-  border: solid 0.1em var(--eggshell); 
-  box-shadow: 0.1em 0.2em 0.5em rgba(0,0,0,.09); 
-  background: var(--eggshell); 
+  border: solid 0.2em var(--darkblue); 
+  background: var(--white); 
   box-sizing: border-box;
+}
+
+input:active {
+  border: solid 0.2em var(--black); 
 }
 
 select {
@@ -352,10 +360,11 @@ button {
   margin: 1em;
   border-radius: 5px; 
   border: none;
-  background: var(--blue); 
+  background: var(--white); 
+  color: var(--black);
+  border: 0.15em solid var(--darkblue);
   font-size: 1em;
   font-weight: 600;
-  color: var(--white);
   cursor: pointer;
   display: flex;
   flex-direction: row;
@@ -368,9 +377,12 @@ button {
 button:hover {
   opacity: 0.5;
   cursor: pointer;
+  background-color: var(--eggshell);
 }
+
 button:disabled {
-  cursor:default;
+  cursor: default;
+  opacity: 0.5;
 }
 
 .groups, .wishlists, .wishes {
@@ -383,11 +395,9 @@ button:disabled {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
-  padding: 0.5em;
-  border: 2px solid var(--eggshell);
+  padding: 0.25em;
   margin: 1em 1em;
-  border-radius: 1em;
-  background-color: var(--mediumblue);
+  background-color: var(--eggshell);
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
@@ -397,25 +407,31 @@ button:disabled {
 }
 
 .hoverable-light:hover {
-  background-color: var(--lightblue);
+  background-color: var(--white);
   transition: 1s;
 }
 
 .hoverable-dark:hover {
-  background-color: var(--mediumblue);
+  background-color: var(--darkblue);
   transition: 1s;
+  color: var(--white);
 }
 
 .clickable {
   cursor: pointer;
 }
+
 .clickable:hover{
   opacity: 0.5;
 }
 
+.underline {
+  text-decoration: underline;
+}
+
 .group-title {
   max-width: 50%;
-  margin: 0.5em 0;
+  margin: 0.5em 0.25em;
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
@@ -465,9 +481,8 @@ button:disabled {
  }
 
 .profile-icon {
-  margin: 0 0.5em;
+  margin: 0 0.25em;
   border-radius: 100%;
-  border: 0.125em solid white;
   width: 2em;
   height: 2em;
   display: flex;
@@ -479,12 +494,35 @@ button:disabled {
   padding: 0.12em;
 }
 
+.icon-border {
+  border: 0.15em solid var(--black);
+}
+
+.icon-background {
+  background-color: var(--white);
+}
+
 .icon-img {
   margin: auto;
 }
 
 .color-invert {
   filter: invert(100%);
+}
+
+.group-wrapper, .wishlist-wrapper {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  align-content: center;
+  margin: 2em 0.5em;
+  border: 0.15em solid var(--darkblue);
+  border-radius: 1em;
+  background-color: var(--white);
+  transition: 2s;
+  overflow: hidden;
 }
 
 .wish-wrapper, .group-wrapper, .wishlist-wrapper {
@@ -494,11 +532,12 @@ button:disabled {
   justify-content: space-between;
   align-items: center;
   align-content: center;
-  margin: 1.5em 0.5em;
-  border: 2px solid var(--eggshell);
+  margin: 2em 0.5em;
+  border: 0.15em solid var(--darkblue);
   border-radius: 1em;
-  background-color: var(--lightblue);
+  background-color: var(--eggshell);
   transition: 2s;
+  overflow: hidden;
 }
 
 .wish-note, .group-members {
@@ -525,6 +564,9 @@ button:disabled {
   align-items: center;
   align-content: center;
   border-radius: 1em;
+  border: 0.15em solid var(--darkblue);
+  background-color: var(--eggshell);
+  margin: 0.25em 0;
 }
 
 .wish-input, .group-input, .wishlist-input {
@@ -604,8 +646,8 @@ button:disabled {
   border-radius: 1em;
   padding: 1em;
   margin: 0 0.5em 2em 0.5em;
-  background-color: var(--mediumblue);
-  border: 2px solid var(--eggshell);
+  background-color: var(--eggshell);
+  border: 0.15em solid var(--darkblue);
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
@@ -630,9 +672,8 @@ hr {
 .news-post {
   margin: 2em 0.5em;
   padding: 0.5em;
-  background-color: var(--mediumblue);
-  border: 2px solid var(--eggshell);
-  border-radius: 1em;
+  background-color: none;
+  border-top: 2px solid var(--eggshell);
 }
 
 .news {
@@ -732,11 +773,12 @@ hr {
 }
 
 .wish-price {
-  margin: 1em 0.5em;
+  margin: 0.25em 0.5em;
   padding: 0.25em 0.5em;
   background-color: var(--blue);
   border-radius: 1em;
   font-size: 0.75em;
+  color: var(--white);
 }
 
 .user-active-profile-photo-img, .wish-image-thumbnail-img {
@@ -748,28 +790,29 @@ hr {
 
 .user-active-profile-photo {
   border-radius: 10em;
-  margin: auto;
+  margin: 2em auto ;
   width: 10em;
   height: 10em;
   max-width: 100%;
   max-height: 100%;
-  border: solid 0.5em var(--mediumblue);
+  border: solid 0.25em var(--darkblue);
   background-color: var(--white);
 }
 
 .wish-image-thumbnail {
   border-radius: 10em;
   margin: 0.25em;
-  width: 10em;
-  height: 10em;
+  width: 6em;
+  height: 6em;
   max-width: 100%;
   max-height: 100%;
-  border: solid 0.5em var(--mediumblue);
+  border: solid 0.25em var(--mediumblue);
   background-color: var(--white);
 }
 
 .wish-note-text {
-  margin: 1em;
+  margin: 0.5em;
+  flex-basis: auto;
 }
 
 /* The Modal (background) */
@@ -854,4 +897,33 @@ hr {
 
 a {
   color: var(--blue);
+}
+
+label {
+  margin: 1em 0 0 0;
+}
+
+.wishlist-date-wrapper {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  align-items: flex-start;
+  box-sizing: border-box;
+  overflow: hidden;
+  transition: 1s;
+}
+
+.wishlist-date-wrapper-extended {
+  height: auto;
+  transition: 1s;
+}
+
+.wishlist-date-wrapper-minimized {
+  height: 0;
+  transition: 1s;
 }

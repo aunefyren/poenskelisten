@@ -62,7 +62,7 @@ function load_page(result) {
                             </div>
 
                             <div class="bottom-right-button" id="edit-wishlist" style="display: none;" title="Edit wishlist">
-                                <img class="icon-img color-invert clickable" src="/assets/edit.svg" onclick="wishlist_edit(${user_id}, ${wishlist_id}, '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires});">
+                                <img class="icon-img  clickable" src="/assets/edit.svg" onclick="wishlist_edit(${user_id}, ${wishlist_id}, '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires});">
                             </div>
 
                         </div>
@@ -79,7 +79,7 @@ function load_page(result) {
                         </div>
 
                         <div id="wish-input" class="wish-input">
-                            <form action="" onsubmit="event.preventDefault(); send_wish(` + wishlist_id + `,` + group_id + `,` + user_id + `);">
+                            <form action="" class="icon-border" onsubmit="event.preventDefault(); send_wish(` + wishlist_id + `,` + group_id + `,` + user_id + `);">
                                 <label for="wish_name">Add a new wish:</label><br>
                                 <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" autocomplete="off" required />
                                 <label for="wish_note" style="margin-top: 2em;">Optional details:</label><br>
@@ -295,8 +295,9 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     var html = '';
     var wish_with_image = false;
 
-    owner_id = wish_object.owner_id.ID
-    
+    var owner_id = wish_object.owner_id.ID
+    var wishlist_ownerID = wish_object.wishlist_owner.ID
+
     var collaborator = false;
     for(var i = 0; i < wish_object.collaborators.length; i++) {
         if(wish_object.collaborators[i].user.ID == user_id) {
@@ -317,7 +318,7 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     
     html += '<div class="wish-title">'
     html += '<div class="profile-icon">'
-    html += '<img class="icon-img color-invert" src="/assets/gift.svg">'
+    html += '<img class="icon-img " src="/assets/gift.svg">'
     html += '</div>'
 
     html += wish_object.name
@@ -342,9 +343,9 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
         html += '<div class="profile-icon clickable" onclick="toggle_wish(' + wish_object.ID + ')" title="Expandable">'
 
         if(wish_object.image) {
-            html += '<img id="wish_' + wish_object.ID + '_arrow" class="icon-img color-invert" src="/assets/chevron-down.svg">'
+            html += '<img id="wish_' + wish_object.ID + '_arrow" class="icon-img " src="/assets/chevron-down.svg">'
         } else {
-            html += '<img id="wish_' + wish_object.ID + '_arrow" class="icon-img color-invert" src="/assets/chevron-right.svg">'
+            html += '<img id="wish_' + wish_object.ID + '_arrow" class="icon-img " src="/assets/chevron-right.svg">'
         }
 
         html += '</div>'
@@ -352,11 +353,11 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
 
     if(wish_object.url !== "") {
         html += '<div class="profile-icon clickable" onclick="window.open(\'' + wish_object.url + '\', \'_blank\')" title="Go to webpage">'
-        html += '<img class="icon-img color-invert" src="/assets/link.svg">'
+        html += '<img class="icon-img " src="/assets/link.svg">'
         html += '</div>'
     }
 
-    if(user_id == owner_id || collaborator) {
+    if(user_id == owner_id || collaborator || user_id == wishlist_ownerID) {
 
         var b64_wish_name = toBASE64(wish_object.name)
         var b64_wish_note = toBASE64(wish_object.note)
@@ -364,27 +365,27 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
         var b64_wish_price = toBASE64(wish_object.price.toString())
 
         html += '<div class="profile-icon clickable" title="Edit wish" onclick="edit_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ", '" + b64_wish_name + "', '" + b64_wish_note + "', '" + b64_wish_url + "', '" + b64_wish_price + "', '" + owner_id + '\')">'
-        html += '<img class="icon-img color-invert" src="/assets/edit.svg">'
+        html += '<img class="icon-img " src="/assets/edit.svg">'
         html += '</div>'
 
         html += '<div class="profile-icon clickable" title="Delete wish" onclick="delete_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')">'
-        html += '<img class="icon-img color-invert" src="/assets/trash-2.svg">'
+        html += '<img class="icon-img " src="/assets/trash-2.svg">'
         html += '</div>'
     } else if(wish_object.wishclaim.length > 0 && wish_object.wish_claimable) {
         for(var j = 0; j < wish_object.wishclaim.length; j++) {
             if(user_id !== wish_object.wishclaim[j].user.ID) {
                 html += '<div class="profile-icon" title="Claimed by ' + wish_object.wishclaim[j].user.first_name + ' ' + wish_object.wishclaim[j].user.last_name + '">'
-                html += '<img class="icon-img color-invert" src="/assets/lock.svg">'
+                html += '<img class="icon-img " src="/assets/lock.svg">'
                 html += '</div>'
             } else {
                 html += '<div class="profile-icon clickable" title="Claimed by you, click to unclaim.">'
-                html += '<img class="icon-img color-invert" src="/assets/unlock.svg" onclick="unclaim_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')")>'
+                html += '<img class="icon-img " src="/assets/unlock.svg" onclick="unclaim_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')")>'
                 html += '</div>'
             }
         }
     } else if(wish_object.wish_claimable) {
         html += '<div class="profile-icon clickable" title="Claim this gift" onclick="claim_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')">'
-        html += '<img class="icon-img color-invert" src="/assets/check.svg">'
+        html += '<img class="icon-img " src="/assets/check.svg">'
         html += '</div>'
     }
     html += '</div>'
@@ -714,15 +715,19 @@ function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date, wishlist_
     }
 
     var expires_string = ""
+    var expireDateClass = ""
     if(wishlist_expires) {
         expires_string = "checked"
+        expireDateClass = "wishlist-date-wrapper-extended"
+    } else {
+        expireDateClass = "wishlist-date-wrapper-minimized"
     }
 
     var html = '';
 
     html += `
         <div class="bottom-right-button" id="edit-wishlist" style="" onclick="cancel_edit_wishlist(${wishlist_id}, ${user_id});" title="Cancel edit">
-            <img class="icon-img color-invert clickable" style="" src="/assets/x.svg">
+            <img class="icon-img  clickable" style="" src="/assets/x.svg">
         </div>
 
         <form action="" onsubmit="event.preventDefault(); update_wishlist(${wishlist_id}, ` + user_id + `);">
@@ -732,11 +737,13 @@ function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date, wishlist_
             
             <input type="text" name="wishlist_description" id="wishlist_description" placeholder="Wishlist description" value="${wishlist_description}" autocomplete="off" required />
 
-            <input class="clickable" onclick="" style="margin-top: 2em;" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" ${expires_string}>
+            <input class="clickable" onclick="toggeWishListDate('wishlist_date_wrapper_${wishlist_id}')" style="margin-top: 2em;" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" ${expires_string}>
             <label for="wishlist_expires" style="margin-bottom: 2em;" class="clickable">Does the wishlist expire?</label><br>
-
-            <label for="wishlist_date">When does the wishlist expire?</label><br>
-            <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" value="${wishlist_expiration}" autocomplete="off" required />
+            
+            <div id="wishlist_date_wrapper_${wishlist_id}" class="wishlist-date-wrapper ${expireDateClass}">
+                <label for="wishlist_date">When does your wishlist expire?</label><br>
+                <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" value="${wishlist_expiration}" autocomplete="off" />
+            </div>
 
             <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" ${checked_string}>
             <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
@@ -826,7 +833,7 @@ function reset_wishlist_info_box(user_id, wishlist_id) {
     </div>
 
     <div class="bottom-right-button" id="edit-wishlist" style="display: none;">
-        <img class="icon-img color-invert clickable" src="/assets/edit.svg" onclick="wishlist_edit(${user_id}, ${wishlist_id}, '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires});">
+        <img class="icon-img  clickable" src="/assets/edit.svg" onclick="wishlist_edit(${user_id}, ${wishlist_id}, '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires});">
     </div>
     `;
 
@@ -845,7 +852,7 @@ function edit_wish(wish_id, wishlist_id, group_id, user_id, b64_wish_name, b64_w
     html += `
 
         <div class="bottom-right-button" id="edit-wish" style="" onclick="cancel_edit_wish(${wish_id}, ${wishlist_id}, ${group_id}, ${user_id});" title="Cancel edit">
-            <img class="icon-img color-invert clickable" style="margin: 1em 1em 0 0;" src="/assets/x.svg">
+            <img class="icon-img  clickable" style="margin: 1em 1em 0 0;" src="/assets/x.svg">
         </div>
 
         <form action="" onsubmit="event.preventDefault(); update_wish(${wish_id}, ${user_id}, ${wishlist_id}, ${group_id});">

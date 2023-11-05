@@ -331,3 +331,19 @@ function fromBASE64(base64String) {
     var string = fromBinary(binaryString);
     return string;
 }
+
+function toggeWishListDate(wrapperID) {
+    try {
+        var wrapper = document.getElementById(wrapperID)
+
+        if (wrapper.classList.contains('wishlist-date-wrapper-extended')) {
+            wrapper.classList.remove('wishlist-date-wrapper-extended')
+            wrapper.classList.add('wishlist-date-wrapper-minimized')
+        } else if (wrapper.classList.contains('wishlist-date-wrapper-minimized')) {
+            wrapper.classList.remove('wishlist-date-wrapper-minimized')
+            wrapper.classList.add('wishlist-date-wrapper-extended')
+        }
+    } catch(e) {
+        console.log("Failed to toggle wishlist date wrapper: " + e)
+    }
+}

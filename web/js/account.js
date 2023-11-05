@@ -48,7 +48,7 @@ function load_page(result) {
                             <img style="width: 100%; height: 100%;" class="user-active-profile-photo-img" id="user-active-profile-photo-img" src="/assets/loading.gif">
                         </div>
                     
-                        <form action="" onsubmit="event.preventDefault(); send_update();">
+                        <form action="" class="icon-border" style="margin: 0 1em;" onsubmit="event.preventDefault(); send_update();">
 
                             <label id="form-input-icon" for="email"></label>
                             <input type="email" name="email" id="email" placeholder="Email" value="` + email + `" required/>
