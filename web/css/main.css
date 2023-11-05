@@ -551,8 +551,8 @@ button:disabled {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
-  padding: 0 0.5em;
-  margin: 0.5em;
+  padding: 0;
+  margin: 0.25em;
   border-radius: 0 0 1em 1em;
   transition: 2s;
 }
