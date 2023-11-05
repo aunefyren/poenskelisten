@@ -68,7 +68,7 @@ function load_page(result) {
                     </div>
 
                     <div class="module" id="new-news" style="display: none;">
-                        <form action="" onsubmit="event.preventDefault(); create_news();">
+                        <form action="" class="icon-border" onsubmit="event.preventDefault(); create_news();">
                             
                             <label for="news_title">Create post:</label><br>
                             <input type="text" name="news_title" id="news_title" placeholder="Post title" autocomplete="off" required />
