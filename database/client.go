@@ -178,7 +178,7 @@ func VerifyUserIsVerified(userID int) (bool, error) {
 		return false, errors.New("No user found.")
 	}
 
-	return user.Verified, nil
+	return *user.Verified, nil
 }
 
 // Verify unsued invite code exists

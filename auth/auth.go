@@ -49,6 +49,12 @@ func GenerateJWT(firstname string, lastname string, email string, userid int, ad
 	return
 }
 
+func GenerateJWTFromClaims(claims *JWTClaim) (tokenString string, err error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err = token.SignedString(jwtKey)
+	return
+}
+
 func ValidateToken(signedToken string, admin bool) (err error) {
 	token, err := jwt.ParseWithClaims(
 		signedToken,

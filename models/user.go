@@ -13,9 +13,9 @@ type User struct {
 	LastName         string    `json:"last_name" gorm:"not null"`
 	Email            string    `json:"email" gorm:"unique; not null"`
 	Password         string    `json:"password" gorm:"not null"`
-	Admin            bool      `json:"admin" gorm:"not null; default: false"`
+	Admin            *bool     `json:"admin" gorm:"not null; default: false"`
 	Enabled          bool      `json:"enabled" gorm:"not null; default: false"`
-	Verified         bool      `json:"verified" gorm:"not null; default: false"`
+	Verified         *bool     `json:"verified" gorm:"not null; default: false"`
 	VerificationCode string    `json:"verification_code"`
 	ResetCode        string    `json:"reset_code"`
 	ResetExpiration  time.Time `json:"reset_expiration"`
