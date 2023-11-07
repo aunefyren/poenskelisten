@@ -94,9 +94,17 @@ function load_page(result) {
                                 <input type="text" name="wishlist_name" id="wishlist_name" placeholder="Wishlist name" autocomplete="off" required />
                                 
                                 <input type="text" name="wishlist_description" id="wishlist_description" placeholder="Wishlist description" autocomplete="off" required />
+                                
+                                <input class="clickable" onclick="toggeWishListDate('wishlist_date_wrapper_new')" style="margin-top: 2em;" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" checked>
+                                <label for="wishlist_expires" style="margin-bottom: 2em;" class="clickable">Does the wishlist expire?</label><br>
+                                
+                                <div id="wishlist_date_wrapper_new" class="wishlist-date-wrapper wishlist-date-wrapper-extended">
+                                    <label for="wishlist_date">When does your wishlist expire?</label><br>
+                                    <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" autocomplete="off" />
+                                </div>
 
-                                <label for="wishlist_date">When does your wishlist expire?</label><br>
-                                <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" autocomplete="off" required />
+                                <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" checked>
+                                <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
                                 
                                 <button id="register-button" type="submit" href="/">Create wishlist in this group</button>
 
@@ -255,7 +263,7 @@ function place_wishlists(wishlists_array, group_id, user_id) {
         html += `<div class="profile-name">`
         html += wishlists_array[i].owner.first_name + " " + wishlists_array[i].owner.last_name
         html += '</div>'
-        html += `<div class="profile-icon icon-border" id="group_owner_image_${wishlists_array[i].owner.ID}_${wishlists_array[i].ID}">`
+        html += `<div class="profile-icon icon-border icon-background" id="group_owner_image_${wishlists_array[i].owner.ID}_${wishlists_array[i].ID}">`
         html += '<img class="icon-img " src="/assets/user.svg">'
         html += '</div>'
 
@@ -305,8 +313,20 @@ function create_wishlist(group_id, user_id) {
     var wishlist_name = document.getElementById("wishlist_name").value;
     var wishlist_description = document.getElementById("wishlist_description").value;
     var wishlist_date = document.getElementById("wishlist_date").value;
-    var wishlist_date_object = new Date(wishlist_date)
-    var wishlist_date_string = wishlist_date_object.toISOString();
+    var wishlist_expires = document.getElementById("wishlist_expires").checked;
+    var wishlist_claimable = document.getElementById("wishlist_claimable").checked;
+
+    if(wishlist_expires) {
+        try {
+            var wishlist_date_object = new Date(wishlist_date)
+            var wishlist_date_string = wishlist_date_object.toISOString();
+        } catch(e) {
+            alert("Invalid date selected.");
+            return;
+        }
+    } else {
+        var wishlist_date_string = "2006-01-02T15:04:05.000Z";
+    }
 
     try {
         group_id_int = parseInt(group_id);
@@ -316,11 +336,13 @@ function create_wishlist(group_id, user_id) {
     }
 
     var form_obj = { 
-                                    "name" : wishlist_name,
-                                    "description" : wishlist_description,
-                                    "date": wishlist_date_string,
-                                    "group": group_id_int
-                                };
+        "name" : wishlist_name,
+        "description" : wishlist_description,
+        "date": wishlist_date_string,
+        "group": group_id_int,
+        "claimable": wishlist_claimable,
+        "expires": wishlist_expires
+    };
 
     var form_data = JSON.stringify(form_obj);
 

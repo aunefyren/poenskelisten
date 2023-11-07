@@ -42,7 +42,7 @@ function set_cookie(cname, cvalue, exdays) {
     var d = new Date();
     d.setTime(d.getTime() + (exdays*24*60*60*1000));
     var expires = "expires="+ d.toUTCString();
-    document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/;samesite=strict";
+    document.cookie = cname + "=" + cvalue + "; " + expires + "; path=/; samesite=strict; secure;";
 }
 
 // Get cookie from browser
@@ -77,6 +77,12 @@ function get_login(cookie) {
 
             var result;
             if(result = JSON.parse(this.responseText)) { 
+                // If new token, save it
+                if(result.token != null && result.token != "") {
+                    // store jwt to cookie
+                    console.log("Refreshed login token.")
+                    set_cookie("poenskelisten", result.token, 7);
+                }
                 load_page(this.responseText);
             } else {
                 load_page(false);

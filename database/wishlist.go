@@ -56,20 +56,20 @@ func UpdateWishlistValuesByID(wishlistID int, wishlistName string, wishlistDesc 
 }
 
 // Create wishlist in DB
-func CreateWishlistInDB(wishlistdb models.Wishlist) error {
-
+func CreateWishlistInDB(wishlistdb models.Wishlist) (wishlist models.Wishlist, err error) {
+	wishlist = models.Wishlist{}
+	err = nil
 	record := Instance.Create(&wishlistdb)
 
 	if record.Error != nil {
-		return record.Error
+		return wishlistdb, record.Error
 	}
 
 	if record.RowsAffected != 1 {
-		return errors.New("Wishlist not added to database.")
+		return wishlistdb, errors.New("Wishlist not added to database.")
 	}
 
-	return nil
-
+	return wishlistdb, err
 }
 
 // Get wishlist by wishlist ID

@@ -130,7 +130,7 @@ func RegisterWishlist(context *gin.Context) {
 	wishlistdb.Claimable = wishlist.Claimable
 
 	// Create wishlist in DB
-	err = database.CreateWishlistInDB(wishlistdb)
+	wishlistdb, err = database.CreateWishlistInDB(wishlistdb)
 	if err != nil {
 		log.Println("Failed to create wishlist in database. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create wishlist in database."})

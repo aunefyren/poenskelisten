@@ -101,7 +101,8 @@ func RegisterUser(context *gin.Context) {
 		context.Abort()
 		return
 	} else if userAmount == 0 {
-		user.Admin = true
+		var adminBool bool = true
+		user.Admin = &adminBool
 		log.Println("No other users found. New user is set to admin.")
 	}
 
@@ -115,9 +116,11 @@ func RegisterUser(context *gin.Context) {
 
 	// If SMTP is disabled, create the user as verified
 	if config.SMTPEnabled {
-		user.Verified = false
+		var verifiedBool bool = false
+		user.Verified = &verifiedBool
 	} else {
-		user.Verified = true
+		var verifiedBool bool = true
+		user.Verified = &verifiedBool
 	}
 
 	// Hash the selected password
@@ -168,7 +171,7 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	// If user is not verified and SMTP is enabled, send verification e-mail
-	if !user.Verified && config.SMTPEnabled {
+	if !*user.Verified && config.SMTPEnabled {
 
 		log.Println("Sending verification e-mail to new user: " + user.FirstName + " " + user.LastName + ".")
 
@@ -285,7 +288,7 @@ func VerifyUser(context *gin.Context) {
 	}
 
 	// Generate new JWT token
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, int(user.ID), user.Admin, user.Verified)
+	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, int(user.ID), *user.Admin, *user.Verified)
 	if err != nil {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		context.Abort()
@@ -467,7 +470,7 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// Generate new JWT token
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, int(user.ID), user.Admin, user.Verified)
+	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, int(user.ID), *user.Admin, *user.Verified)
 	if err != nil {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		context.Abort()
@@ -483,7 +486,7 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// If user is not verified and SMTP is enabled, send verification e-mail
-	if config.SMTPEnabled && !user.Verified {
+	if config.SMTPEnabled && !*user.Verified {
 
 		verificationCode, err := database.GenrateRandomVerificationCodeForuser(userID)
 		if err != nil {
