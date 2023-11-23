@@ -137,7 +137,7 @@ func GetGroupMembershipsFromGroup(GroupID uuid.UUID) ([]models.GroupMembership, 
 	groupmembershipRecords := Instance.
 		Where("`group_memberships`.enabled = ?", 1).
 		Where("`group_memberships`.group_id = ?", GroupID).
-		Joins("JOIN `users` on `group_memberships`.group_id = `users`.id").
+		Joins("JOIN `users` on `group_memberships`.member_id = `users`.id").
 		Where("`users`.enabled = ?", 1).Find(&groupMemberships)
 
 	if groupmembershipRecords.Error != nil {
