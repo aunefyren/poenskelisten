@@ -303,6 +303,33 @@ func initRouter() *gin.Engine {
 		c.HTML(http.StatusOK, "verify.html", nil)
 	})
 
+	// Static endpoint for service-worker
+	router.GET("/service-worker.js", func(c *gin.Context) {
+		JSfile, err := os.ReadFile("./web/js/service-worker.js")
+		if err != nil {
+			fmt.Println("Reading service-worker threw error trying to open the file. Error: " + err.Error())
+		}
+		c.Data(http.StatusOK, "text/javascript", JSfile)
+	})
+
+	// Static endpoint for manifest
+	router.GET("/manifest.json", func(c *gin.Context) {
+		JSONfile, err := os.ReadFile("./web/manifest.json")
+		if err != nil {
+			fmt.Println("Reading manifest threw error trying to open the file. Error: " + err.Error())
+		}
+		c.Data(http.StatusOK, "text/json", JSONfile)
+	})
+
+	// Static endpoint for robots.txt
+	router.GET("/robots.txt", func(c *gin.Context) {
+		TXTfile, err := os.ReadFile("./web/txt/robots.txt")
+		if err != nil {
+			fmt.Println("Reading manifest threw error trying to open the file. Error: " + err.Error())
+		}
+		c.Data(http.StatusOK, "text/plain", TXTfile)
+	})
+
 	return router
 }
 
