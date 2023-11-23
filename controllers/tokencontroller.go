@@ -18,36 +18,37 @@ type TokenRequest struct {
 }
 
 func GenerateToken(context *gin.Context) {
-
 	var request TokenRequest
-
 	var user models.User
+
 	if err := context.ShouldBindJSON(&request); err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
 
 	// check if email exists and password is correct
-	record := database.Instance.Where("email = ?", request.Email).First(&user)
-	if record.Error != nil {
-		log.Println("Invalid credentials. Error: " + record.Error.Error())
+	user, err := database.GetAllUserInformationByEmail(request.Email)
+	if err != nil {
+		log.Println("Failed to get user by e-mail. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid credentials."})
 		context.Abort()
 		return
 	}
 
-	credentialError := user.CheckPassword(request.Password)
-	if credentialError != nil {
-		log.Println("Invalid credentials")
+	err = user.CheckPassword(request.Password)
+	if err != nil {
+		log.Println("Failed to verify password. Error: " + err.Error())
 		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
 		context.Abort()
 		return
 	}
 
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, int(user.ID), *user.Admin, *user.Verified)
+	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, user.ID, *user.Admin, *user.Verified)
 	if err != nil {
-		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Println("Failed to generate token. Error: " + err.Error())
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
 		context.Abort()
 		return
 	}

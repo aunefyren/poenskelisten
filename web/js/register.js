@@ -117,7 +117,7 @@ function send_registration(){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "open/user/register");
+    xhttp.open("post", api_url + "open/users");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.send(form_data);
     return false;

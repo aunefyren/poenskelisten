@@ -49,7 +49,7 @@ function load_page(result) {
                         <h3 id="invitation-module-title">Invites:</h3>
                         <div class="invite-list" id="invite-list">
                         </div>
-                        <button type="submit" onclick="generate_invite();" id="generate_invite_button" style=""><img src="assets/plus.svg" class="btn_logo color-invert"><p2>Generate</p2></button>
+                        <button type="submit" onclick="generate_invite();" id="generate_invite_button" style=""><img src="assets/plus.svg" class="btn_logo"><p2>Generate</p2></button>
                     
                     </div>
 
@@ -62,7 +62,7 @@ function load_page(result) {
                         <input class="clickable" onclick="" style="" type="checkbox" id="currency-padding" name="currency-padding" value="confirm" >
                         <label for="currency-padding" class="clickable">Pad the currency string</label><br>
 
-                        <button type="submit" onclick="update_currency();" id="update_currency_button" style=""><img src="assets/check.svg" class="btn_logo color-invert"><p2>Update</p2></button>
+                        <button type="submit" onclick="update_currency();" id="update_currency_button" style=""><img src="assets/check.svg" class="btn_logo"><p2>Update</p2></button>
                     
                     </div>
          
@@ -158,7 +158,7 @@ function get_invites() {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "admin/invite/get");
+    xhttp.open("get", api_url + "admin/invites");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -195,7 +195,7 @@ function place_invites(invites_array) {
                         <div class="leaderboard-object-user">
                             Not used
                         </div>
-                        <img class="icon-img clickable color-invert" onclick="delete_invite(` + invites_array[i].ID + `)" src="/assets/trash-2.svg"></img>
+                        <img class="icon-img clickable" onclick="delete_invite('${invites_array[i].id}')" src="/assets/trash-2.svg"></img>
                     `;
             }
 
@@ -238,7 +238,7 @@ function generate_invite() {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "admin/invite/register");
+    xhttp.open("post", api_url + "admin/invites");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -278,7 +278,7 @@ function delete_invite(invide_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "admin/invite/" + invide_id + "/delete");
+    xhttp.open("delete", api_url + "admin/invites/" + invide_id);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -315,7 +315,7 @@ function get_currency() {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/currency");
+    xhttp.open("get", api_url + "auth/currency");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();

@@ -177,14 +177,6 @@
   
   .card-body{-webkit-box-flex:1;-ms-flex:1 1 auto;flex:1 1 auto;padding:0.75em}
   
-  hr{
-    margin-top:1rem;
-    margin-bottom:1rem;
-    border:0;
-    border-top:1px solid rgba(0,0,0,.1);
-    width: -webkit-fill-available;
-  }
-  
   .btn{cursor: pointer; display:inline-block;font-weight:400;text-align:center;white-space:nowrap;vertical-align:middle;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;border:1px solid transparent;padding:.375rem .75rem;font-size:1rem;line-height:1.5;border-radius:.25rem;transition:color .15s ease-in-out,background-color .15s ease-in-out,border-color .15s ease-in-out,box-shadow .15s ease-in-out}.btn:focus,.btn:hover{text-decoration:none}.btn.focus,.btn:focus{outline:0;box-shadow:0 0 0 .2rem rgba(0,123,255,.25)}
   
   .form-control:disabled,.form-control[readonly]{background-color:#e9ecef;opacity:1;box-sizing: border-box;}
@@ -518,7 +510,7 @@ button:disabled {
   justify-content: space-between;
   align-items: center;
   align-content: center;
-  margin: 2em 0.5em;
+  margin: 1em 0.5em;
   border: 0.15em solid var(--darkblue);
   border-radius: 1em;
   background-color: var(--white);
@@ -567,7 +559,7 @@ button:disabled {
   border-radius: 1em;
   border: 0.15em solid var(--darkblue);
   background-color: var(--eggshell);
-  margin: 0.25em 0;
+  margin: 0.25em 1em;
 }
 
 .wish-input, .group-input, .wishlist-input {
@@ -656,7 +648,7 @@ button:disabled {
 
 
 hr {
-  border: 0.025em solid var(--eggshell);
+  border: 0.025em solid var(--darkblue);
   opacity: 0.25;
   border-radius: 1em;
   width: 100%;
@@ -672,9 +664,10 @@ hr {
 
 .news-post {
   margin: 2em 0.5em;
-  padding: 0.5em;
+  padding: 1em 0.5em;
   background-color: none;
-  border-top: 2px solid var(--eggshell);
+  border: 2px solid var(--eggshell);
+  border-radius: 0.5em;
 }
 
 .news {
@@ -687,8 +680,8 @@ hr {
   border-radius: 1em;
   padding: 1em;
   margin: 0 1em 2em 1em;
-  background-color: var(--mediumblue);
-  border: 2px solid var(--eggshell);
+  background-color: var(--eggshell);
+  border: 0.15em solid var(--darkblue);
   width: auto;
 }
 
@@ -710,8 +703,8 @@ hr {
   max-width: 100%;
   max-width: -webkit-fill-available;
   max-width: -moz-available;
-  background-color: var(--mediumblue);
-  border: 2px solid var(--eggshell);
+  background-color: var(--eggshell);
+  border: 0.15em solid var(--darkblue);
   box-sizing: border-box;
   text-align: center;
 }
@@ -720,17 +713,19 @@ hr {
   display: flex;
   flex-direction: column;
   flex-wrap: wrap;
-  align-content: flex-start;
+  align-content: center;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   box-sizing: border-box;
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
-  border: solid 2px var(--eggshell);
+  border: solid 0.15em var(--darkblue);
+  background-color: var(--white);
   border-radius: 0.5em;
   padding: 0.5em;
   margin: 0.5em;
+  text-align: center;
 }
 
 .invite-list {
@@ -896,10 +891,6 @@ hr {
   }
 }
 
-a {
-  color: var(--blue);
-}
-
 label {
   margin: 1em 0 0 0;
 }
@@ -927,4 +918,34 @@ label {
 .wishlist-date-wrapper-minimized {
   height: 0;
   transition: 1s;
+}
+
+.full-width {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+}
+
+.blue-label {
+  background-color: var(--lightblue);
+  padding: 0.25em 0.75em;
+  width: min-content;
+  height: min-content;
+  border-radius: 1em;
+  color: var(--white);
+  margin: 0 1em;
+}
+
+.labels {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  margin: 2em 0;
 }

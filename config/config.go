@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-var poenskelisten_version_parameter = "v1.0.10"
+var poenskelisten_version_parameter = "v2.0.0"
 var config_path, _ = filepath.Abs("./files/config.json")
 
 func GetConfig() (*models.ConfigStruct, error) {
@@ -62,7 +62,7 @@ func GetConfig() (*models.ConfigStruct, error) {
 		anythingChanged = true
 	}
 
-	if config.PoenskelistenVersion == "" {
+	if config.PoenskelistenVersion == "" || config.PoenskelistenVersion != poenskelisten_version_parameter {
 		// Set new value
 		config.PoenskelistenVersion = poenskelisten_version_parameter
 		anythingChanged = true
@@ -74,7 +74,7 @@ func GetConfig() (*models.ConfigStruct, error) {
 		anythingChanged = true
 	}
 
-	if config.DBType == "" || (strings.ToLower(config.DBType) != "mysql" && strings.ToLower(config.DBType) != "postgresql") {
+	if config.DBType == "" || (strings.ToLower(config.DBType) != "mysql" && strings.ToLower(config.DBType) != "postgres" && strings.ToLower(config.DBType) != "sqlite") {
 		// Set new value
 		config.DBType = "mysql"
 		anythingChanged = true

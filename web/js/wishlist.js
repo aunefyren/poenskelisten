@@ -62,7 +62,7 @@ function load_page(result) {
                             </div>
 
                             <div class="bottom-right-button" id="edit-wishlist" style="display: none;" title="Edit wishlist">
-                                <img class="icon-img  clickable" src="/assets/edit.svg" onclick="wishlist_edit(${user_id}, ${wishlist_id}, '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires});">
+                                <img class="icon-img  clickable" src="/assets/edit.svg" onclick="wishlist_edit('${user_id}', '${wishlist_id}', '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires});">
                             </div>
 
                         </div>
@@ -79,7 +79,7 @@ function load_page(result) {
                         </div>
 
                         <div id="wish-input" class="wish-input">
-                            <form action="" class="icon-border" onsubmit="event.preventDefault(); send_wish(` + wishlist_id + `,` + group_id + `,` + user_id + `);">
+                            <form action="" class="icon-border" onsubmit="event.preventDefault(); send_wish('${wishlist_id}','${group_id}','${user_id}');">
                                 <label for="wish_name">Add a new wish:</label><br>
                                 <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" autocomplete="off" required />
                                 <label for="wish_note" style="margin-top: 2em;">Optional details:</label><br>
@@ -152,7 +152,7 @@ function get_wishlist(wishlist_id){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlist/get/" + wishlist_id);
+    xhttp.open("get", api_url + "auth/wishlists/" + wishlist_id);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -249,7 +249,7 @@ function get_wishes(wishlist_id, group_id, user_id){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wish/get/" + wishlist_id);
+    xhttp.open("get", api_url + "auth/wishes?wishlist=" + wishlist_id);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -268,7 +268,7 @@ function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
         var wish_image = function_result[1]
 
         if(wish_image) {
-            wish_id_array.push(wishes_array[i].ID)
+            wish_id_array.push(wishes_array[i].id)
         }
 
         html += new_html
@@ -295,12 +295,12 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     var html = '';
     var wish_with_image = false;
 
-    var owner_id = wish_object.owner_id.ID
-    var wishlist_ownerID = wish_object.wishlist_owner.ID
+    var owner_id = wish_object.owner_id.id
+    var wishlist_ownerID = wish_object.wishlist_owner.id
 
     var collaborator = false;
     for(var i = 0; i < wish_object.collaborators.length; i++) {
-        if(wish_object.collaborators[i].user.ID == user_id) {
+        if(wish_object.collaborators[i].user.id == user_id) {
             collaborator = true;
             break;
         }
@@ -312,9 +312,9 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
         var transparent = ""
     }
 
-    html += '<div class="wish-wrapper ' + transparent + '" id="wish_wrapper_' + wish_object.ID + '">'
+    html += '<div class="wish-wrapper ' + transparent + '" id="wish_wrapper_' + wish_object.id + '">'
 
-    html += '<div class="wish" id="wish_' + wish_object.ID + '">'
+    html += '<div class="wish" id="wish_' + wish_object.id + '">'
     
     html += '<div class="wish-title">'
     html += '<div class="profile-icon">'
@@ -340,19 +340,19 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     html += '<div class="profile">'
 
     if(wish_object.note !== "" || wish_object.image) {
-        html += '<div class="profile-icon clickable" onclick="toggle_wish(' + wish_object.ID + ')" title="Expandable">'
+        html += `<div class="profile-icon clickable" onclick="toggle_wish('${wish_object.id}')" title="Expandable">`;
 
         if(wish_object.image) {
-            html += '<img id="wish_' + wish_object.ID + '_arrow" class="icon-img " src="/assets/chevron-down.svg">'
+            html += '<img id="wish_' + wish_object.id + '_arrow" class="icon-img " src="/assets/chevron-down.svg">'
         } else {
-            html += '<img id="wish_' + wish_object.ID + '_arrow" class="icon-img " src="/assets/chevron-right.svg">'
+            html += '<img id="wish_' + wish_object.id + '_arrow" class="icon-img " src="/assets/chevron-right.svg">'
         }
 
         html += '</div>'
     }
 
     if(wish_object.url !== "") {
-        html += '<div class="profile-icon clickable" onclick="window.open(\'' + wish_object.url + '\', \'_blank\')" title="Go to webpage">'
+        html += `<div class="profile-icon clickable" onclick="window.open('${wish_object.url}', \'_blank\')" title="Go to webpage">`
         html += '<img class="icon-img " src="/assets/link.svg">'
         html += '</div>'
     }
@@ -364,27 +364,27 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
         var b64_wish_url = toBASE64(wish_object.url)
         var b64_wish_price = toBASE64(wish_object.price.toString())
 
-        html += '<div class="profile-icon clickable" title="Edit wish" onclick="edit_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ", '" + b64_wish_name + "', '" + b64_wish_note + "', '" + b64_wish_url + "', '" + b64_wish_price + "', '" + owner_id + '\')">'
+        html += `<div class="profile-icon clickable" title="Edit wish" onclick="edit_wish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}', '${b64_wish_name}', '${b64_wish_note}', '${b64_wish_url}', '${b64_wish_price}', '${owner_id}')">`;
         html += '<img class="icon-img " src="/assets/edit.svg">'
         html += '</div>'
 
-        html += '<div class="profile-icon clickable" title="Delete wish" onclick="delete_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')">'
+        html += `<div class="profile-icon clickable" title="Delete wish" onclick="delete_wish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}')">`;
         html += '<img class="icon-img " src="/assets/trash-2.svg">'
         html += '</div>'
     } else if(wish_object.wishclaim.length > 0 && wish_object.wish_claimable) {
         for(var j = 0; j < wish_object.wishclaim.length; j++) {
-            if(user_id !== wish_object.wishclaim[j].user.ID) {
+            if(user_id !== wish_object.wishclaim[j].user.id) {
                 html += '<div class="profile-icon" title="Claimed by ' + wish_object.wishclaim[j].user.first_name + ' ' + wish_object.wishclaim[j].user.last_name + '">'
                 html += '<img class="icon-img " src="/assets/lock.svg">'
                 html += '</div>'
             } else {
                 html += '<div class="profile-icon clickable" title="Claimed by you, click to unclaim.">'
-                html += '<img class="icon-img " src="/assets/unlock.svg" onclick="unclaim_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')")>'
+                html += `<img class="icon-img " src="/assets/unlock.svg" onclick="unclaim_wish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}')")>`;
                 html += '</div>'
             }
         }
     } else if(wish_object.wish_claimable) {
-        html += '<div class="profile-icon clickable" title="Claim this gift" onclick="claim_wish(' + wish_object.ID + ", " + wishlist_id  + ", " + group_id  + ", " + user_id + ')">'
+        html += `<div class="profile-icon clickable" title="Claim this gift" onclick="claim_wish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}')">`;
         html += '<img class="icon-img " src="/assets/check.svg">'
         html += '</div>'
     }
@@ -393,14 +393,14 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     html += '</div>'
 
     if(wish_object.image) {
-        html += '<div class="wish-note expanded" style="display: flex !important;" id="wish_' + wish_object.ID + '_note" title="Note">'
+        html += '<div class="wish-note expanded" style="display: flex !important;" id="wish_' + wish_object.id + '_note" title="Note">'
     } else {
-        html += '<div class="wish-note collapsed" id="wish_' + wish_object.ID + '_note" title="Note">'
+        html += '<div class="wish-note collapsed" id="wish_' + wish_object.id + '_note" title="Note">'
     }
 
     if(wish_object.image) {
-        html += '<div class="wish-image-thumbnail clickable" onclick="toggle_wish_modal(' + wish_object.ID + ')">';
-        html += '<img style="width: 100%; height: 100%;" class="wish-image-thumbnail-img" id="wish-image-thumbnail-img-' + wish_object.ID  + '" src="/assets/loading.gif">'
+        html += `<div class="wish-image-thumbnail clickable" onclick="toggle_wish_modal('${wish_object.id}')">`;
+        html += '<img style="width: 100%; height: 100%;" class="wish-image-thumbnail-img" id="wish-image-thumbnail-img-' + wish_object.id  + '" src="/assets/loading.gif">'
         html += '</div>'
 
         wish_with_image = true
@@ -533,7 +533,7 @@ function send_wish_two(form_data, wishlist_id, group_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wish/register/" + wishlist_id);
+    xhttp.open("post", api_url + "auth/wishes?wishlist=" + wishlist_id);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -588,7 +588,7 @@ function delete_wish(wish_id, wishlist_id, group_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wish/" + wish_id + "/delete");
+    xhttp.open("delete", api_url + "auth/wishes/" + wish_id);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -642,7 +642,7 @@ function claim_wish(wish_id, wishlist_id, group_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wish/" + wish_id + "/claim");
+    xhttp.open("post", api_url + "auth/wishes/" + wish_id + "/claim");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -696,7 +696,7 @@ function unclaim_wish(wish_id, wishlist_id, group_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wish/" + wish_id + "/unclaim");
+    xhttp.open("post", api_url + "auth/wishes/" + wish_id + "/unclaim");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -726,11 +726,11 @@ function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date, wishlist_
     var html = '';
 
     html += `
-        <div class="bottom-right-button" id="edit-wishlist" style="" onclick="cancel_edit_wishlist(${wishlist_id}, ${user_id});" title="Cancel edit">
+        <div class="bottom-right-button" id="edit-wishlist" style="" onclick="cancel_edit_wishlist('${wishlist_id}', '${user_id}');" title="Cancel edit">
             <img class="icon-img  clickable" style="" src="/assets/x.svg">
         </div>
 
-        <form action="" onsubmit="event.preventDefault(); update_wishlist(${wishlist_id}, ` + user_id + `);">
+        <form action="" onsubmit="event.preventDefault(); update_wishlist('${wishlist_id}', '${user_id}');">
                                 
             <label for="wishlist_name">Edit wishlist:</label><br>
             <input type="text" name="wishlist_name" id="wishlist_name" placeholder="Wishlist name" value="${wishlist_title}" autocomplete="off" required />
@@ -813,7 +813,7 @@ function update_wishlist(wishlist_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlist/" + wishlist_id + "/update");
+    xhttp.open("post", api_url + "auth/wishlists/" + wishlist_id + "/update");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -833,7 +833,7 @@ function reset_wishlist_info_box(user_id, wishlist_id) {
     </div>
 
     <div class="bottom-right-button" id="edit-wishlist" style="display: none;">
-        <img class="icon-img  clickable" src="/assets/edit.svg" onclick="wishlist_edit(${user_id}, ${wishlist_id}, '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires});">
+        <img class="icon-img  clickable" src="/assets/edit.svg" onclick="wishlist_edit('${user_id}', '${wishlist_id}', '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires});">
     </div>
     `;
 
@@ -851,11 +851,11 @@ function edit_wish(wish_id, wishlist_id, group_id, user_id, b64_wish_name, b64_w
 
     html += `
 
-        <div class="bottom-right-button" id="edit-wish" style="" onclick="cancel_edit_wish(${wish_id}, ${wishlist_id}, ${group_id}, ${user_id});" title="Cancel edit">
+        <div class="bottom-right-button" id="edit-wish" style="" onclick="cancel_edit_wish('${wish_id}', '${wishlist_id}', '${group_id}', '${user_id}');" title="Cancel edit">
             <img class="icon-img  clickable" style="margin: 1em 1em 0 0;" src="/assets/x.svg">
         </div>
 
-        <form action="" onsubmit="event.preventDefault(); update_wish(${wish_id}, ${user_id}, ${wishlist_id}, ${group_id});">
+        <form action="" onsubmit="event.preventDefault(); update_wish('${wish_id}', '${user_id}', '${wishlist_id}', '${group_id}');">
                                 
             <label for="wish_name_${wish_id}">Edit wish:</label><br>
             <input type="text" name="wish_name_${wish_id}" id="wish_name_${wish_id}" placeholder="Wish name" value="" autocomplete="off" required />
@@ -971,7 +971,7 @@ function update_wish_two(form_data, wish_id, user_id, wishlist_id, group_id) {
                 document.getElementById("wish_wrapper_" + wish_id).outerHTML = wish_html;
 
                 if(wish_image) {
-                    GetWishImageThumbail(result.wish.ID)
+                    GetWishImageThumbail(result.wish.id)
                 }
 
             }
@@ -981,7 +981,7 @@ function update_wish_two(form_data, wish_id, user_id, wishlist_id, group_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wish/" + wish_id + "/update");
+    xhttp.open("post", api_url + "auth/wishes/" + wish_id + "/update");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -1016,7 +1016,7 @@ function cancel_edit_wish(wish_id, wishlist_id, group_id, user_id) {
                 document.getElementById("wish_wrapper_" + wish_id).outerHTML = wish_html;
 
                 if(wish_image) {
-                    GetWishImageThumbail(result.wish.ID)
+                    GetWishImageThumbail(result.wish.id)
                 }
 
             }
@@ -1024,7 +1024,7 @@ function cancel_edit_wish(wish_id, wishlist_id, group_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wish/" + wish_id);
+    xhttp.open("get", api_url + "auth/wishes/" + wish_id);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -1061,7 +1061,7 @@ function cancel_edit_wishlist(wishlist_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlist/" + wishlist_id);
+    xhttp.open("get", api_url + "auth/wishlists/" + wishlist_id);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -1110,7 +1110,7 @@ function GetWishImage(wishID) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wish/" + wishID + "/image");
+    xhttp.open("get", api_url + "auth/wishes/" + wishID + "/image");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -1154,7 +1154,7 @@ function GetWishImageThumbail(wishID) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wish/" + wishID + "/image?thumbnail=true");
+    xhttp.open("get", api_url + "auth/wishes/" + wishID + "/image?thumbnail=true");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();

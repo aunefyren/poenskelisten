@@ -154,12 +154,12 @@ function send_update() {
     } else {
 
         var form_obj = { 
-                            "email" : email,
-                            "password" : password,
-                            "password_repeat": password_repeat,
-                            "password_original": password_original,
-                            "profile_image": ""
-                        };
+            "email" : email,
+            "password" : password,
+            "password_repeat": password_repeat,
+            "password_original": password_original,
+            "profile_image": ""
+        };
 
         var form_data = JSON.stringify(form_obj);
     
@@ -205,7 +205,7 @@ function send_update_two(form_data) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/user/update");
+    xhttp.open("post", api_url + "auth/users/update");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -242,7 +242,7 @@ function GetProfileImage(userID) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/user/get/" + userID + "/image");
+    xhttp.open("get", api_url + "auth/users/" + userID + "/image");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();

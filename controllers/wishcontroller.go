@@ -11,15 +11,23 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"strconv"
+	"sort"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func GetWishesFromWishlist(context *gin.Context) {
 
 	// Create wish request
-	var wishlist_id = context.Param("wishlist_id")
+	var wishlist_id string
+
+	wishlist_id, okay := context.GetQuery("wishlist")
+	if !okay {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wishlist from request."})
+		context.Abort()
+		return
+	}
 
 	// Get user ID
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
@@ -39,9 +47,10 @@ func GetWishesFromWishlist(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wishlist_id_int, err := strconv.Atoi(wishlist_id)
+	wishlist_id_int, err := uuid.Parse(wishlist_id)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
 		context.Abort()
 		return
 	}
@@ -82,6 +91,11 @@ func GetWishesFromWishlist(context *gin.Context) {
 		return
 	}
 
+	// Sort wishes by creation date
+	sort.Slice(wishObjects, func(i, j int) bool {
+		return wishObjects[i].CreatedAt.Before(wishObjects[j].CreatedAt)
+	})
+
 	owner_id, err := database.GetWishlistOwner(wishlist_id_int)
 	if err != nil {
 		log.Println("Failed to get wishlist owner. Error: " + err.Error())
@@ -98,45 +112,45 @@ func GetWishesFromWishlist(context *gin.Context) {
 		return
 	}
 
-	wishlistCollabsIntArray := []int{}
+	wishlistCollabsIntArray := []uuid.UUID{}
 	for _, wishlistCollab := range wishlistCollabs {
-		wishlistCollabsIntArray = append(wishlistCollabsIntArray, wishlistCollab.User)
+		wishlistCollabsIntArray = append(wishlistCollabsIntArray, wishlistCollab.UserID)
 	}
 
 	context.JSON(http.StatusOK, gin.H{"owner_id": owner_id, "collaborators": wishlistCollabsIntArray, "wishes": wishObjects, "message": "Wishes retrieved.", "currency": config.PoenskelistenCurrency, "padding": config.PoenskelistenCurrencyPad})
 }
 
-func ConvertWishToWishObject(wish models.Wish, requestUserID *int) (models.WishObject, error) {
+func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models.WishObject, error) {
 
 	wishObject := models.WishObject{}
 
-	user_object, err := database.GetUserInformation(wish.Owner)
+	user_object, err := database.GetUserInformation(wish.OwnerID)
 	if err != nil {
-		log.Println("Failed to get information about wish owner for wish'" + strconv.Itoa(int(wish.ID)) + "' and user '" + strconv.Itoa(int(wish.Owner)) + "'. Returning. Error: " + err.Error())
+		log.Println("Failed to get information about wish owner for wish'" + wish.ID.String() + "' and user '" + wish.OwnerID.String() + "'. Returning. Error: " + err.Error())
 		return models.WishObject{}, err
 	}
 
-	wishclaimobject, err := database.GetWishClaimFromWish(int(wish.ID))
+	wishclaimobject, err := database.GetWishClaimFromWish(wish.ID)
 	if err != nil {
-		log.Println("Failed to get wish claims wish'" + strconv.Itoa(int(wish.ID)) + "'. Returning. Error: " + err.Error())
+		log.Println("Failed to get wish claims wish'" + wish.ID.String() + "'. Returning. Error: " + err.Error())
 		return models.WishObject{}, err
 	}
 
 	_, wishlist, err := database.GetWishlistByWishlistID(wish.WishlistID)
 	if err != nil {
-		log.Println("Failed to get wishlist for wish'" + strconv.Itoa(int(wish.ID)) + "'. Returning. Error: " + err.Error())
+		log.Println("Failed to get wishlist for wish'" + wish.ID.String() + "'. Returning. Error: " + err.Error())
 		return models.WishObject{}, err
 	}
 
-	wishlistOwnerUser, err := database.GetUserInformation(wishlist.Owner)
+	wishlistOwnerUser, err := database.GetUserInformation(wishlist.OwnerID)
 	if err != nil {
-		log.Println("Failed to get information about wishlist owner for wish'" + strconv.Itoa(int(wish.ID)) + "' and user '" + strconv.Itoa(int(wishlist.Owner)) + "'. Returning. Error: " + err.Error())
+		log.Println("Failed to get information about wishlist owner for wish'" + wish.ID.String() + "' and user '" + wishlist.OwnerID.String() + "'. Returning. Error: " + err.Error())
 		return models.WishObject{}, err
 	}
 
-	imageExists, err := CheckIfWishImageExists(int(wish.ID))
+	imageExists, err := CheckIfWishImageExists(wish.ID)
 	if err != nil {
-		log.Println("Failed to check if wish'" + strconv.Itoa(int(wish.ID)) + "' had image. Setting to false. Error: " + err.Error())
+		log.Println("Failed to check if wish'" + wish.ID.String() + "' had image. Setting to false. Error: " + err.Error())
 		wishObject.Image = false
 	} else if imageExists {
 		wishObject.Image = true
@@ -157,12 +171,12 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *int) (models.WishO
 
 	// Purge the reply if the requester is the owner
 	if requestUserID != nil {
-		if wish.Owner == *requestUserID {
+		if wish.OwnerID == *requestUserID {
 			wishclaimobject = []models.WishClaimObject{}
 		}
 
 		for _, wishCollaborator := range wishlistCollabObjects {
-			if int(wishCollaborator.User.ID) == int(*requestUserID) {
+			if wishCollaborator.User.ID == *requestUserID {
 				wishclaimobject = []models.WishClaimObject{}
 			}
 		}
@@ -172,7 +186,6 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *int) (models.WishO
 	wishObject.DeletedAt = wish.DeletedAt
 	wishObject.Enabled = wish.Enabled
 	wishObject.ID = wish.ID
-	wishObject.Model = wish.Model
 	wishObject.Name = wish.Name
 	wishObject.Note = wish.Note
 	wishObject.Owner = user_object
@@ -189,7 +202,7 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *int) (models.WishO
 
 }
 
-func ConvertWishesToWishObjects(wishes []models.Wish, requestUserID *int) ([]models.WishObject, error) {
+func ConvertWishesToWishObjects(wishes []models.Wish, requestUserID *uuid.UUID) ([]models.WishObject, error) {
 
 	wishObjects := []models.WishObject{}
 
@@ -197,7 +210,7 @@ func ConvertWishesToWishObjects(wishes []models.Wish, requestUserID *int) ([]mod
 
 		wishObject, err := ConvertWishToWishObject(wish, requestUserID)
 		if err != nil {
-			log.Println("Failed to convert wish '" + strconv.Itoa(int(wish.ID)) + "' to wish object. Skipping. Error: " + err.Error())
+			log.Println("Failed to convert wish '" + wish.ID.String() + "' to wish object. Skipping. Error: " + err.Error())
 			continue
 		}
 
@@ -211,7 +224,15 @@ func ConvertWishesToWishObjects(wishes []models.Wish, requestUserID *int) ([]mod
 
 func RegisterWish(context *gin.Context) {
 	// Create wish request
-	var wishlist_id = context.Param("wishlist_id")
+	var wishlist_id string
+
+	wishlist_id, okay := context.GetQuery("wishlist")
+	if !okay {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wishlist from request."})
+		context.Abort()
+		return
+	}
+
 	var wish models.WishCreationRequest
 	var db_wish models.Wish
 
@@ -230,9 +251,10 @@ func RegisterWish(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wishlist_id_int, err := strconv.Atoi(wishlist_id)
+	wishlist_id_int, err := uuid.Parse(wishlist_id)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
 		context.Abort()
 		return
 	}
@@ -327,12 +349,13 @@ func RegisterWish(context *gin.Context) {
 		return
 	}
 
-	db_wish.Owner = UserID
+	db_wish.OwnerID = UserID
 	db_wish.WishlistID = wishlist_id_int
 	db_wish.Name = wish.Name
 	db_wish.Note = wish.Note
 	db_wish.URL = wish.URL
 	db_wish.Price = wish.Price
+	db_wish.ID = uuid.New()
 
 	// Create user in DB
 	record := database.Instance.Create(&db_wish)
@@ -344,7 +367,7 @@ func RegisterWish(context *gin.Context) {
 
 	// Save image
 	if wish.Image != "" {
-		err = SaveWishImage(int(db_wish.ID), wish.Image)
+		err = SaveWishImage(db_wish.ID, wish.Image)
 		if err != nil {
 			log.Println("Failed to save wish image. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save wish image."})
@@ -387,9 +410,10 @@ func DeleteWish(context *gin.Context) {
 	}
 
 	// Parse wish id
-	wish_id_int, err := strconv.Atoi(wish_id)
+	wish_id_int, err := uuid.Parse(wish_id)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse wish ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})
 		context.Abort()
 		return
 	}
@@ -497,9 +521,10 @@ func RegisterWishClaim(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wish_id_int, err := strconv.Atoi(wish_id)
+	wish_id_int, err := uuid.Parse(wish_id)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse wish ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})
 		context.Abort()
 		return
 	}
@@ -590,8 +615,9 @@ func RegisterWishClaim(context *gin.Context) {
 		return
 	}
 
-	db_wishclaim.User = UserID
-	db_wishclaim.Wish = wish_id_int
+	db_wishclaim.UserID = UserID
+	db_wishclaim.WishID = wish_id_int
+	db_wishclaim.ID = uuid.New()
 
 	// Create wish claim
 	record := database.Instance.Create(&db_wishclaim)
@@ -601,7 +627,7 @@ func RegisterWishClaim(context *gin.Context) {
 		return
 	}
 
-	if wishclaim.WishlistID != 0 {
+	if wishclaim.WishlistID != nil {
 
 		_, wishes, err := database.GetWishesFromWishlist(db_wishlist_id)
 		if err != nil {
@@ -648,9 +674,10 @@ func RemoveWishClaim(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wish_id_int, err := strconv.Atoi(wish_id)
+	wish_id_int, err := uuid.Parse(wish_id)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse wish ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})
 		context.Abort()
 		return
 	}
@@ -737,7 +764,7 @@ func RemoveWishClaim(context *gin.Context) {
 		return
 	}
 
-	if wishclaim.WishlistID != 0 {
+	if wishclaim.WishlistID != nil {
 
 		_, wishes, err := database.GetWishesFromWishlist(db_wishlist_id)
 		if err != nil {
@@ -756,11 +783,11 @@ func RemoveWishClaim(context *gin.Context) {
 		}
 
 		// Return response
-		context.JSON(http.StatusCreated, gin.H{"message": "Wish claimed.", "wishes": wishObjects})
+		context.JSON(http.StatusOK, gin.H{"message": "Wish unclaimed.", "wishes": wishObjects})
 		return
 
 	} else {
-		context.JSON(http.StatusCreated, gin.H{"message": "Wish claimed."})
+		context.JSON(http.StatusOK, gin.H{"message": "Wish unclaimed."})
 	}
 }
 
@@ -788,7 +815,7 @@ func APIUpdateWish(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wishIDInt, err := strconv.Atoi(wishID)
+	wishIDInt, err := uuid.Parse(wishID)
 	if err != nil {
 		log.Println("Failed to parse wish ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})
@@ -925,7 +952,7 @@ func APIUpdateWish(context *gin.Context) {
 
 	// Save image
 	if wish.Image != "" {
-		err = SaveWishImage(int(wishIDInt), wish.Image)
+		err = SaveWishImage(wishIDInt, wish.Image)
 		if err != nil {
 			log.Println("Failed to save wish image. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save wish image."})
@@ -983,7 +1010,7 @@ func APIGetWish(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wishIDInt, err := strconv.Atoi(wishID)
+	wishIDInt, err := uuid.Parse(wishID)
 	if err != nil {
 		log.Println("Failed to parse wish ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})
@@ -1004,7 +1031,7 @@ func APIGetWish(context *gin.Context) {
 		return
 	}
 
-	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(userID, int(wishlistID))
+	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(userID, wishlistID)
 	if err != nil {
 		log.Println("Failed to verify wishlist ownership. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wishlist ownership."})

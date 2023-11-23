@@ -72,15 +72,11 @@ function action_login() {
     <div class="action-block">
         <form action="" class="icon-border" onsubmit="event.preventDefault(); send_log_in();">
 
-            <hr>
-
             <label id="form-input-icon" for="email"></label>
             <input type="email" name="email" id="email" value="` + email + `" placeholder="Email" required/>
 
             <label id="form-input-icon" for="password"></label>
             <input type="password" name="password" id="password" placeholder="Password" required/>
-            
-            <hr>
 
             <button id="log-in-button" type="submit" href="/">Log in</button>
 
@@ -120,12 +116,8 @@ function action_newpassword() {
     <div class="action-block">
         <form action="" class="icon-border" onsubmit="event.preventDefault(); reset_password_request();">
 
-            <hr>
-
             <label id="form-input-icon" for="email"></label>
             <input type="email" name="email" id="email" value="` + email + `" placeholder="Email" required/>
-
-            <hr>
 
             <button id="reset-button" type="submit" href="/">Reset password</button>
 
@@ -161,8 +153,6 @@ function action_resetpassword(reset_code) {
     <div class="action-block">
         <form action="" class="icon-border" onsubmit="event.preventDefault(); reset_password();">
 
-            <hr>
-
             <label id="form-input-icon" for="password"></label>
             <input type="password" name="password" id="password" placeholder="New password" />
 
@@ -170,8 +160,6 @@ function action_resetpassword(reset_code) {
             <input type="password" name="password_repeat" id="password_repeat" placeholder="Repeat the password" />
 
             <input type="hidden" name="reset_code" id="reset_code" value="` + reset_code + `" />
-
-            <hr>
 
             <button id="reset-button" type="submit" href="/">Change password</button>
 
@@ -238,7 +226,7 @@ function send_log_in(){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "open/token/register");
+    xhttp.open("post", api_url + "open/tokens/register");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.send(form_data);
     return false;
@@ -273,8 +261,8 @@ function reset_password_request(){
     var user_email = document.getElementById("email").value;
 
     var form_obj = { 
-                                    "email" : user_email
-                                };
+        "email" : user_email
+    };
 
     var form_data = JSON.stringify(form_obj);
 

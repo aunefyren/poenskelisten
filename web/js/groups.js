@@ -57,7 +57,7 @@ function load_page(result) {
                         </div>
 
                         <div id="group-input" class="group-input">
-                            <form action="" class="icon-border" onsubmit="event.preventDefault(); create_group(` + user_id + `);">
+                            <form action="" class="icon-border" onsubmit="event.preventDefault(); create_group('${user_id}');">
                                 
                                 <label for="group_name">Create a new group:</label><br>
 
@@ -85,7 +85,7 @@ function load_page(result) {
     clearResponse();
 
     if(result !== false) {
-
+        console.log("User: " + user_id)
         showLoggedInMenu();
         get_groups(user_id);
         get_users(user_id);
@@ -133,7 +133,7 @@ function get_groups(user_id){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/group/get");
+    xhttp.open("get", api_url + "auth/groups");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -146,13 +146,13 @@ function place_groups(group_array, user_id) {
 
     for(var i = 0; i < group_array.length; i++) {
 
-        var owner_id = group_array[i].owner.ID
+        var owner_id = group_array[i].owner.id
 
         html += '<div class="group-wrapper">'
 
         html += '<div class="group">'
         
-        html += '<div class="group-title clickable underline" style="margin: auto;" onclick="location.href = \'./groups/' + group_array[i].ID + '\'" title="Go to group">'
+        html += `<div class="group-title clickable underline" style="margin: 0.5em auto;" onclick="location.href = '/groups/${group_array[i].id}'" title="Go to group">`;
         html += '<div class="profile-icon">'
         html += '<img class="icon-img " src="/assets/users.svg">'
         html += '</div>'
@@ -166,18 +166,18 @@ function place_groups(group_array, user_id) {
             if(j !== 0) {
                 members_string += ','
             }
-            members_string += group_array[i].members[j].ID
+            members_string += group_array[i].members[j].id
         }
         members_string += ']'
 
         if(group_array[i].members.length > 0) {
-            html += '<div class="profile-icon clickable" onclick="toggle_group(' + group_array[i].ID + ', ' + group_array[i].owner.ID + ', ' + user_id + ', ' + members_string + ')" title="Expandable">'
-            html += '<img id="group_' + group_array[i].ID + '_arrow" class="icon-img " src="/assets/chevron-right.svg">'
+            html += `<div class="profile-icon clickable" onclick="toggle_group('${group_array[i].id}', '${group_array[i].owner.id}', '${user_id}', '${members_string}')" title="Expandable">`;
+            html += '<img id="group_' + group_array[i].id + '_arrow" class="icon-img " src="/assets/chevron-right.svg">'
             html += '</div>'
         }
 
         if(owner_id == user_id) {
-            html += '<div class="profile-icon clickable" onclick="delete_group(' + group_array[i].ID + ', ' + user_id + ')" title="Delete group">'
+            html += `<div class="profile-icon clickable" onclick="delete_group('${group_array[i].id}', '${user_id}')" title="Delete group">`;
             html += '<img class="icon-img " src="/assets/trash-2.svg">'
             html += '</div>'
         }
@@ -185,8 +185,8 @@ function place_groups(group_array, user_id) {
         html += '</div>'
 
         html += '</div>'
-
-        html += '<div class="group-members collapsed" id="group_' + group_array[i].ID + '_members">'
+        
+        html += '<div class="group-members collapsed" id="group_' + group_array[i].id + '_members">'
         for(var j = 0; j < group_array[i].members.length; j++) {
             if(j == 0) {
                 html += '<div class="text-body">Members in this group:</div>'
@@ -195,7 +195,7 @@ function place_groups(group_array, user_id) {
 
             html += '<div class="group-title">';
 
-            html += `<div class="profile-icon icon-border icon-background" id="group_member_image_${group_array[i].members[j].ID}_${group_array[i].ID}">`
+            html += `<div class="profile-icon icon-border icon-background" id="group_member_image_${group_array[i].members[j].id}_${group_array[i].id}">`
             html += '<img class="icon-img " src="/assets/user.svg">'
             html += '</div>'
 
@@ -203,15 +203,15 @@ function place_groups(group_array, user_id) {
 
             html += '</div>'
 
-            if(owner_id == user_id && group_array[i].members[j].ID !== user_id) {
-                html += '<div class="profile-icon clickable" onclick="remove_member(' + group_array[i].ID + ',' + group_array[i].members[j].ID + ', ' + user_id +')" title="Remove member">'
+            if(owner_id == user_id && group_array[i].members[j].id !== user_id) {
+                html += `<div class="profile-icon clickable" onclick="remove_member('${group_array[i].id}','${group_array[i].members[j].id}', '${user_id}')" title="Remove member">`
                 html += '<img class="icon-img " src="/assets/x.svg">'
                 html += '</div>'
-            } else if(group_array[i].members[j].ID == user_id && owner_id !== user_id){
-                html += '<div class="profile-icon clickable" onclick="leave_group(' + group_array[i].ID + ',' + user_id +')" title="Leave group">'
+            } else if(group_array[i].members[j].id == user_id && owner_id !== user_id){
+                html += `<div class="profile-icon clickable" onclick="leave_group('${group_array[i].id}','${user_id}')" title="Leave group">`;
                 html += '<img class="icon-img " src="/assets/log-out.svg">'
                 html += '</div>'
-            } else if(group_array[i].members[j].ID == owner_id) {
+            } else if(group_array[i].members[j].id == owner_id) {
                 html += '<div class="profile-icon" title="Group owner">'
                 html += '<img class="icon-img " src="/assets/star.svg">'
                 html += '</div>'
@@ -221,9 +221,10 @@ function place_groups(group_array, user_id) {
         }
 
         if(owner_id == user_id) {
-            html += '<form action="" class="icon-border" onsubmit="event.preventDefault(); add_members(' + group_array[i].ID + ', ' + user_id + ');">';
-            html += '<label for="group_members_' + group_array[i].ID + '">Select group members:</label><br>';
-            html += '<select name="group_members_' + group_array[i].ID + '" id="group-input-members-' + group_array[i].ID + '" multiple>';
+            html += '<hr style="margin: 1.75em 0.5em;">'
+            html += `<form action="" class="" onsubmit="event.preventDefault(); add_members('${group_array[i].id}', '${user_id}');">`;
+            html += '<label for="group_members_' + group_array[i].id + '">Select new group members:</label><br>';
+            html += '<select name="group_members_' + group_array[i].id + '" id="group-input-members-' + group_array[i].id + '" multiple>';
             html += '</select>';
             html += '<button id="register-button" type="submit" href="/">Add members to group</button>';
             html += '</form>';
@@ -243,7 +244,7 @@ function place_groups(group_array, user_id) {
 
     for(var i = 0; i < group_array.length; i++) {
         for(var j = 0; j < group_array[i].members.length; j++) {
-            GetProfileImage(group_array[i].members[j].ID, `group_member_image_${group_array[i].members[j].ID}_${group_array[i].ID}`)
+            GetProfileImage(group_array[i].members[j].id, `group_member_image_${group_array[i].members[j].id}_${group_array[i].id}`)
         }
     }
 }
@@ -316,7 +317,7 @@ function get_users_group(group_id, owner_id, user_id, member_array){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/user/get");
+    xhttp.open("get", api_url + "auth/users");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -328,12 +329,12 @@ function place_users_groups(user_array, group_id, owner_id, user_id, member_arra
 
     for(var i = 0; i < user_array.length; i++) {
 
-        if(user_array[i].ID == user_id) {
+        if(user_array[i].id == user_id) {
             continue;
         } else {
             var found = false;
             for(var j = 0; j < user_array.length; j++) {
-                if(member_array[j] == user_array[i].ID) {
+                if(member_array[j] == user_array[i].id) {
                     found = true;
                     break;
                 }
@@ -344,7 +345,7 @@ function place_users_groups(user_array, group_id, owner_id, user_id, member_arra
         }
 
         var option = document.createElement("option");
-        option.value = user_array[i].ID
+        option.value = user_array[i].id
         option.text = user_array[i].first_name + " " + user_array[i].last_name
         select_list.add(option, select_list[0]);
     }
@@ -380,7 +381,7 @@ function get_users(user_id){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/user/get");
+    xhttp.open("get", api_url + "auth/users");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -392,12 +393,12 @@ function place_users(user_array, user_id) {
 
     for(var i = 0; i < user_array.length; i++) {
 
-        if(user_array[i].ID == user_id) {
+        if(user_array[i].id == user_id) {
             continue;
         }
 
         var option = document.createElement("option");
-        option.value = user_array[i].ID
+        option.value = user_array[i].id
         option.text = user_array[i].first_name + " " + user_array[i].last_name
         select_list.add(option, select_list[0]);
     }
@@ -419,10 +420,10 @@ function create_group(user_id) {
     var group_description = document.getElementById("group_description").value;
 
     var form_obj = { 
-                                    "name" : group_name,
-                                    "description" : group_description,
-                                    "members": selected_members
-                                };
+        "name" : group_name,
+        "description" : group_description,
+        "members": selected_members
+    };
 
     var form_data = JSON.stringify(form_obj);
 
@@ -465,7 +466,7 @@ function create_group(user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/group/register");
+    xhttp.open("post", api_url + "auth/groups");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -519,7 +520,7 @@ function delete_group(group_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/group/" + group_id + "/delete");
+    xhttp.open("delete", api_url + "auth/groups/" + group_id);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -574,7 +575,7 @@ function remove_member(group_id, member_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/group/" + group_id + "/remove");
+    xhttp.open("post", api_url + "auth/groups/" + group_id + "/remove");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -596,8 +597,8 @@ function add_members(group_id, user_id) {
     }
 
     var form_obj = { 
-                                    "members": selected_members
-                                };
+        "members": selected_members
+    };
 
     var form_data = JSON.stringify(form_obj);
 
@@ -636,7 +637,7 @@ function add_members(group_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/group/" + group_id + "/join");
+    xhttp.open("post", api_url + "auth/groups/" + group_id + "/join");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -685,7 +686,7 @@ function leave_group(group_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/group/" + group_id + "/leave");
+    xhttp.open("post", api_url + "auth/groups/" + group_id + "/leave");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -723,7 +724,7 @@ function GetProfileImage(userID, divID) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/user/get/" + userID + "/image?thumbnail=true");
+    xhttp.open("get", api_url + "auth/users/" + userID + "/image?thumbnail=true");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();

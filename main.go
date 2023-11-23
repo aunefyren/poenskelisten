@@ -78,13 +78,18 @@ func main() {
 	log.Println("Configuration file loaded.")
 
 	// Change the config to respect flags
-	Config, generateInvite, err := parseFlags(Config)
+	Config, generateInvite, upgradeToV2, err := parseFlags(Config)
 	if err != nil {
 		log.Println("Failed to parse input flags. Error: " + err.Error())
 
 		os.Exit(1)
 	}
 	log.Println("Flags parsed.")
+
+	if upgradeToV2 {
+		utilities.MigrateDBToV2()
+		os.Exit(1)
+	}
 
 	// Set time zone from config if it is not empty
 	if Config.Timezone != "" {
@@ -125,10 +130,9 @@ func main() {
 	// Initialize Database
 	log.Println("Connecting to database...")
 
-	err = database.Connect(Config.DBType, Config.Timezone, Config.DBUsername, Config.DBPassword, Config.DBIP, Config.DBPort, Config.DBName)
+	err = database.Connect(Config.DBType, Config.Timezone, Config.DBUsername, Config.DBPassword, Config.DBIP, Config.DBPort, Config.DBName, Config.DBSSL, Config.DBLocation)
 	if err != nil {
 		log.Println("Failed to connect to database. Error: " + err.Error())
-
 		os.Exit(1)
 	}
 	database.Migrate()
@@ -151,7 +155,6 @@ func main() {
 	log.Println("Router initialized.")
 
 	log.Fatal(router.Run(":" + strconv.Itoa(Config.PoenskelistenPort)))
-
 }
 
 func initRouter() *gin.Engine {
@@ -164,72 +167,69 @@ func initRouter() *gin.Engine {
 	{
 		open := api.Group("/open")
 		{
-			open.POST("/token/register", controllers.GenerateToken)
+			open.POST("/tokens/register", controllers.GenerateToken)
 
-			open.POST("/user/register", controllers.RegisterUser)
-			open.POST("/user/reset", controllers.APIResetPassword)
-			open.POST("/user/password", controllers.APIChangePassword)
+			open.POST("/users", controllers.RegisterUser)
+			open.POST("/users/reset", controllers.APIResetPassword)
+			open.POST("/users/password", controllers.APIChangePassword)
+			open.POST("/users/verify/:code", controllers.VerifyUser)
+			open.POST("/users/verification", controllers.SendUserVerificationCode)
 		}
 
 		auth := api.Group("/auth").Use(middlewares.Auth(false))
 		{
-			auth.POST("/token/validate", controllers.ValidateToken)
+			auth.POST("/tokens/validate", controllers.ValidateToken)
 
-			auth.POST("/currency/", controllers.APIGetCurrency)
+			auth.GET("/currency", controllers.APIGetCurrency)
 
-			auth.POST("/group/register", controllers.RegisterGroup)
-			auth.POST("/group/:group_id/delete", controllers.DeleteGroup)
-			auth.POST("/group/:group_id/join", controllers.JoinGroup)
-			auth.POST("/group/:group_id/leave", controllers.RemoveSelfFromGroup)
-			auth.POST("/group/:group_id/remove", controllers.RemoveFromGroup)
-			auth.POST("/group/get", controllers.GetGroups)
-			auth.POST("/group/get/:group_id", controllers.GetGroup)
-			auth.POST("/group/:group_id", controllers.GetGroup)
-			auth.POST("/group/get/:group_id/members", controllers.GetGroupMembers)
-			auth.POST("/group/:group_id/update", controllers.APIUpdateGroup)
+			auth.POST("/groups", controllers.RegisterGroup)
+			auth.DELETE("/groups/:group_id", controllers.DeleteGroup)
+			auth.POST("/groups/:group_id/join", controllers.JoinGroup)
+			auth.POST("/groups/:group_id/leave", controllers.RemoveSelfFromGroup)
+			auth.POST("/groups/:group_id/remove", controllers.RemoveFromGroup)
+			auth.GET("/groups", controllers.GetGroups)
+			auth.GET("/groups/:group_id", controllers.GetGroup)
+			auth.GET("/groups/:group_id/members", controllers.GetGroupMembers)
+			auth.POST("/groups/:group_id/update", controllers.APIUpdateGroup)
 
-			auth.POST("/wishlist/register", controllers.RegisterWishlist)
-			auth.POST("/wishlist/get", controllers.GetWishlists)
-			auth.POST("/wishlist/get/:wishlist_id", controllers.GetWishlist)
-			auth.POST("/wishlist/get/group/:group_id", controllers.GetWishlistsFromGroup)
-			auth.POST("/wishlist/:wishlist_id/delete", controllers.DeleteWishlist)
-			auth.POST("/wishlist/:wishlist_id/join", controllers.JoinWishlist)
-			auth.POST("/wishlist/:wishlist_id/collaborate", controllers.APICollaborateWishlist)
-			auth.POST("/wishlist/:wishlist_id/remove", controllers.RemoveFromWishlist)
-			auth.POST("/wishlist/:wishlist_id/un-collaborate", controllers.APIUnCollaborateWishlist)
-			auth.POST("/wishlist/:wishlist_id/update", controllers.APIUpdateWishlist)
-			auth.POST("/wishlist/:wishlist_id", controllers.GetWishlist)
+			auth.POST("/wishlists", controllers.RegisterWishlist)
+			auth.GET("/wishlists", controllers.GetWishlists)
+			auth.GET("/wishlists/:wishlist_id", controllers.GetWishlist)
+			auth.DELETE("/wishlists/:wishlist_id", controllers.DeleteWishlist)
+			auth.POST("/wishlists/:wishlist_id/join", controllers.JoinWishlist)
+			auth.POST("/wishlists/:wishlist_id/collaborate", controllers.APICollaborateWishlist)
+			auth.POST("/wishlists/:wishlist_id/remove", controllers.RemoveFromWishlist)
+			auth.POST("/wishlists/:wishlist_id/un-collaborate", controllers.APIUnCollaborateWishlist)
+			auth.POST("/wishlists/:wishlist_id/update", controllers.APIUpdateWishlist)
 
-			auth.POST("/wish/get/:wishlist_id", controllers.GetWishesFromWishlist)
-			auth.POST("/wish/register/:wishlist_id", controllers.RegisterWish)
-			auth.POST("/wish/:wish_id/delete", controllers.DeleteWish)
-			auth.POST("/wish/:wish_id/claim", controllers.RegisterWishClaim)
-			auth.POST("/wish/:wish_id/unclaim", controllers.RemoveWishClaim)
-			auth.POST("/wish/:wish_id/update", controllers.APIUpdateWish)
-			auth.POST("/wish/:wish_id/image", controllers.APIGetWishImage)
-			auth.POST("/wish/:wish_id", controllers.APIGetWish)
+			auth.GET("/wishes", controllers.GetWishesFromWishlist)
+			auth.POST("/wishes", controllers.RegisterWish)
+			auth.DELETE("/wishes/:wish_id", controllers.DeleteWish)
+			auth.POST("/wishes/:wish_id/claim", controllers.RegisterWishClaim)
+			auth.POST("/wishes/:wish_id/unclaim", controllers.RemoveWishClaim)
+			auth.POST("/wishes/:wish_id/update", controllers.APIUpdateWish)
+			auth.GET("/wishes/:wish_id/image", controllers.APIGetWishImage)
+			auth.GET("/wishes/:wish_id", controllers.APIGetWish)
 
-			auth.POST("/news/get", controllers.GetNews)
-			auth.POST("/news/get/:news_id", controllers.GetNewsPost)
+			auth.GET("/news", controllers.GetNews)
+			auth.GET("/news/:news_id", controllers.GetNewsPost)
 
-			open.POST("/user/verify/:code", controllers.VerifyUser)
-			open.POST("/user/verification", controllers.SendUserVerificationCode)
-			auth.POST("/user/get/:user_id", controllers.GetUser)
-			auth.POST("/user/get/:user_id/image", controllers.APIGetUserProfileImage)
-			auth.POST("/user/get", controllers.GetUsers)
-			auth.POST("/user/update", controllers.UpdateUser)
+			auth.GET("/users/:user_id", controllers.GetUser)
+			auth.GET("/users/:user_id/image", controllers.APIGetUserProfileImage)
+			auth.GET("/users", controllers.GetUsers)
+			auth.POST("/users/update", controllers.UpdateUser)
 		}
 
 		admin := api.Group("/admin").Use(middlewares.Auth(true))
 		{
 			admin.POST("/currency/update", controllers.APIUpdateCurrency)
 
-			admin.POST("/invite/register", controllers.RegisterInvite)
-			admin.POST("/invite/get", controllers.APIGetAllInvites)
-			admin.POST("/invite/:invite_id/delete", controllers.APIDeleteInvite)
+			admin.POST("/invites", controllers.RegisterInvite)
+			admin.GET("/invites", controllers.APIGetAllInvites)
+			admin.DELETE("/invites/:invite_id", controllers.APIDeleteInvite)
 
-			admin.POST("/news/register", controllers.RegisterNewsPost)
-			admin.POST("/news/:news_id/delete", controllers.DeleteNewsPost)
+			admin.POST("/news", controllers.RegisterNewsPost)
+			admin.DELETE("/news/:news_id", controllers.DeleteNewsPost)
 
 			admin.POST("/server/info", controllers.APIGetServerInfo)
 		}
@@ -298,10 +298,15 @@ func initRouter() *gin.Engine {
 		c.HTML(http.StatusOK, "admin.html", nil)
 	})
 
+	// Static endpoint for verifying account
+	router.GET("/verify", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "verify.html", nil)
+	})
+
 	return router
 }
 
-func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, error) {
+func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, bool, error) {
 
 	// Define flag variables with the configuration file as default values
 	var port int
@@ -331,6 +336,13 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, error)
 	var dbIP string
 	flag.StringVar(&dbIP, "dbip", Config.DBIP, "The IP address used to reach the database.")
 
+	var dbSSL string
+	var dbSSLBool bool
+	flag.StringVar(&dbSSL, "dbssl", "false", "If the database connection uses SSL.")
+
+	var dbLocation string
+	flag.StringVar(&dbLocation, "dblocation", "", "The database is a local file, what is the system file path.")
+
 	var smtpDisabled string
 	flag.StringVar(&smtpDisabled, "disablesmtp", "false", "Disables user verification using e-mail.")
 
@@ -352,6 +364,10 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, error)
 	var generateInvite string
 	var generateInviteBool bool
 	flag.StringVar(&generateInvite, "generateinvite", "false", "If an invite code should be automatically generate on startup.")
+
+	var upgradeToV2 string
+	var upgradeToV2Bool bool
+	flag.StringVar(&upgradeToV2, "upgradetov2", "false", "If have placed your old pre-V2 database .json in the files folder as 'db.json' we will attempt to migrate the data.")
 
 	// Parse the flags from input
 	flag.Parse()
@@ -402,6 +418,19 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, error)
 	}
 
 	// Respect the flag if string is true
+	if strings.ToLower(dbSSL) == "true" {
+		dbSSLBool = true
+	} else {
+		dbSSLBool = false
+	}
+	Config.DBSSL = dbSSLBool
+
+	// Respect the flag if config is empty
+	if Config.DBLocation == "" {
+		Config.DBLocation = dbLocation
+	}
+
+	// Respect the flag if string is true
 	if strings.ToLower(smtpDisabled) == "true" {
 		Config.SMTPEnabled = false
 	}
@@ -438,6 +467,13 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, error)
 		generateInviteBool = false
 	}
 
+	// Respect the flag if string is true
+	if strings.ToLower(upgradeToV2) == "true" {
+		upgradeToV2Bool = true
+	} else {
+		upgradeToV2Bool = false
+	}
+
 	// Failsafe, if port is 0, set to default 8080
 	if Config.PoenskelistenPort == 0 {
 		Config.PoenskelistenPort = 8080
@@ -446,9 +482,9 @@ func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, error)
 	// Save the new config
 	err := config.SaveConfig(Config)
 	if err != nil {
-		return &models.ConfigStruct{}, false, err
+		return &models.ConfigStruct{}, false, false, err
 	}
 
-	return Config, generateInviteBool, nil
+	return Config, generateInviteBool, upgradeToV2Bool, nil
 
 }

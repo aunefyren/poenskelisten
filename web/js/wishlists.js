@@ -68,7 +68,7 @@ function load_page(result) {
                         </div>
 
                         <div id="wishlist-input" class="wishlist-input">
-                            <form action="" class="icon-border" onsubmit="event.preventDefault(); create_wishlist(` + user_id + `);">
+                            <form action="" class="icon-border" onsubmit="event.preventDefault(); create_wishlist('${user_id}');">
                                 
                                 <label for="wishlist_name">Create a new wishlist:</label><br>
 
@@ -87,7 +87,7 @@ function load_page(result) {
                                 <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" checked>
                                 <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
                                 
-                                <button id="register-button" type="submit" href="/">Create wishlist</button>
+                                <button id="register-button" type="submit">Create wishlist</button>
 
                             </form>
                         </div>
@@ -145,7 +145,7 @@ function get_wishlists(user_id){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlist/get");
+    xhttp.open("get", api_url + "auth/wishlists");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -181,15 +181,15 @@ function place_wishlists(wishlists_array, user_id) {
             console.log("Failed to parse datetime. Error: " + err)
         }
 
-        console.log("Wishlist ID: " + wishlists_array[i].ID)
+        console.log("Wishlist ID: " + wishlists_array[i].id)
 
-        owner_id = wishlists_array[i].owner.ID
+        owner_id = wishlists_array[i].owner.id
 
         html += '<div class="wishlist-wrapper">'
 
         html += '<div class="wishlist">'
         
-        html += '<div class="wishlist-title clickable underline" onclick="location.href = \'./wishlists/' + wishlists_array[i].ID + '\'" title="Go to wishlist">'
+        html += `<div class="wishlist-title clickable underline" onclick="location.href = '/wishlists/${wishlists_array[i].id}'" title="Go to wishlist">`;
         html += '<div class="profile-icon">'
         html += '<img class="icon-img" src="/assets/list.svg">'
         html += '</div><b>'
@@ -200,8 +200,8 @@ function place_wishlists(wishlists_array, user_id) {
         html += '<div class="profile-name">'
         html += wishlists_array[i].owner.first_name + " " + wishlists_array[i].owner.last_name
         html += '</div>'
-        html += `<div class="profile-icon icon-border" id="wishlist_owner_image_${owner_id}_${wishlists_array[i].ID}">`
-        html += `<img class="icon-img " src="/assets/user.svg" id="wishlist_owner_image_img_${owner_id}_${wishlists_array[i].ID}">`
+        html += `<div class="profile-icon icon-border icon-background" id="wishlist_owner_image_${owner_id}_${wishlists_array[i].id}">`
+        html += `<img class="icon-img " src="/assets/user.svg" id="wishlist_owner_image_img_${owner_id}_${wishlists_array[i].id}">`
         html += '</div>'
 
         var members_string="["  
@@ -209,9 +209,9 @@ function place_wishlists(wishlists_array, user_id) {
             if(j !== 0) {
                 members_string += ','
             }
-            members_string += wishlists_array[i].members[j].ID
+            members_string += "'" + wishlists_array[i].members[j].id + "'"
             
-            console.log(wishlists_array[i].ID + " " + wishlists_array[i].members[j].ID)
+            console.log(wishlists_array[i].id + " " + wishlists_array[i].members[j].id)
             console.log(wishlists_array[i].members)
         }
         members_string += ']'
@@ -221,21 +221,21 @@ function place_wishlists(wishlists_array, user_id) {
             if(j !== 0) {
                 collaboratorsString += ','
             }
-            collaboratorsString += wishlists_array[i].collaborators[j].user.ID
+            collaboratorsString += "'" + wishlists_array[i].collaborators[j].user.id + "'"
             
-            console.log(wishlists_array[i].ID + " " + wishlists_array[i].collaborators[j].user.ID)
+            console.log(wishlists_array[i].id + " " + wishlists_array[i].collaborators[j].user.id)
             console.log(wishlists_array[i].collaborators)
         }
         collaboratorsString += ']'
 
         if(owner_id == user_id) {
-            html += '<div class="profile-icon clickable" onclick="toggle_wishlist(' + user_id + ', ' + wishlists_array[i].ID + ', ' + owner_id + ', ' + members_string + ', ' + collaboratorsString + ')" title="Expandable">'
-            html += '<img id="wishlist_' + wishlists_array[i].ID + '_arrow" class="icon-img " src="/assets/chevron-right.svg">'
+            html += `<div class="profile-icon clickable" onclick="toggle_wishlist('${user_id}', '${wishlists_array[i].id}', '${owner_id}', ${members_string}, ${collaboratorsString})" title="Expandable">`
+            html += '<img id="wishlist_' + wishlists_array[i].id + '_arrow" class="icon-img " src="/assets/chevron-right.svg">'
             html += '</div>'
         }
 
         if(owner_id == user_id) {
-            html += '<div class="profile-icon clickable" onclick="delete_wishlist(' + wishlists_array[i].ID + ', ' + user_id + ')" title="Delete wishlist">'
+            html += `<div class="profile-icon clickable" onclick="delete_wishlist('${wishlists_array[i].id}', '${user_id}')" title="Delete wishlist">`
             html += '<img class="icon-img " src="/assets/trash-2.svg">'
             html += '</div>'
         }
@@ -244,7 +244,7 @@ function place_wishlists(wishlists_array, user_id) {
 
         html += '</div>'
 
-        html += '<div class="group-members collapsed" id="wishlist_' + wishlists_array[i].ID + '_members">'
+        html += '<div class="group-members collapsed" id="wishlist_' + wishlists_array[i].id + '_members">'
         for(var j = 0; j < wishlists_array[i].members.length; j++) {
             if(j == 0) {
                 html += '<div class="text-body">Available in these groups:</div>'
@@ -252,7 +252,7 @@ function place_wishlists(wishlists_array, user_id) {
 
             html += '<div class="group-member hoverable-light" title="Group">'
 
-            html += '<div class="group-title">';
+            html += `<div class="group-title clickable underline" onclick="location.href = '/groups/${wishlists_array[i].members[j].id}'" title="Go to group">`;
 
             html += '<div class="profile-icon">'
             html += '<img class="icon-img " src="/assets/users.svg">'
@@ -263,7 +263,7 @@ function place_wishlists(wishlists_array, user_id) {
             html += '</div>'
 
             if(owner_id == user_id) {
-                html += '<div class="profile-icon clickable" onclick="remove_member(' + wishlists_array[i].ID + ',' + wishlists_array[i].members[j].ID + ', ' + user_id +')" title="Remove wishlist from group">'
+                html += `<div class="profile-icon clickable" onclick="remove_member('${wishlists_array[i].id}','${wishlists_array[i].members[j].id}', '${user_id}')" title="Remove wishlist from group">`;
                 html += '<img class="icon-img " src="/assets/x.svg">'
                 html += '</div>'
             }
@@ -271,15 +271,16 @@ function place_wishlists(wishlists_array, user_id) {
         }
 
         if(owner_id == user_id) {
-            html += '<form action="" class="icon-border" onsubmit="event.preventDefault(); add_groups(' + wishlists_array[i].ID + ', ' + user_id + ');">';
-            html += '<label for="wishlist-input-members-' + wishlists_array[i].ID + '">Add to groups:</label><br>';
-            html += '<select name="wishlist_members_' + wishlists_array[i].ID + '" id="wishlist-input-members-' + wishlists_array[i].ID + '" multiple>';
+            html += '<hr style="margin: 1.75em 0.5em;">'
+            html += `<form action="" class="" onsubmit="event.preventDefault(); add_groups('${wishlists_array[i].id}', '${user_id}');">`;
+            html += '<label for="wishlist-input-members-' + wishlists_array[i].id + '">Add to groups:</label><br>';
+            html += '<select name="wishlist_members_' + wishlists_array[i].id + '" id="wishlist-input-members-' + wishlists_array[i].id + '" multiple>';
             html += '</select>';
             html += '<button id="register-button" type="submit" href="/">Add wishlist to groups</button>';
             html += '</form>';
         }
 
-        html += '<hr style="margin: 1.5em 0.5em;">'
+        html += '<hr style="margin: 1.75em 0.5em;">'
 
         for(var j = 0; j < wishlists_array[i].collaborators.length; j++) {
             if(j == 0) {
@@ -290,7 +291,7 @@ function place_wishlists(wishlists_array, user_id) {
 
             html += '<div class="group-title">';
 
-            html += `<div class="profile-icon icon-border icon-background" id="wishlist_${wishlists_array[i].ID}_collaborator_${wishlists_array[i].collaborators[j].user.ID}">`
+            html += `<div class="profile-icon icon-border icon-background" id="wishlist_${wishlists_array[i].id}_collaborator_${wishlists_array[i].collaborators[j].user.id}">`
             html += '<img class="icon-img " src="/assets/user.svg">'
             html += '</div>'
 
@@ -299,7 +300,7 @@ function place_wishlists(wishlists_array, user_id) {
             html += '</div>'
 
             if(owner_id == user_id) {
-                html += '<div class="profile-icon clickable" onclick="removeCollaborator(' + wishlists_array[i].ID + ',' + wishlists_array[i].collaborators[j].user.ID + ', ' + user_id +')" title="Remove collaborator from wishlist">'
+                html += `<div class="profile-icon clickable" onclick="removeCollaborator('${wishlists_array[i].id}', '${wishlists_array[i].collaborators[j].user.id}', '${user_id}')" title="Remove collaborator from wishlist">`;
                 html += '<img class="icon-img " src="/assets/x.svg">'
                 html += '</div>'
             }
@@ -307,9 +308,9 @@ function place_wishlists(wishlists_array, user_id) {
         }
 
         if(owner_id == user_id) {
-            html += '<form action="" class="icon-border" onsubmit="event.preventDefault(); addCollaborators(' + wishlists_array[i].ID + ', ' + user_id + ');">';
-            html += '<label for="wishlist-input-collaborators-' + wishlists_array[i].ID + '">Add users to wishlist as collaborators:</label><br>';
-            html += '<select name="wishlist_collaborators_' + wishlists_array[i].ID + '" id="wishlist-input-collaborators-' + wishlists_array[i].ID + '" multiple>';
+            html += `<form action="" class="" onsubmit="event.preventDefault(); addCollaborators('${wishlists_array[i].id}', '${user_id}');">`;
+            html += '<label for="wishlist-input-collaborators-' + wishlists_array[i].id + '">Add users to wishlist as collaborators:</label><br>';
+            html += '<select name="wishlist_collaborators_' + wishlists_array[i].id + '" id="wishlist-input-collaborators-' + wishlists_array[i].id + '" multiple>';
             html += '</select>';
             html += '<button id="register-collaborators-button" type="submit" href="/">Add collaborators to wishlist</button>';
             html += '</form>';
@@ -345,17 +346,16 @@ function place_wishlists(wishlists_array, user_id) {
     wishlist_object_expired.innerHTML = html_expired
 
     for(var i = 0; i < wishlists_array.length; i++) {
-        GetProfileImage(wishlists_array[i].owner.ID, `wishlist_owner_image_${wishlists_array[i].owner.ID}_${wishlists_array[i].ID}`)
+        GetProfileImage(wishlists_array[i].owner.id, `wishlist_owner_image_${wishlists_array[i].owner.id}_${wishlists_array[i].id}`)
     }
     for(var i = 0; i < wishlists_array.length; i++) {
         for(var j = 0; j < wishlists_array[i].collaborators.length; j++) {
-            GetProfileImage(wishlists_array[i].collaborators[j].user.ID, `wishlist_${wishlists_array[i].ID}_collaborator_${wishlists_array[i].collaborators[j].user.ID}`)
+            GetProfileImage(wishlists_array[i].collaborators[j].user.id, `wishlist_${wishlists_array[i].id}_collaborator_${wishlists_array[i].collaborators[j].user.id}`)
         }
     }
 }
 
 function create_wishlist(user_id) {
-
     var wishlist_name = document.getElementById("wishlist_name").value;
     var wishlist_description = document.getElementById("wishlist_description").value;
     var wishlist_date = document.getElementById("wishlist_date").value;
@@ -420,7 +420,7 @@ function create_wishlist(user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlist/register");
+    xhttp.open("post", api_url + "auth/wishlists");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -473,7 +473,7 @@ function delete_wishlist(wishlist_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlist/" + wishlist_id + "/delete");
+    xhttp.open("delete", api_url + "auth/wishlists/" + wishlist_id);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -568,7 +568,7 @@ function get_groups(owner_id, wishlist_id, user_id, member_array){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/group/get");
+    xhttp.open("get", api_url + "auth/groups");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -584,7 +584,8 @@ function place_groups(group_array, wishlist_id, owner_id, user_id, member_array)
 
         var found = false;
         for(var j = 0; j < group_array.length; j++) {
-            if(member_array[j] == group_array[i].ID) {
+            console.log(member_array[j])
+            if(member_array[j] == group_array[i].id) {
                 found = true;
                 break;
             }
@@ -594,7 +595,7 @@ function place_groups(group_array, wishlist_id, owner_id, user_id, member_array)
         }
 
         var option = document.createElement("option");
-        option.value = group_array[i].ID
+        option.value = group_array[i].id
         option.text = group_array[i].name
         select_list.add(option, select_list[0]);
     }
@@ -609,13 +610,13 @@ function add_groups(wishlist_id, user_id) {
         opt = select_list.options[i];
     
         if (opt.selected) {
-            selected_members.push(Number(opt.value));
+            selected_members.push(opt.value);
         }
     }
 
     var form_obj = { 
-                                    "groups": selected_members
-                                };
+        "groups": selected_members
+    };
 
     var form_data = JSON.stringify(form_obj);
 
@@ -654,7 +655,7 @@ function add_groups(wishlist_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlist/" + wishlist_id + "/join");
+    xhttp.open("post", api_url + "auth/wishlists/" + wishlist_id + "/join");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -711,7 +712,7 @@ function remove_member(wishlist_id, group_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlist/" + wishlist_id + "/remove");
+    xhttp.open("post", api_url + "auth/wishlists/" + wishlist_id + "/remove");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -749,7 +750,7 @@ function GetProfileImage(userID, divID) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/user/get/" + userID + "/image?thumbnail=true");
+    xhttp.open("get", api_url + "auth/users/" + userID + "/image?thumbnail=true");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -800,7 +801,7 @@ function getCollaborators(owner_id, wishlist_id, user_id, collaboratorArray){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/user/get");
+    xhttp.open("get", api_url + "auth/users");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -817,17 +818,17 @@ function placeCollaborators(userArray, wishlist_id, owner_id, user_id, collabora
 
         var found = false;
         for(var j = 0; j < userArray.length; j++) {
-            if(collaboratorArray[j] == userArray[i].ID) {
+            if(collaboratorArray[j] == userArray[i].id) {
                 found = true;
                 break;
             }
         }
-        if(found || userArray[i].ID == owner_id) {
+        if(found || userArray[i].id == owner_id) {
             continue;
         }
 
         var option = document.createElement("option");
-        option.value = userArray[i].ID
+        option.value = userArray[i].id
         option.text = `${userArray[i].first_name} ${userArray[i].last_name}`
         select_list.add(option, select_list[0]);
     }
@@ -841,7 +842,7 @@ function addCollaborators(wishlist_id, user_id) {
         opt = select_list.options[i];
     
         if (opt.selected) {
-            selected_collaborators.push(Number(opt.value));
+            selected_collaborators.push(opt.value);
         }
     }
 
@@ -886,7 +887,7 @@ function addCollaborators(wishlist_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlist/" + wishlist_id + "/collaborate");
+    xhttp.open("post", api_url + "auth/wishlists/" + wishlist_id + "/collaborate");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -942,7 +943,7 @@ function removeCollaborator(wishlist_id, collaborator_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlist/" + wishlist_id + "/un-collaborate");
+    xhttp.open("post", api_url + "auth/wishlists/" + wishlist_id + "/un-collaborate");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
