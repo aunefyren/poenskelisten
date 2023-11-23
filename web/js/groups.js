@@ -148,6 +148,8 @@ function place_groups(group_array, user_id) {
 
         var owner_id = group_array[i].owner.id
 
+        console.log("Owner:" + owner_id)
+
         html += '<div class="group-wrapper">'
 
         html += '<div class="group">'
@@ -166,12 +168,12 @@ function place_groups(group_array, user_id) {
             if(j !== 0) {
                 members_string += ','
             }
-            members_string += group_array[i].members[j].id
+            members_string += "'" + group_array[i].members[j].id + "'"
         }
         members_string += ']'
 
         if(group_array[i].members.length > 0) {
-            html += `<div class="profile-icon clickable" onclick="toggle_group('${group_array[i].id}', '${group_array[i].owner.id}', '${user_id}', '${members_string}')" title="Expandable">`;
+            html += `<div class="profile-icon clickable" onclick="toggle_group('${group_array[i].id}', '${group_array[i].owner.id}', '${user_id}', ${members_string})" title="Expandable">`;
             html += '<img id="group_' + group_array[i].id + '_arrow" class="icon-img " src="/assets/chevron-right.svg">'
             html += '</div>'
         }
