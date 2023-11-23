@@ -175,6 +175,10 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 			wishclaimobject = []models.WishClaimObject{}
 		}
 
+		if wishlistOwnerUser.ID == *requestUserID {
+			wishclaimobject = []models.WishClaimObject{}
+		}
+
 		for _, wishCollaborator := range wishlistCollabObjects {
 			if wishCollaborator.User.ID == *requestUserID {
 				wishclaimobject = []models.WishClaimObject{}
