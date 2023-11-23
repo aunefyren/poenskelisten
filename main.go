@@ -314,7 +314,7 @@ func initRouter() *gin.Engine {
 
 	// Static endpoint for manifest
 	router.GET("/manifest.json", func(c *gin.Context) {
-		JSONfile, err := os.ReadFile("./web/manifest.json")
+		JSONfile, err := os.ReadFile("./web/json/manifest.json")
 		if err != nil {
 			fmt.Println("Reading manifest threw error trying to open the file. Error: " + err.Error())
 		}
