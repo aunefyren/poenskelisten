@@ -23,9 +23,7 @@ function load_page(result) {
                         <br>
 
                         <div class="action-block">
-                            <form action="" onsubmit="event.preventDefault(); send_registration();">
-
-                                <hr>
+                            <form action="" class="icon-border" onsubmit="event.preventDefault(); send_registration();">
 
                                 <label id="form-input-icon" for="email"></label>
                                 <input type="email" name="email" id="email" placeholder="Email" required/>
@@ -45,10 +43,8 @@ function load_page(result) {
                                 <label id="form-input-icon" for="invitation_code"></label>
                                 <input type="text" name="invitation_code" id="invitation_code" placeholder="Invitation code" required/>
                                 
-                                <input style="margin-top: 2em;" type="checkbox" id="confirm" name="confirm" value="confirm" required>
-                                <label for="confirm"> I confirm that Pønskelisten can store relevant information about me and that I am atleast thirteen years of age.</label><br>
-
-                                <hr>
+                                <input class="clickable" style="margin-top: 2em;" type="checkbox" id="confirm" name="confirm" value="confirm" required>
+                                <label for="confirm" class="clickable"> I confirm that Pønskelisten can store relevant information about me and that I am atleast thirteen years of age.</label><br>
 
                                 <button id="register-button" type="submit" href="/">Register</button>
 
