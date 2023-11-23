@@ -76,42 +76,37 @@ function get_login(cookie) {
         if (this.readyState == 4) {
 
             var result;
-            if(result = JSON.parse(this.responseText)) { 
-                // If the error is to verify, allow loading page anyways
-                if(result.error === "You must verify your account.") {
-
-                    // If not front-page, redirect
-                    if(window.location.pathname !== "/verify") {
-                        location.href = '/verify';
-                        return;
-                    }
-
-                    // Load page
-                    load_page(this.responseText)
-
-                } else if (result.error) {
-                    
-                    error(result.error)
-                    showLoggedInMenu();
-                    return;
-                    
-                } else {
-
-                    // If new token, save it
-                    if(result.token != null && result.token != "") {
-                        // store jwt to cookie
-                        console.log("Refreshed login token.")
-                        set_cookie("poenskelisten", result.token, 7);
-                    }
-
-                    // Load page
-                    load_page(this.responseText)
-                    
-                }
-            } else {
+            try {
+                result = JSON.parse(this.responseText)
+            } catch(e) {
+                console.log("Failed to parse JSON. Error: " + e)
                 load_page(false);
             }
 
+            // If the error is to verify, allow loading page anyways
+            if(result.error === "You must verify your account.") {
+                // If not front-page, redirect
+                if(window.location.pathname !== "/verify") {
+                    location.href = '/verify';
+                    return;
+                }
+                // Load page
+                load_page(this.responseText)
+            } else if (result.error) {
+                error(result.error)
+                showLoggedInMenu();
+                return;
+            } else {
+                // If new token, save it
+                if(result.token != null && result.token != "") {
+                    // store jwt to cookie
+                    console.log("Refreshed login token.")
+                    set_cookie("poenskelisten", result.token, 7);
+                }
+
+                // Load page
+                load_page(this.responseText)
+            }
         }
     };
     xhttp.withCredentials = true;
