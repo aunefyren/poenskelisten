@@ -2,7 +2,7 @@ var api_url = window.location.origin + "/api/";
 
 // Load service worker
 if('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/js/service-worker.js')
+    navigator.serviceWorker.register('/service-worker.js')
 .then((reg) => {
     // registration worked
     console.log('Registration succeeded. Scope is ' + reg.scope);

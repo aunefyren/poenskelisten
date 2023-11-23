@@ -5,48 +5,67 @@
 	"short_name": "Pønskelisten",
 	"description": "Share wishes in a meaningful way.",
 	"theme_color": "#0d1b2a",
-	"background_color": "#0d1b2a",
+	"background_color": "#e0e1dd",
 	"display": "standalone",
 	"orientation": "portrait",
 	"scope": "/",
 	"start_url": "/",
 	"icons": [
-	{
+	  {
 		"src": "/assets/logos/logo-72x72.png",
 		"sizes": "72x72",
 		"type": "image/png",
 		"purpose": "maskable any"
-	},
-	{
+	  },
+	  {
 		"src": "/assets/logos/logo-96x96.png",
 		"sizes": "96x96",
 		"type": "image/png",
 		"purpose": "maskable any"
-	},
-	{
+	  },
+	  {
 		"src": "/assets/logos/logo-128x128.png",
 		"sizes": "128x128",
 		"type": "image/png",
 		"purpose": "maskable any"
-	},
-	{
+	  },
+	  {
 		"src": "/assets/logos/logo-192x192.png",
 		"sizes": "192x192",
 		"type": "image/png",
 		"purpose": "maskable any"
-	},
-	{
+	  },
+	  {
 		"src": "/assets/logos/logo-384x384.png",
 		"sizes": "384x384",
 		"type": "image/png",
 		"purpose": "maskable any"
-	},
-	{
+	  },
+	  {
 		"src": "/assets/logos/logo-512x512.png",
 		"sizes": "512x512",
 		"type": "image/png",
-    	"purpose": "maskable any"
-	}
-],
-	"splash_pages": null
-}
+		"purpose": "maskable any"
+	  },
+	  {
+		"src": "/assets/logos/logo-1024x1024.png",
+		"sizes": "1024x1024",
+		"type": "image/png",
+		"purpose": "maskable any"
+	  },
+	  {
+		"src": "/assets/logos/logo-mono-512x512.png",
+		"sizes": "512x512",
+		"type": "image/png",
+		"purpose": "any monochrome"
+	  },
+	  {
+		"src": "/assets/logo_trans.svg",
+		"sizes": "any",
+		"type": "image/svg+xml",
+		"purpose": "any monochrome"
+	  }
+	],
+	"splash_pages": null,
+	"id": "277e3b14-f50c-437b-a5a8-d19118407bdd"
+  }
