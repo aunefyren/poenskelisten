@@ -9,11 +9,11 @@ import (
 	"aunefyren/poenskelisten/utilities"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/thanhpk/randstr"
 )
 
@@ -84,6 +84,7 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	user.Enabled = true
+	user.ID = uuid.New()
 
 	user.ResetExpiration = time.Now()
 
@@ -125,7 +126,8 @@ func RegisterUser(context *gin.Context) {
 
 	// Hash the selected password
 	if err := user.HashPassword(user.Password); err != nil {
-		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Println("Failed to hash password. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password."})
 		context.Abort()
 		return
 	}
@@ -133,7 +135,8 @@ func RegisterUser(context *gin.Context) {
 	// Verify unsued invite code exists
 	unique_invitecode, err := database.VerifyUnusedUserInviteCode(usercreationrequest.InviteCode)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to verify invite code. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify invite code."})
 		context.Abort()
 		return
 	} else if !unique_invitecode {
@@ -145,7 +148,8 @@ func RegisterUser(context *gin.Context) {
 	// Verify e-mail is not in use
 	unique_email, err := database.VerifyUniqueUserEmail(user.Email)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to verify unique e-mail. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify unique e-mail."})
 		context.Abort()
 		return
 	} else if !unique_email {
@@ -163,9 +167,10 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	// Set code to used
-	err = database.SetUsedUserInviteCode(usercreationrequest.InviteCode, int(user.ID))
+	err = database.SetUsedUserInviteCode(usercreationrequest.InviteCode, user.ID)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to set invite code to used. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to set invite code to used."})
 		context.Abort()
 		return
 	}
@@ -194,9 +199,10 @@ func GetUser(context *gin.Context) {
 	var user = context.Param("user_id")
 
 	// Parse group id
-	user_id_int, err := strconv.Atoi(user)
+	user_id_int, err := uuid.Parse(user)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse group ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
 	}
@@ -214,24 +220,16 @@ func GetUser(context *gin.Context) {
 
 func GetUsers(context *gin.Context) {
 
-	// Create user request
-	var user_struct []models.User
-
-	userrecord := database.Instance.Where("`users`.enabled = ?", 1).Find(&user_struct)
-	if userrecord.Error != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": userrecord.Error})
+	users, err := database.GetEnabledUsers()
+	if err != nil {
+		log.Println("Failed to get enabled users. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get enabled users."})
 		context.Abort()
 		return
 	}
 
-	for index, _ := range user_struct {
-		// Redact user information
-		user_struct[index].Email = "REDACTED"
-		user_struct[index].Password = "REDACTED"
-	}
-
 	// Reply
-	context.JSON(http.StatusOK, gin.H{"users": user_struct, "message": "Users retrieved."})
+	context.JSON(http.StatusOK, gin.H{"users": users, "message": "Users retrieved."})
 }
 
 func VerifyUser(context *gin.Context) {
@@ -278,17 +276,16 @@ func VerifyUser(context *gin.Context) {
 	}
 
 	// Get user object
-	var user models.User
-	record := database.Instance.Where("ID = ?", userID).First(&user)
-	if record.Error != nil {
-		log.Println("Invalid credentials. Error: " + record.Error.Error())
+	user, err := database.GetAllUserInformation(userID)
+	if err != nil {
+		log.Println("Failed to get user details. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details."})
 		context.Abort()
 		return
 	}
 
 	// Generate new JWT token
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, int(user.ID), *user.Admin, *user.Verified)
+	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, user.ID, *user.Admin, *user.Verified)
 	if err != nil {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		context.Abort()
@@ -397,10 +394,9 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// Get user object
-	var userOriginal models.User
-	record := database.Instance.Where("ID = ?", userID).First(&userOriginal)
-	if record.Error != nil {
-		log.Println("Invalid credentials. Error: " + record.Error.Error())
+	userOriginal, err := database.GetAllUserInformation(userID)
+	if err != nil {
+		log.Println("Failed to get user details. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details."})
 		context.Abort()
 		return
@@ -443,7 +439,7 @@ func UpdateUser(context *gin.Context) {
 
 	// Update profile image
 	if userUpdateRequest.ProfileImage != "" {
-		err = UpdateUserProfileImage(int(userOriginal.ID), userUpdateRequest.ProfileImage)
+		err = UpdateUserProfileImage(userOriginal.ID, userUpdateRequest.ProfileImage)
 		if err != nil {
 			log.Println("Failed to update profile image. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile image."})
@@ -453,7 +449,7 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// Update user in database
-	err = database.UpdateUserValuesByUserID(int(userOriginal.ID), userOriginal.Email, userOriginal.Password)
+	err = database.UpdateUserValuesByUserID(userOriginal.ID, userOriginal.Email, userOriginal.Password)
 	if err != nil {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		context.Abort()
@@ -470,7 +466,7 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// Generate new JWT token
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, int(user.ID), *user.Admin, *user.Verified)
+	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, user.ID, *user.Admin, *user.Verified)
 	if err != nil {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		context.Abort()
@@ -555,7 +551,7 @@ func APIResetPassword(context *gin.Context) {
 		return
 	}
 
-	_, err = database.GenrateRandomResetCodeForuser(int(user.ID))
+	_, err = database.GenrateRandomResetCodeForuser(user.ID)
 	if err != nil {
 		log.Println("Failed to generate reset code for user during password reset. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})
@@ -563,7 +559,7 @@ func APIResetPassword(context *gin.Context) {
 		return
 	}
 
-	user, err = database.GetAllUserInformation(int(user.ID))
+	user, err = database.GetAllUserInformation(user.ID)
 	if err != nil {
 		log.Println("Failed to retrieve data for user during password reset. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})
@@ -643,7 +639,7 @@ func APIChangePassword(context *gin.Context) {
 	}
 
 	// Save new password
-	err = database.UpdateUserValuesByUserID(int(user.ID), user.Email, user.Password)
+	err = database.UpdateUserValuesByUserID(user.ID, user.Email, user.Password)
 	if err != nil {
 		log.Println("Failed to update password. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password."})
@@ -652,7 +648,7 @@ func APIChangePassword(context *gin.Context) {
 	}
 
 	// Change the reset code
-	_, err = database.GenrateRandomResetCodeForuser(int(user.ID))
+	_, err = database.GenrateRandomResetCodeForuser(user.ID)
 	if err != nil {
 		log.Println("Failed to generate reset code for user during password reset. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})

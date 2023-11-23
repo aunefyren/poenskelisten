@@ -8,9 +8,10 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"strconv"
+	"sort"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // The RegisterGroup function creates a new group with the specified name and owner, and adds the specified members to the group.
@@ -31,6 +32,7 @@ func RegisterGroup(context *gin.Context) {
 	// Copy the data from the GroupCreationRequest model to the Group model
 	group.Description = groupCreationRequest.Description
 	group.Name = groupCreationRequest.Name
+	group.ID = uuid.New()
 
 	// Get the user ID from the Authorization header of the request
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
@@ -42,7 +44,7 @@ func RegisterGroup(context *gin.Context) {
 	}
 
 	// Set the group owner to the user ID we obtained
-	group.Owner = userID
+	group.OwnerID = userID
 
 	// Verify that the group name is not empty and has at least 5 characters
 	if len(group.Name) < 5 || group.Name == "" {
@@ -78,11 +80,15 @@ func RegisterGroup(context *gin.Context) {
 		return
 	}
 
-	// Verify that a group with the same name and owner does not already exist
-	groupRecords := database.Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.name = ?", group.Name).Where("`groups`.Owner = ?", group.Owner).Find(&group)
-	if groupRecords.RowsAffected > 0 {
-		// If a group with the same name and owner already exists, return an Internal Server Error response
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "A group with that name already exists."})
+	// Check if owner already has a group with this name
+	groupExists, err := database.VerifyIfGroupWithSameNameAndOwnerDoesNotExist(group.Name, group.OwnerID)
+	if err != nil {
+		log.Println("Failed to check for existing groups. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check for existing groups."})
+		context.Abort()
+		return
+	} else if groupExists {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Owner already has a group with this name."})
 		context.Abort()
 		return
 	}
@@ -90,8 +96,8 @@ func RegisterGroup(context *gin.Context) {
 	// Create the group in the database
 	record := database.Instance.Create(&group)
 	if record.Error != nil {
-		// If there is an error creating the group, return an Internal Server Error response
-		context.JSON(http.StatusInternalServerError, gin.H{"error": record.Error.Error()})
+		log.Println("Failed to create group in database. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group in database."})
 		context.Abort()
 		return
 	}
@@ -100,8 +106,9 @@ func RegisterGroup(context *gin.Context) {
 	var groupMembership models.GroupMembership
 
 	// Set the member and group ID for the new group membership
-	groupMembership.Member = userID
-	groupMembership.Group = int(group.ID)
+	groupMembership.MemberID = userID
+	groupMembership.GroupID = group.ID
+	groupMembership.ID = uuid.New()
 
 	// Create the group membership in the database
 	membershipRecord := database.Instance.Create(&groupMembership)
@@ -118,8 +125,9 @@ func RegisterGroup(context *gin.Context) {
 		var groupMembership models.GroupMembership
 
 		// Set the member and group ID for the new group membership
-		groupMembership.Member = member
-		groupMembership.Group = int(group.ID)
+		groupMembership.MemberID = member
+		groupMembership.GroupID = group.ID
+		groupMembership.ID = uuid.New()
 
 		// Create the group membership in the database
 		_ = database.Instance.Create(&groupMembership)
@@ -150,7 +158,8 @@ func JoinGroup(context *gin.Context) {
 	// Bind the incoming request body to the GroupMembershipCreationRequest model
 	if err := context.ShouldBindJSON(&groupMembership); err != nil {
 		// If there is an error binding the request, return a Bad Request response
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
@@ -167,16 +176,18 @@ func JoinGroup(context *gin.Context) {
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
 		// If there is an error getting the user ID, return a Bad Request response
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse header. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse header."})
 		context.Abort()
 		return
 	}
 
 	// Parse the group ID from string to int
-	groupIDInt, err := strconv.Atoi(groupID)
+	groupIDInt, err := uuid.Parse(groupID)
 	if err != nil {
 		// If there is an error parsing the group ID, return a Bad Request response
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse group ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
 	}
@@ -187,13 +198,14 @@ func JoinGroup(context *gin.Context) {
 		var groupMembershipDB models.GroupMembership
 
 		// Set the member ID for the new group membership
-		groupMembershipDB.Member = member
+		groupMembershipDB.MemberID = member
 
 		// Verify that the user exists
 		_, err := database.GetUserInformation(member)
 		if err != nil {
 			// If the user does not exist, return a Bad Request response
-			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			log.Println("Failed to load user from database. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load user from database."})
 			context.Abort()
 			return
 		}
@@ -202,7 +214,8 @@ func JoinGroup(context *gin.Context) {
 		membershipStatus, err := database.VerifyUserMembershipToGroup(member, groupIDInt)
 		if err != nil {
 			// If there is an error verifying the user's membership, return a Bad Request response
-			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			log.Println("Failed to verify membership to group. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
 			context.Abort()
 			return
 		} else if membershipStatus {
@@ -213,23 +226,24 @@ func JoinGroup(context *gin.Context) {
 		}
 
 		// Verify that the group is owned by the current user
-		var group models.Group
-		groupRecord := database.Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", groupIDInt).Where("`groups`.owner = ?", userID).Find(&group)
-		if groupRecord.Error != nil {
-			// If the group is not owned by the current user, return a Bad Request response
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Only owners can edit their group memberships."})
+		_, err = database.GetGroupUsingGroupIDAndUserIDAsOwner(userID, groupIDInt)
+		if err != nil {
+			log.Println("Failed to verify ownership of group. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of group."})
 			context.Abort()
 			return
 		}
 
 		// Set the group ID for the new group membership
-		groupMembershipDB.Group = groupIDInt
+		groupMembershipDB.GroupID = groupIDInt
+		groupMembershipDB.ID = uuid.New()
 
 		// Add the group membership to the database
 		record := database.Instance.Create(&groupMembershipDB)
 		if record.Error != nil {
 			// If there is an error adding the group membership to the database, return an Internal Server Error response
-			context.JSON(http.StatusInternalServerError, gin.H{"error": record.Error.Error()})
+			log.Println("Failed to create group membership in database.")
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group membership in database."})
 			context.Abort()
 			return
 		}
@@ -239,7 +253,8 @@ func JoinGroup(context *gin.Context) {
 	groupsWithOwner, err := GetGroupObjects(userID)
 	if err != nil {
 		// If there is an error getting the updated list of groups, return a Bad Request response
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to get groups for user. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get groups for user."})
 		context.Abort()
 		return
 	}
@@ -272,15 +287,16 @@ func RemoveFromGroup(context *gin.Context) {
 	}
 
 	// Parse group ID as integer
-	groupIDInt, err := strconv.Atoi(groupID)
+	groupIDInt, err := uuid.Parse(groupID)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse group ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
 	}
 
 	// Verify user membership to group
-	membershipStatus, err := database.VerifyUserMembershipToGroup(groupMembership.Member, groupIDInt)
+	membershipStatus, err := database.VerifyUserMembershipToGroup(groupMembership.MemberID, groupIDInt)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
@@ -302,7 +318,7 @@ func RemoveFromGroup(context *gin.Context) {
 		return
 	}
 
-	if userID == groupMembership.Member {
+	if userID == groupMembership.MemberID {
 		// Return error if user is owner and trying to remove themselves
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Owner cannot be removed as member."})
 		context.Abort()
@@ -319,7 +335,7 @@ func RemoveFromGroup(context *gin.Context) {
 	}
 
 	// Delete group membership
-	err = database.DeleteGroupMembership(int(groupMembership.ID))
+	err = database.DeleteGroupMembership(groupMembership.ID)
 	if groupMembershipRecord.Error != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
@@ -356,9 +372,10 @@ func RemoveSelfFromGroup(context *gin.Context) {
 	}
 
 	// Parse group ID as integer
-	groupIDInt, err := strconv.Atoi(groupID)
+	groupIDInt, err := uuid.Parse(groupID)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse group ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
 	}
@@ -377,7 +394,7 @@ func RemoveSelfFromGroup(context *gin.Context) {
 	}
 
 	// Verify group is not owned by requester
-	ownershipStatus, err := database.VerifyUserOwnershipToGroup(groupMembership.Member, groupIDInt)
+	ownershipStatus, err := database.VerifyUserOwnershipToGroup(groupMembership.MemberID, groupIDInt)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
@@ -399,7 +416,7 @@ func RemoveSelfFromGroup(context *gin.Context) {
 	}
 
 	// Delete group membership
-	err = database.DeleteGroupMembership(int(groupMembership.ID))
+	err = database.DeleteGroupMembership(groupMembership.ID)
 	if groupMembershipRecord.Error != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
@@ -429,9 +446,10 @@ func DeleteGroup(context *gin.Context) {
 	groupID := context.Param("group_id")
 
 	// Parse group ID as integer
-	groupIDInt, err := strconv.Atoi(groupID)
+	groupIDInt, err := uuid.Parse(groupID)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse group ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
 	}
@@ -498,13 +516,18 @@ func GetGroups(context *gin.Context) {
 		return
 	}
 
+	// Sort groups by creation date
+	sort.Slice(groupsWithOwner, func(i, j int) bool {
+		return groupsWithOwner[i].CreatedAt.Before(groupsWithOwner[j].CreatedAt)
+	})
+
 	// Return list of groups with owner and success message
 	context.JSON(http.StatusOK, gin.H{"groups": groupsWithOwner, "message": "Groups retrieved."})
 
 }
 
 // The function retrieves a list of groups that the given user owns or is a member of.
-func GetGroupObjects(userID int) ([]models.GroupUser, error) {
+func GetGroupObjects(userID uuid.UUID) ([]models.GroupUser, error) {
 
 	// Create groups slice and groups with owner slice
 	var groups []models.Group
@@ -541,9 +564,10 @@ func GetGroup(context *gin.Context) {
 	}
 
 	// Parse group ID as integer
-	groupIDInt, err := strconv.Atoi(groupID)
+	groupIDInt, err := uuid.Parse(groupID)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse group ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
 	}
@@ -577,21 +601,14 @@ func GetGroup(context *gin.Context) {
 
 // GetGroupObject retrieves the specified group that the authenticated user is a member of,
 // along with the group's owner and members.
-func GetGroupObject(userID int, groupID int) (models.GroupUser, error) {
+func GetGroupObject(userID uuid.UUID, groupID uuid.UUID) (models.GroupUser, error) {
 	var group models.Group
 
 	// Get group
-	groupRecord := database.Instance.Where("`groups`.enabled = ?", 1).
-		Joins("JOIN group_memberships on group_memberships.group = groups.id").
-		Where("`group_memberships`.enabled = ?", 1).
-		Where("`group_memberships`.member = ?", userID).
-		Where("`group_memberships`.group = ?", groupID).
-		Find(&group)
-
-	if groupRecord.Error != nil {
-		return models.GroupUser{}, groupRecord.Error
-	} else if groupRecord.RowsAffected == 0 {
-		return models.GroupUser{}, nil
+	group, err := database.GetGroupUsingGroupIDAndMembershipUsingUserID(userID, groupID)
+	if err != nil {
+		log.Println("Failed to get group for user. Error: " + err.Error())
+		return models.GroupUser{}, errors.New("Failed to get group for user.")
 	}
 
 	groupObject, err := ConvertGroupToGroupObject(group)
@@ -618,9 +635,10 @@ func GetGroupMembers(context *gin.Context) {
 	}
 
 	// Parse group id for usage
-	groupIDInt, err := strconv.Atoi(group)
+	groupIDInt, err := uuid.Parse(group)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse group ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
 	}
@@ -648,7 +666,7 @@ func GetGroupMembers(context *gin.Context) {
 	// Add user information to each membership
 	for _, membership := range groupMemberships {
 
-		userObject, err := database.GetUserInformation(membership.Member)
+		userObject, err := database.GetUserInformation(membership.MemberID)
 		if err != nil {
 			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			context.Abort()
@@ -660,9 +678,8 @@ func GetGroupMembers(context *gin.Context) {
 		groupmembershipWithUser.CreatedAt = membership.CreatedAt
 		groupmembershipWithUser.DeletedAt = membership.DeletedAt
 		groupmembershipWithUser.Enabled = membership.Enabled
-		groupmembershipWithUser.Group = membership.Group
+		groupmembershipWithUser.Group = membership.GroupID
 		groupmembershipWithUser.ID = membership.ID
-		groupmembershipWithUser.Model = membership.Model
 		groupmembershipWithUser.UpdatedAt = membership.UpdatedAt
 
 		groupMembershipsWithUser = append(groupMembershipsWithUser, groupmembershipWithUser)
@@ -690,8 +707,9 @@ func APIUpdateGroup(context *gin.Context) {
 	}
 
 	// Parse group id for usage
-	groupIDInt, err := strconv.Atoi(groupID)
+	groupIDInt, err := uuid.Parse(groupID)
 	if err != nil {
+		log.Println("Failed to parse group ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
@@ -723,7 +741,7 @@ func APIUpdateGroup(context *gin.Context) {
 	// Copy the data from the GroupUpdateRequest model to the Group model
 	group.Description = groupUpdateRequest.Description
 	group.Name = groupUpdateRequest.Name
-	group.Owner = userID
+	group.OwnerID = userID
 
 	groupOriginal, err := database.GetGroupInformation(groupIDInt)
 	if err != nil {
@@ -757,7 +775,7 @@ func APIUpdateGroup(context *gin.Context) {
 		}
 
 		// Verify that a group with the same name and owner does not already exist
-		groupExists, _, err := database.VerifyGroupExistsByNameForUser(group.Name, group.Owner)
+		groupExists, _, err := database.VerifyGroupExistsByNameForUser(group.Name, group.OwnerID)
 		if err != nil {
 			log.Println(("Failed verify group name. Error: " + err.Error()))
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed verify group name."})
@@ -818,10 +836,10 @@ func ConvertGroupToGroupObject(group models.Group) (groupObject models.GroupUser
 	groupObject = models.GroupUser{}
 
 	// Add owner information to group
-	userObject, err := database.GetUserInformation(group.Owner)
+	userObject, err := database.GetUserInformation(group.OwnerID)
 	if err != nil {
-		log.Println("Failed to get user object for user ID " + strconv.Itoa(int(group.ID)) + ". Returning. Error: " + err.Error())
-		return models.GroupUser{}, errors.New("Failed to get user object for user ID " + strconv.Itoa(int(group.ID)) + ".")
+		log.Println("Failed to get user object for user ID " + group.ID.String() + ". Returning. Error: " + err.Error())
+		return models.GroupUser{}, errors.New("Failed to get user object for user ID " + group.ID.String() + ".")
 	}
 
 	groupObject.CreatedAt = group.CreatedAt
@@ -829,24 +847,24 @@ func ConvertGroupToGroupObject(group models.Group) (groupObject models.GroupUser
 	groupObject.Description = group.Description
 	groupObject.Enabled = group.Enabled
 	groupObject.ID = group.ID
-	groupObject.Model = group.Model
 	groupObject.Name = group.Name
 	groupObject.Owner = userObject
 	groupObject.UpdatedAt = group.UpdatedAt
+	groupObject.Members = []models.User{}
 
 	// Get group members
-	groupMemberships, err := database.GetGroupMembershipsFromGroup(int(group.ID))
+	groupMemberships, err := database.GetGroupMembershipsFromGroup(group.ID)
 	if err != nil {
-		log.Println("Failed to get group memberships for group " + strconv.Itoa(int(group.ID)) + ". Returning. Error: " + err.Error())
-		return groupObject, errors.New("Failed to get group memberships for group " + strconv.Itoa(int(group.ID)) + ".")
+		log.Println("Failed to get group memberships for group " + group.ID.String() + ". Returning. Error: " + err.Error())
+		return groupObject, errors.New("Failed to get group memberships for group " + group.ID.String() + ".")
 	}
 
 	// Add user information to each membership
 	for _, membership := range groupMemberships {
-		userObject, err := database.GetUserInformation(membership.Member)
+		userObject, err := database.GetUserInformation(membership.MemberID)
 		if err != nil {
-			log.Println("Failed to get user information for group '" + strconv.Itoa(int(group.ID)) + "' member '" + strconv.Itoa(membership.Member) + "'. Returning. Error: " + err.Error())
-			return models.GroupUser{}, errors.New("Failed to get user information for group '" + strconv.Itoa(int(group.ID)) + "' member '" + strconv.Itoa(membership.Member) + "'.")
+			log.Println("Failed to get user information for group '" + group.ID.String() + "' member '" + membership.MemberID.String() + "'. Returning. Error: " + err.Error())
+			return models.GroupUser{}, errors.New("Failed to get user information for group '" + group.ID.String() + "' member '" + membership.MemberID.String() + "'.")
 		}
 
 		groupObject.Members = append(groupObject.Members, userObject)
@@ -862,7 +880,7 @@ func ConvertGroupsToGroupObjects(groups []models.Group) (groupObjects []models.G
 	for _, group := range groups {
 		groupObject, err := ConvertGroupToGroupObject(group)
 		if err != nil {
-			log.Println("Failed to get group object for '" + strconv.Itoa(int(group.ID)) + "'. Skipping. Error: " + err.Error())
+			log.Println("Failed to get group object for '" + group.ID.String() + "'. Skipping. Error: " + err.Error())
 			continue
 		}
 		groupObjects = append(groupObjects, groupObject)

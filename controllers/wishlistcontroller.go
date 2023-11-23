@@ -8,10 +8,11 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"strconv"
+	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func RegisterWishlist(context *gin.Context) {
@@ -35,13 +36,13 @@ func RegisterWishlist(context *gin.Context) {
 		return
 	}
 
-	group_membership := false
-	group_id := 0
-	if wishlist.Group != 0 {
+	var group_membership = false
+	var group_id = uuid.UUID{}
+	if wishlist.Group != nil {
 		group_membership = true
 
 		// Parse group id
-		group_id = wishlist.Group
+		group_id = *wishlist.Group
 
 		MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, group_id)
 		if err != nil {
@@ -124,10 +125,11 @@ func RegisterWishlist(context *gin.Context) {
 	}
 
 	// Finalize wishlist object
-	wishlistdb.Owner = UserID
+	wishlistdb.OwnerID = UserID
 	wishlistdb.Description = wishlist.Description
 	wishlistdb.Name = wishlist.Name
 	wishlistdb.Claimable = wishlist.Claimable
+	wishlistdb.ID = uuid.New()
 
 	// Create wishlist in DB
 	wishlistdb, err = database.CreateWishlistInDB(wishlistdb)
@@ -143,8 +145,9 @@ func RegisterWishlist(context *gin.Context) {
 	// If a group was referenced, create the wishlist membership
 	if group_membership == true {
 		var wishlistmembershipdb models.WishlistMembership
-		wishlistmembershipdb.Group = group_id
-		wishlistmembershipdb.Wishlist = int(wishlistdb.ID)
+		wishlistmembershipdb.GroupID = group_id
+		wishlistmembershipdb.WishlistID = wishlistdb.ID
+		wishlistmembershipdb.ID = uuid.New()
 
 		// Add group membership to database
 		record := database.Instance.Create(&wishlistmembershipdb)
@@ -178,55 +181,8 @@ func RegisterWishlist(context *gin.Context) {
 	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist created.", "wishlists": wishlists_with_users})
 }
 
-func GetWishlistsFromGroup(context *gin.Context) {
-
-	// Create wishlist request
-	var group = context.Param("group_id")
-
-	// Get user ID
-	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
-	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		context.Abort()
-		return
-	}
-
-	// Parse group id
-	group_id_int, err := strconv.Atoi(group)
-	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		context.Abort()
-		return
-	}
-
-	// Verify membership to group exists
-	MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, group_id_int)
-	if err != nil {
-		log.Println("Failed to verify membership to group. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership to group."})
-		context.Abort()
-		return
-	} else if !MembershipStatus {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not a member of this group."})
-		context.Abort()
-		return
-	}
-
-	wishlists_with_users, err := GetWishlistObjectsFromGroup(group_id_int, UserID)
-	if err != nil {
-		log.Println("Failed to get wishlists for group. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wishlists for group."})
-		context.Abort()
-		return
-	}
-
-	context.JSON(http.StatusOK, gin.H{"wishlists": wishlists_with_users, "message": "Wishlists retrieved."})
-
-}
-
 func DeleteWishlist(context *gin.Context) {
-
+	var wishlistObjects = []models.WishlistUser{}
 	var wishlist = context.Param("wishlist_id")
 
 	// Get user ID
@@ -238,9 +194,10 @@ func DeleteWishlist(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wishlist_id_int, err := strconv.Atoi(wishlist)
+	wishlist_id_int, err := uuid.Parse(wishlist)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
 		context.Abort()
 		return
 	}
@@ -265,18 +222,53 @@ func DeleteWishlist(context *gin.Context) {
 		return
 	}
 
-	wishlists_with_users, err := GetWishlistObjects(UserID)
-	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		context.Abort()
-		return
+	group_id, okay := context.GetQuery("group")
+	if !okay {
+		wishlistObjects, err = GetWishlistObjects(UserID)
+		if err != nil {
+			log.Println("Failed to get wishlist objects for user. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist objects for user."})
+			context.Abort()
+			return
+		}
+	} else {
+		// Parse group id
+		group_id_int, err := uuid.Parse(group_id)
+		if err != nil {
+			log.Println("Failed to parse group ID. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
+			context.Abort()
+			return
+		}
+
+		// Verify membership to group exists
+		MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, group_id_int)
+		if err != nil {
+			log.Println("Failed to verify membership to group. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership to group."})
+			context.Abort()
+			return
+		} else if !MembershipStatus {
+			//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not a member of this group."})
+			context.Abort()
+			return
+		}
+
+		wishlistObjects, err = GetWishlistObjectsFromGroup(group_id_int, UserID)
+		if err != nil {
+			log.Println("Failed to get wishlists for group. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wishlists for group."})
+			context.Abort()
+			return
+		}
 	}
 
-	context.JSON(http.StatusOK, gin.H{"wishlists": wishlists_with_users, "message": "Wishlist deleted."})
+	context.JSON(http.StatusOK, gin.H{"wishlists": wishlistObjects, "message": "Wishlist deleted."})
 
 }
 
-func GetWishlistObjectsFromGroup(group_id int, RequestUserID int) (wishlistObjects []models.WishlistUser, err error) {
+func GetWishlistObjectsFromGroup(group_id uuid.UUID, RequestUserID uuid.UUID) (wishlistObjects []models.WishlistUser, err error) {
 	err = nil
 	wishlistObjects = []models.WishlistUser{}
 
@@ -308,9 +300,10 @@ func GetWishlist(context *gin.Context) {
 	}
 
 	// parse wishlist id
-	wishlist_id_int, err := strconv.Atoi(wishlist_id)
+	wishlist_id_int, err := uuid.Parse(wishlist_id)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
 		context.Abort()
 		return
 	}
@@ -349,26 +342,28 @@ func GetWishlist(context *gin.Context) {
 
 }
 
-func GetWishlistObject(WishlistID int, RequestUserID int) (wishlistObject models.WishlistUser, err error) {
+func GetWishlistObject(WishlistID uuid.UUID, RequestUserID uuid.UUID) (wishlistObject models.WishlistUser, err error) {
 	err = nil
 	wishlistObject = models.WishlistUser{}
 
 	wishlist, err := database.GetWishlist(WishlistID)
 	if err != nil {
-		log.Println("Failed to get wishlist '" + strconv.Itoa(WishlistID) + "' from DB. Returning. Error: " + err.Error())
+		log.Println("Failed to get wishlist '" + WishlistID.String() + "' from DB. Returning. Error: " + err.Error())
 		return models.WishlistUser{}, err
 	}
 
 	wishlistObject, err = ConvertWishlistToWishlistObject(wishlist, &RequestUserID)
 	if err != nil {
-		log.Println("Failed to convert wishlist '" + strconv.Itoa(WishlistID) + "' to object. Returning. Error: " + err.Error())
-		return models.WishlistUser{}, errors.New("Failed to convert wishlist '" + strconv.Itoa(WishlistID) + "' to object.")
+		log.Println("Failed to convert wishlist '" + WishlistID.String() + "' to object. Returning. Error: " + err.Error())
+		return models.WishlistUser{}, errors.New("Failed to convert wishlist '" + WishlistID.String() + "' to object.")
 	}
 
 	return
 }
 
 func GetWishlists(context *gin.Context) {
+	var group_id string
+	var wishlistObjects = []models.WishlistUser{}
 
 	// Get user ID
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
@@ -378,31 +373,71 @@ func GetWishlists(context *gin.Context) {
 		return
 	}
 
-	wishlists_with_users, err := GetWishlistObjects(UserID)
-	if err != nil {
-		log.Println("Failed to get wishlist objects for user. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist objects for user."})
-		context.Abort()
-		return
+	group_id, okay := context.GetQuery("group")
+	if !okay {
+		wishlistObjects, err = GetWishlistObjects(UserID)
+		if err != nil {
+			log.Println("Failed to get wishlist objects for user. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist objects for user."})
+			context.Abort()
+			return
+		}
+
+	} else {
+		// Parse group id
+		group_id_int, err := uuid.Parse(group_id)
+		if err != nil {
+			log.Println("Failed to parse group ID. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
+			context.Abort()
+			return
+		}
+
+		// Verify membership to group exists
+		MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, group_id_int)
+		if err != nil {
+			log.Println("Failed to verify membership to group. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership to group."})
+			context.Abort()
+			return
+		} else if !MembershipStatus {
+			//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not a member of this group."})
+			context.Abort()
+			return
+		}
+
+		wishlistObjects, err = GetWishlistObjectsFromGroup(group_id_int, UserID)
+		if err != nil {
+			log.Println("Failed to get wishlists for group. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wishlists for group."})
+			context.Abort()
+			return
+		}
 	}
 
-	context.JSON(http.StatusOK, gin.H{"wishlists": wishlists_with_users, "message": "Wishlists retrieved."})
+	// Sort wishlists by creation date
+	sort.Slice(wishlistObjects, func(i, j int) bool {
+		return wishlistObjects[i].CreatedAt.Before(wishlistObjects[j].CreatedAt)
+	})
+
+	context.JSON(http.StatusOK, gin.H{"wishlists": wishlistObjects, "message": "Wishlists retrieved."})
 }
 
-func GetWishlistObjects(UserID int) (wishlistObjects []models.WishlistUser, err error) {
+func GetWishlistObjects(UserID uuid.UUID) (wishlistObjects []models.WishlistUser, err error) {
 	err = nil
 	wishlistObjects = []models.WishlistUser{}
 
 	wishlists, err := database.GetOwnedWishlists(UserID)
 	if err != nil {
-		log.Println("Failed to get owned wishlists for user '" + strconv.Itoa(UserID) + "'. Returning. Error: " + err.Error())
-		return wishlistObjects, errors.New("Failed to get owned wishlists for user '" + strconv.Itoa(UserID) + "'.")
+		log.Println("Failed to get owned wishlists for user '" + UserID.String() + "'. Returning. Error: " + err.Error())
+		return wishlistObjects, errors.New("Failed to get owned wishlists for user '" + UserID.String() + "'.")
 	}
 
 	wishlistsThroughCollab, err := database.GetWishlistsByUserIDThroughWishlistCollaborations(UserID)
 	if err != nil {
-		log.Println("Failed to get collaboration wishlists for user '" + strconv.Itoa(UserID) + "'. Returning. Error: " + err.Error())
-		return wishlistObjects, errors.New("Failed to get collaboration wishlists for user '" + strconv.Itoa(UserID) + "'.")
+		log.Println("Failed to get collaboration wishlists for user '" + UserID.String() + "'. Returning. Error: " + err.Error())
+		return wishlistObjects, errors.New("Failed to get collaboration wishlists for user '" + UserID.String() + "'.")
 	}
 
 	for _, wishlistThroughCollab := range wishlistsThroughCollab {
@@ -444,9 +479,10 @@ func JoinWishlist(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wishlist_id_int, err := strconv.Atoi(wishlist_id)
+	wishlist_id_int, err := uuid.Parse(wishlist_id)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
 		context.Abort()
 		return
 	}
@@ -454,7 +490,7 @@ func JoinWishlist(context *gin.Context) {
 	for _, Group := range wishlistmembership.Groups {
 
 		var wishlistmembershipdb models.WishlistMembership
-		wishlistmembershipdb.Group = Group
+		wishlistmembershipdb.GroupID = Group
 
 		// Verify user exists
 		_, err := database.GetGroupInformation(Group)
@@ -478,15 +514,20 @@ func JoinWishlist(context *gin.Context) {
 		}
 
 		// Verify wishlist is owned by requester
-		var wishlist models.Wishlist
-		wishlistrecord := database.Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", wishlist_id_int).Where("`wishlists`.owner = ?", UserID).Find(&wishlist)
-		if wishlistrecord.Error != nil {
+		wishlistOwned, err := database.VerifyUserOwnershipToWishlist(UserID, wishlist_id_int)
+		if err != nil {
+			log.Println("Failed to verify ownership to wishlist. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership to wishlist."})
+			context.Abort()
+			return
+		} else if !wishlistOwned {
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Only owners can edit their wishlist."})
 			context.Abort()
 			return
 		}
 
-		wishlistmembershipdb.Wishlist = wishlist_id_int
+		wishlistmembershipdb.WishlistID = wishlist_id_int
+		wishlistmembershipdb.ID = uuid.New()
 
 		// Add group membership to database
 		record := database.Instance.Create(&wishlistmembershipdb)
@@ -510,12 +551,14 @@ func JoinWishlist(context *gin.Context) {
 }
 
 func RemoveFromWishlist(context *gin.Context) {
-
 	// Create groupmembership request
 	var wishlist_id = context.Param("wishlist_id")
-	var wishlistmembership models.WishlistMembership
-	if err := context.ShouldBindJSON(&wishlistmembership); err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var wishlistObjects = []models.WishlistUser{}
+
+	var wishlistMembershipRequest models.WishlistMembershipDeletionRequest
+	if err := context.ShouldBindJSON(&wishlistMembershipRequest); err != nil {
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
@@ -528,15 +571,16 @@ func RemoveFromWishlist(context *gin.Context) {
 	}
 
 	// Parse group id
-	wishlist_id_int, err := strconv.Atoi(wishlist_id)
+	wishlist_id_int, err := uuid.Parse(wishlist_id)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
 		context.Abort()
 		return
 	}
 
 	// Verify membership exists
-	MembershipStatus, err := database.VerifyGroupMembershipToWishlist(wishlist_id_int, wishlistmembership.Group)
+	MembershipStatus, err := database.VerifyGroupMembershipToWishlist(wishlist_id_int, wishlistMembershipRequest.Group)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
@@ -548,40 +592,83 @@ func RemoveFromWishlist(context *gin.Context) {
 		return
 	}
 
-	// Verify wishlist is owned by requester
-	var wishlist models.Wishlist
-	wishlistrecord := database.Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", wishlist_id_int).Where("`wishlists`.owner = ?", UserID).Find(&wishlist)
-	if wishlistrecord.Error != nil {
+	ownWishlist, err := database.VerifyUserOwnershipToWishlist(UserID, wishlist_id_int)
+	if err != nil {
+		log.Println("Failed to verify ownership of wishlist. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of wishlist."})
+		context.Abort()
+		return
+	} else if !ownWishlist {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Only owners can edit their wishlist memberships."})
 		context.Abort()
 		return
 	}
 
 	// Get the membership id
-	wishlistmembershiprecord := database.Instance.Where("`wishlist_memberships`.enabled = ?", 1).Where("`wishlist_memberships`.wishlist = ?", wishlist_id_int).Where("`wishlist_memberships`.group = ?", wishlistmembership.Group).Find(&wishlistmembership)
-	if wishlistmembershiprecord.Error != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership."})
+	membershipFound, wishlistmembership, err := database.GetMembershipIDForGroupToWishlist(wishlist_id_int, wishlistMembershipRequest.Group)
+	if err != nil {
+		log.Println("Failed to get group membership ID. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get group membership ID."})
+		context.Abort()
+		return
+	} else if !membershipFound {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find group membership ID."})
 		context.Abort()
 		return
 	}
 
 	// Delete the membership
-	err = database.DeleteWishlistMembership(int(wishlistmembership.ID))
-	if wishlistmembershiprecord.Error != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		context.Abort()
-		return
-	}
-
-	// get new group list
-	wishlists_with_users, err := GetWishlistObjects(UserID)
+	err = database.DeleteWishlistMembership(wishlistmembership.ID)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to delete wishlist membership. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete wishlist membership."})
 		context.Abort()
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Group member removed.", "wishlists": wishlists_with_users})
+	group_id, okay := context.GetQuery("group")
+	if !okay {
+		wishlistObjects, err = GetWishlistObjects(UserID)
+		if err != nil {
+			log.Println("Failed to get wishlist objects for user. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist objects for user."})
+			context.Abort()
+			return
+		}
+	} else {
+		// Parse group id
+		group_id_int, err := uuid.Parse(group_id)
+		if err != nil {
+			log.Println("Failed to parse group ID. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
+			context.Abort()
+			return
+		}
+
+		// Verify membership to group exists
+		MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, group_id_int)
+		if err != nil {
+			log.Println("Failed to verify membership to group. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership to group."})
+			context.Abort()
+			return
+		} else if !MembershipStatus {
+			//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not a member of this group."})
+			context.Abort()
+			return
+		}
+
+		wishlistObjects, err = GetWishlistObjectsFromGroup(group_id_int, UserID)
+		if err != nil {
+			log.Println("Failed to get wishlists for group. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wishlists for group."})
+			context.Abort()
+			return
+		}
+	}
+
+	context.JSON(http.StatusCreated, gin.H{"message": "Group member removed.", "wishlists": wishlistObjects})
 }
 
 func APIUpdateWishlist(context *gin.Context) {
@@ -598,7 +685,7 @@ func APIUpdateWishlist(context *gin.Context) {
 	}
 
 	// Parse group id
-	wishlist_id_int, err := strconv.Atoi(wishlist_id)
+	wishlist_id_int, err := uuid.Parse(wishlist_id)
 	if err != nil {
 		log.Println("Failed to parse wishlist ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
@@ -636,7 +723,7 @@ func APIUpdateWishlist(context *gin.Context) {
 	}
 
 	// Get original wishlist from DB
-	wishlistOriginal, err := GetWishlistObject(int(wishlist_id_int), UserID)
+	wishlistOriginal, err := GetWishlistObject(wishlist_id_int, UserID)
 	if err != nil {
 		log.Println("Failed to get wishlist object. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist object."})
@@ -707,7 +794,7 @@ func APIUpdateWishlist(context *gin.Context) {
 	}
 
 	// Finalize wishlist object
-	wishlistdb.Owner = UserID
+	wishlistdb.OwnerID = UserID
 	wishlistdb.Description = wishlist.Description
 	wishlistdb.Name = wishlist.Name
 	wishlistdb.Claimable = wishlist.Claimable
@@ -723,7 +810,7 @@ func APIUpdateWishlist(context *gin.Context) {
 	}
 
 	// Get updated wishlist from DB
-	wishlist_with_user, err := GetWishlistObject(int(wishlist_id_int), UserID)
+	wishlist_with_user, err := GetWishlistObject(wishlist_id_int, UserID)
 	if err != nil {
 		log.Println("Failed to get wishlist object. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist object."})
@@ -738,17 +825,16 @@ func ConvertWishlistCollaberatorToWishlistCollaberatorObject(wishlistCollab mode
 	err = nil
 	wishlistCollabObject = models.WishlistCollaboratorObject{}
 
-	userObject, err := database.GetUserInformation(wishlistCollab.User)
+	userObject, err := database.GetUserInformation(wishlistCollab.UserID)
 	if err != nil {
-		log.Println("Failed to get user information for user ID '" + strconv.Itoa(int(wishlistCollab.ID)) + "'. Returning. Error: " + err.Error())
-		return wishlistCollabObject, errors.New("Failed to get user information for user ID '" + strconv.Itoa(int(wishlistCollab.ID)) + "'.")
+		log.Println("Failed to get user information for user ID '" + wishlistCollab.ID.String() + "'. Returning. Error: " + err.Error())
+		return wishlistCollabObject, errors.New("Failed to get user information for user ID '" + wishlistCollab.ID.String() + "'.")
 	}
 
 	wishlistCollabObject.CreatedAt = wishlistCollab.CreatedAt
 	wishlistCollabObject.DeletedAt = wishlistCollab.DeletedAt
 	wishlistCollabObject.Enabled = wishlistCollab.Enabled
 	wishlistCollabObject.ID = wishlistCollab.ID
-	wishlistCollabObject.Model = wishlistCollab.Model
 	wishlistCollabObject.UpdatedAt = wishlistCollab.UpdatedAt
 	wishlistCollabObject.User = userObject
 	wishlistCollabObject.Wishlist = wishlistCollabObject.Wishlist
@@ -763,7 +849,7 @@ func ConvertWishlistCollaberatorsToWishlistCollaberatorObjects(wishlistCollabs [
 	for _, wishlistCollab := range wishlistCollabs {
 		wishlistCollabObject, err := ConvertWishlistCollaberatorToWishlistCollaberatorObject(wishlistCollab)
 		if err != nil {
-			log.Println("Failed to get wishlist collaberator object for '" + strconv.Itoa(int(wishlistCollab.ID)) + "'. Skipping. Error: " + err.Error())
+			log.Println("Failed to get wishlist collaberator object for '" + wishlistCollab.ID.String() + "'. Skipping. Error: " + err.Error())
 			continue
 		}
 		wishlistCollabObjects = append(wishlistCollabObjects, wishlistCollabObject)
@@ -772,11 +858,11 @@ func ConvertWishlistCollaberatorsToWishlistCollaberatorObjects(wishlistCollabs [
 	return
 }
 
-func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *int) (wishlistObject models.WishlistUser, err error) {
+func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *uuid.UUID) (wishlistObject models.WishlistUser, err error) {
 	err = nil
 	wishlistObject = models.WishlistUser{}
 
-	groups, err := database.GetGroupMembersFromWishlist(int(wishlist.ID))
+	groups, err := database.GetGroupMembersFromWishlist(wishlist.ID)
 	if err != nil {
 		return models.WishlistUser{}, err
 	}
@@ -787,7 +873,7 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *in
 		return models.WishlistUser{}, err
 	}
 
-	wishlistsCollabs, err := database.GetWishlistCollaboratorsFromWishlist(int(wishlist.ID))
+	wishlistsCollabs, err := database.GetWishlistCollaboratorsFromWishlist(wishlist.ID)
 	if err != nil {
 		log.Println("Failed to convert wishlist collaberators. Returning. Error: " + err.Error())
 		return models.WishlistUser{}, err
@@ -799,9 +885,9 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *in
 		return models.WishlistUser{}, err
 	}
 
-	owner, err := database.GetUserInformation(int(wishlist.Owner))
+	owner, err := database.GetUserInformation(wishlist.OwnerID)
 	if err != nil {
-		log.Println("Failed to get information of wishlist owner '" + strconv.Itoa(int(wishlist.Owner)) + "'. Returning. Error: " + err.Error())
+		log.Println("Failed to get information of wishlist owner '" + wishlist.OwnerID.String() + "'. Returning. Error: " + err.Error())
 		return models.WishlistUser{}, err
 	}
 
@@ -813,7 +899,6 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *in
 	wishlistObject.ID = wishlist.ID
 	wishlistObject.Members = groupObjects
 	wishlistObject.Owner = owner
-	wishlistObject.Model = wishlist.Model
 	wishlistObject.Name = wishlist.Name
 	wishlistObject.UpdatedAt = wishlist.UpdatedAt
 	wishlistObject.Claimable = wishlist.Claimable
@@ -821,7 +906,7 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *in
 	wishlistObject.Expires = wishlist.Expires
 
 	// Get wishes
-	_, wishes, err := database.GetWishesFromWishlist(int(wishlist.ID))
+	_, wishes, err := database.GetWishesFromWishlist(wishlist.ID)
 	if err != nil {
 		log.Println("Failed to get wishes from database. Returning. Error: " + err.Error())
 		return models.WishlistUser{}, err
@@ -838,14 +923,14 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *in
 	return
 }
 
-func ConvertWishlistsToWishlistObjects(wishlists []models.Wishlist, RequestUserID *int) (wishlistObjects []models.WishlistUser, err error) {
+func ConvertWishlistsToWishlistObjects(wishlists []models.Wishlist, RequestUserID *uuid.UUID) (wishlistObjects []models.WishlistUser, err error) {
 	err = nil
 	wishlistObjects = []models.WishlistUser{}
 
 	for _, wishlist := range wishlists {
 		wishlistObject, err := ConvertWishlistToWishlistObject(wishlist, RequestUserID)
 		if err != nil {
-			log.Println("Failed to get wishlist object for wishlist ID '" + strconv.Itoa(int(wishlist.ID)) + "'. Skipping. Error: " + err.Error())
+			log.Println("Failed to get wishlist object for wishlist ID '" + wishlist.ID.String() + "'. Skipping. Error: " + err.Error())
 			continue
 		}
 		wishlistObjects = append(wishlistObjects, wishlistObject)
@@ -879,9 +964,10 @@ func APICollaborateWishlist(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wishlist_id_int, err := strconv.Atoi(wishlist_id)
+	wishlist_id_int, err := uuid.Parse(wishlist_id)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
 		context.Abort()
 		return
 	}
@@ -889,7 +975,7 @@ func APICollaborateWishlist(context *gin.Context) {
 	for _, user := range wishlistCollaboratorsequest.Users {
 
 		wishlistCollaborator := models.WishlistCollaborator{}
-		wishlistCollaborator.User = user
+		wishlistCollaborator.UserID = user
 
 		// Verify user exists
 		_, err := database.GetUserInformation(user)
@@ -925,13 +1011,14 @@ func APICollaborateWishlist(context *gin.Context) {
 			return
 		}
 
-		if UserID == int(user) {
+		if UserID == user {
 			context.JSON(http.StatusBadRequest, gin.H{"error": "The wishlist owner can't be a collaborator."})
 			context.Abort()
 			return
 		}
 
-		wishlistCollaborator.Wishlist = wishlist_id_int
+		wishlistCollaborator.WishlistID = wishlist_id_int
+		wishlistCollaborator.ID = uuid.New()
 
 		// Add group membership to database
 		err = database.CreateWishlistCollaboratorInDB(wishlistCollaborator)
@@ -960,8 +1047,8 @@ func APIUnCollaborateWishlist(context *gin.Context) {
 
 	// Create groupmembership request
 	var wishlist_id = context.Param("wishlist_id")
-	wishlistCollaborator := models.WishlistCollaborator{}
-	if err := context.ShouldBindJSON(&wishlistCollaborator); err != nil {
+	wishlistCollaboratorRequest := models.WishlistCollaboratorDeletionRequest{}
+	if err := context.ShouldBindJSON(&wishlistCollaboratorRequest); err != nil {
 		log.Println("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
@@ -977,16 +1064,16 @@ func APIUnCollaborateWishlist(context *gin.Context) {
 	}
 
 	// Parse group id
-	wishlist_id_int, err := strconv.Atoi(wishlist_id)
+	wishlist_id_int, err := uuid.Parse(wishlist_id)
 	if err != nil {
-		log.Println("Failed to ID string to integer. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to ID string to integer."})
+		log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
 		context.Abort()
 		return
 	}
 
 	// Verify collaboration exists
-	collaborationStatus, err := database.VerifyWishlistCollaboratorToWishlist(wishlist_id_int, wishlistCollaborator.User)
+	collaborationStatus, err := database.VerifyWishlistCollaboratorToWishlist(wishlist_id_int, wishlistCollaboratorRequest.User)
 	if err != nil {
 		log.Println("Failed to verify wishlist collaborator status. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wishlist collaborator status."})
@@ -1012,7 +1099,7 @@ func APIUnCollaborateWishlist(context *gin.Context) {
 	}
 
 	// Get the collaboration id
-	wishlistCollaborator, err = database.GetWishlistCollaboratorByUserIDAndWishlistID(wishlist_id_int, wishlistCollaborator.User)
+	wishlistCollaborator, err := database.GetWishlistCollaboratorByUserIDAndWishlistID(wishlist_id_int, wishlistCollaboratorRequest.User)
 	if err != nil {
 		log.Println("Failed to get collaboration in database. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get collaboration in database."})
@@ -1021,7 +1108,7 @@ func APIUnCollaborateWishlist(context *gin.Context) {
 	}
 
 	// Delete the collaboration
-	err = database.DeleteWishlistCollaboratorByWishlistCollaboratorID(int(wishlistCollaborator.ID))
+	err = database.DeleteWishlistCollaboratorByWishlistCollaboratorID(wishlistCollaborator.ID)
 	if err != nil {
 		log.Println("Failed to remove collaborator in database. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove collaborator in database."})

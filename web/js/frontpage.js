@@ -7,7 +7,7 @@ function load_page(result) {
             var login_data = JSON.parse(result);
 
             if(login_data.error === "You must verify your account.") {
-                load_verify_account();
+                verifyRedirect();
                 return;
             }
 
@@ -47,7 +47,12 @@ function load_page(result) {
                             <br>
                             <br>
 
-                            Welcome to the front page. Use to navigation bar and head to <a href="/wishlists">Wishlists</a> to manage your wishlists. Head to <a href="/groups">Groups</a> to manage and view wishlists in groups.
+                            Welcome to the front page. Use to navigation bar and head to Wishlists to manage your wishlists. Head to Groups to manage and view wishlists in groups.
+
+                            <div class="labels">
+                                <div class="blue-label clickable" onclick="location.href='/wishlists'">Wishlists</div>
+                                <div class="blue-label clickable" onclick="location.href='/groups'">Groups</div>
+                            </div>
                         </div>
 
                         <div id="log-in-button" style="margin-top: 2em; display: none; width: 10em;">
@@ -139,7 +144,7 @@ function get_news(admin){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/news/get");
+    xhttp.open("get", api_url + "auth/news");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -188,127 +193,6 @@ function place_news(news_array, admin) {
     news_object = document.getElementById("news-box")
     news_object.innerHTML = html
 
-}
-
-function load_verify_account() {
-
-    var html = `
-                <div class="" id="front-page">
-                    
-                    <div class="module">
-                    
-                        <div class="title">
-                            Pønskelisten
-                        </div>
-
-                        <div class="text-body" style="text-align: center;">
-                            You must verify your account by giving us the access code we e-mailed you.
-                        </div>
-
-                    </div>
-
-                    <div class="module">
-
-                        <form action="" onsubmit="event.preventDefault(); verify_account();">
-                            <label for="email_code">Code:</label><br>
-                            <input type="text" name="email_code" id="email_code" placeholder="Code" autocomplete="off" required />
-                            <button id="verify-button" type="submit" href="/">Verify</button>
-                        </form>
-
-                    </div>
-
-                    <div class="module">
-                        <a style="font-size:0.75em;cursor:pointer;" onclick="new_code();">Send me a new code!</i>
-                    </div>
-
-                </div>
-
-    `;
-
-    document.getElementById('content').innerHTML = html;
-    document.getElementById('card-header').innerHTML = 'Robot or human?';
-    clearResponse();
-    showLoggedInMenu();
-    document.getElementById('navbar').style.display = 'none';
-
-}
-
-function verify_account(){
-
-    var email_code = document.getElementById("email_code").value;
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                // store jwt to cookie
-                set_cookie("poenskelisten", result.token, 7);
-                location.reload();
-
-            }
-
-        } else {
-            info("Verifying account...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "open/user/verify/" + email_code);
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send();
-    return false;
-    
-}
-
-function new_code(){
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message)
-
-            }
-
-        } else {
-            info("Sending new code...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "open/user/verification");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send();
-    return false;
-    
 }
 
 function create_news() {
@@ -365,10 +249,16 @@ function create_news() {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "admin/news/register");
+    xhttp.open("post", api_url + "admin/news");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
     return false;
+
+}
+
+function verifyRedirect() {
+
+    window.location = '/verify'
 
 }

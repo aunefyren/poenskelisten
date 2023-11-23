@@ -1,18 +1,18 @@
 package models
 
-import (
-	"gorm.io/gorm"
-)
+import "github.com/google/uuid"
 
 type Wish struct {
-	gorm.Model
-	Name       string  `json:"name" gorm:"not null"`
-	Note       string  `json:"note"`
-	Price      float64 `json:"price"`
-	Enabled    bool    `json:"enabled" gorm:"not null; default: true"`
-	Owner      int     `json:"owner_id" gorm:"not null"`
-	URL        string  `json:"url"`
-	WishlistID int     `json:"wishlist_id" gorm:"not null"`
+	GormModel
+	Name       string    `json:"name" gorm:"not null"`
+	Note       string    `json:"note"`
+	Price      float64   `json:"price"`
+	Enabled    bool      `json:"enabled" gorm:"not null; default: true"`
+	OwnerID    uuid.UUID `json:"" gorm:"type:varchar(100);"`
+	Owner      User      `json:"owner" gorm:"not null;"`
+	URL        string    `json:"url"`
+	WishlistID uuid.UUID `json:"" gorm:"type:varchar(100);"`
+	Wishlist   Wishlist  `json:"wishlist" gorm:"not null;"`
 }
 
 type WishCreationRequest struct {
@@ -32,7 +32,7 @@ type WishUpdateRequest struct {
 }
 
 type WishObject struct {
-	gorm.Model
+	GormModel
 	Name          string                       `json:"name"`
 	Note          string                       `json:"note"`
 	Price         float64                      `json:"price"`
@@ -42,25 +42,27 @@ type WishObject struct {
 	Collaborators []WishlistCollaboratorObject `json:"collaborators"`
 	URL           string                       `json:"url"`
 	Image         bool                         `json:"image"`
-	WishlistID    int                          `json:"wishlist_id"`
+	WishlistID    uuid.UUID                    `json:"wishlist_id"`
 	WishClaim     []WishClaimObject            `json:"wishclaim"`
 	WishClaimable bool                         `json:"wish_claimable"`
 }
 
 type WishClaim struct {
-	gorm.Model
-	Wish    int  `json:"wish_id" gorm:"not null"`
-	User    int  `json:"user_id" gorm:"not null"`
-	Enabled bool `json:"enabled" gorm:"not null;default: true"`
+	GormModel
+	WishID  uuid.UUID `json:"" gorm:"type:varchar(100);"`
+	Wish    Wish      `json:"wish" gorm:"not null;"`
+	UserID  uuid.UUID `json:"" gorm:"type:varchar(100);"`
+	User    User      `json:"user" gorm:"not null;"`
+	Enabled bool      `json:"enabled" gorm:"not null;default: true"`
 }
 
 type WishClaimObject struct {
-	gorm.Model
-	Wish    int  `json:"wish_id"`
-	User    User `json:"user"`
-	Enabled bool `json:"enabled"`
+	GormModel
+	Wish    uuid.UUID `json:"wish_id"`
+	User    User      `json:"user"`
+	Enabled bool      `json:"enabled"`
 }
 
 type WishClaimCreationRequest struct {
-	WishlistID int `json:"wishlist_id"`
+	WishlistID *uuid.UUID `json:"wishlist_id"`
 }

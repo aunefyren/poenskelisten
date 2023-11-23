@@ -77,13 +77,37 @@ function get_login(cookie) {
 
             var result;
             if(result = JSON.parse(this.responseText)) { 
-                // If new token, save it
-                if(result.token != null && result.token != "") {
-                    // store jwt to cookie
-                    console.log("Refreshed login token.")
-                    set_cookie("poenskelisten", result.token, 7);
+                // If the error is to verify, allow loading page anyways
+                if(result.error === "You must verify your account.") {
+
+                    // If not front-page, redirect
+                    if(window.location.pathname !== "/verify") {
+                        location.href = '/verify';
+                        return;
+                    }
+
+                    // Load page
+                    load_page(this.responseText)
+
+                } else if (result.error) {
+                    
+                    error(result.error)
+                    showLoggedInMenu();
+                    return;
+                    
+                } else {
+
+                    // If new token, save it
+                    if(result.token != null && result.token != "") {
+                        // store jwt to cookie
+                        console.log("Refreshed login token.")
+                        set_cookie("poenskelisten", result.token, 7);
+                    }
+
+                    // Load page
+                    load_page(this.responseText)
+                    
                 }
-                load_page(this.responseText);
             } else {
                 load_page(false);
             }
@@ -91,7 +115,7 @@ function get_login(cookie) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/token/validate");
+    xhttp.open("post", api_url + "auth/tokens/validate");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", cookie);
     xhttp.send();

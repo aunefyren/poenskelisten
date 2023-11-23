@@ -5,17 +5,18 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 var jwtKey = []byte("supersecretkey")
 
 type JWTClaim struct {
-	Firstname string `json:"first_name"`
-	Lastname  string `json:"last_name"`
-	Email     string `json:"email"`
-	Admin     bool   `json:"admin"`
-	Verified  bool   `json:"verified"`
-	UserID    int    `json:"id"`
+	Firstname string    `json:"first_name"`
+	Lastname  string    `json:"last_name"`
+	Email     string    `json:"email"`
+	Admin     bool      `json:"admin"`
+	Verified  bool      `json:"verified"`
+	UserID    uuid.UUID `json:"id"`
 	jwt.RegisteredClaims
 }
 
@@ -28,7 +29,7 @@ func SetPrivateKey(PrivateKey string) error {
 	return nil
 }
 
-func GenerateJWT(firstname string, lastname string, email string, userid int, admin bool, verified bool) (tokenString string, err error) {
+func GenerateJWT(firstname string, lastname string, email string, userid uuid.UUID, admin bool, verified bool) (tokenString string, err error) {
 	expirationTime := time.Now().Add(1 * time.Hour * 24 * 7)
 	claims := &JWTClaim{
 		Firstname: firstname,

@@ -5,9 +5,11 @@ import (
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func Auth(admin bool) gin.HandlerFunc {
@@ -21,7 +23,8 @@ func Auth(admin bool) gin.HandlerFunc {
 
 		err := auth.ValidateToken(tokenString, admin)
 		if err != nil {
-			context.JSON(401, gin.H{"error": err.Error()})
+			log.Println("Failed to validate token. Error: " + err.Error())
+			context.JSON(http.StatusForbidden, gin.H{"error": "Failed to validate token."})
 			context.Abort()
 			return
 		}
@@ -29,7 +32,8 @@ func Auth(admin bool) gin.HandlerFunc {
 		// Get configuration
 		config, err := config.GetConfig()
 		if err != nil {
-			context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			log.Println("Failed to get config. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config."})
 			context.Abort()
 			return
 		}
@@ -40,7 +44,8 @@ func Auth(admin bool) gin.HandlerFunc {
 			// Get userID from header
 			userID, err := GetAuthUsername(context.GetHeader("Authorization"))
 			if err != nil {
-				context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				log.Println("Failed to get user ID from token. Error: " + err.Error())
+				context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user ID from token."})
 				context.Abort()
 				return
 			}
@@ -52,7 +57,8 @@ func Auth(admin bool) gin.HandlerFunc {
 				// Verify user has verification code
 				hasVerficationCode, err := database.VerifyUserHasVerfificationCode(userID)
 				if err != nil {
-					context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					log.Println("Failed to get verification code. Error: " + err.Error())
+					context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get verification code."})
 					context.Abort()
 					return
 				}
@@ -61,7 +67,8 @@ func Auth(admin bool) gin.HandlerFunc {
 				if !hasVerficationCode {
 					_, err := database.GenrateRandomVerificationCodeForuser(userID)
 					if err != nil {
-						context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+						log.Println("Failed to generate verification code. Error: " + err.Error())
+						context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate verification code."})
 						context.Abort()
 						return
 					}
@@ -79,14 +86,14 @@ func Auth(admin bool) gin.HandlerFunc {
 	}
 }
 
-func GetAuthUsername(tokenString string) (int, error) {
+func GetAuthUsername(tokenString string) (uuid.UUID, error) {
 
 	if tokenString == "" {
-		return 0, errors.New("No Auhtorization header given.")
+		return uuid.UUID{}, errors.New("No Auhtorization header given.")
 	}
 	claims, err := auth.ParseToken(tokenString)
 	if err != nil {
-		return 0, err
+		return uuid.UUID{}, err
 	}
 	return claims.UserID, nil
 }

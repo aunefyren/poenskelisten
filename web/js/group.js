@@ -56,7 +56,7 @@ function load_page(result) {
                             </div>
 
                             <div class="bottom-right-button" id="edit-group" style="display: none;">
-                                <img class="icon-img  clickable" src="/assets/edit.svg" onclick="group_edit(${user_id}, ${group_id});" title="Edit group">
+                                <img class="icon-img  clickable" src="/assets/edit.svg" onclick="group_edit('${user_id}', '${group_id}');" title="Edit group">
                             </div>
 
                         </div>
@@ -87,7 +87,7 @@ function load_page(result) {
                         </div>
 
                         <div id="wishlist-input" class="wishlist-input">
-                            <form action="" class="icon-border" onsubmit="event.preventDefault(); create_wishlist(` + group_id + `, ` + user_id + `);">
+                            <form action="" class="icon-border" onsubmit="event.preventDefault(); create_wishlist('${group_id}', '${user_id}');">
                                 
                                 <label for="wishlist_name">Create a new wishlist in this group:</label><br>
 
@@ -154,8 +154,9 @@ function get_group(group_id){
                 console.log(result);
                 place_group(result.group);
 
-                if(result.group.owner.ID == user_id) {
+                if(result.group.owner.id == user_id) {
                     show_owner_inputs();
+                    groupOwnerID = result.group.owner.id;
                 }
 
             }
@@ -163,7 +164,7 @@ function get_group(group_id){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/group/get/" + group_id);
+    xhttp.open("get", api_url + "auth/groups/" + group_id);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -212,7 +213,7 @@ function get_wishlists(group_id, user_id){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlist/get/group/" + group_id);
+    xhttp.open("get", api_url + "auth/wishlists?group=" + group_id);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -252,7 +253,7 @@ function place_wishlists(wishlists_array, group_id, user_id) {
 
         html += '<div class="wishlist hoverable-light">'
         
-        html += '<div class="wishlist-title clickable underline" onclick="location.href = \'../wishlists/'+ wishlists_array[i].ID + '\'" title="Go to wishlist">'
+        html += `<div class="wishlist-title clickable underline" onclick="location.href = '/wishlists/${wishlists_array[i].id}'" title="Go to wishlist">`;
         html += `<div class="profile-icon">`
         html += '<img class="icon-img " src="/assets/list.svg">'
         html += '</div>'
@@ -263,13 +264,19 @@ function place_wishlists(wishlists_array, group_id, user_id) {
         html += `<div class="profile-name">`
         html += wishlists_array[i].owner.first_name + " " + wishlists_array[i].owner.last_name
         html += '</div>'
-        html += `<div class="profile-icon icon-border icon-background" id="group_owner_image_${wishlists_array[i].owner.ID}_${wishlists_array[i].ID}">`
+        html += `<div class="profile-icon icon-border icon-background" id="group_owner_image_${wishlists_array[i].owner.id}_${wishlists_array[i].id}">`
         html += '<img class="icon-img " src="/assets/user.svg">'
         html += '</div>'
 
-        if(wishlists_array[i].owner.ID == user_id) {
-            html += '<div class="profile-icon clickable" onclick="delete_wishlist(' + wishlists_array[i].ID + ', ' + group_id + ', ' + user_id + ')" title="Delete wishlist">'
+        if(wishlists_array[i].owner.id == user_id) {
+            html += `<div class="profile-icon clickable" onclick="delete_wishlist('${wishlists_array[i].id}', '${group_id}', '${user_id}')" title="Delete wishlist">`;
             html += '<img class="icon-img " src="/assets/trash-2.svg">'
+            html += '</div>'
+        }
+
+        if(groupOwnerID == user_id) {
+            html += `<div class="profile-icon clickable" onclick="remove_member('${wishlists_array[i].id}','${group_id}', '${user_id}')" title="Remove wishlist from group">`;
+            html += '<img class="icon-img " src="/assets/x.svg">'
             html += '</div>'
         }
 
@@ -304,7 +311,7 @@ function place_wishlists(wishlists_array, group_id, user_id) {
     wishlist_object_expired.innerHTML = html_expired
 
     for(var i = 0; i < wishlists_array.length; i++) {
-        GetProfileImage(wishlists_array[i].owner.ID, `group_owner_image_${wishlists_array[i].owner.ID}_${wishlists_array[i].ID}`)
+        GetProfileImage(wishlists_array[i].owner.id, `group_owner_image_${wishlists_array[i].owner.id}_${wishlists_array[i].id}`)
     }
 }
 
@@ -382,7 +389,7 @@ function create_wishlist(group_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlist/register");
+    xhttp.open("post", api_url + "auth/wishlists");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -435,7 +442,7 @@ function delete_wishlist(wishlist_id, group_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlist/" + wishlist_id + "/delete");
+    xhttp.open("delete", api_url + "auth/wishlists/" + wishlist_id + "?group=" + group_id);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -473,7 +480,7 @@ function reset_group_info_box(user_id, group_id) {
     </div>
 
     <div class="bottom-right-button" id="edit-group" style="display: none;">
-        <img class="icon-img  clickable" src="/assets/edit.svg" onclick="group_edit(${user_id}, ${group_id});">
+        <img class="icon-img  clickable" src="/assets/edit.svg" onclick="group_edit('${user_id}', '${group_id}');">
     </div>
     `;
 
@@ -493,11 +500,11 @@ function group_edit(user_id, group_id) {
     var html = '';
 
     html += `
-        <div class="bottom-right-button" id="edit-group" style="" onclick="cancel_edit_group(${group_id}, ${user_id});" title="Cancel edit">
+        <div class="bottom-right-button" id="edit-group" style="" onclick="cancel_edit_group('${group_id}', '${user_id}');" title="Cancel edit">
             <img class="icon-img  clickable" style="" src="/assets/x.svg">
         </div>
 
-        <form action="" class="icon-border" onsubmit="event.preventDefault(); update_group(${group_id}, ` + user_id + `);">
+        <form action="" class="" onsubmit="event.preventDefault(); update_group('${group_id}', '${user_id}');">
                                 
             <label for="group_name">Edit group:</label><br>
             <input type="text" name="group_name" id="group_name" placeholder="Group name" value="${group_title}" autocomplete="off" required />
@@ -561,7 +568,7 @@ function update_group(group_id, user_id) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/group/" + group_id + "/update");
+    xhttp.open("post", api_url + "auth/groups/" + group_id + "/update");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -598,7 +605,7 @@ function cancel_edit_group(group_id, user_id){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/group/" + group_id);
+    xhttp.open("get", api_url + "auth/groups/" + group_id);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -635,7 +642,7 @@ function GetProfileImage(userID, divID) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/user/get/" + userID + "/image?thumbnail=true");
+    xhttp.open("get", api_url + "auth/users/" + userID + "/image?thumbnail=true");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -650,5 +657,62 @@ function PlaceProfileImage(imageBase64, divID) {
     image.innerHTML = ""
     image.style.backgroundImage = `url('${imageBase64}')`
     image.style.backgroundPosition = "center center"
+
+}
+
+function remove_member(wishlist_id, group_id, user_id) {
+
+    if(!confirm("Are you sure you want to remove your wishlist from this group?")) {
+        return;
+    }
+
+    var form_obj = { 
+        "group_id" : group_id
+    };
+
+    var form_data = JSON.stringify(form_obj);
+
+    console.log(form_data)
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                success(result.message);
+                console.log(result);
+
+                console.log("User ID: " + user_id);
+
+                wishlists = result.wishlists;
+
+                console.log("Placing groups after member is removed: ")
+                place_wishlists(wishlists, user_id);
+                
+            }
+
+        } else {
+            info("Removing member...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/wishlists/" + wishlist_id + "/remove?group=" + group_id);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
 
 }

@@ -4,15 +4,14 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 type User struct {
-	gorm.Model
+	GormModel
 	FirstName        string    `json:"first_name" gorm:"not null"`
 	LastName         string    `json:"last_name" gorm:"not null"`
 	Email            string    `json:"email" gorm:"unique; not null"`
-	Password         string    `json:"password" gorm:"not null"`
+	Password         string    `json:"password" gorm:"not null; type: varchar(256);"`
 	Admin            *bool     `json:"admin" gorm:"not null; default: false"`
 	Enabled          bool      `json:"enabled" gorm:"not null; default: false"`
 	Verified         *bool     `json:"verified" gorm:"not null; default: false"`

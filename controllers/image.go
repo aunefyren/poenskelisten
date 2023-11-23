@@ -8,15 +8,14 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/nfnt/resize"
 )
 
@@ -46,10 +45,10 @@ func APIGetUserProfileImage(context *gin.Context) {
 	}
 
 	// Parse user id
-	userID, err := strconv.Atoi(userIDString)
+	userID, err := uuid.Parse(userIDString)
 	if err != nil {
-		log.Println("Failed to parse user ID. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse user ID."})
+		log.Println("Failed to parse group ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
 	}
@@ -68,7 +67,6 @@ func APIGetUserProfileImage(context *gin.Context) {
 	imageBytes, err := LoadImageFile(filePath)
 	resize := true
 	if err != nil {
-		log.Println("Failed to find profile image. Loading default.")
 		imageBytes, err = LoadDefaultProfileImage()
 		if err != nil {
 			log.Println("Failed to load default profile image. Error: " + err.Error())
@@ -103,9 +101,9 @@ func APIGetUserProfileImage(context *gin.Context) {
 
 }
 
-func CheckIfWishImageExists(wishID int) (bool, error) {
+func CheckIfWishImageExists(wishID uuid.UUID) (bool, error) {
 
-	var filePath = wish_image_path + "/" + strconv.Itoa(wishID) + ".jpg"
+	var filePath = wish_image_path + "/" + wishID.String() + ".jpg"
 
 	_, err := LoadImageFile(filePath)
 
@@ -120,9 +118,8 @@ func CheckIfWishImageExists(wishID int) (bool, error) {
 func LoadImageFile(filePath string) ([]byte, error) {
 
 	// Read the entire file into a byte slice
-	imageBytes, err := ioutil.ReadFile(filePath)
+	imageBytes, err := os.ReadFile(filePath)
 	if err != nil {
-		log.Println("Failed to read file. Returning.")
 		return nil, errors.New("Failed to read file.")
 	}
 
@@ -245,7 +242,7 @@ func ResizeImage(maxWidth uint, maxHeight uint, imageBytes []byte) ([]byte, erro
 	return resizedImageBytes, nil
 }
 
-func UpdateUserProfileImage(userID int, base64String string) error {
+func UpdateUserProfileImage(userID uuid.UUID, base64String string) error {
 
 	imageBytes, mimeType, err := Base64ToImageBytes(base64String)
 	if err != nil {
@@ -280,7 +277,7 @@ func UpdateUserProfileImage(userID int, base64String string) error {
 		return errors.New("Invalid image type.")
 	}
 
-	userIDString := strconv.Itoa(userID)
+	userIDString := userID.String()
 
 	err = SaveImageFile(profile_image_path, userIDString+".jpg", imageObject)
 	if err != nil {
@@ -309,10 +306,10 @@ func APIGetWishImage(context *gin.Context) {
 	}
 
 	// Parse user id
-	wishID, err := strconv.Atoi(wishIDString)
+	wishID, err := uuid.Parse(wishIDString)
 	if err != nil {
-		log.Println("Failed to parse user ID. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse user ID."})
+		log.Println("Failed to parse wish ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})
 		context.Abort()
 		return
 	}
@@ -365,7 +362,7 @@ func APIGetWishImage(context *gin.Context) {
 
 }
 
-func SaveWishImage(wishID int, base64String string) error {
+func SaveWishImage(wishID uuid.UUID, base64String string) error {
 
 	imageBytes, mimeType, err := Base64ToImageBytes(base64String)
 	if err != nil {
@@ -400,7 +397,7 @@ func SaveWishImage(wishID int, base64String string) error {
 		return errors.New("Invalid image type.")
 	}
 
-	wishIDString := strconv.Itoa(wishID)
+	wishIDString := wishID.String()
 
 	err = SaveImageFile(wish_image_path, wishIDString+".jpg", imageObject)
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func GetNews(context *gin.Context) {
@@ -110,6 +111,7 @@ func RegisterNewsPost(context *gin.Context) {
 	}
 
 	news.Date = newsCreationRequest.Date
+	news.ID = uuid.New()
 
 	// Create the news post in the database
 	newsRecord := database.Instance.Create(&news)

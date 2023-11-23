@@ -6,11 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/thanhpk/randstr"
 )
 
 // Get redacted user information based on User ID
-func GetUserInformation(UserID int) (models.User, error) {
+func GetUserInformation(UserID uuid.UUID) (models.User, error) {
 	var user models.User
 	userrecord := Instance.Where("`users`.enabled = ?", 1).Where("`users`.id = ?", UserID).Find(&user)
 	if userrecord.Error != nil {
@@ -20,11 +21,20 @@ func GetUserInformation(UserID int) (models.User, error) {
 	}
 
 	// Redact user information
-	user.Password = "REDACTED"
-	user.Email = "REDACTED"
-	user.VerificationCode = "REDACTED"
-	user.ResetCode = "REDACTED"
-	user.ResetExpiration = time.Now()
+	user = RedactUserObject(user)
+
+	return user, nil
+}
+
+// Get ALL user information
+func GetAllUserInformation(UserID uuid.UUID) (models.User, error) {
+	var user models.User
+	userrecord := Instance.Where("enabled = ?", true).Where("id = ?", UserID).Find(&user)
+	if userrecord.Error != nil {
+		return models.User{}, userrecord.Error
+	} else if userrecord.RowsAffected != 1 {
+		return models.User{}, errors.New("Failed to find correct user in DB.")
+	}
 
 	return user, nil
 }
@@ -40,17 +50,26 @@ func GetUserInformationByEmail(email string) (models.User, error) {
 	}
 
 	// Redact user information
-	user.Password = "REDACTED"
-	user.Email = "REDACTED"
-	user.VerificationCode = "REDACTED"
-	user.ResetCode = "REDACTED"
-	user.ResetExpiration = time.Now()
+	user = RedactUserObject(user)
+
+	return user, nil
+}
+
+// Get ALL user information using email
+func GetAllUserInformationByEmail(email string) (models.User, error) {
+	var user models.User
+	userrecord := Instance.Where("`users`.enabled = ?", 1).Where("`users`.email = ?", email).Find(&user)
+	if userrecord.Error != nil {
+		return models.User{}, userrecord.Error
+	} else if userrecord.RowsAffected != 1 {
+		return models.User{}, errors.New("Failed to find correct user in DB.")
+	}
 
 	return user, nil
 }
 
 // Genrate a random reset code and return it
-func GenrateRandomResetCodeForuser(userID int) (string, error) {
+func GenrateRandomResetCodeForuser(userID uuid.UUID) (string, error) {
 
 	randomString := randstr.String(8)
 	resetCode := strings.ToUpper(randomString)
@@ -96,11 +115,42 @@ func GetAmountOfEnabledUsers() (int, error) {
 
 	var users []models.User
 
-	userRecords := Instance.Where("`users`.enabled = ?", 1).Find(&users)
+	userRecords := Instance.Where("enabled = ?", true).Find(&users)
 	if userRecords.Error != nil {
 		return 0, userRecords.Error
 	}
 
 	return int(userRecords.RowsAffected), nil
 
+}
+
+func RedactUserObject(user models.User) (userObject models.User) {
+	userObject = user
+
+	// Redact user information
+	userObject.Password = "REDACTED"
+	userObject.Email = "REDACTED"
+	userObject.VerificationCode = "REDACTED"
+	userObject.ResetCode = "REDACTED"
+	userObject.ResetExpiration = time.Now()
+	return
+}
+
+func GetEnabledUsers() (usersRedacted []models.User, err error) {
+	users := []models.User{}
+	usersRedacted = []models.User{}
+	err = nil
+
+	userrecord := Instance.Where("`users`.enabled = ?", 1).Find(&users)
+	if userrecord.Error != nil {
+		return usersRedacted, userrecord.Error
+	}
+
+	// Redact user information
+	for _, user := range users {
+		redactedUser := RedactUserObject(user)
+		usersRedacted = append(usersRedacted, redactedUser)
+	}
+
+	return
 }
