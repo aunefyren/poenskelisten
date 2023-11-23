@@ -67,5 +67,10 @@
 	  }
 	],
 	"splash_pages": null,
-	"id": "277e3b14-f50c-437b-a5a8-d19118407bdd"
+	"id": "277e3b14-f50c-437b-a5a8-d19118407bdd",
+	"categories": [
+	  "shopping",
+	  "social",
+	  "productivity"
+	]
   }
