@@ -430,6 +430,7 @@ button:disabled {
   justify-content: center;
   align-items: center;
   align-content: center;
+  text-align: center;
 }
 
 .wish-title, .wishlist-title {
