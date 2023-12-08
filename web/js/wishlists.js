@@ -250,7 +250,7 @@ function place_wishlists(wishlists_array, user_id) {
                 html += '<div class="text-body">Available in these groups:</div>'
             }
 
-            html += '<div class="group-member hoverable-light" title="Group">'
+            html += '<div class="group-member hoverable-opacity" title="Group">'
 
             html += `<div class="group-title clickable underline" onclick="location.href = '/groups/${wishlists_array[i].members[j].id}'" title="Go to group">`;
 
@@ -287,7 +287,7 @@ function place_wishlists(wishlists_array, user_id) {
                 html += '<div class="text-body">Wishlist collaborators:</div>'
             }
 
-            html += '<div class="group-member hoverable-light" title="User">'
+            html += '<div class="group-member hoverable-opacity" title="User">'
 
             html += '<div class="group-title">';
 
