@@ -193,7 +193,7 @@ function place_groups(group_array, user_id) {
             if(j == 0) {
                 html += '<div class="text-body">Members in this group:</div>'
             }
-            html += '<div class="group-member hoverable-light" title="Group member">'
+            html += '<div class="group-member hoverable-opacity" title="Group member">'
 
             html += '<div class="group-title">';
 

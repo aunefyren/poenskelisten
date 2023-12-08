@@ -403,6 +403,12 @@ button:disabled {
   transition: 1s;
 }
 
+.hoverable-opacity:hover {
+  opacity: 0.5;
+  transition: 1s;
+  color: var(--black);
+}
+
 .hoverable-dark:hover {
   background-color: var(--darkblue);
   transition: 1s;
@@ -559,7 +565,7 @@ button:disabled {
   align-content: center;
   border-radius: 1em;
   border: 0.15em solid var(--darkblue);
-  background-color: var(--eggshell);
+  background-color: var(--white);
   margin: 0.25em 1em;
 }
 
