@@ -78,7 +78,7 @@ func GetWishesFromWishlist(WishlistID uuid.UUID) (bool, []models.Wish, error) {
 
 	var wishes []models.Wish
 
-	wishrecords := Instance.Where("`wishes`.enabled = ?", 1).Where("`wishes`.wishlist_id = ?", WishlistID).Joins("JOIN `users` on `users`.id = `wishes`.owner_id").Where("`users`.enabled = ?", 1).Find(&wishes)
+	wishrecords := Instance.Order("created_at ASC").Where("`wishes`.enabled = ?", 1).Where("`wishes`.wishlist_id = ?", WishlistID).Joins("JOIN `users` on `users`.id = `wishes`.owner_id").Where("`users`.enabled = ?", 1).Find(&wishes)
 	if wishrecords.Error != nil {
 		return false, []models.Wish{}, wishrecords.Error
 	} else if wishrecords.RowsAffected < 1 {

@@ -22,7 +22,7 @@ A website-based application for sharing and collaborating on wishlists and prese
 <br>
 <br>
 
-![Image showing the wishlist section of Pønskelisten.](https://raw.githubusercontent.com/aunefyren/poenskelisten/main/web/assets/images/wishlists_example.png?raw=true)
+![Image showing the wishlist section of Pønskelisten.](https://raw.githubusercontent.com/aunefyren/poenskelisten/main/.github/assets/wishlists.jpg?raw=true)
 
 <br>
 <br>
@@ -30,18 +30,17 @@ A website-based application for sharing and collaborating on wishlists and prese
 Notable features:
 - Group people using, well, groups.
 - Create wishlists, with wishes.
-- Have multiple wishlists shared with multiple groups. 
-- Synchronize wishlists towards multiple groups.
+- Add collaborators to that very wishlist.
+- Have multiple wishlists, shared with multiple groups.
 - Wish claiming. Someone can claim a gift on a wishlist they are allowed to see. Anyone else who can see that wishlist then knows that gift idea is taken. The owner can't see this of course.
 
 Known issues:
-- Can't add additional wishlist owners
 - UI can be a bit cluttered on smaller screens such as phones
 
 <br>
 <br>
 
-![Image showing the wishlist section of Pønskelisten.](https://raw.githubusercontent.com/aunefyren/poenskelisten/main/web/assets/images/claim_example.png?raw=true)
+![Image showing the wishes section of Pønskelisten.](https://raw.githubusercontent.com/aunefyren/poenskelisten/main/.github/assets/wishes.jpg?raw=true)
 
 <br>
 <br>
@@ -109,6 +108,7 @@ The exceptions are `generateinvite`, which will generate a new, random invitatio
 | smtpport | integer | The SMTP server host port used. |
 | smtpusername | string | The username used to authenticate towards the SMTP server used. |
 | smtppassword | string | The username used to authenticate towards the SMTP server used. |
+| upgradetov2 | string (true/false) | Converts `db.sql` in the `/files` folder to the v2.00 format. |
 
 <br>
 <br>
@@ -144,37 +144,21 @@ You should not be able to access Pønskelisten. By default, you can find the fro
 
 ### 4. Be able to alter the DB
 
-To sign up for the website you need an invitation code. If you used the `generateinvite` flag you can find an invitation code in the log file located within the files directory. 
+To sign up for the website you need an invitation code. If you used the `generateinvite` flag you can find an invitation code in the log file located within the files directory, or on the console. 
 
 If not, you need to alter the database table to add the invitation code. Cumbersome, I know. 
 
 <br>
 <br>
 
-I recommend installing PHPMyAdmin (a database interface) either as a [Docker image](https://hub.docker.com/_/phpmyadmin) or locally (it comes pre-packaged in XAMPP).
-
-After accessing the DB through an interface, or by just running SQL commands, add an invitation code to the table `invitations`. You should now be able to sign up using the code at the Pønskelisten front end.
+I recommend installing PHPMyAdmin (a database interface) either as a [Docker image](https://hub.docker.com/_/phpmyadmin) or locally (it comes pre-packaged in XAMPP). This can used to alter the database.
 
 <br>
 <br>
 
-You need an invitation code for every user who wants to sign up.
-
-<br>
-<br>
-
-MySQL example command for adding an invitation code called `RANDOMCODE`:
-
-```
-INSERT INTO `invites` (`id`, `created_at`, `updated_at`, `deleted_at`, `invite_code`, `invite_used`, `invite_recipient`, `invite_enabled`) VALUES (NULL, CURRENT_TIME(), CURRENT_TIME(), NULL, 'RANDOMCODE', '0', NULL, '1'); 
-```
+The first user who signs up is automatically an admin. You need an invitation code for every user who wants to sign up. This can be generated on the admin page.
 
 Be prepared to access the DB every time a user manages to screw up their e-mail while signing up or someone needs an invitation code.
-
-<br>
-<br>
-
-The first user who sings up is automatically an admin.
 
 <br>
 <br>
