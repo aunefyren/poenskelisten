@@ -178,6 +178,11 @@ func RegisterWishlist(context *gin.Context) {
 
 	}
 
+	// Sort wishlists by creation date
+	sort.Slice(wishlists_with_users, func(i, j int) bool {
+		return wishlists_with_users[j].CreatedAt.Before(wishlists_with_users[i].CreatedAt)
+	})
+
 	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist created.", "wishlists": wishlists_with_users})
 }
 
@@ -418,7 +423,7 @@ func GetWishlists(context *gin.Context) {
 
 	// Sort wishlists by creation date
 	sort.Slice(wishlistObjects, func(i, j int) bool {
-		return wishlistObjects[i].CreatedAt.Before(wishlistObjects[j].CreatedAt)
+		return wishlistObjects[j].CreatedAt.Before(wishlistObjects[i].CreatedAt)
 	})
 
 	context.JSON(http.StatusOK, gin.H{"wishlists": wishlistObjects, "message": "Wishlists retrieved."})

@@ -93,7 +93,7 @@ func GetWishesFromWishlist(context *gin.Context) {
 
 	// Sort wishes by creation date
 	sort.Slice(wishObjects, func(i, j int) bool {
-		return wishObjects[i].CreatedAt.Before(wishObjects[j].CreatedAt)
+		return wishObjects[j].CreatedAt.Before(wishObjects[i].CreatedAt)
 	})
 
 	owner_id, err := database.GetWishlistOwner(wishlist_id_int)
@@ -395,6 +395,11 @@ func RegisterWish(context *gin.Context) {
 		context.Abort()
 		return
 	}
+
+	// Sort wishes by creation date
+	sort.Slice(wishObjects, func(i, j int) bool {
+		return wishObjects[j].CreatedAt.Before(wishObjects[i].CreatedAt)
+	})
 
 	// Return response
 	context.JSON(http.StatusCreated, gin.H{"message": "Wish saved.", "wishes": wishObjects})
