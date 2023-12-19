@@ -422,7 +422,7 @@ function create_group(user_id) {
         opt = select_list.options[i];
     
         if (opt.selected) {
-            selected_members.push(Number(opt.value));
+            selected_members.push(opt.value);
         }
     }
 
@@ -602,7 +602,7 @@ function add_members(group_id, user_id) {
         opt = select_list.options[i];
     
         if (opt.selected) {
-            selected_members.push(Number(opt.value));
+            selected_members.push(opt.value);
         }
     }
 
