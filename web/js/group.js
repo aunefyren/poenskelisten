@@ -70,6 +70,9 @@ function load_page(result) {
                         </div>
 
                         <div id="wishlists-box" class="wishlists">
+                            <div class="loading-icon-wrapper" id="loading-icon-wrapper">
+                                <img class="loading-icon" src="/assets/loading.svg">
+                            </div>
                         </div>
 
                         <div id="wishlists-box-expired-wrapper" class="wishlist-wrapper wishlist-expired" style="display: none;">
@@ -296,6 +299,12 @@ function place_wishlists(wishlists_array, group_id, user_id) {
 
     if(wishlists_array_length < 1) {
         info("Looks like this list is empty...");
+
+        try {
+            document.getElementById("loading-icon-wrapper").style.display = "none"
+        } catch(e) {
+            console.log("Error: " + e)
+        }
     }
 
     if(wishlists_expired_length > 0) {
