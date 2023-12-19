@@ -836,13 +836,16 @@ func ConvertWishlistCollaberatorToWishlistCollaberatorObject(wishlistCollab mode
 		return wishlistCollabObject, errors.New("Failed to get user information for user ID '" + wishlistCollab.ID.String() + "'.")
 	}
 
+	wishlistCollabObject.User = userObject
+
+	// Prevent double nesting by just including Wihslist ID
+	wishlistCollabObject.WishlistID = wishlistCollab.WishlistID
+
 	wishlistCollabObject.CreatedAt = wishlistCollab.CreatedAt
 	wishlistCollabObject.DeletedAt = wishlistCollab.DeletedAt
 	wishlistCollabObject.Enabled = wishlistCollab.Enabled
 	wishlistCollabObject.ID = wishlistCollab.ID
 	wishlistCollabObject.UpdatedAt = wishlistCollab.UpdatedAt
-	wishlistCollabObject.User = userObject
-	wishlistCollabObject.Wishlist = wishlistCollabObject.Wishlist
 
 	return
 }
