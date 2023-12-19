@@ -45,7 +45,7 @@ function load_page(result) {
                     <div class="module">
 
                         <div class="user-active-profile-photo">
-                            <img style="width: 100%; height: 100%;" class="user-active-profile-photo-img" id="user-active-profile-photo-img" src="/assets/loading.gif">
+                            <img style="width: 100%; height: 100%;" class="user-active-profile-photo-img" id="user-active-profile-photo-img" src="/assets/loading.svg">
                         </div>
                     
                         <form action="" class="icon-border" style="margin: 0 1em;" onsubmit="event.preventDefault(); send_update();">
@@ -145,7 +145,7 @@ function send_update() {
 
             var form_data = JSON.stringify(form_obj);
 
-            document.getElementById("user-active-profile-photo-img").src = 'assets/loading.gif';
+            document.getElementById("user-active-profile-photo-img").src = 'assets/loading.svg';
 
             send_update_two(form_data);
         

@@ -956,3 +956,23 @@ label {
   box-sizing: border-box;
   margin: 2em 0;
 }
+
+.loading-icon-wrapper {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  height: 10em;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  margin: 1em;
+  padding: 2em;
+}
+
+.loading-icon {
+  height: 100%;
+}
