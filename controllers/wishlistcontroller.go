@@ -836,13 +836,30 @@ func ConvertWishlistCollaberatorToWishlistCollaberatorObject(wishlistCollab mode
 		return wishlistCollabObject, errors.New("Failed to get user information for user ID '" + wishlistCollab.ID.String() + "'.")
 	}
 
+	wishlistCollabObject.User = userObject
+
+	wishlistFound, wishlist, err := database.GetWishlistByWishlistID(wishlistCollab.WishlistID)
+	if err != nil {
+		log.Println("Failed to get wishlist object for wishlist ID '" + wishlistCollab.WishlistID.String() + "'. Returning. Error: " + err.Error())
+		return wishlistCollabObject, errors.New("Failed to get wishlist object for wishlist ID '" + wishlistCollab.ID.String() + "'.")
+	} else if !wishlistFound {
+		log.Println("Failed to find wishlist object for wishlist ID '" + wishlistCollab.WishlistID.String() + "'. Returning. Error: " + err.Error())
+		return wishlistCollabObject, errors.New("Failed to find wishlist object for wishlist ID '" + wishlistCollab.ID.String() + "'.")
+	}
+
+	wishlistObject, err := ConvertWishlistToWishlistObject(wishlist, nil)
+	if err != nil {
+		log.Println("Failed convert wishlist to wishlist object for wishlist ID '" + wishlistCollab.WishlistID.String() + "'. Returning. Error: " + err.Error())
+		return wishlistCollabObject, errors.New("Failed convert wishlist to wishlist object for wishlist ID '" + wishlistCollab.ID.String() + "'.")
+	}
+
+	wishlistCollabObject.Wishlist = wishlistObject
+
 	wishlistCollabObject.CreatedAt = wishlistCollab.CreatedAt
 	wishlistCollabObject.DeletedAt = wishlistCollab.DeletedAt
 	wishlistCollabObject.Enabled = wishlistCollab.Enabled
 	wishlistCollabObject.ID = wishlistCollab.ID
 	wishlistCollabObject.UpdatedAt = wishlistCollab.UpdatedAt
-	wishlistCollabObject.User = userObject
-	wishlistCollabObject.Wishlist = wishlistCollabObject.Wishlist
 
 	return
 }
