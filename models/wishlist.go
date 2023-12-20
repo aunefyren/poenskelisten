@@ -16,6 +16,8 @@ type Wishlist struct {
 	Date        time.Time `json:"date" gorm:"not null"`
 	Expires     *bool     `json:"expires" gorm:"not null; default: true"`
 	Claimable   *bool     `json:"claimable" gorm:"not null; default: false"`
+	Public      *bool     `json:"public" gorm:"not null; default: false"`
+	PublicHash  uuid.UUID `json:"public_hash" gorm:"type:varchar(100);"`
 }
 
 type WishlistCreationRequest struct {
@@ -23,9 +25,10 @@ type WishlistCreationRequest struct {
 	Name        string     `json:"name"`
 	Description string     `json:"description"`
 	Date        string     `json:"date"`
-	Expires     *bool      `json:"expires"`
+	Expires     bool       `json:"expires"`
 	Group       *uuid.UUID `json:"group"`
-	Claimable   *bool      `json:"claimable"`
+	Claimable   bool       `json:"claimable"`
+	Public      bool       `json:"public"`
 }
 
 type WishlistUpdateRequest struct {
@@ -33,8 +36,9 @@ type WishlistUpdateRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Date        string `json:"date"`
-	Expires     *bool  `json:"expires"`
-	Claimable   *bool  `json:"claimable"`
+	Expires     bool   `json:"expires"`
+	Claimable   bool   `json:"claimable"`
+	Public      bool   `json:"public"`
 }
 
 type WishlistUser struct {
@@ -46,6 +50,8 @@ type WishlistUser struct {
 	Date          time.Time                    `json:"date"`
 	Expires       *bool                        `json:"expires"`
 	Claimable     *bool                        `json:"claimable"`
+	Public        *bool                        `json:"public" gorm:"not null; default: false"`
+	PublicHash    uuid.UUID                    `json:"public_hash" gorm:"type:varchar(100);"`
 	Members       []GroupUser                  `json:"members"`
 	Wishes        []WishObject                 `json:"wishes"`
 	Collaborators []WishlistCollaboratorObject `json:"collaborators"`

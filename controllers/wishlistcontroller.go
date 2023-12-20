@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
@@ -92,7 +93,7 @@ func RegisterWishlist(context *gin.Context) {
 		return
 	}
 
-	wishlistdb.Expires = wishlist.Expires
+	wishlistdb.Expires = &wishlist.Expires
 
 	wishlistdb.Date, err = time.Parse("2006-01-02T15:04:05.000Z", wishlist.Date)
 	if err != nil && *wishlistdb.Expires {
@@ -128,8 +129,16 @@ func RegisterWishlist(context *gin.Context) {
 	wishlistdb.OwnerID = UserID
 	wishlistdb.Description = wishlist.Description
 	wishlistdb.Name = wishlist.Name
-	wishlistdb.Claimable = wishlist.Claimable
+	wishlistdb.Claimable = &wishlist.Claimable
 	wishlistdb.ID = uuid.New()
+	wishlistdb.Public = &wishlist.Public
+	wishlistdb.PublicHash = uuid.New()
+
+	if *wishlistdb.Public && *wishlistdb.Claimable {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "A wishlist cannot have claimable wishes and be public to users without accounts."})
+		context.Abort()
+		return
+	}
 
 	// Create wishlist in DB
 	wishlistdb, err = database.CreateWishlistInDB(wishlistdb)
@@ -296,6 +305,15 @@ func GetWishlist(context *gin.Context) {
 	// Create wishlist request
 	var wishlist_id = context.Param("wishlist_id")
 
+	// Get configuration
+	configFile, err := config.GetConfig()
+	if err != nil {
+		log.Println("Failed to get config file. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
+		context.Abort()
+		return
+	}
+
 	// Get user ID
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
@@ -343,7 +361,7 @@ func GetWishlist(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"wishlist": wishlist_with_user, "message": "Wishlist retrieved."})
+	context.JSON(http.StatusOK, gin.H{"wishlist": wishlist_with_user, "message": "Wishlist retrieved.", "public_url": configFile.PoenskelistenExternalURL})
 
 }
 
@@ -683,6 +701,15 @@ func APIUpdateWishlist(context *gin.Context) {
 	var wishlist models.WishlistUpdateRequest
 	var wishlistdb models.Wishlist
 
+	// Get configuration
+	configFile, err := config.GetConfig()
+	if err != nil {
+		log.Println("Failed to get config file. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
+		context.Abort()
+		return
+	}
+
 	if err := context.ShouldBindJSON(&wishlist); err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
@@ -802,11 +829,18 @@ func APIUpdateWishlist(context *gin.Context) {
 	wishlistdb.OwnerID = UserID
 	wishlistdb.Description = wishlist.Description
 	wishlistdb.Name = wishlist.Name
-	wishlistdb.Claimable = wishlist.Claimable
-	wishlistdb.Expires = wishlist.Expires
+	wishlistdb.Claimable = &wishlist.Claimable
+	wishlistdb.Expires = &wishlist.Expires
+	wishlistdb.Public = &wishlist.Public
+
+	if *wishlistdb.Public && *wishlistdb.Claimable {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "A wishlist cannot have claimable wishes and be public to users without accounts."})
+		context.Abort()
+		return
+	}
 
 	// Update wishlist in DB
-	err = database.UpdateWishlistValuesByID(wishlist_id_int, wishlistdb.Name, wishlistdb.Description, wishlistdb.Date, *wishlistdb.Claimable, *wishlistdb.Expires)
+	err = database.UpdateWishlistValuesByID(wishlist_id_int, wishlistdb.Name, wishlistdb.Description, wishlistdb.Date, *wishlistdb.Claimable, *wishlistdb.Expires, *wishlistdb.Public, uuid.New())
 	if err != nil {
 		log.Println("Failed to update wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update wishlist."})
@@ -823,7 +857,7 @@ func APIUpdateWishlist(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist updated.", "wishlist": wishlist_with_user})
+	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist updated.", "wishlist": wishlist_with_user, "public_url": configFile.PoenskelistenExternalURL})
 }
 
 func ConvertWishlistCollaberatorToWishlistCollaberatorObject(wishlistCollab models.WishlistCollaborator) (wishlistCollabObject models.WishlistCollaboratorObject, err error) {
@@ -912,6 +946,8 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *uu
 	wishlistObject.Claimable = wishlist.Claimable
 	wishlistObject.Collaborators = wishlistsCollabObjects
 	wishlistObject.Expires = wishlist.Expires
+	wishlistObject.Public = wishlist.Public
+	wishlistObject.PublicHash = wishlist.PublicHash
 
 	// Get wishes
 	_, wishes, err := database.GetWishesFromWishlist(wishlist.ID)
@@ -1134,4 +1170,54 @@ func APIUnCollaborateWishlist(context *gin.Context) {
 	}
 
 	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist collaborator removed.", "wishlists": wishlists_with_users})
+}
+
+func GetPublicWishlist(context *gin.Context) {
+	// Create wishlist request
+	var wishlistHash = context.Param("wishlist_hash")
+
+	// Get configuration
+	config, err := config.GetConfig()
+	if err != nil {
+		log.Println("Failed to get config file. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
+		context.Abort()
+		return
+	}
+
+	// parse wishlist id
+	wishlistHashUUID, err := uuid.Parse(wishlistHash)
+	if err != nil {
+		log.Println("Failed to parse wishlist hash. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist hash."})
+		context.Abort()
+		return
+	}
+
+	wishlistFound, wishlist, err := database.GetPublicWishListByWishlistHash(wishlistHashUUID)
+	if err != nil {
+		log.Println("Failed to get wishlist. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist."})
+		context.Abort()
+		return
+	} else if !wishlistFound {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
+		context.Abort()
+		return
+	}
+
+	wishlistObject, err := ConvertWishlistToWishlistObject(wishlist, nil)
+	if err != nil {
+		log.Println("Failed to convert to wishlist object. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert to wishlist object."})
+		context.Abort()
+		return
+	}
+
+	// Sort wishlist wishes by creation date
+	sort.Slice(wishlistObject.Wishes, func(i, j int) bool {
+		return wishlistObject.Wishes[j].CreatedAt.Before(wishlistObject.Wishes[i].CreatedAt)
+	})
+
+	context.JSON(http.StatusOK, gin.H{"wishlist": wishlistObject, "message": "Wishlist retrieved.", "currency": config.PoenskelistenCurrency, "padding": config.PoenskelistenCurrencyPad})
 }
