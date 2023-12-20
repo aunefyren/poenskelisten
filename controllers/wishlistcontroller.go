@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
@@ -304,6 +305,15 @@ func GetWishlist(context *gin.Context) {
 	// Create wishlist request
 	var wishlist_id = context.Param("wishlist_id")
 
+	// Get configuration
+	configFile, err := config.GetConfig()
+	if err != nil {
+		log.Println("Failed to get config file. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
+		context.Abort()
+		return
+	}
+
 	// Get user ID
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
@@ -351,7 +361,7 @@ func GetWishlist(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"wishlist": wishlist_with_user, "message": "Wishlist retrieved."})
+	context.JSON(http.StatusOK, gin.H{"wishlist": wishlist_with_user, "message": "Wishlist retrieved.", "public_url": configFile.PoenskelistenExternalURL})
 
 }
 
@@ -691,6 +701,15 @@ func APIUpdateWishlist(context *gin.Context) {
 	var wishlist models.WishlistUpdateRequest
 	var wishlistdb models.Wishlist
 
+	// Get configuration
+	configFile, err := config.GetConfig()
+	if err != nil {
+		log.Println("Failed to get config file. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
+		context.Abort()
+		return
+	}
+
 	if err := context.ShouldBindJSON(&wishlist); err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
@@ -838,7 +857,7 @@ func APIUpdateWishlist(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist updated.", "wishlist": wishlist_with_user})
+	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist updated.", "wishlist": wishlist_with_user, "public_url": configFile.PoenskelistenExternalURL})
 }
 
 func ConvertWishlistCollaberatorToWishlistCollaberatorObject(wishlistCollab models.WishlistCollaborator) (wishlistCollabObject models.WishlistCollaboratorObject, err error) {
@@ -1148,4 +1167,54 @@ func APIUnCollaborateWishlist(context *gin.Context) {
 	}
 
 	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist collaborator removed.", "wishlists": wishlists_with_users})
+}
+
+func GetPublicWishlist(context *gin.Context) {
+	// Create wishlist request
+	var wishlistHash = context.Param("wishlist_hash")
+
+	// Get configuration
+	config, err := config.GetConfig()
+	if err != nil {
+		log.Println("Failed to get config file. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
+		context.Abort()
+		return
+	}
+
+	// parse wishlist id
+	wishlistHashUUID, err := uuid.Parse(wishlistHash)
+	if err != nil {
+		log.Println("Failed to parse wishlist hash. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist hash."})
+		context.Abort()
+		return
+	}
+
+	wishlistFound, wishlist, err := database.GetPublicWishListByWishlistHash(wishlistHashUUID)
+	if err != nil {
+		log.Println("Failed to get wishlist. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist."})
+		context.Abort()
+		return
+	} else if !wishlistFound {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
+		context.Abort()
+		return
+	}
+
+	wishlistObject, err := ConvertWishlistToWishlistObject(wishlist, nil)
+	if err != nil {
+		log.Println("Failed to convert to wishlist object. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert to wishlist object."})
+		context.Abort()
+		return
+	}
+
+	// Sort wishlist wishes by creation date
+	sort.Slice(wishlistObject.Wishes, func(i, j int) bool {
+		return wishlistObject.Wishes[j].CreatedAt.Before(wishlistObject.Wishes[i].CreatedAt)
+	})
+
+	context.JSON(http.StatusOK, gin.H{"wishlist": wishlistObject, "message": "Wishlist retrieved.", "currency": config.PoenskelistenCurrency, "padding": config.PoenskelistenCurrencyPad})
 }

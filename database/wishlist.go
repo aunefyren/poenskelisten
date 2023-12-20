@@ -344,3 +344,18 @@ func GetMembershipIDForGroupToWishlist(WishlistID uuid.UUID, GroupID uuid.UUID) 
 
 	return true, wishlistMembership, err
 }
+
+// Get wishlist by wishlist ID
+func GetPublicWishListByWishlistHash(wishlistHash uuid.UUID) (bool, models.Wishlist, error) {
+	var wishlist models.Wishlist
+
+	wishlistRecord := Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.public = ?", 1).Where("`wishlists`.public_hash = ?", wishlistHash).Find(&wishlist)
+
+	if wishlistRecord.Error != nil {
+		return false, models.Wishlist{}, wishlistRecord.Error
+	} else if wishlistRecord.RowsAffected != 1 {
+		return false, models.Wishlist{}, nil
+	}
+
+	return true, wishlist, nil
+}
