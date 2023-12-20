@@ -174,6 +174,8 @@ func initRouter() *gin.Engine {
 			open.POST("/users/password", controllers.APIChangePassword)
 			open.POST("/users/verify/:code", controllers.VerifyUser)
 			open.POST("/users/verification", controllers.SendUserVerificationCode)
+
+			open.GET("/wishlists/public/:wishlist_hash", controllers.GetPublicWishlist)
 		}
 
 		auth := api.Group("/auth").Use(middlewares.Auth(false))
@@ -291,6 +293,11 @@ func initRouter() *gin.Engine {
 	// Static endpoint for wishlist in your group
 	router.GET("/wishlists/:wishlist_id", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "wishlist.html", nil)
+	})
+
+	// Static endpoint for public wishlist
+	router.GET("/wishlists/public/:wishlist_hash", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "public.html", nil)
 	})
 
 	// Static endpoint for admin panel

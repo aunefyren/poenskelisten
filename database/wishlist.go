@@ -9,7 +9,7 @@ import (
 )
 
 // Update values in wishlist object in DB
-func UpdateWishlistValuesByID(wishlistID uuid.UUID, wishlistName string, wishlistDesc string, wishlistExpiration time.Time, wishlistClaimable bool, wishlistExpires bool) error {
+func UpdateWishlistValuesByID(wishlistID uuid.UUID, wishlistName string, wishlistDesc string, wishlistExpiration time.Time, wishlistClaimable bool, wishlistExpires bool, wishlistPublic bool, wishlistPublicHash uuid.UUID) error {
 
 	var wishlist models.Wishlist
 
@@ -51,6 +51,22 @@ func UpdateWishlistValuesByID(wishlistID uuid.UUID, wishlistName string, wishlis
 	}
 	if wishlistRecord.RowsAffected != 1 {
 		return errors.New("Expiration not changed in database.")
+	}
+
+	wishlistRecord = Instance.Model(wishlist).Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.ID = ?", wishlistID).Update("public", wishlistPublic)
+	if wishlistRecord.Error != nil {
+		return wishlistRecord.Error
+	}
+	if wishlistRecord.RowsAffected != 1 {
+		return errors.New("Public state not changed in database.")
+	}
+
+	wishlistRecord = Instance.Model(wishlist).Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.ID = ?", wishlistID).Update("public_hash", wishlistPublicHash)
+	if wishlistRecord.Error != nil {
+		return wishlistRecord.Error
+	}
+	if wishlistRecord.RowsAffected != 1 {
+		return errors.New("Public hash not changed in database.")
 	}
 
 	return nil
@@ -327,4 +343,19 @@ func GetMembershipIDForGroupToWishlist(WishlistID uuid.UUID, GroupID uuid.UUID) 
 	}
 
 	return true, wishlistMembership, err
+}
+
+// Get wishlist by wishlist ID
+func GetPublicWishListByWishlistHash(wishlistHash uuid.UUID) (bool, models.Wishlist, error) {
+	var wishlist models.Wishlist
+
+	wishlistRecord := Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.public = ?", 1).Where("`wishlists`.public_hash = ?", wishlistHash).Find(&wishlist)
+
+	if wishlistRecord.Error != nil {
+		return false, models.Wishlist{}, wishlistRecord.Error
+	} else if wishlistRecord.RowsAffected != 1 {
+		return false, models.Wishlist{}, nil
+	}
+
+	return true, wishlist, nil
 }

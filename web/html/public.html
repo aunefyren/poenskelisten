@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="no">
+    <head>
+
+        <!-- Required meta tags -->
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+        <meta name="description" content="Keep track of whishlists in a meaningful way.">
+        <meta name="pønskelisten" content="index, follow">
+        <title>Pønskelisten</title>
+
+        <!-- Custom CSS -->
+        <link rel="stylesheet" type="text/css" href="/css/main.css">
+        <link rel="manifest" href="/manifest.json" />
+        <script src="/js/public.js"></script>
+        <script src="/js/functions.js"></script>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300&display=swap" rel="stylesheet"> 
+        <!-- <script src="https://code.jquery.com/jquery-3.6.0.slim.js" integrity="sha256-HwWONEZrpuoh951cQD1ov2HUK5zA5DwJ1DNUXaM6FsY=" crossorigin="anonymous"></script> -->
+
+        <!-- All Apple touch icons for iPad, iPhone, iPod -->
+        <link rel="apple-touch-icon" sizes="57x57" href="assets/favicons/apple-touch-icon-57x57.png" />
+        <link rel="apple-touch-icon" sizes="60x60" href="assets/favicons/apple-touch-icon-60x60.png" />
+        <link rel="apple-touch-icon" sizes="72x72" href="assets/favicons/apple-touch-icon-72x72.png" />
+        <link rel="apple-touch-icon" sizes="76x76" href="assets/favicons/apple-touch-icon-76x76.png" />
+        <link rel="apple-touch-icon" sizes="114x114" href="assets/favicons/apple-touch-icon-114x114.png" />
+        <link rel="apple-touch-icon" sizes="120x120" href="assets/favicons/apple-touch-icon-120x120.png" />
+        <link rel="apple-touch-icon" sizes="144x144" href="assets/favicons/apple-touch-icon-144x144.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="assets/favicons/apple-touch-icon-152x152.png" />
+
+        <!-- All favicon sizes - for all devices and browsers -->
+        <link rel="icon" type="image/png" href="/assets/favicons/favicon-196x196.png" sizes="196x196" />
+        <link rel="icon" type="image/png" href="/assets/favicons/favicon-96x96.png" sizes="96x96" />
+        <link rel="icon" type="image/png" href="/assets/favicons/favicon-32x32.png" sizes="32x32" />
+        <link rel="icon" type="image/png" href="/assets/favicons/favicon-16x16.png" sizes="16x16" />
+        <link rel="icon" type="image/png" href="/assets/favicons/favicon-128x128.png" sizes="128x128" />
+
+        <!-- A favicon with four different sizes -->
+        <link rel="shortcut icon" type="image/x-icon" href="/assets/favicons/favicon.ico" />
+
+        <!-- Application color for Microsoft Windows app tile and Android status bar -->
+        <meta name="theme-color" content="#0d1b2a" />
+        <meta name="msapplication-TileColor" content="#0d1b2a" />
+
+        <!-- Application name for Microsoft Windows app tile -->
+        <meta name="Pønskelisten" content="Wishlists." />
+
+        <!-- Application icons for Microsoft Windows app tile -->
+        <meta name="msapplication-TileImage" content="assets/favicons/ms-tile-144x144.png" />
+        <meta name="msapplication-square70x70logo" content="assets/favicons/ms-tile-70x70.png" />
+        <meta name="msapplication-square150x150logo" content="assets/favicons/ms-tile-150x150.png" />
+        <meta name="msapplication-wide310x150logo" content="assets/favicons/ms-tile-310x150.png" />
+        <meta name="msapplication-square310x310logo" content="assets/favicons/ms-tile-310x310.png" />
+
+        <!-- Application config file for Microsoft browsers -->
+        <meta name="msapplication-config" content="config.xml" />
+
+        <meta name="apple-mobile-web-app-capable" content="yes" /> <meta name="mobile-web-app-capable" content="yes" />
+
+    </head>
+    <body>
+
+        <!-- navbar -->
+        <div id="nav">
+            <nav class="navbar" id="navbar">
+                <div class="nav-logo color-invert" id="nav-logo">
+                    <a href="/"><img src="/assets/gift.svg" style="box-sizing: border-box; height: 4em;padding: 0.5em; margin: auto;"></img></a>
+                </div>
+
+                <a class="nav-title" id="nav-title" href="/" id='home'>
+                    <b>Pønskelisten</b>
+                </a>
+
+                <a class="nav-icon" href="javascript:void(0);" class="icon" onclick="toggle_navbar()" style="padding: 0;">
+                    <img src="/assets/tab.png" class="color-invert" style="box-sizing: border-box;height: 4em;padding: 1em;margin: auto;"></img>
+                </a>
+
+                <a class="nav-item disabled" href="/wishlists" id='wishlists'>My wishlists</a>
+                <a class="nav-item disabled" href="/groups" id='groups'>Groups</a>
+
+                <a class="nav-item disabled" href="/admin" id='admin'>Admin</a>
+       
+                <a class="nav-item disabled" href="/account" id='account'>Account</a>
+                <a class="nav-item enabled" href="/login" id='login'>Log in</a>
+                <a class="nav-item enabled" href="/register" id='register'>Register</a>
+                <a class="nav-item disabled" href="#" onclick="logout()" id='logout'>Log out</a>
+            
+            </nav>
+        </div>
+        <!-- /navbar -->
+
+        <!-- container -->
+        <main role="main" class="container starter-template">
+            <div class="row">
+                <div class="col">
+
+                  <!-- where prompt / messages will appear -->
+                  <div id="response"></div>
+
+                    <!-- where main content will appear -->
+                    <div class="card">
+                        <div class="card-header" id="card-header"></div>
+                        <div class="card-body" id="content"></div>
+                    </div>
+                </div>
+            </div>
+        </main> 
+        <!-- /container -->
+      
+        <script>
+
+            var ignoreNav = document.getElementById('nav');
+            var groups;
+            var jwt;
+            var admin = false;
+            var currency = "$"
+            var currency_pad = true;
+            info('Loading...');
+            showLoggedOutMenu();
+            jwt = get_cookie('poenskelisten');
+            get_login(jwt);
+            
+        </script>
+
+        <noscript>
+            <h3>You need JavaScript to use this website.</h3>
+        </noscript>
+
+    </body>
+</html>

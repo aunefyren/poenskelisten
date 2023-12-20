@@ -61,8 +61,17 @@ function load_page(result) {
                             <div class="text-body" id="wishlist-info">
                             </div>
 
+                            <div class="wishlist-url-wrapper" id="wishlist-url-wrapper" style="display: none;">
+                                <div class="wishlist-url-title" id="wishlist-url-title">
+                                </div>
+                                <div class="wishlist-url" id="wishlist-url">
+                                    <span class="wishlist-url-span" id="wishlist-url-span"></span>
+                                    <img id="share-wishlist-url-button" class="share-wishlist-url-button clickable hover" src="/assets/copy.svg" style="" title="Click to copy the URL" onclick="copyPublicLink();">
+                                </div>
+                            </div>
+
                             <div class="bottom-right-button" id="edit-wishlist" style="display: none;" title="Edit wishlist">
-                                <img class="icon-img  clickable" src="/assets/edit.svg" onclick="wishlist_edit('${user_id}', '${wishlist_id}', '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires});">
+                                <img class="icon-img  clickable" src="/assets/edit.svg" onclick="wishlist_edit('${user_id}', '${wishlist_id}', '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires}, {wishlist_public});">
                             </div>
 
                         </div>
@@ -148,7 +157,7 @@ function get_wishlist(wishlist_id){
             } else {
 
                 console.log(result);
-                place_wishlist(result.wishlist);
+                place_wishlist(result.wishlist, result.public_url);
 
             }
 
@@ -162,11 +171,11 @@ function get_wishlist(wishlist_id){
     return false;
 }
 
-function place_wishlist(wishlist_object) {
+function place_wishlist(wishlist_object, public_url) {
 
     document.getElementById("wishlist-title").innerHTML = wishlist_object.name
     document.getElementById("wishlist-description").innerHTML = wishlist_object.description
-    document.getElementById("wishlist-info").innerHTML += "<br>By: " + wishlist_object.owner.first_name + " " + wishlist_object.owner.last_name
+    document.getElementById("wishlist-info").innerHTML += "<br>By: " + wishlist_object.owner.first_name + " " + wishlist_object.owner.last_name + "."
 
     try {
         
@@ -192,6 +201,20 @@ function place_wishlist(wishlist_object) {
             document.getElementById("wishlist-info").innerHTML += "<br>Wishes are not claimable.";
             box = document.getElementById("wishlist-info-box")
             document.getElementById("wishlist-info-box").innerHTML = box.innerHTML.replace('{wishlist_claimable}', "false");
+        }
+
+        if(wishlist_object.public) {
+            document.getElementById("wishlist-info").innerHTML += "<br>Wishlist is public to users without accounts.";
+            box = document.getElementById("wishlist-info-box")
+            document.getElementById("wishlist-info-box").innerHTML = box.innerHTML.replace('{wishlist_public}', "true");
+
+            document.getElementById("wishlist-url-wrapper").style.display = "flex";
+            document.getElementById("wishlist-url-title").innerHTML = "Public URL:";
+            document.getElementById("wishlist-url-span").innerHTML = public_url + "/wishlists/public/" + wishlist_object.public_hash;
+        } else {
+            document.getElementById("wishlist-info").innerHTML += "<br>Wishlist is private to shared groups.";
+            box = document.getElementById("wishlist-info-box")
+            document.getElementById("wishlist-info-box").innerHTML = box.innerHTML.replace('{wishlist_public}', "false");
         }
 
     } catch(err) {
@@ -712,7 +735,7 @@ function unclaim_wish(wish_id, wishlist_id, group_id, user_id) {
     return false;
 }
 
-function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date, wishlist_claimable, wishlist_expires) {
+function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date, wishlist_claimable, wishlist_expires, wishlist_public) {
 
     var wishlist_title = document.getElementById("wishlist-title").innerHTML;
     var wishlist_description = document.getElementById("wishlist-description").innerHTML;
@@ -730,6 +753,11 @@ function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date, wishlist_
         expireDateClass = "wishlist-date-wrapper-extended"
     } else {
         expireDateClass = "wishlist-date-wrapper-minimized"
+    }
+
+    var public_string = ""
+    if(wishlist_public) {
+        public_string = "checked"
     }
 
     var html = '';
@@ -756,6 +784,9 @@ function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date, wishlist_
 
             <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" ${checked_string}>
             <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
+
+            <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${public_string}>
+            <label for="wishlist_public" style="margin-bottom: 1em;" class="clickable">Make this wishlist public and shareable.</label><br>
             
             <button id="register-button" type="submit" href="/">Save wishlist</button>
 
@@ -767,11 +798,6 @@ function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date, wishlist_
 }
 
 function update_wishlist(wishlist_id, user_id) {
-
-    if(!confirm("Are you sure you want to update this wishlist?")) {
-        return;
-    }
-
     var wishlist_name = document.getElementById("wishlist_name").value;
     var wishlist_description = document.getElementById("wishlist_description").value;
     var wishlist_date = document.getElementById("wishlist_date").value;
@@ -779,18 +805,29 @@ function update_wishlist(wishlist_id, user_id) {
     var wishlist_date_string = wishlist_date_object.toISOString();
     var wishlist_claimable = document.getElementById("wishlist_claimable").checked;
     var wishlist_expires = document.getElementById("wishlist_expires").checked;
+    var wishlist_public = document.getElementById("wishlist_public").checked;
+
+    if(wishlist_public && wishlist_claimable) {
+        alert("A wishlist cannot have claimable wishes and be public to users without accounts.")
+        return;
+    }
 
     var form_obj = { 
         "name" : wishlist_name,
         "description" : wishlist_description,
         "date": wishlist_date_string,
         "claimable": wishlist_claimable,
-        "expires": wishlist_expires
+        "expires": wishlist_expires,
+        "public": wishlist_public
     };
 
     var form_data = JSON.stringify(form_obj);
 
     console.log(form_data)
+
+    if(!confirm("Are you sure you want to update this wishlist?")) {
+        return;
+    }
 
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -812,7 +849,7 @@ function update_wishlist(wishlist_id, user_id) {
 
                 success(result.message);
                 reset_wishlist_info_box(user_id, wishlist_id);
-                place_wishlist(result.wishlist);
+                place_wishlist(result.wishlist, result.public_url);
                 show_owner_inputs();
 
             }
@@ -841,8 +878,17 @@ function reset_wishlist_info_box(user_id, wishlist_id) {
     <div class="text-body" id="wishlist-info">
     </div>
 
+    <div class="wishlist-url-wrapper" id="wishlist-url-wrapper" style="display: none;">
+        <div class="wishlist-url-title" id="wishlist-url-title">
+        </div>
+        <div class="wishlist-url" id="wishlist-url">
+            <span class="wishlist-url-span" id="wishlist-url-span"></span>
+            <img id="share-wishlist-url-button" class="share-wishlist-url-button clickable hover" src="/assets/copy.svg" style="" title="Click to copy the URL" onclick="copyPublicLink();">
+        </div>
+    </div>
+
     <div class="bottom-right-button" id="edit-wishlist" style="display: none;">
-        <img class="icon-img  clickable" src="/assets/edit.svg" onclick="wishlist_edit('${user_id}', '${wishlist_id}', '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires});">
+        <img class="icon-img  clickable" src="/assets/edit.svg" onclick="wishlist_edit('${user_id}', '${wishlist_id}', '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires}, {wishlist_public});">
     </div>
     `;
 
@@ -1062,7 +1108,7 @@ function cancel_edit_wishlist(wishlist_id, user_id) {
             } else {
 
                 reset_wishlist_info_box(user_id, wishlist_id);
-                place_wishlist(result.wishlist);
+                place_wishlist(result.wishlist, result.public_url);
                 show_owner_inputs();
 
             }
@@ -1175,5 +1221,17 @@ function GetWishImageThumbail(wishID) {
 function PlaceWishImageThumbail(imageBase64, wishID) {
 
     document.getElementById("wish-image-thumbnail-img-" + wishID).src = imageBase64
+
+}
+
+function copyPublicLink() {
+
+    /* Get the text field */
+    var copyText = document.getElementById("wishlist-url-span").innerHTML
+
+    /* Copy the text inside the text field */
+    navigator.clipboard.writeText(copyText)
+
+    alert("URL copied to clipboard.")
 
 }
