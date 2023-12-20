@@ -92,7 +92,7 @@ func RegisterWishlist(context *gin.Context) {
 		return
 	}
 
-	wishlistdb.Expires = wishlist.Expires
+	wishlistdb.Expires = &wishlist.Expires
 
 	wishlistdb.Date, err = time.Parse("2006-01-02T15:04:05.000Z", wishlist.Date)
 	if err != nil && *wishlistdb.Expires {
@@ -128,8 +128,16 @@ func RegisterWishlist(context *gin.Context) {
 	wishlistdb.OwnerID = UserID
 	wishlistdb.Description = wishlist.Description
 	wishlistdb.Name = wishlist.Name
-	wishlistdb.Claimable = wishlist.Claimable
+	wishlistdb.Claimable = &wishlist.Claimable
 	wishlistdb.ID = uuid.New()
+	wishlistdb.Public = &wishlist.Public
+	wishlistdb.PublicHash = uuid.New()
+
+	if *wishlistdb.Public && *wishlistdb.Claimable {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "A wishlist cannot have claimable wishes and be public to users without accounts."})
+		context.Abort()
+		return
+	}
 
 	// Create wishlist in DB
 	wishlistdb, err = database.CreateWishlistInDB(wishlistdb)
@@ -802,11 +810,18 @@ func APIUpdateWishlist(context *gin.Context) {
 	wishlistdb.OwnerID = UserID
 	wishlistdb.Description = wishlist.Description
 	wishlistdb.Name = wishlist.Name
-	wishlistdb.Claimable = wishlist.Claimable
-	wishlistdb.Expires = wishlist.Expires
+	wishlistdb.Claimable = &wishlist.Claimable
+	wishlistdb.Expires = &wishlist.Expires
+	wishlistdb.Public = &wishlist.Public
+
+	if *wishlistdb.Public && *wishlistdb.Claimable {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "A wishlist cannot have claimable wishes and be public to users without accounts."})
+		context.Abort()
+		return
+	}
 
 	// Update wishlist in DB
-	err = database.UpdateWishlistValuesByID(wishlist_id_int, wishlistdb.Name, wishlistdb.Description, wishlistdb.Date, *wishlistdb.Claimable, *wishlistdb.Expires)
+	err = database.UpdateWishlistValuesByID(wishlist_id_int, wishlistdb.Name, wishlistdb.Description, wishlistdb.Date, *wishlistdb.Claimable, *wishlistdb.Expires, *wishlistdb.Public, uuid.New())
 	if err != nil {
 		log.Println("Failed to update wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update wishlist."})
@@ -909,6 +924,8 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *uu
 	wishlistObject.Claimable = wishlist.Claimable
 	wishlistObject.Collaborators = wishlistsCollabObjects
 	wishlistObject.Expires = wishlist.Expires
+	wishlistObject.Public = wishlist.Public
+	wishlistObject.PublicHash = wishlist.PublicHash
 
 	// Get wishes
 	_, wishes, err := database.GetWishesFromWishlist(wishlist.ID)

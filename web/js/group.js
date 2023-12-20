@@ -105,6 +105,9 @@ function load_page(result) {
 
                                 <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" checked>
                                 <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
+
+                                <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm">
+                                <label for="wishlist_public" style="margin-bottom: 1em;" class="clickable">Make this wishlist public and shareable.</label><br>
                                 
                                 <button id="register-button" type="submit" href="/">Create wishlist in this group</button>
 
@@ -322,6 +325,7 @@ function create_wishlist(group_id, user_id) {
     var wishlist_date = document.getElementById("wishlist_date").value;
     var wishlist_expires = document.getElementById("wishlist_expires").checked;
     var wishlist_claimable = document.getElementById("wishlist_claimable").checked;
+    var wishlist_public = document.getElementById("wishlist_public").checked;
 
     if(wishlist_expires) {
         try {
@@ -348,7 +352,8 @@ function create_wishlist(group_id, user_id) {
         "date": wishlist_date_string,
         "group": group_id_int,
         "claimable": wishlist_claimable,
-        "expires": wishlist_expires
+        "expires": wishlist_expires,
+        "public": wishlist_public
     };
 
     var form_data = JSON.stringify(form_obj);
