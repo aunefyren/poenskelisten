@@ -31,4 +31,4 @@ WORKDIR /app
 
 COPY --from=builder /app .
 
-ENTRYPOINT /app/poenskelisten -port ${port} -timezone ${timezone} -generateinvite ${generateinvite}-dbip ${dbip}-dbport ${dbport} -dbname ${dbname} -dbusername ${dbusername} -dbpassword ${dbpassword} -disablesmtp ${disablesmtp} -smtphost ${smtphost} -smtpport ${smtpport} -smtpusername ${smtpusername} -smtppassword ${smtppassword}
+ENTRYPOINT /app/poenskelisten -port ${port} -timezone ${timezone} -generateinvite ${generateinvite} -dbip ${dbip} -dbport ${dbport} -dbname ${dbname} -dbusername ${dbusername} -dbpassword ${dbpassword} -disablesmtp ${disablesmtp} -smtphost ${smtphost} -smtpport ${smtpport} -smtpusername ${smtpusername} -smtppassword ${smtppassword}
