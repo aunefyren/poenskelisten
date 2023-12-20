@@ -88,9 +88,9 @@ type WishlistCollaborator struct {
 
 type WishlistCollaboratorObject struct {
 	GormModel
-	User     User         `json:"user"`
-	Enabled  bool         `json:"enabled"`
-	Wishlist WishlistUser `json:"wishlist"`
+	User       User      `json:"user"`
+	Enabled    bool      `json:"enabled"`
+	WishlistID uuid.UUID `json:"wishlist"`
 }
 
 type WishlistCollaboratorCreationRequest struct {

@@ -54,6 +54,9 @@ function load_page(result) {
                         </div>
 
                         <div id="groups-box" class="groups">
+                            <div class="loading-icon-wrapper" id="loading-icon-wrapper">
+                                <img class="loading-icon" src="/assets/loading.svg">
+                            </div>
                         </div>
 
                         <div id="group-input" class="group-input">
@@ -64,7 +67,6 @@ function load_page(result) {
                                 <input type="text" name="group_name" id="group_name" placeholder="Group name" autocomplete="off" required />
                                 
                                 <input type="text" name="group_description" id="group_description" placeholder="Group description" autocomplete="off" required />
-
 
                                 <label for="group_members">Select group members:</label><br>
                                 <select name="group_members" id="group-input-members" multiple>
@@ -239,6 +241,12 @@ function place_groups(group_array, user_id) {
 
     if(group_array.length == 0) {
         info("Looks like this list is empty...");
+
+        try {
+            document.getElementById("loading-icon-wrapper").style.display = "none"
+        } catch(e) {
+            console.log("Error: " + e)
+        }
     }
 
     group_object = document.getElementById("groups-box")
@@ -414,7 +422,7 @@ function create_group(user_id) {
         opt = select_list.options[i];
     
         if (opt.selected) {
-            selected_members.push(Number(opt.value));
+            selected_members.push(opt.value);
         }
     }
 
@@ -594,7 +602,7 @@ function add_members(group_id, user_id) {
         opt = select_list.options[i];
     
         if (opt.selected) {
-            selected_members.push(Number(opt.value));
+            selected_members.push(opt.value);
         }
     }
 

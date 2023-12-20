@@ -42,7 +42,7 @@ function load_page(result) {
                 <!-- The Modal -->
                 <div id="myModal" class="modal">
                     <span class="close selectable">&times;</span>
-                    <img class="modal-content" id="modal-img" src="/assets/loading.gif">
+                    <img class="modal-content" id="modal-img" src="/assets/loading.svg">
                     <div id="caption"></div>
                 </div>
 
@@ -85,6 +85,9 @@ function load_page(result) {
                         </div>
 
                         <div id="wishes-box" class="wishes">
+                            <div class="loading-icon-wrapper" id="loading-icon-wrapper">
+                                <img class="loading-icon" src="/assets/loading.svg">
+                            </div>
                         </div>
 
                         <div id="wish-input" class="wish-input">
@@ -116,7 +119,7 @@ function load_page(result) {
     // When the user clicks on <span> (x), close the modal
     span.onclick = function() { 
         document.getElementById("myModal").style.display = "none";
-        document.getElementById("modal-img").src = "/assets/loading.gif"
+        document.getElementById("modal-img").src = "/assets/loading.svg"
     }
 
     if(result !== false) {
@@ -300,6 +303,12 @@ function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
 
     if(wishes_array.length == 0) {
         info("Looks like this list is empty...");
+
+        try {
+            document.getElementById("loading-icon-wrapper").style.display = "none"
+        } catch(e) {
+            console.log("Error: " + e)
+        }
     }
 
     wishlist_object = document.getElementById("wishes-box")
@@ -423,7 +432,7 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
 
     if(wish_object.image) {
         html += `<div class="wish-image-thumbnail clickable" onclick="toggle_wish_modal('${wish_object.id}')">`;
-        html += '<img style="width: 100%; height: 100%;" class="wish-image-thumbnail-img" id="wish-image-thumbnail-img-' + wish_object.id  + '" src="/assets/loading.gif">'
+        html += '<img style="width: 100%; height: 100%;" class="wish-image-thumbnail-img" id="wish-image-thumbnail-img-' + wish_object.id  + '" src="/assets/loading.svg">'
         html += '</div>'
 
         wish_with_image = true
