@@ -1,9 +1,17 @@
-FROM golang:1.20.4-bullseye
+FROM golang:1.20.4-bullseye as builder
+
+ARG TARGETARCH
+ARG TARGETOS
+
+WORKDIR /app
+
+COPY . .
+
+RUN GO111MODULE=on CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build
+
+FROM debian:bullseye-slim as runtime
 
 LABEL org.opencontainers.image.source=https://github.com/aunefyren/poenskelisten
-
-ARG TARGETARCH 
-ARG TARGETOS 
 
 ENV port=8080
 ENV timezone=Europe/Oslo
@@ -21,8 +29,6 @@ ENV smtppassword=password123
 
 WORKDIR /app
 
-COPY . .
+COPY --from=builder /app .
 
-RUN GO111MODULE=on CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build 
-
-ENTRYPOINT /app/poenskelisten -port ${port} -timezone ${timezone} -generateinvite ${generateinvite} -dbip ${dbip} -dbport ${dbport} -dbname ${dbname} -dbusername ${dbusername} -dbpassword ${dbpassword} -disablesmtp ${disablesmtp} -smtphost ${smtphost} -smtpport ${smtpport} -smtpusername ${smtpusername} -smtppassword ${smtppassword}
+ENTRYPOINT /app/poenskelisten -port ${port} -timezone ${timezone} -generateinvite ${generateinvite}-dbip ${dbip}-dbport ${dbport} -dbname ${dbname} -dbusername ${dbusername} -dbpassword ${dbpassword} -disablesmtp ${disablesmtp} -smtphost ${smtphost} -smtpport ${smtpport} -smtpusername ${smtpusername} -smtppassword ${smtppassword}
