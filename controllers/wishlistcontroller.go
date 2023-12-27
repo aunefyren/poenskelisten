@@ -278,6 +278,11 @@ func DeleteWishlist(context *gin.Context) {
 		}
 	}
 
+	// Sort wishlists by creation date
+	sort.Slice(wishlistObjects, func(i, j int) bool {
+		return wishlistObjects[j].CreatedAt.Before(wishlistObjects[i].CreatedAt)
+	})
+
 	context.JSON(http.StatusOK, gin.H{"wishlists": wishlistObjects, "message": "Wishlist deleted."})
 
 }
@@ -563,14 +568,19 @@ func JoinWishlist(context *gin.Context) {
 	}
 
 	// get new group list
-	wishlists_with_users, err := GetWishlistObjects(UserID)
+	wishlistObjects, err := GetWishlistObjects(UserID)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		context.Abort()
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist member joined.", "wishlists": wishlists_with_users})
+	// Sort wishlists by creation date
+	sort.Slice(wishlistObjects, func(i, j int) bool {
+		return wishlistObjects[j].CreatedAt.Before(wishlistObjects[i].CreatedAt)
+	})
+
+	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist member joined.", "wishlists": wishlistObjects})
 }
 
 func RemoveFromWishlist(context *gin.Context) {
@@ -690,6 +700,11 @@ func RemoveFromWishlist(context *gin.Context) {
 			return
 		}
 	}
+
+	// Sort wishlists by creation date
+	sort.Slice(wishlistObjects, func(i, j int) bool {
+		return wishlistObjects[j].CreatedAt.Before(wishlistObjects[i].CreatedAt)
+	})
 
 	context.JSON(http.StatusCreated, gin.H{"message": "Group member removed.", "wishlists": wishlistObjects})
 }
@@ -962,6 +977,11 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *uu
 		return models.WishlistUser{}, err
 	}
 
+	// Sort wishes by creation date
+	sort.Slice(wishObjects, func(i, j int) bool {
+		return wishObjects[j].CreatedAt.Before(wishObjects[i].CreatedAt)
+	})
+
 	wishlistObject.Wishes = wishObjects
 
 	return
@@ -1076,7 +1096,7 @@ func APICollaborateWishlist(context *gin.Context) {
 	}
 
 	// get new wishlist list
-	wishlists_with_users, err := GetWishlistObjects(UserID)
+	wishlistObjects, err := GetWishlistObjects(UserID)
 	if err != nil {
 		log.Println("Failed to get new wishlist objects. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get new wishlist objects."})
@@ -1084,7 +1104,12 @@ func APICollaborateWishlist(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist collaborators added.", "wishlists": wishlists_with_users})
+	// Sort wishlists by creation date
+	sort.Slice(wishlistObjects, func(i, j int) bool {
+		return wishlistObjects[j].CreatedAt.Before(wishlistObjects[i].CreatedAt)
+	})
+
+	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist collaborators added.", "wishlists": wishlistObjects})
 }
 
 func APIUnCollaborateWishlist(context *gin.Context) {
@@ -1161,7 +1186,7 @@ func APIUnCollaborateWishlist(context *gin.Context) {
 	}
 
 	// get new wishlist list
-	wishlists_with_users, err := GetWishlistObjects(UserID)
+	wishlistObjects, err := GetWishlistObjects(UserID)
 	if err != nil {
 		log.Println("Failed to get new wishlist objects. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get new wishlist objects."})
@@ -1169,7 +1194,12 @@ func APIUnCollaborateWishlist(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist collaborator removed.", "wishlists": wishlists_with_users})
+	// Sort wishlists by creation date
+	sort.Slice(wishlistObjects, func(i, j int) bool {
+		return wishlistObjects[j].CreatedAt.Before(wishlistObjects[i].CreatedAt)
+	})
+
+	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist collaborator removed.", "wishlists": wishlistObjects})
 }
 
 func GetPublicWishlist(context *gin.Context) {
