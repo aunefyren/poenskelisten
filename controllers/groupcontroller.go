@@ -142,6 +142,11 @@ func RegisterGroup(context *gin.Context) {
 		return
 	}
 
+	// Sort groups by creation date
+	sort.Slice(groupsWithOwner, func(i, j int) bool {
+		return groupsWithOwner[j].CreatedAt.Before(groupsWithOwner[i].CreatedAt)
+	})
+
 	// Return a response indicating that the group was created, along with the updated list of groups
 	context.JSON(http.StatusCreated, gin.H{"message": "Group created.", "groups": groupsWithOwner})
 }
@@ -259,9 +264,13 @@ func JoinGroup(context *gin.Context) {
 		return
 	}
 
+	// Sort groups by creation date
+	sort.Slice(groupsWithOwner, func(i, j int) bool {
+		return groupsWithOwner[j].CreatedAt.Before(groupsWithOwner[i].CreatedAt)
+	})
+
 	// Return a Created response with a message indicating that the group member(s) joined successfully, and the updated list of groups
 	context.JSON(http.StatusCreated, gin.H{"message": "Group member(s) joined.", "groups": groupsWithOwner})
-
 }
 
 // RemoveFromGroup creates a groupmembership request, gets the group ID from the URL parameter, and binds the request to a groupMembership variable.
@@ -350,9 +359,13 @@ func RemoveFromGroup(context *gin.Context) {
 		return
 	}
 
+	// Sort groups by creation date
+	sort.Slice(groupsWithOwner, func(i, j int) bool {
+		return groupsWithOwner[j].CreatedAt.Before(groupsWithOwner[i].CreatedAt)
+	})
+
 	// Return success message and updated list of groups
 	context.JSON(http.StatusCreated, gin.H{"message": "Group member removed.", "groups": groupsWithOwner})
-
 }
 
 // The function is an API endpoint that allows the authenticated user to remove themselves from a group.
@@ -431,9 +444,13 @@ func RemoveSelfFromGroup(context *gin.Context) {
 		return
 	}
 
+	// Sort groups by creation date
+	sort.Slice(groupsWithOwner, func(i, j int) bool {
+		return groupsWithOwner[j].CreatedAt.Before(groupsWithOwner[i].CreatedAt)
+	})
+
 	// Return success message and updated list of groups
 	context.JSON(http.StatusCreated, gin.H{"message": "Group left.", "groups": groupsWithOwner})
-
 }
 
 // The function is an API endpoint that allows the authenticated user to delete a group.
@@ -491,8 +508,12 @@ func DeleteGroup(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Group deleted.", "groups": groupsWithOwner})
+	// Sort groups by creation date
+	sort.Slice(groupsWithOwner, func(i, j int) bool {
+		return groupsWithOwner[j].CreatedAt.Before(groupsWithOwner[i].CreatedAt)
+	})
 
+	context.JSON(http.StatusCreated, gin.H{"message": "Group deleted.", "groups": groupsWithOwner})
 }
 
 // The function retrieves a list of groups that the authenticated user owns or is a member of.
@@ -523,7 +544,6 @@ func GetGroups(context *gin.Context) {
 
 	// Return list of groups with owner and success message
 	context.JSON(http.StatusOK, gin.H{"groups": groupsWithOwner, "message": "Groups retrieved."})
-
 }
 
 // The function retrieves a list of groups that the given user owns or is a member of.
@@ -668,7 +688,8 @@ func GetGroupMembers(context *gin.Context) {
 
 		userObject, err := database.GetUserInformation(membership.MemberID)
 		if err != nil {
-			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			log.Println("Failed to get user object for group member. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user object for group member."})
 			context.Abort()
 			return
 		}

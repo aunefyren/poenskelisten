@@ -486,6 +486,11 @@ func DeleteWish(context *gin.Context) {
 		return
 	}
 
+	// Sort wishes by creation date
+	sort.Slice(wishObjects, func(i, j int) bool {
+		return wishObjects[j].CreatedAt.Before(wishObjects[i].CreatedAt)
+	})
+
 	// Return response
 	context.JSON(http.StatusCreated, gin.H{"message": "Wish deleted.", "wishes": wishObjects})
 
@@ -654,6 +659,11 @@ func RegisterWishClaim(context *gin.Context) {
 			return
 		}
 
+		// Sort wishes by creation date
+		sort.Slice(wishObjects, func(i, j int) bool {
+			return wishObjects[j].CreatedAt.Before(wishObjects[i].CreatedAt)
+		})
+
 		// Return response
 		context.JSON(http.StatusCreated, gin.H{"message": "Wish claimed.", "wishes": wishObjects})
 		return
@@ -790,6 +800,11 @@ func RemoveWishClaim(context *gin.Context) {
 			context.Abort()
 			return
 		}
+
+		// Sort wishes by creation date
+		sort.Slice(wishObjects, func(i, j int) bool {
+			return wishObjects[j].CreatedAt.Before(wishObjects[i].CreatedAt)
+		})
 
 		// Return response
 		context.JSON(http.StatusOK, gin.H{"message": "Wish unclaimed.", "wishes": wishObjects})
