@@ -416,7 +416,7 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     } else if(wish_object.wishclaim.length > 0 && wish_object.wish_claimable) {
         for(var j = 0; j < wish_object.wishclaim.length; j++) {
             if(user_id !== wish_object.wishclaim[j].user.id) {
-                html += '<div class="profile-icon" title="Claimed by ' + wish_object.wishclaim[j].user.first_name + ' ' + wish_object.wishclaim[j].user.last_name + '">'
+                html += `<div class="profile-icon clickable" title="Wish is claimed by ${wish_object.wishclaim[j].user.first_name} ${wish_object.wishclaim[j].user.last_name}." onclick="alert('Wish is claimed by ${wish_object.wishclaim[j].user.first_name} ${wish_object.wishclaim[j].user.last_name}.')">`
                 html += '<img class="icon-img " src="/assets/lock.svg">'
                 html += '</div>'
             } else {
