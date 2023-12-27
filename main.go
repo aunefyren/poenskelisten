@@ -77,6 +77,8 @@ func main() {
 	}
 	log.Println("Configuration file loaded.")
 
+	log.Println("Running Pønskelisten version: " + Config.PoenskelistenVersion)
+
 	// Change the config to respect flags
 	Config, generateInvite, upgradeToV2, err := parseFlags(Config)
 	if err != nil {
