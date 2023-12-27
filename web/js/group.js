@@ -301,7 +301,7 @@ function place_wishlists(wishlists_array, group_id, user_id) {
     }
 
     if(wishlists_array_length < 1) {
-        info("Looks like this list is empty...");
+        info("Looks like this list is empty... Someone needs to add their wishlist to this group!");
 
         try {
             document.getElementById("loading-icon-wrapper").style.display = "none"
