@@ -336,7 +336,7 @@ function place_wishlists(wishlists_array, user_id) {
     }
 
     if(wishlists_array_length < 1) {
-        info("Looks like this list is empty...");
+        info("Looks like this list is empty... Ready to create your first wishlist?");
 
         try {
             document.getElementById("loading-icon-wrapper").style.display = "none"

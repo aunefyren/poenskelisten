@@ -219,7 +219,7 @@ function placeWishes(wishes_array, wishlist_id, group_id, user_id) {
     }
 
     if(wishes_array.length == 0) {
-        info("Looks like this list is empty...");
+        info("Looks like this wishlist is empty...");
 
         try {
             document.getElementById("loading-icon-wrapper").style.display = "none"

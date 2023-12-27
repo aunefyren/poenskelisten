@@ -52,6 +52,10 @@ function load_page(result) {
                     
                         <div class="wishlist-info" id="wishlist-info-box">
 
+                            <div class="loading-icon-wrapper" id="loading-icon-wrapper-wishlist">
+                                <img class="loading-icon" src="/assets/loading.svg">
+                            </div>
+
                             <div id="wishlist-title" class="title">
                             </div>
 
@@ -172,6 +176,12 @@ function get_wishlist(wishlist_id){
 }
 
 function place_wishlist(wishlist_object, public_url) {
+
+    try {
+        document.getElementById("loading-icon-wrapper-wishlist").style.display = "none"
+    } catch(e) {
+        console.log("Error: " + e)
+    }
 
     document.getElementById("wishlist-title").innerHTML = wishlist_object.name
     document.getElementById("wishlist-description").innerHTML = wishlist_object.description
@@ -302,7 +312,7 @@ function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
     }
 
     if(wishes_array.length == 0) {
-        info("Looks like this list is empty...");
+        info("Looks like this wishlist is empty...");
 
         try {
             document.getElementById("loading-icon-wrapper").style.display = "none"
@@ -869,6 +879,10 @@ function update_wishlist(wishlist_id, user_id) {
 
 function reset_wishlist_info_box(user_id, wishlist_id) {
     var html = `
+    <div class="loading-icon-wrapper" id="loading-icon-wrapper-wishlist">
+        <img class="loading-icon" src="/assets/loading.svg">
+    </div>
+
     <div id="wishlist-title" class="title">
     </div>
 
