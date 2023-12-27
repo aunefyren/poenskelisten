@@ -5,6 +5,7 @@ import (
 	"aunefyren/poenskelisten/models"
 	"log"
 	"net/http"
+	"sort"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -35,6 +36,11 @@ func RegisterInvite(context *gin.Context) {
 		context.Abort()
 		return
 	}
+
+	// Sort invites  by creation date
+	sort.Slice(inviteObjects, func(i, j int) bool {
+		return inviteObjects[j].CreatedAt.Before(inviteObjects[i].CreatedAt)
+	})
 
 	context.JSON(http.StatusCreated, gin.H{"message": "Invitation created.", "invitation": invite, "invites": inviteObjects})
 
@@ -111,6 +117,11 @@ func APIGetAllInvites(context *gin.Context) {
 		context.Abort()
 		return
 	}
+
+	// Sort invites  by creation date
+	sort.Slice(inviteObjects, func(i, j int) bool {
+		return inviteObjects[j].CreatedAt.Before(inviteObjects[i].CreatedAt)
+	})
 
 	context.JSON(http.StatusOK, gin.H{"message": "Invites retrieved.", "invites": inviteObjects})
 }
