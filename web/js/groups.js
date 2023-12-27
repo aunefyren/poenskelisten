@@ -240,7 +240,7 @@ function place_groups(group_array, user_id) {
     }
 
     if(group_array.length == 0) {
-        info("Looks like this list is empty...");
+        info("Looks like this list is empty... Maybe the group owner needs to add you to a group?");
 
         try {
             document.getElementById("loading-icon-wrapper").style.display = "none"
@@ -317,9 +317,7 @@ function get_users_group(group_id, owner_id, user_id, member_array){
 
             } else {
 
-                clearResponse();
                 users = result.users;
-                console.log(users);
                 place_users_groups(users, group_id, owner_id, user_id, member_array);
 
             }
@@ -381,9 +379,7 @@ function get_users(user_id){
 
             } else {
 
-                clearResponse();
                 users = result.users;
-                console.log(users);
                 place_users(users, user_id);
 
             }
