@@ -217,7 +217,7 @@ func GetGroupUsingGroupIDAndMembershipUsingUserID(UserID uuid.UUID, GroupID uuid
 	return group, nil
 }
 
-// Verify the given user owns the given group by ID
+// Verify the given user owns the given group by ID. Returns an error if not found.
 func GetGroupUsingGroupIDAndUserIDAsOwner(UserID uuid.UUID, GroupID uuid.UUID) (models.Group, error) {
 	var group = models.Group{}
 
@@ -229,4 +229,19 @@ func GetGroupUsingGroupIDAndUserIDAsOwner(UserID uuid.UUID, GroupID uuid.UUID) (
 	}
 
 	return group, nil
+}
+
+// Returns an error if not found
+func GetGroupMembershipByGroupIDAndMemberID(GroupID uuid.UUID, MemberID uuid.UUID) (groupmembership models.GroupMembership, err error) {
+	groupmembership = models.GroupMembership{}
+	err = nil
+
+	groupMembershipRecord := Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group_id = ?", GroupID).Where("`group_memberships`.member = ?", MemberID).Find(&groupmembership)
+	if groupMembershipRecord.Error != nil {
+		return groupmembership, groupMembershipRecord.Error
+	} else if groupMembershipRecord.RowsAffected != 1 {
+		return groupmembership, errors.New("Failed to find group membership.")
+	}
+
+	return groupmembership, err
 }
