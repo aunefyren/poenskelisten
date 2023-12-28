@@ -30,7 +30,8 @@ func APIUpdateCurrency(context *gin.Context) {
 	var currency models.UpdateCurrencyrequest
 
 	if err := context.ShouldBindJSON(&currency); err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
