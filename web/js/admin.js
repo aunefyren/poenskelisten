@@ -42,6 +42,9 @@ function load_page(result) {
                     <div class="server-info" id="server-info">
                         <h3 id="server-info-title">Server info:</h3>
                         <p id="server-poenskelisten-version-title" style="">Version: <a id="server-poenskelisten-version">...</a></p>
+                        <p id="server-poenskelisten-port-title" style="">Port: <a id="server-poenskelisten-port">...</a></p>
+                        <p id="server-poenskelisten-database-title" style="">Database: <a id="server-poenskelisten-database">...</a></p>
+                        <p id="server-poenskelisten-url-title" style="">External URL: <a id="server-poenskelisten-url">...</a></p>
                         <p id="server-timezone-title" style="">Timezone: <a id="server-timezone">...</a></p>
                     </div>
 
@@ -129,6 +132,9 @@ function get_server_info() {
 function place_server_info(server_info) {
     document.getElementById('server-poenskelisten-version').innerHTML = server_info.poenskelisten_version
     document.getElementById('server-timezone').innerHTML = server_info.timezone
+    document.getElementById('server-poenskelisten-url').innerHTML = server_info.poenskelisten_external_url
+    document.getElementById('server-poenskelisten-database').innerHTML = server_info.database_type
+    document.getElementById('server-poenskelisten-port').innerHTML = server_info.poenskelisten_port
 }
 
 function get_invites() {
