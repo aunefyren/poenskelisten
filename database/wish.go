@@ -185,3 +185,23 @@ func DeleteWish(WishID uuid.UUID) error {
 	}
 	return nil
 }
+
+// Get wish by wish ID
+func GetWishlistByWishID(wishID uuid.UUID) (bool, models.Wishlist, error) {
+	var wishlist models.Wishlist
+
+	wishlistRecords := Instance.
+		Where("`wishlists`.enabled = ?", 1).
+		Joins("JOIN `wishes` on `wishlists`.id = `wishes`.wishlist_id").
+		Where("`wishes`.enabled = ?", 1).
+		Where("`wishes`.id = ?", wishID).
+		Find(&wishlist)
+
+	if wishlistRecords.Error != nil {
+		return false, models.Wishlist{}, wishlistRecords.Error
+	} else if wishlistRecords.RowsAffected != 1 {
+		return false, models.Wishlist{}, nil
+	}
+
+	return true, wishlist, nil
+}
