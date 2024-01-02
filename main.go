@@ -180,6 +180,11 @@ func initRouter() *gin.Engine {
 			open.GET("/wishlists/public/:wishlist_hash", controllers.GetPublicWishlist)
 		}
 
+		both := api.Group("/both")
+		{
+			both.GET("/wishes/:wish_id/image", controllers.APIGetWishImage)
+		}
+
 		auth := api.Group("/auth").Use(middlewares.Auth(false))
 		{
 			auth.POST("/tokens/validate", controllers.ValidateToken)
@@ -212,7 +217,6 @@ func initRouter() *gin.Engine {
 			auth.POST("/wishes/:wish_id/claim", controllers.RegisterWishClaim)
 			auth.POST("/wishes/:wish_id/unclaim", controllers.RemoveWishClaim)
 			auth.POST("/wishes/:wish_id/update", controllers.APIUpdateWish)
-			auth.GET("/wishes/:wish_id/image", controllers.APIGetWishImage)
 			auth.GET("/wishes/:wish_id", controllers.APIGetWish)
 
 			auth.GET("/news", controllers.GetNews)
