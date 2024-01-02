@@ -1179,7 +1179,7 @@ function GetWishImage(wishID) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "auth/wishes/" + wishID + "/image");
+    xhttp.open("get", api_url + "both/wishes/" + wishID + "/image");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -1223,7 +1223,7 @@ function GetWishImageThumbail(wishID) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "auth/wishes/" + wishID + "/image?thumbnail=true");
+    xhttp.open("get", api_url + "both/wishes/" + wishID + "/image?thumbnail=true");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();

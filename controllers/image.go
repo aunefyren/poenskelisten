@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/middlewares"
 	"bytes"
 	"encoding/base64"
 	"errors"
@@ -295,6 +296,27 @@ func APIGetWishImage(context *gin.Context) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})
 		context.Abort()
 		return
+	}
+
+	// Get wishlist object
+	wishlistFound, wishlist, err := database.GetWishlistByWishID(wishID)
+	if err != nil {
+		log.Println("Failed to get wishlist. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist."})
+		context.Abort()
+		return
+	} else if !wishlistFound {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist for wish."})
+		context.Abort()
+		return
+	} else if wishlist.Public != nil && !*wishlist.Public {
+		success, errorString, httpStatus := middlewares.AuthFunction(context, false)
+
+		if !success {
+			context.JSON(httpStatus, gin.H{"error": errorString})
+			context.Abort()
+			return
+		}
 	}
 
 	// Check if user exists
