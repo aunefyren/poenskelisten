@@ -219,7 +219,7 @@ function placeWishes(wishes_array, wishlist_id, group_id, user_id) {
     }
 
     if(wishes_array.length == 0) {
-        info("Looks like this list is empty...");
+        info("Looks like this wishlist is empty...");
 
         try {
             document.getElementById("loading-icon-wrapper").style.display = "none"
@@ -240,10 +240,6 @@ function placeWishes(wishes_array, wishlist_id, group_id, user_id) {
 }
 
 function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
-
-    // Disable wish images
-    wish_object.image = false;
-
     var html = '';
     var wish_with_image = false;
 
@@ -428,7 +424,7 @@ function GetWishImage(wishID) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "auth/wishes/" + wishID + "/image");
+    xhttp.open("get", api_url + "both/wishes/" + wishID + "/image");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -472,7 +468,7 @@ function GetWishImageThumbail(wishID) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "auth/wishes/" + wishID + "/image?thumbnail=true");
+    xhttp.open("get", api_url + "both/wishes/" + wishID + "/image?thumbnail=true");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();

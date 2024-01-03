@@ -20,8 +20,12 @@ func APIGetServerInfo(context *gin.Context) {
 	}
 
 	serverInfo := models.ServerInfoReply{
-		Timezone:             config.Timezone,
-		PoenskelistenVersion: config.PoenskelistenVersion,
+		Timezone:                 config.Timezone,
+		PoenskelistenVersion:     config.PoenskelistenVersion,
+		PoenskelistenPort:        config.PoenskelistenPort,
+		PoenskelistenExternalURL: config.PoenskelistenExternalURL,
+		DatabaseType:             config.DBType,
+		SMTPEnabled:              config.SMTPEnabled,
 	}
 
 	// Reply

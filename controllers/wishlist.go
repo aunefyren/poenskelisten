@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -24,15 +25,21 @@ func RegisterWishlist(context *gin.Context) {
 	var now = time.Now()
 
 	if err := context.ShouldBindJSON(&wishlist); err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
 
+	// Trim request input
+	wishlist.Name = strings.TrimSpace(wishlist.Name)
+	wishlist.Description = strings.TrimSpace(wishlist.Description)
+
 	// Get user ID
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to get user ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
 	}
@@ -202,7 +209,8 @@ func DeleteWishlist(context *gin.Context) {
 	// Get user ID
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to get user ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
 	}
@@ -219,19 +227,20 @@ func DeleteWishlist(context *gin.Context) {
 	// Verify wishlist owner
 	MembershipStatus, err := database.VerifyUserOwnershipToWishlist(UserID, wishlist_id_int)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to verify ownership of wishlist. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of wishlist."})
 		context.Abort()
 		return
 	} else if !MembershipStatus {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not the owner of this wishlist."})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not the owner of this wishlist."})
 		context.Abort()
 		return
 	}
 
 	err = database.DeleteWishlist(wishlist_id_int)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to delete wishlist. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to delete wishlist."})
 		context.Abort()
 		return
 	}
@@ -259,12 +268,11 @@ func DeleteWishlist(context *gin.Context) {
 		MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, group_id_int)
 		if err != nil {
 			log.Println("Failed to verify membership to group. Error: " + err.Error())
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership to group."})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
 			context.Abort()
 			return
 		} else if !MembershipStatus {
-			//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not a member of this group."})
+			context.JSON(http.StatusBadRequest, gin.H{"error": "You are not a member of this group."})
 			context.Abort()
 			return
 		}
@@ -277,6 +285,11 @@ func DeleteWishlist(context *gin.Context) {
 			return
 		}
 	}
+
+	// Sort wishlists by creation date
+	sort.Slice(wishlistObjects, func(i, j int) bool {
+		return wishlistObjects[j].CreatedAt.Before(wishlistObjects[i].CreatedAt)
+	})
 
 	context.JSON(http.StatusOK, gin.H{"wishlists": wishlistObjects, "message": "Wishlist deleted."})
 
@@ -317,7 +330,8 @@ func GetWishlist(context *gin.Context) {
 	// Get user ID
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to get user ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
 	}
@@ -424,7 +438,6 @@ func GetWishlists(context *gin.Context) {
 			context.Abort()
 			return
 		} else if !MembershipStatus {
-			//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not a member of this group."})
 			context.Abort()
 			return
@@ -483,7 +496,8 @@ func JoinWishlist(context *gin.Context) {
 	var wishlistmembership models.WishlistMembershipCreationRequest
 
 	if err := context.ShouldBindJSON(&wishlistmembership); err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
@@ -496,7 +510,8 @@ func JoinWishlist(context *gin.Context) {
 
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
@@ -518,7 +533,8 @@ func JoinWishlist(context *gin.Context) {
 		// Verify user exists
 		_, err := database.GetGroupInformation(Group)
 		if err != nil {
-			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			log.Println("Failed to get group. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get group."})
 			context.Abort()
 			return
 		}
@@ -526,11 +542,11 @@ func JoinWishlist(context *gin.Context) {
 		// Verify membership doesnt exist
 		MembershipStatus, err := database.VerifyGroupMembershipToWishlist(wishlist_id_int, Group)
 		if err != nil {
-			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			log.Println("Failed to verify membership to group. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
 			context.Abort()
 			return
 		} else if MembershipStatus {
-			//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Wishlist membership already exists."})
 			context.Abort()
 			return
@@ -555,7 +571,8 @@ func JoinWishlist(context *gin.Context) {
 		// Add group membership to database
 		record := database.Instance.Create(&wishlistmembershipdb)
 		if record.Error != nil {
-			context.JSON(http.StatusInternalServerError, gin.H{"error": record.Error.Error()})
+			log.Println("Failed to create membership. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create membership."})
 			context.Abort()
 			return
 		}
@@ -563,14 +580,20 @@ func JoinWishlist(context *gin.Context) {
 	}
 
 	// get new group list
-	wishlists_with_users, err := GetWishlistObjects(UserID)
+	wishlistObjects, err := GetWishlistObjects(UserID)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to get wishlist. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist."})
 		context.Abort()
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist member joined.", "wishlists": wishlists_with_users})
+	// Sort wishlists by creation date
+	sort.Slice(wishlistObjects, func(i, j int) bool {
+		return wishlistObjects[j].CreatedAt.Before(wishlistObjects[i].CreatedAt)
+	})
+
+	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist member joined.", "wishlists": wishlistObjects})
 }
 
 func RemoveFromWishlist(context *gin.Context) {
@@ -588,7 +611,8 @@ func RemoveFromWishlist(context *gin.Context) {
 
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to get user ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
 	}
@@ -605,11 +629,11 @@ func RemoveFromWishlist(context *gin.Context) {
 	// Verify membership exists
 	MembershipStatus, err := database.VerifyGroupMembershipToWishlist(wishlist_id_int, wishlistMembershipRequest.Group)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to verify membership to wishlist. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to wishlist."})
 		context.Abort()
 		return
 	} else if !MembershipStatus {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Wishlist membership doesn't exist."})
 		context.Abort()
 		return
@@ -676,7 +700,6 @@ func RemoveFromWishlist(context *gin.Context) {
 			context.Abort()
 			return
 		} else if !MembershipStatus {
-			//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not a member of this group."})
 			context.Abort()
 			return
@@ -690,6 +713,11 @@ func RemoveFromWishlist(context *gin.Context) {
 			return
 		}
 	}
+
+	// Sort wishlists by creation date
+	sort.Slice(wishlistObjects, func(i, j int) bool {
+		return wishlistObjects[j].CreatedAt.Before(wishlistObjects[i].CreatedAt)
+	})
 
 	context.JSON(http.StatusCreated, gin.H{"message": "Group member removed.", "wishlists": wishlistObjects})
 }
@@ -711,10 +739,15 @@ func APIUpdateWishlist(context *gin.Context) {
 	}
 
 	if err := context.ShouldBindJSON(&wishlist); err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
+
+	// Trim request input
+	wishlist.Name = strings.TrimSpace(wishlist.Name)
+	wishlist.Description = strings.TrimSpace(wishlist.Description)
 
 	// Parse group id
 	wishlist_id_int, err := uuid.Parse(wishlist_id)
@@ -728,7 +761,8 @@ func APIUpdateWishlist(context *gin.Context) {
 	// Get user ID
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
@@ -820,7 +854,8 @@ func APIUpdateWishlist(context *gin.Context) {
 	// Parse expiration date
 	wishlistdb.Date, err = time.Parse("2006-01-02T15:04:05.000Z", wishlist.Date)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse date request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse date request."})
 		context.Abort()
 		return
 	}
@@ -962,6 +997,11 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *uu
 		return models.WishlistUser{}, err
 	}
 
+	// Sort wishes by creation date
+	sort.Slice(wishObjects, func(i, j int) bool {
+		return wishObjects[j].CreatedAt.Before(wishObjects[i].CreatedAt)
+	})
+
 	wishlistObject.Wishes = wishObjects
 
 	return
@@ -989,7 +1029,8 @@ func APICollaborateWishlist(context *gin.Context) {
 	var wishlistCollaboratorsequest models.WishlistCollaboratorCreationRequest
 
 	if err := context.ShouldBindJSON(&wishlistCollaboratorsequest); err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
@@ -1002,7 +1043,8 @@ func APICollaborateWishlist(context *gin.Context) {
 
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
@@ -1076,7 +1118,7 @@ func APICollaborateWishlist(context *gin.Context) {
 	}
 
 	// get new wishlist list
-	wishlists_with_users, err := GetWishlistObjects(UserID)
+	wishlistObjects, err := GetWishlistObjects(UserID)
 	if err != nil {
 		log.Println("Failed to get new wishlist objects. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get new wishlist objects."})
@@ -1084,7 +1126,12 @@ func APICollaborateWishlist(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist collaborators added.", "wishlists": wishlists_with_users})
+	// Sort wishlists by creation date
+	sort.Slice(wishlistObjects, func(i, j int) bool {
+		return wishlistObjects[j].CreatedAt.Before(wishlistObjects[i].CreatedAt)
+	})
+
+	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist collaborators added.", "wishlists": wishlistObjects})
 }
 
 func APIUnCollaborateWishlist(context *gin.Context) {
@@ -1161,7 +1208,7 @@ func APIUnCollaborateWishlist(context *gin.Context) {
 	}
 
 	// get new wishlist list
-	wishlists_with_users, err := GetWishlistObjects(UserID)
+	wishlistObjects, err := GetWishlistObjects(UserID)
 	if err != nil {
 		log.Println("Failed to get new wishlist objects. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get new wishlist objects."})
@@ -1169,7 +1216,12 @@ func APIUnCollaborateWishlist(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist collaborator removed.", "wishlists": wishlists_with_users})
+	// Sort wishlists by creation date
+	sort.Slice(wishlistObjects, func(i, j int) bool {
+		return wishlistObjects[j].CreatedAt.Before(wishlistObjects[i].CreatedAt)
+	})
+
+	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist collaborator removed.", "wishlists": wishlistObjects})
 }
 
 func GetPublicWishlist(context *gin.Context) {
