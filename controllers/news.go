@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -18,7 +19,8 @@ func GetNews(context *gin.Context) {
 	newsPosts, err := database.GetNewsPosts()
 	if err != nil {
 		// If there is an error getting the list of news, return an internal server error
-		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Println("Failed to get news. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get news."})
 		context.Abort()
 		return
 	}
@@ -33,7 +35,8 @@ func GetNewsPost(context *gin.Context) {
 
 	newsIDInt, err := strconv.Atoi(newsID)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed parse request."})
 		context.Abort()
 		return
 	}
@@ -42,7 +45,8 @@ func GetNewsPost(context *gin.Context) {
 	newsPost, err := database.GetNewsPostByNewsID(newsIDInt)
 	if err != nil {
 		// If there is an error getting the news, return an internal server error
-		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Println("Failed to get news post. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed get news post."})
 		context.Abort()
 		return
 	}
@@ -60,10 +64,14 @@ func RegisterNewsPost(context *gin.Context) {
 	// Bind the incoming request body to the NewsCreationRequest model
 	if err := context.ShouldBindJSON(&newsCreationRequest); err != nil {
 		// If there is an error binding the request, return a Bad Request response
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
+
+	newsCreationRequest.Title = strings.TrimSpace(newsCreationRequest.Title)
+	newsCreationRequest.Body = strings.TrimSpace(newsCreationRequest.Body)
 
 	// Copy the data from the NewsCreationRequest model to the News model
 	news.Title = newsCreationRequest.Title
@@ -117,7 +125,8 @@ func RegisterNewsPost(context *gin.Context) {
 	newsRecord := database.Instance.Create(&news)
 	if newsRecord.Error != nil {
 		// If there is an error creating the news, return an Internal Server Error response
-		context.JSON(http.StatusInternalServerError, gin.H{"error": newsRecord.Error.Error()})
+		log.Println("Failed to create news post. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create news post."})
 		context.Abort()
 		return
 	}
@@ -125,7 +134,8 @@ func RegisterNewsPost(context *gin.Context) {
 	newsPosts, err := database.GetNewsPosts()
 	if err != nil {
 		// If there is an error getting the list of news, return an internal server error
-		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Println("Failed to get news posts. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get news posts."})
 		context.Abort()
 		return
 	}
@@ -142,7 +152,8 @@ func DeleteNewsPost(context *gin.Context) {
 	// Parse news ID as integer
 	newsIDInt, err := strconv.Atoi(newsID)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
@@ -151,7 +162,8 @@ func DeleteNewsPost(context *gin.Context) {
 	_, err = database.GetNewsPostByNewsID(newsIDInt)
 	if err != nil {
 		// If there is an error getting the news, return an internal server error
-		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Println("Failed to get news post. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get news post."})
 		context.Abort()
 		return
 	}
@@ -159,7 +171,8 @@ func DeleteNewsPost(context *gin.Context) {
 	// Set the news post to disabled in the database
 	err = database.DeleteNewsPost(newsIDInt)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println("Failed to delete news post. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete news post."})
 		context.Abort()
 		return
 	}
@@ -168,7 +181,8 @@ func DeleteNewsPost(context *gin.Context) {
 	newsPosts, err := database.GetNewsPosts()
 	if err != nil {
 		// If there is an error getting the list of news, return an internal server error
-		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Println("Failed to get news posts. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get news posts."})
 		context.Abort()
 		return
 	}

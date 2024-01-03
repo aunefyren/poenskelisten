@@ -67,6 +67,10 @@ function load_page(result) {
                             News:
                         </div>
 
+                        <div class="loading-icon-wrapper" id="loading-icon-wrapper-news">
+                            <img class="loading-icon" src="/assets/loading.svg">
+                        </div>
+
                         <div id="news-box" class="news">
                         </div>
                         
@@ -153,6 +157,11 @@ function get_news(admin){
 }
 
 function place_news(news_array, admin) {
+    try {
+        document.getElementById("loading-icon-wrapper-news").style.display = "none"
+    } catch(e) {
+        console.log("Error: " + e)
+    }
 
     if(news_array.length == 0) {
         return;

@@ -52,6 +52,10 @@ function load_page(result) {
                     
                         <div class="wishlist-info" id="wishlist-info-box">
 
+                            <div class="loading-icon-wrapper" id="loading-icon-wrapper-wishlist">
+                                <img class="loading-icon" src="/assets/loading.svg">
+                            </div>
+
                             <div id="wishlist-title" class="title">
                             </div>
 
@@ -172,6 +176,12 @@ function get_wishlist(wishlist_id){
 }
 
 function place_wishlist(wishlist_object, public_url) {
+
+    try {
+        document.getElementById("loading-icon-wrapper-wishlist").style.display = "none"
+    } catch(e) {
+        console.log("Error: " + e)
+    }
 
     document.getElementById("wishlist-title").innerHTML = wishlist_object.name
     document.getElementById("wishlist-description").innerHTML = wishlist_object.description
@@ -302,7 +312,7 @@ function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
     }
 
     if(wishes_array.length == 0) {
-        info("Looks like this list is empty...");
+        info("Looks like this wishlist is empty...");
 
         try {
             document.getElementById("loading-icon-wrapper").style.display = "none"
@@ -406,7 +416,7 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     } else if(wish_object.wishclaim.length > 0 && wish_object.wish_claimable) {
         for(var j = 0; j < wish_object.wishclaim.length; j++) {
             if(user_id !== wish_object.wishclaim[j].user.id) {
-                html += '<div class="profile-icon" title="Claimed by ' + wish_object.wishclaim[j].user.first_name + ' ' + wish_object.wishclaim[j].user.last_name + '">'
+                html += `<div class="profile-icon clickable" title="Wish is claimed by ${wish_object.wishclaim[j].user.first_name} ${wish_object.wishclaim[j].user.last_name}." onclick="alert('Wish is claimed by ${wish_object.wishclaim[j].user.first_name} ${wish_object.wishclaim[j].user.last_name}.')">`
                 html += '<img class="icon-img " src="/assets/lock.svg">'
                 html += '</div>'
             } else {
@@ -869,6 +879,10 @@ function update_wishlist(wishlist_id, user_id) {
 
 function reset_wishlist_info_box(user_id, wishlist_id) {
     var html = `
+    <div class="loading-icon-wrapper" id="loading-icon-wrapper-wishlist">
+        <img class="loading-icon" src="/assets/loading.svg">
+    </div>
+
     <div id="wishlist-title" class="title">
     </div>
 
@@ -1165,7 +1179,7 @@ function GetWishImage(wishID) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "auth/wishes/" + wishID + "/image");
+    xhttp.open("get", api_url + "both/wishes/" + wishID + "/image");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -1209,7 +1223,7 @@ function GetWishImageThumbail(wishID) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "auth/wishes/" + wishID + "/image?thumbnail=true");
+    xhttp.open("get", api_url + "both/wishes/" + wishID + "/image?thumbnail=true");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();

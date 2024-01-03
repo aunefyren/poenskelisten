@@ -21,7 +21,8 @@ func GenerateToken(context *gin.Context) {
 	var request TokenRequest
 	var user models.User
 
-	if err := context.ShouldBindJSON(&request); err != nil {
+	err := context.ShouldBindJSON(&request)
+	if err != nil {
 		log.Println("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
@@ -29,7 +30,7 @@ func GenerateToken(context *gin.Context) {
 	}
 
 	// check if email exists and password is correct
-	user, err := database.GetAllUserInformationByEmail(request.Email)
+	user, err = database.GetAllUserInformationByEmail(request.Email)
 	if err != nil {
 		log.Println("Failed to get user by e-mail. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid credentials."})
@@ -54,7 +55,6 @@ func GenerateToken(context *gin.Context) {
 	}
 
 	context.JSON(http.StatusOK, gin.H{"token": tokenString, "message": "Logged in!"})
-
 }
 
 func ValidateToken(context *gin.Context) {

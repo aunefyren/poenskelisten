@@ -46,6 +46,10 @@ function load_page(result) {
 
                         <div class="group-info" id="group-info-box">
 
+                            <div class="loading-icon-wrapper" id="loading-icon-wrapper-group">
+                                <img class="loading-icon" src="/assets/loading.svg">
+                            </div>
+
                             <div id="group-title" class="title">
                             </div>
 
@@ -178,11 +182,15 @@ function get_group(group_id){
 }
 
 function place_group(group_object) {
+    try {
+        document.getElementById("loading-icon-wrapper-group").style.display = "none"
+    } catch(e) {
+        console.log("Error: " + e)
+    }
 
     document.getElementById("group-title").innerHTML = group_object.name
     document.getElementById("group-description").innerHTML = group_object.description
     document.getElementById("group-info").innerHTML += "<br>Owner: " + group_object.owner.first_name + " " + group_object.owner.last_name
-
 }
 
 function get_wishlists(group_id, user_id){
@@ -301,7 +309,7 @@ function place_wishlists(wishlists_array, group_id, user_id) {
     }
 
     if(wishlists_array_length < 1) {
-        info("Looks like this list is empty...");
+        info("Looks like this list is empty... Someone needs to add their wishlist to this group!");
 
         try {
             document.getElementById("loading-icon-wrapper").style.display = "none"
@@ -484,6 +492,10 @@ function toggle_expired_wishlists() {
 
 function reset_group_info_box(user_id, group_id) {
     var html = `
+    <div class="loading-icon-wrapper" id="loading-icon-wrapper-group">
+        <img class="loading-icon" src="/assets/loading.svg">
+    </div>
+
     <div id="group-title" class="title">
     </div>
 

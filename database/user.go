@@ -58,6 +58,7 @@ func GetUserInformationByEmail(email string) (models.User, error) {
 // Get ALL user information using email
 func GetAllUserInformationByEmail(email string) (models.User, error) {
 	var user models.User
+
 	userrecord := Instance.Where("`users`.enabled = ?", 1).Where("`users`.email = ?", email).Find(&user)
 	if userrecord.Error != nil {
 		return models.User{}, userrecord.Error
