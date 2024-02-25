@@ -110,6 +110,12 @@ function load_page(result) {
         showLoggedOutMenu();
         document.getElementById('main-text').innerHTML = "You need to login.";
         document.getElementById('log-in-button').style.display = 'inline-block';
+
+        try {
+            document.getElementById("loading-icon-wrapper-news").style.display = "none"
+        } catch(e) {
+            console.log("Error: " + e)
+        }
     }
 }
 

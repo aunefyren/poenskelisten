@@ -372,3 +372,45 @@ function toggeWishListDate(wrapperID) {
         console.log("Failed to toggle wishlist date wrapper: " + e)
     }
 }
+
+function GetDateString(dateTime, giveWeekday) {
+    try {
+
+        var weekDayArray = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        var monthArray = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+        var weekDay = "";
+        var month = "";
+        var day = "";
+        var year = "";
+
+        var weekDayInt = dateTime.getDay();
+        var monthInt = dateTime.getMonth();
+        var dayInt = dateTime.getDate();
+        var yearInt = dateTime.getYear();
+
+        weekDay = weekDayArray[weekDayInt]
+        month = monthArray[monthInt]
+        day = padNumber(dayInt, 2)
+
+        if(yearInt >= 100) {
+            year = yearInt + 1900
+        } else {
+            year = 1900 + yearInt
+        }
+
+        if(giveWeekday) {
+            return weekDay + ", " + day + ". " + month + ", " + year;
+        } else {
+            return day + ". " + month + ", " + year;
+        }
+
+    } catch(e) {
+        console.log("Failed to generate string for date time. Error: " + e)
+        return "Error"
+    }
+}
+
+function padNumber(num, size) {
+    var s = "000000000" + num;
+    return s.substr(s.length-size);
+}
