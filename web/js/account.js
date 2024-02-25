@@ -47,17 +47,19 @@ function load_page(result) {
                         <div class="user-active-profile-photo">
                             <img style="width: 100%; height: 100%;" class="user-active-profile-photo-img" id="user-active-profile-photo-img" src="/assets/loading.svg">
                         </div>
+
+                        <b><p id="user_name" style="font-size: 1.25em;"></p></b>
+                        <p id="join_date" style=""></p>
+                        <p id="user_admin" style=""></p>
+
+                        <div class="module color-invert" id="" style="">
+                            <hr>
+                        </div>
                     
                         <form action="" class="icon-border" style="margin: 0 1em;" onsubmit="event.preventDefault(); send_update();">
 
                             <label id="form-input-icon" for="email"></label>
-                            <input type="email" name="email" id="email" placeholder="Email" value="` + email + `" required/>
-
-                            <label id="form-input-icon" for="first_name"></label>
-                            <input type="text" name="first_name" id="first_name" placeholder="First name" value="` + first_name + `" required disabled />
-
-                            <label id="form-input-icon" for="last_name"></label>
-                            <input type="text" name="last_name" id="last_name" placeholder="Last name" value="` + last_name + `" disabled required/>
+                            <input type="email" name="email" id="email" placeholder="Email" value="" required/>
 
                             <input class="clickable" onclick="change_password_toggle();" style="margin-top: 2em;" type="checkbox" id="password-toggle" name="password-toggle" value="confirm" >
                             <label for="password-toggle" class="clickable">Change my password.</label><br>
@@ -93,6 +95,7 @@ function load_page(result) {
 
     if(result !== false) {
         showLoggedInMenu();
+        GetUserData(user_id);
         GetProfileImage(user_id);
     } else {
         showLoggedOutMenu();
@@ -255,4 +258,64 @@ function PlaceProfileImage(imageBase64) {
 
     document.getElementById("user-active-profile-photo-img").src = imageBase64
 
+}
+
+function GetUserData(userID) {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                PlaceUserData(result.user)
+                
+            }
+
+        } else {
+            // info("Loading week...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("get", api_url + "auth/users/" + userID);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+
+    return;
+}
+
+function PlaceUserData(user_object) {
+    document.getElementById("user_name").innerHTML = user_object.first_name + " " + user_object.last_name
+    document.getElementById("email").value = user_object.email
+
+    // parse date object
+    try {
+        var date = new Date(Date.parse(user_object.created_at));
+        var date_string = GetDateString(date)
+    } catch(e) {
+        var date_string = "Error"
+        console.log("Join date error: " + e)
+    }
+
+    document.getElementById("join_date").innerHTML = "Joined: " + date_string
+
+    if(user_object.admin) {
+        var admin_string = "Yes"
+    } else {
+        var admin_string = "No"
+    }
+
+    document.getElementById("user_admin").innerHTML = "Administrator: " + admin_string
 }

@@ -208,6 +208,23 @@ func GetUser(context *gin.Context) {
 	// Create user request
 	var user = context.Param("user_id")
 
+	// Get user ID
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		log.Println("Failed to get user ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
+		context.Abort()
+		return
+	}
+
+	requestingUserObject, err := database.GetUserInformation(userID)
+	if err != nil {
+		log.Println("Failed to get user object. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user object."})
+		context.Abort()
+		return
+	}
+
 	// Parse group id
 	user_id_int, err := uuid.Parse(user)
 	if err != nil {
@@ -217,26 +234,67 @@ func GetUser(context *gin.Context) {
 		return
 	}
 
-	user_object, err := database.GetUserInformation(user_id_int)
-	if err != nil {
-		log.Println("Failed to get user. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
-		context.Abort()
-		return
+	userObject := models.User{}
+	if userID == user_id_int || (requestingUserObject.Admin != nil && *requestingUserObject.Admin == true) {
+		userObject, err = database.GetAllUserInformationAnyState(user_id_int)
+		if err != nil {
+			log.Println("Failed to get user. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user (all)."})
+			context.Abort()
+			return
+		}
+	} else {
+		userObject, err = database.GetUserInformation(user_id_int)
+		if err != nil {
+			log.Println("Failed to get user. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
+			context.Abort()
+			return
+		}
 	}
 
 	// Reply
-	context.JSON(http.StatusOK, gin.H{"user": user_object, "message": "User retrieved."})
+	context.JSON(http.StatusOK, gin.H{"user": userObject, "message": "User retrieved."})
 }
 
 func GetUsers(context *gin.Context) {
 
-	users, err := database.GetEnabledUsers()
+	// Get user ID
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to get enabled users. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get enabled users."})
+		log.Println("Failed to get user ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
+	}
+
+	requestingUserObject, err := database.GetUserInformation(userID)
+	if err != nil {
+		log.Println("Failed to get user object. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user object."})
+		context.Abort()
+		return
+	}
+
+	users := []models.User{}
+
+	includeDisabled, okay := context.GetQuery("includeDisabled")
+	if okay && strings.ToLower(includeDisabled) == "true" && requestingUserObject.Admin != nil && *requestingUserObject.Admin == true {
+		users, err = database.GetAllUsers()
+		if err != nil {
+			log.Println("Failed to get all users. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get all users."})
+			context.Abort()
+			return
+		}
+	} else {
+		users, err = database.GetEnabledUsers()
+		if err != nil {
+			log.Println("Failed to get enabled users. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get enabled users."})
+			context.Abort()
+			return
+		}
 	}
 
 	// Reply
@@ -585,7 +643,7 @@ func APIResetPassword(context *gin.Context) {
 		return
 	}
 
-	_, err = database.GenrateRandomResetCodeForuser(user.ID)
+	_, err = database.GenerateRandomResetCodeForUser(user.ID)
 	if err != nil {
 		log.Println("Failed to generate reset code for user during password reset. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})
@@ -683,7 +741,7 @@ func APIChangePassword(context *gin.Context) {
 	}
 
 	// Change the reset code
-	_, err = database.GenrateRandomResetCodeForuser(user.ID)
+	_, err = database.GenerateRandomResetCodeForUser(user.ID)
 	if err != nil {
 		log.Println("Failed to generate reset code for user during password reset. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})

@@ -37,39 +37,47 @@ function load_page(result) {
     }
 
    var html = `
-                <div class="modules" id="admin-page">
-                    
-                    <div class="server-info" id="server-info">
-                        <h3 id="server-info-title">Server info:</h3>
-                        <p id="server-poenskelisten-version-title" style="">Version: <a id="server-poenskelisten-version">...</a></p>
-                        <p id="server-poenskelisten-port-title" style="">Port: <a id="server-poenskelisten-port">...</a></p>
-                        <p id="server-poenskelisten-database-title" style="">Database: <a id="server-poenskelisten-database">...</a></p>
-                        <p id="server-poenskelisten-url-title" style="">External URL: <a id="server-poenskelisten-url">...</a></p>
-                        <p id="server-timezone-title" style="">Timezone: <a id="server-timezone">...</a></p>
-                    </div>
+        <!-- The Modal -->
+        <div id="myModal" class="modal">
+            <span class="close selectable" onclick="closeModal();">&times;</span>
+            <div class="modal-content" id="modal-content">
+                <img style="width: 100%; height: 100%;" src="/assets/loading.svg">
+            </div>
+        </div>
 
-                    <div class="invites" id="invites">
-                        <h3 id="invitation-module-title">Invites:</h3>
-                        <div class="invite-list" id="invite-list">
-                        </div>
-                        <button type="submit" onclick="generate_invite();" id="generate_invite_button" style=""><img src="assets/plus.svg" class="btn_logo"><p2>Generate</p2></button>
-                    
-                    </div>
+        <div class="modules" id="admin-page">
+            
+            <div class="server-info" id="server-info">
+                <h3 id="server-info-title">Server info:</h3>
+                <p id="server-poenskelisten-version-title" style="">Version: <a id="server-poenskelisten-version">...</a></p>
+                <p id="server-poenskelisten-port-title" style="">Port: <a id="server-poenskelisten-port">...</a></p>
+                <p id="server-poenskelisten-database-title" style="">Database: <a id="server-poenskelisten-database">...</a></p>
+                <p id="server-poenskelisten-url-title" style="">External URL: <a id="server-poenskelisten-url">...</a></p>
+                <p id="server-timezone-title" style="">Timezone: <a id="server-timezone">...</a></p>
+            </div>
 
-                    <div class="currency-module" id="currency-module">
-
-                        <h3 id="currency-module-title">Currency:</h3>
-
-                        <input type="text" name="currency" id="currency" placeholder="What currency can wishes be listed in?" value="" autocomplete="off" required />
-
-                        <input class="clickable" onclick="" style="" type="checkbox" id="currency-padding" name="currency-padding" value="confirm" >
-                        <label for="currency-padding" class="clickable">Pad the currency string</label><br>
-
-                        <button type="submit" onclick="update_currency();" id="update_currency_button" style=""><img src="assets/check.svg" class="btn_logo"><p2>Update</p2></button>
-                    
-                    </div>
-         
+            <div class="invites" id="invites">
+                <h3 id="invitation-module-title">Invites:</h3>
+                <div class="invite-list" id="invite-list">
                 </div>
+                <button type="submit" onclick="generate_invite();" id="generate_invite_button" style=""><img src="assets/plus.svg" class="btn_logo"><p2>Generate</p2></button>
+            
+            </div>
+
+            <div class="currency-module" id="currency-module">
+
+                <h3 id="currency-module-title">Currency:</h3>
+
+                <input type="text" name="currency" id="currency" placeholder="What currency can wishes be listed in?" value="" autocomplete="off" required />
+
+                <input class="clickable" onclick="" style="" type="checkbox" id="currency-padding" name="currency-padding" value="confirm" >
+                <label for="currency-padding" class="clickable">Pad the currency string</label><br>
+
+                <button type="submit" onclick="update_currency();" id="update_currency_button" style=""><img src="assets/check.svg" class="btn_logo"><p2>Update</p2></button>
+            
+            </div>
+    
+        </div>
     `;
 
     document.getElementById('content').innerHTML = html;
@@ -192,7 +200,7 @@ function place_invites(invites_array) {
 
             if(invites_array[i].invite_used) {
                 html += `
-                        <div class="leaderboard-object-user">
+                        <div class="leaderboard-object-user clickable" onclick="openModal('${invites_array[i].user.id}')">
                             Used by: ` + invites_array[i].user.first_name + ` ` + invites_array[i].user.last_name + `
                         </div>
                     `;
@@ -374,4 +382,81 @@ function update_currency() {
     xhttp.send(form_data);
     return false;
 
+}
+
+function openModal(userID) {
+    document.getElementById("myModal").style.display = "block";
+
+    document.getElementById("modal-content").innerHTML = `
+    <div id="user_name"></div>
+    <div id="email"></div>
+    <div id="join_date"></div>
+    <div id="user_admin"></div>
+    `;
+
+    GetUserData(userID);
+}
+
+function closeModal() {
+    document.getElementById("myModal").style.display = "none";
+}
+
+function GetUserData(userID) {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+
+                error(result.error);
+
+            } else {
+
+                PlaceUserDataInModal(result.user)
+                
+            }
+
+        } else {
+            // info("Loading week...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("get", api_url + "auth/users/" + userID);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+
+    return;
+}
+
+function PlaceUserDataInModal(user_object) {
+    document.getElementById("user_name").innerHTML = user_object.first_name + " " + user_object.last_name
+    document.getElementById("email").value = user_object.email
+
+    // parse date object
+    try {
+        var date = new Date(Date.parse(user_object.created_at));
+        var date_string = GetDateString(date)
+    } catch(e) {
+        var date_string = "Error"
+        console.log("Join date error: " + e)
+    }
+
+    document.getElementById("join_date").innerHTML = "Joined: " + date_string
+
+    if(user_object.admin) {
+        var admin_string = "Yes"
+    } else {
+        var admin_string = "No"
+    }
+
+    document.getElementById("user_admin").innerHTML = "Administrator: " + admin_string
 }

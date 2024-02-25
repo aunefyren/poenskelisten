@@ -10,7 +10,7 @@ import (
 	"github.com/thanhpk/randstr"
 )
 
-// Get redacted user information based on User ID
+// Get redacted user information based on User ID for enabled users
 func GetUserInformation(UserID uuid.UUID) (models.User, error) {
 	var user models.User
 	userrecord := Instance.Where("`users`.enabled = ?", 1).Where("`users`.id = ?", UserID).Find(&user)
@@ -26,10 +26,39 @@ func GetUserInformation(UserID uuid.UUID) (models.User, error) {
 	return user, nil
 }
 
-// Get ALL user information
+// Get redacted user information based on User ID for all users
+func GetUserInformationAnyState(UserID uuid.UUID) (models.User, error) {
+	var user models.User
+	userrecord := Instance.Where("`users`.id = ?", UserID).Find(&user)
+	if userrecord.Error != nil {
+		return models.User{}, userrecord.Error
+	} else if userrecord.RowsAffected != 1 {
+		return models.User{}, errors.New("Failed to find correct user in DB.")
+	}
+
+	// Redact user information
+	user = RedactUserObject(user)
+
+	return user, nil
+}
+
+// Get ALL user information for enabled users (non-redacted)
 func GetAllUserInformation(UserID uuid.UUID) (models.User, error) {
 	var user models.User
 	userrecord := Instance.Where("enabled = ?", true).Where("id = ?", UserID).Find(&user)
+	if userrecord.Error != nil {
+		return models.User{}, userrecord.Error
+	} else if userrecord.RowsAffected != 1 {
+		return models.User{}, errors.New("Failed to find correct user in DB.")
+	}
+
+	return user, nil
+}
+
+// Get ALL user information for ALL users (non-redacted)
+func GetAllUserInformationAnyState(UserID uuid.UUID) (models.User, error) {
+	var user models.User
+	userrecord := Instance.Where("id = ?", UserID).Find(&user)
 	if userrecord.Error != nil {
 		return models.User{}, userrecord.Error
 	} else if userrecord.RowsAffected != 1 {
@@ -69,8 +98,8 @@ func GetAllUserInformationByEmail(email string) (models.User, error) {
 	return user, nil
 }
 
-// Genrate a random reset code and return it
-func GenrateRandomResetCodeForuser(userID uuid.UUID) (string, error) {
+// Generate a random reset code and return it
+func GenerateRandomResetCodeForUser(userID uuid.UUID) (string, error) {
 
 	randomString := randstr.String(8)
 	resetCode := strings.ToUpper(randomString)
@@ -143,6 +172,26 @@ func GetEnabledUsers() (usersRedacted []models.User, err error) {
 	err = nil
 
 	userrecord := Instance.Where("`users`.enabled = ?", 1).Find(&users)
+	if userrecord.Error != nil {
+		return usersRedacted, userrecord.Error
+	}
+
+	// Redact user information
+	for _, user := range users {
+		redactedUser := RedactUserObject(user)
+		usersRedacted = append(usersRedacted, redactedUser)
+	}
+
+	return
+}
+
+// Gets enabled and disabled users
+func GetAllUsers() (usersRedacted []models.User, err error) {
+	users := []models.User{}
+	usersRedacted = []models.User{}
+	err = nil
+
+	userrecord := Instance.Find(&users)
 	if userrecord.Error != nil {
 		return usersRedacted, userrecord.Error
 	}
