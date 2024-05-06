@@ -236,7 +236,7 @@ func GetGroupMembershipByGroupIDAndMemberID(GroupID uuid.UUID, MemberID uuid.UUI
 	groupmembership = models.GroupMembership{}
 	err = nil
 
-	groupMembershipRecord := Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group_id = ?", GroupID).Where("`group_memberships`.member = ?", MemberID).Find(&groupmembership)
+	groupMembershipRecord := Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group_id = ?", GroupID).Where("`group_memberships`.member_id = ?", MemberID).Find(&groupmembership)
 	if groupMembershipRecord.Error != nil {
 		return groupmembership, groupMembershipRecord.Error
 	} else if groupMembershipRecord.RowsAffected != 1 {
