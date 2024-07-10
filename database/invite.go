@@ -2,6 +2,7 @@ package database
 
 import (
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
 	"errors"
 
 	"github.com/google/uuid"
@@ -10,7 +11,8 @@ import (
 // Get invites in database that have not been disabled
 func GetAllEnabledInvites() ([]models.Invite, error) {
 	var invitestruct []models.Invite
-	inviterecords := Instance.Where("`invites`.enabled = ?", 1).Find(&invitestruct)
+	var LolTrue = true
+	inviterecords := Instance.Where(&models.Invite{Enabled: &LolTrue}).Find(&invitestruct)
 	if inviterecords.Error != nil {
 		return []models.Invite{}, inviterecords.Error
 	}
@@ -23,7 +25,7 @@ func GetAllEnabledInvites() ([]models.Invite, error) {
 // Get invite using ID
 func GetInviteByID(inviteID uuid.UUID) (models.Invite, error) {
 	var invitestruct models.Invite
-	inviterecords := Instance.Where("`invites`.enabled = ?", 1).Where("`invites`.id = ?", inviteID).Find(&invitestruct)
+	inviterecords := Instance.Where(&models.Invite{Enabled: &utilities.DBTrue}).Where(&models.GormModel{ID: inviteID}).Find(&invitestruct)
 	if inviterecords.Error != nil {
 		return models.Invite{}, inviterecords.Error
 	}
@@ -36,7 +38,7 @@ func GetInviteByID(inviteID uuid.UUID) (models.Invite, error) {
 // Set invite to disabled by ID
 func DeleteInviteByID(inviteID uuid.UUID) error {
 	var invitestruct models.Invite
-	inviterecords := Instance.Model(invitestruct).Where("`invites`.id = ?", inviteID).Update("enabled", 0)
+	inviterecords := Instance.Model(invitestruct).Where(&models.GormModel{ID: inviteID}).Update("enabled", false)
 	if inviterecords.Error != nil {
 		return inviterecords.Error
 	}
