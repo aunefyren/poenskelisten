@@ -76,8 +76,6 @@ func UpdateWishlistValuesByID(wishlistID uuid.UUID, wishlistName string, wishlis
 
 // Create wishlist in DB
 func CreateWishlistInDB(wishlistdb models.Wishlist) (wishlist models.Wishlist, err error) {
-	wishlist = models.Wishlist{}
-	err = nil
 	record := Instance.Create(&wishlistdb)
 
 	if record.Error != nil {

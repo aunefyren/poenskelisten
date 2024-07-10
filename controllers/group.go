@@ -886,7 +886,6 @@ func APIUpdateGroup(context *gin.Context) {
 }
 
 func ConvertGroupToGroupObject(group models.Group) (groupObject models.GroupUser, err error) {
-	err = nil
 	groupObject = models.GroupUser{}
 
 	// Add owner information to group
