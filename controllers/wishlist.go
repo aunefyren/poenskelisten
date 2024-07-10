@@ -159,7 +159,7 @@ func RegisterWishlist(context *gin.Context) {
 	var wishlists_with_users []models.WishlistUser
 
 	// If a group was referenced, create the wishlist membership
-	if group_membership == true {
+	if group_membership {
 		var wishlistmembershipdb models.WishlistMembership
 		wishlistmembershipdb.GroupID = group_id
 		wishlistmembershipdb.WishlistID = wishlistdb.ID
@@ -296,9 +296,6 @@ func DeleteWishlist(context *gin.Context) {
 }
 
 func GetWishlistObjectsFromGroup(group_id uuid.UUID, RequestUserID uuid.UUID) (wishlistObjects []models.WishlistUser, err error) {
-	err = nil
-	wishlistObjects = []models.WishlistUser{}
-
 	wishlists, err := database.GetWishlistsFromGroup(group_id)
 	if err != nil {
 		return []models.WishlistUser{}, err
@@ -380,9 +377,6 @@ func GetWishlist(context *gin.Context) {
 }
 
 func GetWishlistObject(WishlistID uuid.UUID, RequestUserID uuid.UUID) (wishlistObject models.WishlistUser, err error) {
-	err = nil
-	wishlistObject = models.WishlistUser{}
-
 	wishlist, err := database.GetWishlist(WishlistID)
 	if err != nil {
 		log.Println("Failed to get wishlist '" + WishlistID.String() + "' from DB. Returning. Error: " + err.Error())
@@ -461,7 +455,6 @@ func GetWishlists(context *gin.Context) {
 }
 
 func GetWishlistObjects(UserID uuid.UUID) (wishlistObjects []models.WishlistUser, err error) {
-	err = nil
 	wishlistObjects = []models.WishlistUser{}
 
 	wishlists, err := database.GetOwnedWishlists(UserID)
@@ -476,9 +469,7 @@ func GetWishlistObjects(UserID uuid.UUID) (wishlistObjects []models.WishlistUser
 		return wishlistObjects, errors.New("Failed to get collaboration wishlists for user '" + UserID.String() + "'.")
 	}
 
-	for _, wishlistThroughCollab := range wishlistsThroughCollab {
-		wishlists = append(wishlists, wishlistThroughCollab)
-	}
+	wishlists = append(wishlists, wishlistsThroughCollab...)
 
 	wishlistObjects, err = ConvertWishlistsToWishlistObjects(wishlists, &UserID)
 	if err != nil {
@@ -896,7 +887,6 @@ func APIUpdateWishlist(context *gin.Context) {
 }
 
 func ConvertWishlistCollaberatorToWishlistCollaberatorObject(wishlistCollab models.WishlistCollaborator) (wishlistCollabObject models.WishlistCollaboratorObject, err error) {
-	err = nil
 	wishlistCollabObject = models.WishlistCollaboratorObject{}
 
 	userObject, err := database.GetUserInformation(wishlistCollab.UserID)
@@ -936,7 +926,6 @@ func ConvertWishlistCollaberatorsToWishlistCollaberatorObjects(wishlistCollabs [
 }
 
 func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *uuid.UUID) (wishlistObject models.WishlistUser, err error) {
-	err = nil
 	wishlistObject = models.WishlistUser{}
 
 	groups, err := database.GetGroupMembersFromWishlist(wishlist.ID)

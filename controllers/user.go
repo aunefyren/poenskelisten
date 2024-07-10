@@ -204,7 +204,7 @@ func RegisterUser(context *gin.Context) {
 }
 
 func GetUser(context *gin.Context) {
-
+	var userObject models.User
 	// Create user request
 	var user = context.Param("user_id")
 
@@ -234,8 +234,7 @@ func GetUser(context *gin.Context) {
 		return
 	}
 
-	userObject := models.User{}
-	if userID == user_id_int || (requestingUserObject.Admin != nil && *requestingUserObject.Admin == true) {
+	if userID == user_id_int || (requestingUserObject.Admin != nil && *requestingUserObject.Admin) {
 		userObject, err = database.GetAllUserInformationAnyState(user_id_int)
 		if err != nil {
 			log.Println("Failed to get user. Error: " + err.Error())
@@ -258,6 +257,7 @@ func GetUser(context *gin.Context) {
 }
 
 func GetUsers(context *gin.Context) {
+	var users []models.User
 
 	// Get user ID
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
@@ -276,10 +276,8 @@ func GetUsers(context *gin.Context) {
 		return
 	}
 
-	users := []models.User{}
-
 	includeDisabled, okay := context.GetQuery("includeDisabled")
-	if okay && strings.ToLower(includeDisabled) == "true" && requestingUserObject.Admin != nil && *requestingUserObject.Admin == true {
+	if okay && strings.ToLower(includeDisabled) == "true" && requestingUserObject.Admin != nil && *requestingUserObject.Admin {
 		users, err = database.GetAllUsers()
 		if err != nil {
 			log.Println("Failed to get all users. Error: " + err.Error())
