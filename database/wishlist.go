@@ -23,8 +23,6 @@ func UpdateWishlistInDB(wishlist models.Wishlist) (models.Wishlist, error) {
 
 // Create wishlist in DB
 func CreateWishlistInDB(wishlistDB models.Wishlist) (wishlist models.Wishlist, err error) {
-	wishlist = models.Wishlist{}
-	err = nil
 	record := Instance.Create(&wishlistDB)
 
 	if record.Error != nil {

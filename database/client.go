@@ -98,16 +98,21 @@ func CreateTable(dbUsername string, dbPassword string, dbIP string, dbPort int, 
 }
 
 func Migrate() {
-	Instance.AutoMigrate(&models.User{})
-	Instance.AutoMigrate(&models.Invite{})
-	Instance.AutoMigrate(&models.Group{})
-	Instance.AutoMigrate(&models.GroupMembership{})
-	Instance.AutoMigrate(&models.Wishlist{})
-	Instance.AutoMigrate(&models.WishlistMembership{})
-	Instance.AutoMigrate(&models.WishlistCollaborator{})
-	Instance.AutoMigrate(&models.Wish{})
-	Instance.AutoMigrate(&models.WishClaim{})
-	Instance.AutoMigrate(&models.News{})
+	errUser := Instance.AutoMigrate(&models.User{})
+	errInvite := Instance.AutoMigrate(&models.Invite{})
+	errGroup := Instance.AutoMigrate(&models.Group{})
+	errGroupMemberhip := Instance.AutoMigrate(&models.GroupMembership{})
+	errWishlist := Instance.AutoMigrate(&models.Wishlist{})
+	errWishlistMembership := Instance.AutoMigrate(&models.WishlistMembership{})
+	errWishlistCollaborator := Instance.AutoMigrate(&models.WishlistCollaborator{})
+	errWish := Instance.AutoMigrate(&models.Wish{})
+	errWishClaim := Instance.AutoMigrate(&models.WishClaim{})
+	errNews := Instance.AutoMigrate(&models.News{})
+
+	err := errors.Join(errUser, errInvite, errGroup, errGroupMemberhip, errWishlist, errWishlistMembership, errWishlistCollaborator, errWish, errWishClaim, errNews)
+	if err != nil {
+		panic(err)
+	}
 	logger.Log.Debug("Database migration completed.")
 }
 
