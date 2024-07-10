@@ -3,6 +3,7 @@ package database
 import (
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
 	"errors"
 	"strings"
 	"time"
@@ -14,7 +15,7 @@ import (
 // Get redacted user information based on User ID for enabled users
 func GetUserInformation(UserID uuid.UUID) (models.User, error) {
 	var user models.User
-	userrecord := Instance.Where("`users`.enabled = ?", 1).Where("`users`.id = ?", UserID).Find(&user)
+	userrecord := Instance.Where(&models.GormModel{ID: UserID}).Where(&models.User{Enabled: &utilities.DBTrue}).Find(&user)
 	if userrecord.Error != nil {
 		return models.User{}, userrecord.Error
 	} else if userrecord.RowsAffected != 1 {
@@ -30,7 +31,7 @@ func GetUserInformation(UserID uuid.UUID) (models.User, error) {
 // Get redacted user information based on User ID for all users
 func GetUserInformationAnyState(UserID uuid.UUID) (models.User, error) {
 	var user models.User
-	userrecord := Instance.Where("`users`.id = ?", UserID).Find(&user)
+	userrecord := Instance.Where(&models.GormModel{ID: UserID}).Find(&user)
 	if userrecord.Error != nil {
 		return models.User{}, userrecord.Error
 	} else if userrecord.RowsAffected != 1 {
@@ -46,7 +47,7 @@ func GetUserInformationAnyState(UserID uuid.UUID) (models.User, error) {
 // Get ALL user information for enabled users (non-redacted)
 func GetAllUserInformation(UserID uuid.UUID) (models.User, error) {
 	var user models.User
-	userrecord := Instance.Where("enabled = ?", true).Where("id = ?", UserID).Find(&user)
+	userrecord := Instance.Where(&models.GormModel{ID: UserID}).Where(&models.User{Enabled: &utilities.DBTrue}).Find(&user)
 	if userrecord.Error != nil {
 		return models.User{}, userrecord.Error
 	} else if userrecord.RowsAffected != 1 {
@@ -59,7 +60,7 @@ func GetAllUserInformation(UserID uuid.UUID) (models.User, error) {
 // Get ALL user information for ALL users (non-redacted)
 func GetAllUserInformationAnyState(UserID uuid.UUID) (models.User, error) {
 	var user models.User
-	userrecord := Instance.Where("id = ?", UserID).Find(&user)
+	userrecord := Instance.Where(&models.GormModel{ID: UserID}).Find(&user)
 	if userrecord.Error != nil {
 		return models.User{}, userrecord.Error
 	} else if userrecord.RowsAffected != 1 {
@@ -72,7 +73,7 @@ func GetAllUserInformationAnyState(UserID uuid.UUID) (models.User, error) {
 // Get redacted user information using email
 func GetUserInformationByEmail(email string) (models.User, error) {
 	var user models.User
-	userrecord := Instance.Where("`users`.enabled = ?", 1).Where("`users`.email = ?", email).Find(&user)
+	userrecord := Instance.Where(&models.User{Enabled: &utilities.DBTrue, Email: &email}).Find(&user)
 	if userrecord.Error != nil {
 		return models.User{}, userrecord.Error
 	} else if userrecord.RowsAffected != 1 {
@@ -89,7 +90,7 @@ func GetUserInformationByEmail(email string) (models.User, error) {
 func GetAllUserInformationByEmail(email string) (models.User, error) {
 	var user models.User
 
-	userrecord := Instance.Where("`users`.enabled = ?", 1).Where("`users`.email = ?", email).Find(&user)
+	userrecord := Instance.Where(&models.User{Enabled: &utilities.DBTrue, Email: &email}).Find(&user)
 	if userrecord.Error != nil {
 		return models.User{}, userrecord.Error
 	} else if userrecord.RowsAffected != 1 {
@@ -108,7 +109,7 @@ func GenerateRandomResetCodeForUser(userID uuid.UUID) (string, error) {
 	expirationDate := time.Now().AddDate(0, 0, 7)
 
 	var user models.User
-	userrecord := Instance.Model(user).Where("`users`.enabled = ?", 1).Where("`users`.ID = ?", userID).Update("reset_code", resetCode)
+	userrecord := Instance.Model(user).Where(&models.GormModel{ID: userID}).Where(&models.User{Enabled: &utilities.DBTrue}).Update("reset_code", resetCode)
 	if userrecord.Error != nil {
 		return "", userrecord.Error
 	}
@@ -116,7 +117,7 @@ func GenerateRandomResetCodeForUser(userID uuid.UUID) (string, error) {
 		return "", errors.New("Reset code not changed in database.")
 	}
 
-	userrecord = Instance.Model(user).Where("`users`.enabled = ?", 1).Where("`users`.ID = ?", userID).Update("reset_expiration", expirationDate)
+	userrecord = Instance.Model(user).Where(&models.GormModel{ID: userID}).Where(&models.User{Enabled: &utilities.DBTrue}).Update("reset_expiration", expirationDate)
 	if userrecord.Error != nil {
 		return "", userrecord.Error
 	}
@@ -131,7 +132,7 @@ func GenerateRandomResetCodeForUser(userID uuid.UUID) (string, error) {
 // Retrieve ALL user information using the reset code on the user object
 func GetAllUserInformationByResetCode(resetCode string) (models.User, error) {
 	var user models.User
-	userrecord := Instance.Where("`users`.enabled = ?", 1).Where("`users`.reset_code = ?", resetCode).Find(&user)
+	userrecord := Instance.Where(&models.User{Enabled: &utilities.DBTrue, ResetCode: &resetCode}).Find(&user)
 	if userrecord.Error != nil {
 		return models.User{}, userrecord.Error
 	} else if userrecord.RowsAffected != 1 {
@@ -146,7 +147,7 @@ func GetAmountOfEnabledUsers() (int, error) {
 
 	var users []models.User
 
-	userRecords := Instance.Where("enabled = ?", true).Find(&users)
+	userRecords := Instance.Where(&models.User{Enabled: &utilities.DBTrue}).Find(&users)
 	if userRecords.Error != nil {
 		return 0, userRecords.Error
 	}
@@ -172,7 +173,7 @@ func GetEnabledUsers() (usersRedacted []models.User, err error) {
 	usersRedacted = []models.User{}
 	err = nil
 
-	userrecord := Instance.Where("`users`.enabled = ?", 1).Find(&users)
+	userrecord := Instance.Where(&models.User{Enabled: &utilities.DBTrue}).Find(&users)
 	if userrecord.Error != nil {
 		return usersRedacted, userrecord.Error
 	}
