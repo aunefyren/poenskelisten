@@ -2,6 +2,7 @@ package database
 
 import (
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
 	"errors"
 	"time"
 
@@ -13,7 +14,7 @@ func UpdateWishlistValuesByID(wishlistID uuid.UUID, wishlistName string, wishlis
 
 	var wishlist models.Wishlist
 
-	wishlistRecord := Instance.Model(wishlist).Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.ID = ?", wishlistID).Update("name", wishlistName)
+	wishlistRecord := Instance.Model(wishlist).Where(&models.Wishlist{GormModel: models.GormModel{ID: wishlistID}, Enabled: true}).Update("name", wishlistName)
 	if wishlistRecord.Error != nil {
 		return wishlistRecord.Error
 	}
@@ -21,7 +22,7 @@ func UpdateWishlistValuesByID(wishlistID uuid.UUID, wishlistName string, wishlis
 		return errors.New("Name not changed in database.")
 	}
 
-	wishlistRecord = Instance.Model(wishlist).Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.ID = ?", wishlistID).Update("description", wishlistDesc)
+	wishlistRecord = Instance.Model(wishlist).Where(&models.Wishlist{Enabled: true}).Where(&models.GormModel{ID: wishlistID}).Update("description", wishlistDesc)
 	if wishlistRecord.Error != nil {
 		return wishlistRecord.Error
 	}
@@ -29,7 +30,7 @@ func UpdateWishlistValuesByID(wishlistID uuid.UUID, wishlistName string, wishlis
 		return errors.New("Description not changed in database.")
 	}
 
-	wishlistRecord = Instance.Model(wishlist).Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.ID = ?", wishlistID).Update("date", wishlistExpiration)
+	wishlistRecord = Instance.Model(wishlist).Where(&models.Wishlist{Enabled: true}).Where(&models.GormModel{ID: wishlistID}).Update("date", wishlistExpiration)
 	if wishlistRecord.Error != nil {
 		return wishlistRecord.Error
 	}
@@ -37,7 +38,7 @@ func UpdateWishlistValuesByID(wishlistID uuid.UUID, wishlistName string, wishlis
 		return errors.New("Expiration not changed in database.")
 	}
 
-	wishlistRecord = Instance.Model(wishlist).Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.ID = ?", wishlistID).Update("claimable", wishlistClaimable)
+	wishlistRecord = Instance.Model(wishlist).Where(&models.Wishlist{Enabled: true}).Where(&models.GormModel{ID: wishlistID}).Update("claimable", wishlistClaimable)
 	if wishlistRecord.Error != nil {
 		return wishlistRecord.Error
 	}
@@ -45,7 +46,7 @@ func UpdateWishlistValuesByID(wishlistID uuid.UUID, wishlistName string, wishlis
 		return errors.New("Claimability not changed in database.")
 	}
 
-	wishlistRecord = Instance.Model(wishlist).Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.ID = ?", wishlistID).Update("expires", wishlistExpires)
+	wishlistRecord = Instance.Model(wishlist).Where(&models.Wishlist{Enabled: true}).Where(&models.GormModel{ID: wishlistID}).Update("expires", wishlistExpires)
 	if wishlistRecord.Error != nil {
 		return wishlistRecord.Error
 	}
@@ -53,7 +54,7 @@ func UpdateWishlistValuesByID(wishlistID uuid.UUID, wishlistName string, wishlis
 		return errors.New("Expiration not changed in database.")
 	}
 
-	wishlistRecord = Instance.Model(wishlist).Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.ID = ?", wishlistID).Update("public", wishlistPublic)
+	wishlistRecord = Instance.Model(wishlist).Where(&models.Wishlist{Enabled: true}).Where(&models.GormModel{ID: wishlistID}).Update("public", wishlistPublic)
 	if wishlistRecord.Error != nil {
 		return wishlistRecord.Error
 	}
@@ -61,7 +62,7 @@ func UpdateWishlistValuesByID(wishlistID uuid.UUID, wishlistName string, wishlis
 		return errors.New("Public state not changed in database.")
 	}
 
-	wishlistRecord = Instance.Model(wishlist).Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.ID = ?", wishlistID).Update("public_hash", wishlistPublicHash)
+	wishlistRecord = Instance.Model(wishlist).Where(&models.Wishlist{Enabled: true}).Where(&models.GormModel{ID: wishlistID}).Update("public_hash", wishlistPublicHash)
 	if wishlistRecord.Error != nil {
 		return wishlistRecord.Error
 	}
@@ -75,8 +76,6 @@ func UpdateWishlistValuesByID(wishlistID uuid.UUID, wishlistName string, wishlis
 
 // Create wishlist in DB
 func CreateWishlistInDB(wishlistdb models.Wishlist) (wishlist models.Wishlist, err error) {
-	wishlist = models.Wishlist{}
-	err = nil
 	record := Instance.Create(&wishlistdb)
 
 	if record.Error != nil {
@@ -95,7 +94,7 @@ func GetWishlistByWishlistID(wishlistID uuid.UUID) (bool, models.Wishlist, error
 
 	var wishlist models.Wishlist
 
-	wishlistRecord := Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", wishlistID).Find(&wishlist)
+	wishlistRecord := Instance.Where(&models.Wishlist{Enabled: true}).Where(&models.GormModel{ID: wishlistID}).Find(&wishlist)
 
 	if wishlistRecord.Error != nil {
 		return false, models.Wishlist{}, wishlistRecord.Error
@@ -110,9 +109,12 @@ func GetWishlistByWishlistID(wishlistID uuid.UUID) (bool, models.Wishlist, error
 // Get wishlist collabs who are members of wishlist
 func GetWishlistCollaboratorsFromWishlist(WishlistID uuid.UUID) (wishlistColab []models.WishlistCollaborator, err error) {
 	wishlistColab = []models.WishlistCollaborator{}
-	err = nil
 
-	userRecords := Instance.Where("`wishlist_collaborators`.enabled = ?", 1).Joins("JOIN `users` on `wishlist_collaborators`.user_id = `users`.id").Where("`users`.enabled = ?", 1).Joins("JOIN `wishlists` on `wishlist_collaborators`.wishlist_id = `wishlists`.id").Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", WishlistID).Find(&wishlistColab)
+	userRecords := Instance.
+		Where(&models.WishlistCollaborator{Enabled: true}).
+		Joins("JOIN users ON wishlist_collaborators.user_id = users.id", Instance.Where(&models.User{Enabled: true})).
+		Joins("JOIN wishlists ON wishlist_collaborators.wishlist_id = wishlists.id", Instance.Where(&models.Wishlist{Enabled: true}).Where(&models.GormModel{ID: WishlistID})).
+		Find(&wishlistColab)
 	if userRecords.Error != nil {
 		return wishlistColab, userRecords.Error
 	}
@@ -123,9 +125,12 @@ func GetWishlistCollaboratorsFromWishlist(WishlistID uuid.UUID) (wishlistColab [
 // Get wishlist collab by id
 func GetWishlistCollaboratorByUserIDAndWishlistID(WishlistID uuid.UUID, UserID uuid.UUID) (wishlistColab models.WishlistCollaborator, err error) {
 	wishlistColab = models.WishlistCollaborator{}
-	err = nil
 
-	userRecords := Instance.Where("`wishlist_collaborators`.enabled = ?", 1).Joins("JOIN `users` on `wishlist_collaborators`.user_id = `users`.id").Where("`users`.enabled = ?", 1).Joins("JOIN `wishlists` on `wishlist_collaborators`.wishlist_id = `wishlists`.id").Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", WishlistID).Where("`users`.id = ?", UserID).Find(&wishlistColab)
+	userRecords := Instance.
+		Where(&models.WishlistCollaborator{Enabled: true}).
+		Joins("JOIN users ON wishlist_collaborators.user_id = users.id", Instance.Where(&models.User{Enabled: true}).Where(&models.GormModel{ID: UserID})).
+		Joins("JOIN wishlists ON wishlist_collaborators.wishlist_id = wishlists.id", Instance.Where(&models.Wishlist{Enabled: true}).Where(&models.GormModel{ID: WishlistID})).
+		Find(&wishlistColab)
 	if userRecords.Error != nil {
 		return wishlistColab, userRecords.Error
 	}
@@ -154,7 +159,10 @@ func VerifyWishlistCollaboratorToWishlist(WishlistID uuid.UUID, UserID uuid.UUID
 	err = nil
 	wishlistColab := models.WishlistCollaborator{}
 
-	wishlistmembershipprecord := Instance.Where("`wishlist_collaborators`.enabled = ?", 1).Where("`wishlist_collaborators`.wishlist_id = ?", WishlistID).Where("`wishlist_collaborators`.user_id = ?", UserID).Joins("JOIN `users` on `wishlist_collaborators`.user_id = `users`.id").Where("`users`.enabled = ?", 1).Find(&wishlistColab)
+	wishlistmembershipprecord := Instance.
+		Where(&models.WishlistCollaborator{Enabled: true, WishlistID: WishlistID, UserID: UserID}).
+		Joins("JOIN users ON wishlist_collaborators.user_id = users.id", Instance.Where(&models.User{Enabled: true})).
+		Find(&wishlistColab)
 	if wishlistmembershipprecord.Error != nil {
 		return verified, wishlistmembershipprecord.Error
 	} else if wishlistmembershipprecord.RowsAffected != 1 {
@@ -167,9 +175,8 @@ func VerifyWishlistCollaboratorToWishlist(WishlistID uuid.UUID, UserID uuid.UUID
 // Set wishlist membership to disabled
 func DeleteWishlistCollaboratorByWishlistCollaboratorID(WishlistCollaboratorID uuid.UUID) (err error) {
 	wishlistCollaborator := models.WishlistCollaborator{}
-	err = nil
 
-	wishlistmembershiprecords := Instance.Model(wishlistCollaborator).Where("`wishlist_collaborators`.ID= ?", WishlistCollaboratorID).Update("enabled", 0)
+	wishlistmembershiprecords := Instance.Model(wishlistCollaborator).Where(&models.GormModel{ID: WishlistCollaboratorID}).Update("enabled", 0)
 	if wishlistmembershiprecords.Error != nil {
 		return wishlistmembershiprecords.Error
 	}
@@ -185,7 +192,12 @@ func GetWishlistsByUserIDThroughWishlistCollaborations(UserID uuid.UUID) (wishli
 	wishlists = []models.Wishlist{}
 	err = nil
 
-	wishlistRecords := Instance.Order("`wishlists`.date desc, `wishlists`.name").Where("`wishlists`.enabled = ?", 1).Joins("JOIN `wishlist_collaborators` on `wishlists`.id = `wishlist_collaborators`.wishlist_id").Where("`wishlist_collaborators`.enabled = ?", 1).Where("`wishlist_collaborators`.user_id = ?", UserID).Joins("JOIN `users` on `wishlist_collaborators`.user_id = `users`.id").Where("`users`.enabled = ?", 1).Find(&wishlists)
+	// Order("wishlists.date desc, wishlists.name").
+	wishlistRecords := Instance.
+		Where(&models.Wishlist{Enabled: true}).
+		Joins("JOIN wishlist_collaborators ON wishlists.id = wishlist_collaborators.wishlist_id", Instance.Where(&models.WishlistCollaborator{Enabled: true, UserID: UserID})).
+		Joins("JOIN users ON wishlist_collaborators.user_id = users.id", Instance.Where(&models.User{Enabled: true})).
+		Find(&wishlists)
 
 	if wishlistRecords.Error != nil {
 		return []models.Wishlist{}, wishlistRecords.Error
@@ -198,14 +210,11 @@ func GetWishlistsByUserIDThroughWishlistCollaborations(UserID uuid.UUID) (wishli
 func GetWishlistsFromGroup(GroupID uuid.UUID) ([]models.Wishlist, error) {
 	var wishlists []models.Wishlist
 	wishlistrecords := Instance.
-		Where("`wishlists`.enabled = ?", 1).
-		Joins("JOIN wishlist_memberships on wishlist_memberships.wishlist_id = wishlists.id").
-		Where("`wishlist_memberships`.group_id = ?", GroupID).
-		Where("`wishlist_memberships`.enabled = ?", 1).
-		Joins("JOIN `groups` on `wishlist_memberships`.group_id = `groups`.ID").
-		Where("`groups`.enabled = ?", 1).
-		Joins("JOIN `users` on `wishlists`.owner_id = `users`.id").
-		Where("`users`.enabled = ?", 1).Find(&wishlists)
+		Where(&models.Wishlist{Enabled: true}).
+		Joins("JOIN wishlist_memberships ON wishlist_memberships.wishlist_id = wishlists.id", Instance.Where(&models.WishlistMembership{Enabled: true, GroupID: GroupID})).
+		Joins("JOIN groups ON wishlist_memberships.group_id = groups.ID", Instance.Where(&models.Group{Enabled: true})).
+		Joins("JOIN users ON wishlists.owner_id = users.id", Instance.Where(&models.User{Enabled: true})).
+		Find(&wishlists)
 
 	if wishlistrecords.Error != nil {
 		return []models.Wishlist{}, wishlistrecords.Error
@@ -221,7 +230,11 @@ func GetOwnedWishlists(UserID uuid.UUID) (wishlists []models.Wishlist, err error
 	wishlists = []models.Wishlist{}
 	err = nil
 
-	wishlistrecords := Instance.Order("`wishlists`.date desc, `wishlists`.name").Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.owner_id = ?", UserID).Joins("JOIN users on `users`.id = `wishlists`.owner_id").Where("`users`.enabled = ?", 1).Find(&wishlists)
+	wishlistrecords := Instance.
+		Where(&models.Wishlist{Enabled: true, OwnerID: UserID}).
+		Joins("JOIN users ON users.id = wishlists.owner_id", Instance.Where(&models.User{Enabled: true})).
+		Order("wishlists.date desc, wishlists.name").
+		Find(&wishlists)
 
 	if wishlistrecords.Error != nil {
 		return []models.Wishlist{}, wishlistrecords.Error
@@ -233,7 +246,7 @@ func GetOwnedWishlists(UserID uuid.UUID) (wishlists []models.Wishlist, err error
 // Get all wishlists a user is an owner of
 func GetWishlist(WishlistID uuid.UUID) (models.Wishlist, error) {
 	var wishlist models.Wishlist
-	wishlistrecords := Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", WishlistID).Find(&wishlist)
+	wishlistrecords := Instance.Where(&models.Wishlist{Enabled: true}).Where(&models.GormModel{ID: WishlistID}).Find(&wishlist)
 
 	if wishlistrecords.Error != nil {
 		return models.Wishlist{}, wishlistrecords.Error
@@ -247,7 +260,7 @@ func GetWishlist(WishlistID uuid.UUID) (models.Wishlist, error) {
 // Verify if a wish name in wishlist is unique
 func VerifyUniqueWishNameinWishlist(WishName string, WishlistID uuid.UUID) (bool, error) {
 	var wish models.Wish
-	wishesrecord := Instance.Where("`wishes`.enabled = ?", 1).Where("`wishes`.wishlist_id = ?", WishlistID).Where("`wishes`.name = ?", WishName).Find(&wish)
+	wishesrecord := Instance.Where(&models.Wish{Enabled: true, WishlistID: WishlistID, Name: WishName}).Find(&wish)
 	if wishesrecord.Error != nil {
 		return false, wishesrecord.Error
 	} else if wishesrecord.RowsAffected != 0 {
@@ -259,7 +272,7 @@ func VerifyUniqueWishNameinWishlist(WishName string, WishlistID uuid.UUID) (bool
 // Verify if a wishlist name in group is unique
 func VerifyUniqueWishlistNameForUser(WishlistName string, UserID uuid.UUID) (bool, error) {
 	var wishlist models.Wishlist
-	wishlistrecord := Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.owner_id = ?", UserID).Where("`wishlists`.name = ?", WishlistName).Find(&wishlist)
+	wishlistrecord := Instance.Where(&models.Wishlist{Enabled: true, OwnerID: UserID, Name: WishlistName}).Find(&wishlist)
 	if wishlistrecord.Error != nil {
 		return false, wishlistrecord.Error
 	} else if wishlistrecord.RowsAffected != 0 {
@@ -271,7 +284,7 @@ func VerifyUniqueWishlistNameForUser(WishlistName string, UserID uuid.UUID) (boo
 // Get owner id of wishlist
 func GetWishlistOwner(WishlistID uuid.UUID) (uuid.UUID, error) {
 	var wishlist models.Wishlist
-	wishlistrecord := Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", WishlistID).Find(&wishlist)
+	wishlistrecord := Instance.Where(&models.Wishlist{Enabled: true}).Where(&models.GormModel{ID: WishlistID}).Find(&wishlist)
 	if wishlistrecord.Error != nil {
 		return uuid.UUID{}, wishlistrecord.Error
 	} else if wishlistrecord.RowsAffected != 1 {
@@ -284,7 +297,11 @@ func GetWishlistOwner(WishlistID uuid.UUID) (uuid.UUID, error) {
 // Verify if a group ID is a member of a wishlist
 func VerifyUserMembershipToGroupmembershipToWishlist(UserID uuid.UUID, WishlistID uuid.UUID) (bool, error) {
 	var wishlistmembership models.WishlistMembership
-	wishlistmembershiprecord := Instance.Where("`wishlist_memberships`.enabled = ?", 1).Where("`wishlist_memberships`.wishlist_id = ?", WishlistID).Joins("JOIN `groups` on `groups`.id = `wishlist_memberships`.group_id").Where("`groups`.enabled = ?", 1).Joins("JOIN `group_memberships` on `group_memberships`.group_id = `groups`.id").Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member_id = ?", UserID).Find(&wishlistmembership)
+	wishlistmembershiprecord := Instance.
+		Where(&models.WishlistMembership{WishlistID: WishlistID, Enabled: true}).
+		Joins("JOIN groups ON groups.id = wishlist_memberships.group_id", Instance.Where(&models.Group{Enabled: true})).
+		Joins("JOIN group_memberships ON group_memberships.group_id = groups.id", Instance.Where(&models.GroupMembership{Enabled: true, MemberID: UserID})).
+		Find(&wishlistmembership)
 	if wishlistmembershiprecord.Error != nil {
 		return false, wishlistmembershiprecord.Error
 	} else if wishlistmembershiprecord.RowsAffected != 1 {
@@ -296,7 +313,7 @@ func VerifyUserMembershipToGroupmembershipToWishlist(UserID uuid.UUID, WishlistI
 // Verify if a user ID is an owner of a wishlist
 func VerifyUserOwnershipToWishlist(UserID uuid.UUID, WishlistID uuid.UUID) (bool, error) {
 	var wishlist models.Wishlist
-	wishlistrecord := Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", WishlistID).Where("`wishlists`.owner_id = ?", UserID).Find(&wishlist)
+	wishlistrecord := Instance.Where(&models.Wishlist{Enabled: true, OwnerID: UserID}).Where(&models.GormModel{ID: WishlistID}).Find(&wishlist)
 	if wishlistrecord.Error != nil {
 		return false, wishlistrecord.Error
 	} else if wishlistrecord.RowsAffected != 1 {
@@ -310,7 +327,14 @@ func GetUserMembersFromWishlist(WishlistID uuid.UUID) ([]models.User, error) {
 	var users []models.User
 	var group_memberships []models.GroupMembership
 
-	membershiprecords := Instance.Where("`group_memberships`.enabled = ?", 1).Joins("JOIN `groups` on `group_memberships`.group_id = `groups`.id").Where("`groups`.enabled = ?", 1).Joins("JOIN `wishlist_memberships` on `wishlist_memberships`.group_id = `groups`.id").Where("`wishlist_memberships`.enabled = ?", 1).Joins("JOIN `wishlists` on `wishlists`.id = `wishlist_memberships`.wishlist_id").Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.id = ?", WishlistID).Joins("JOIN `users` on `group_memberships`.group_id = `users`.id").Where("`users`.enabled = ?", 1).Where("`group_memberships`.group_id != `wishlists`.owner_id").Find(&group_memberships)
+	membershiprecords := Instance.
+		Where(&models.GroupMembership{Enabled: true}).
+		Joins("JOIN groups ON group_memberships.group_id = groups.id", Instance.Where(&models.Group{Enabled: true})).
+		Joins("JOIN wishlist_memberships ON wishlist_memberships.group_id = groups.id", Instance.Where(&models.GroupMembership{Enabled: true})).
+		Joins("JOIN wishlists ON wishlists.id = wishlist_memberships.wishlist_id", Instance.Where(&models.Wishlist{Enabled: true}).Where(&models.GormModel{ID: WishlistID})).
+		Joins("JOIN users ON group_memberships.group_id = users.id", Instance.Where(&models.User{Enabled: true})).
+		Where("group_memberships.group_id != wishlists.owner_id").
+		Find(&group_memberships)
 	if membershiprecords.Error != nil {
 		return []models.User{}, membershiprecords.Error
 	}
@@ -335,7 +359,7 @@ func GetMembershipIDForGroupToWishlist(WishlistID uuid.UUID, GroupID uuid.UUID) 
 	membershipFound = false
 	err = nil
 
-	wishlistmembershiprecord := Instance.Where("`wishlist_memberships`.enabled = ?", 1).Where("`wishlist_memberships`.wishlist_id = ?", WishlistID).Where("`wishlist_memberships`.group_id = ?", GroupID).Find(&wishlistMembership)
+	wishlistmembershiprecord := Instance.Where(&models.WishlistMembership{WishlistID: WishlistID, Enabled: true, GroupID: GroupID}).Find(&wishlistMembership)
 	if wishlistmembershiprecord.Error != nil {
 		return membershipFound, wishlistMembership, wishlistmembershiprecord.Error
 	} else if wishlistmembershiprecord.RowsAffected != 1 {
@@ -349,7 +373,7 @@ func GetMembershipIDForGroupToWishlist(WishlistID uuid.UUID, GroupID uuid.UUID) 
 func GetPublicWishListByWishlistHash(wishlistHash uuid.UUID) (bool, models.Wishlist, error) {
 	var wishlist models.Wishlist
 
-	wishlistRecord := Instance.Where("`wishlists`.enabled = ?", 1).Where("`wishlists`.public = ?", 1).Where("`wishlists`.public_hash = ?", wishlistHash).Find(&wishlist)
+	wishlistRecord := Instance.Where(&models.Wishlist{Enabled: true, PublicHash: wishlistHash, Public: &utilities.DBTrue}).Find(&wishlist)
 
 	if wishlistRecord.Error != nil {
 		return false, models.Wishlist{}, wishlistRecord.Error
