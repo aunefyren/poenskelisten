@@ -104,7 +104,7 @@ func GetGroupsAUserIsAMemberOf(UserID uuid.UUID) ([]models.Group, error) {
 	var groups []models.Group
 
 	// Retrieve groups that the user is a member of
-	groupRecords := Instance.
+	groupRecords := Instance.Distinct().
 		Where(&models.Group{Enabled: true}).
 		Joins("JOIN group_memberships ON group_memberships.group_id = groups.id").
 		Where("group_memberships.enabled = ? AND group_memberships.member_id = ?", true, UserID).
