@@ -18,7 +18,6 @@ import (
 )
 
 func RegisterWishlist(context *gin.Context) {
-
 	// Create wishlist request
 	var wishlist models.WishlistCreationRequest
 	var wishlistdb models.Wishlist
