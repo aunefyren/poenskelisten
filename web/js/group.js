@@ -356,18 +356,11 @@ function create_wishlist(group_id, user_id) {
         var wishlist_date_string = "2006-01-02T15:04:05.000Z";
     }
 
-    try {
-        group_id_int = parseInt(group_id);
-    } catch {
-        alert("Failed. Invalid group")
-        return
-    }
-
     var form_obj = { 
         "name" : wishlist_name,
         "description" : wishlist_description,
         "date": wishlist_date_string,
-        "group": group_id_int,
+        "group": group_id,
         "claimable": wishlist_claimable,
         "expires": wishlist_expires,
         "public": wishlist_public
