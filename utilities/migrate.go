@@ -57,7 +57,7 @@ func MigrateSQL(sqlContent *bufio.Scanner) (modifiedSQL2 string, err error) {
 			currentMode = "none"
 			currentTable = "none"
 		} else {
-			// log.Println("No Regex matched: " + line)
+			log.Println("No Regex matched: " + line)
 		}
 
 		if currentMode == "insert" && valueLineRegEx.Match([]byte(line)) {
@@ -92,7 +92,7 @@ func MigrateSQL(sqlContent *bufio.Scanner) (modifiedSQL2 string, err error) {
 			currentMode = "none"
 			currentTable = "none"
 		} else {
-			// log.Println("No Regex matched: " + line)
+			log.Println("No Regex matched: " + line)
 		}
 
 		if currentMode == "insert" && valueLineRegEx.Match([]byte(line)) {

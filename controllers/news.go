@@ -6,7 +6,6 @@ import (
 	"aunefyren/poenskelisten/utilities"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -33,7 +32,7 @@ func GetNewsPost(context *gin.Context) {
 
 	var newsID = context.Param("news_id")
 
-	newsIDInt, err := strconv.Atoi(newsID)
+	newsIDUUID, err := uuid.Parse(newsID)
 	if err != nil {
 		log.Println("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed parse request."})
@@ -42,7 +41,7 @@ func GetNewsPost(context *gin.Context) {
 	}
 
 	// Get the newspost by id
-	newsPost, err := database.GetNewsPostByNewsID(newsIDInt)
+	newsPost, err := database.GetNewsPostByNewsID(newsIDUUID)
 	if err != nil {
 		// If there is an error getting the news, return an internal server error
 		log.Println("Failed to get news post. Error: " + err.Error())
@@ -150,7 +149,7 @@ func DeleteNewsPost(context *gin.Context) {
 	newsID := context.Param("news_id")
 
 	// Parse news ID as integer
-	newsIDInt, err := strconv.Atoi(newsID)
+	newsIDUUID, err := uuid.Parse(newsID)
 	if err != nil {
 		log.Println("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
@@ -159,7 +158,7 @@ func DeleteNewsPost(context *gin.Context) {
 	}
 
 	// Verify that news post exists
-	_, err = database.GetNewsPostByNewsID(newsIDInt)
+	_, err = database.GetNewsPostByNewsID(newsIDUUID)
 	if err != nil {
 		// If there is an error getting the news, return an internal server error
 		log.Println("Failed to get news post. Error: " + err.Error())
@@ -169,7 +168,7 @@ func DeleteNewsPost(context *gin.Context) {
 	}
 
 	// Set the news post to disabled in the database
-	err = database.DeleteNewsPost(newsIDInt)
+	err = database.DeleteNewsPost(newsIDUUID)
 	if err != nil {
 		log.Println("Failed to delete news post. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete news post."})

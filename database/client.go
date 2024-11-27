@@ -2,6 +2,7 @@ package database
 
 import (
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -97,16 +98,21 @@ func CreateTable(dbUsername string, dbPassword string, dbIP string, dbPort int, 
 }
 
 func Migrate() {
-	Instance.AutoMigrate(&models.User{})
-	Instance.AutoMigrate(&models.Invite{})
-	Instance.AutoMigrate(&models.Group{})
-	Instance.AutoMigrate(&models.GroupMembership{})
-	Instance.AutoMigrate(&models.Wishlist{})
-	Instance.AutoMigrate(&models.WishlistMembership{})
-	Instance.AutoMigrate(&models.WishlistCollaborator{})
-	Instance.AutoMigrate(&models.Wish{})
-	Instance.AutoMigrate(&models.WishClaim{})
-	Instance.AutoMigrate(&models.News{})
+	errUser := Instance.AutoMigrate(&models.User{})
+	errInvite := Instance.AutoMigrate(&models.Invite{})
+	errGroup := Instance.AutoMigrate(&models.Group{})
+	errGroupMemberhip := Instance.AutoMigrate(&models.GroupMembership{})
+	errWishlist := Instance.AutoMigrate(&models.Wishlist{})
+	errWishlistMembership := Instance.AutoMigrate(&models.WishlistMembership{})
+	errWishlistCollaborator := Instance.AutoMigrate(&models.WishlistCollaborator{})
+	errWish := Instance.AutoMigrate(&models.Wish{})
+	errWishClaim := Instance.AutoMigrate(&models.WishClaim{})
+	errNews := Instance.AutoMigrate(&models.News{})
+
+	err := errors.Join(errUser, errInvite, errGroup, errGroupMemberhip, errWishlist, errWishlistMembership, errWishlistCollaborator, errWish, errWishClaim, errNews)
+	if err != nil {
+		panic(err)
+	}
 	log.Println("Database Migration Completed!")
 }
 
@@ -133,7 +139,7 @@ func GenrateRandomVerificationCodeForuser(userID uuid.UUID) (string, error) {
 	verificationCode := strings.ToUpper(randomString)
 
 	var user models.User
-	userrecord := Instance.Model(user).Where("enabled = ?", true).Where("ID = ?", userID).Update("verification_code", verificationCode)
+	userrecord := Instance.Model(user).Where(&models.User{Enabled: true}).Where(&models.GormModel{ID: userID}).Update("verification_code", verificationCode)
 	if userrecord.Error != nil {
 		return "", userrecord.Error
 	}
@@ -148,7 +154,7 @@ func GenrateRandomVerificationCodeForuser(userID uuid.UUID) (string, error) {
 // Verify e-mail is not in use
 func VerifyUniqueUserEmail(providedEmail string) (bool, error) {
 	var user models.User
-	userrecords := Instance.Where("enabled = ?", true).Where("email = ?", providedEmail).Find(&user)
+	userrecords := Instance.Where(&models.User{Enabled: true, Email: providedEmail}).Find(&user)
 	if userrecords.Error != nil {
 		return false, userrecords.Error
 	}
@@ -161,7 +167,7 @@ func VerifyUniqueUserEmail(providedEmail string) (bool, error) {
 // Verify if user has a verification code set
 func VerifyUserHasVerfificationCode(userID uuid.UUID) (bool, error) {
 	var user models.User
-	userrecords := Instance.Where("enabled = ?", true).Where("ID = ?", userID).Find(&user)
+	userrecords := Instance.Where(&models.User{Enabled: true}).Where(&models.GormModel{ID: userID}).Find(&user)
 	if userrecords.Error != nil {
 		return false, userrecords.Error
 	}
@@ -178,11 +184,8 @@ func VerifyUserHasVerfificationCode(userID uuid.UUID) (bool, error) {
 
 // Verify if user has a verification code set
 func VerifyUserVerfificationCodeMatches(userID uuid.UUID, verificationCode string) (bool, error) {
-
 	var user models.User
-
-	userrecords := Instance.Where("enabled = ?", true).Where("ID = ?", userID).Where("verification_code = ?", verificationCode).Find(&user)
-
+	userrecords := Instance.Where(&models.User{Enabled: true, VerificationCode: verificationCode}).Where(&models.GormModel{ID: userID}).Find(&user)
 	if userrecords.Error != nil {
 		return false, userrecords.Error
 	}
@@ -197,9 +200,8 @@ func VerifyUserVerfificationCodeMatches(userID uuid.UUID, verificationCode strin
 
 // Verify if user is verified
 func VerifyUserIsVerified(userID uuid.UUID) (bool, error) {
-
 	var user models.User
-	userrecords := Instance.Where("id = ?", userID).Find(&user)
+	userrecords := Instance.Where(&models.GormModel{ID: userID}).Find(&user)
 	if userrecords.Error != nil {
 		return false, userrecords.Error
 	}
@@ -213,7 +215,7 @@ func VerifyUserIsVerified(userID uuid.UUID) (bool, error) {
 // Verify unsued invite code exists
 func VerifyUnusedUserInviteCode(providedCode string) (bool, error) {
 	var invitestruct models.Invite
-	inviterecords := Instance.Where("enabled = ?", true).Where("used = ?", false).Where("code = ?", providedCode).Find(&invitestruct)
+	inviterecords := Instance.Where(&models.Invite{Used: false, Code: providedCode, Enabled: &utilities.DBTrue}).Find(&invitestruct)
 	if inviterecords.Error != nil {
 		return false, inviterecords.Error
 	}
@@ -227,7 +229,7 @@ func VerifyUnusedUserInviteCode(providedCode string) (bool, error) {
 func SetUsedUserInviteCode(providedCode string, userIDClaimer uuid.UUID) error {
 	var invitestruct models.Invite
 
-	inviterecords := Instance.Model(invitestruct).Where("code = ?", providedCode).Update("used", true)
+	inviterecords := Instance.Model(invitestruct).Where(&models.Invite{Code: providedCode}).Update("used", true)
 	if inviterecords.Error != nil {
 		return inviterecords.Error
 	}
@@ -235,7 +237,7 @@ func SetUsedUserInviteCode(providedCode string, userIDClaimer uuid.UUID) error {
 		return errors.New("Code not changed in database.")
 	}
 
-	inviterecords = Instance.Model(invitestruct).Where("code = ?", providedCode).Update("recipient_id", userIDClaimer)
+	inviterecords = Instance.Model(invitestruct).Where(&models.Invite{Code: providedCode}).Update("recipient_id", userIDClaimer)
 	if inviterecords.Error != nil {
 		return inviterecords.Error
 	}
@@ -250,15 +252,8 @@ func SetUsedUserInviteCode(providedCode string, userIDClaimer uuid.UUID) error {
 func SetUserVerification(userID uuid.UUID, verified bool) error {
 
 	var user models.User
-	var verInt int
 
-	if verified {
-		verInt = 1
-	} else {
-		verInt = 0
-	}
-
-	userrecords := Instance.Model(user).Where("`users`.enabled = ?", 1).Where("`users`.ID = ?", userID).Update("verified", verInt)
+	userrecords := Instance.Model(user).Where(models.GormModel{ID: userID}).Where(&models.User{Enabled: true}).Update("verified", verified)
 	if userrecords.Error != nil {
 		return userrecords.Error
 	}
@@ -274,7 +269,7 @@ func UpdateUserValuesByUserID(userID uuid.UUID, email string, password string) e
 
 	var user models.User
 
-	userrecords := Instance.Model(user).Where("`users`.enabled = ?", 1).Where("`users`.ID = ?", userID).Update("email", email)
+	userrecords := Instance.Model(user).Where(&models.User{Enabled: true}).Where(&models.GormModel{ID: userID}).Update("email", email)
 	if userrecords.Error != nil {
 		return userrecords.Error
 	}
@@ -282,7 +277,7 @@ func UpdateUserValuesByUserID(userID uuid.UUID, email string, password string) e
 		return errors.New("Email not changed in database.")
 	}
 
-	userrecords = Instance.Model(user).Where("`users`.enabled = ?", 1).Where("`users`.ID = ?", userID).Update("password", password)
+	userrecords = Instance.Model(user).Where(&models.User{Enabled: true}).Where(&models.GormModel{ID: userID}).Update("password", password)
 	if userrecords.Error != nil {
 		return userrecords.Error
 	}
@@ -296,7 +291,7 @@ func UpdateUserValuesByUserID(userID uuid.UUID, email string, password string) e
 // Set group to disabled
 func DeleteGroup(GroupID uuid.UUID) error {
 	var group models.Group
-	grouprecords := Instance.Model(group).Where("`groups`.ID= ?", GroupID).Update("enabled", 0)
+	grouprecords := Instance.Model(group).Where(&models.GormModel{ID: GroupID}).Update("enabled", false)
 	if grouprecords.Error != nil {
 		return grouprecords.Error
 	}
@@ -309,7 +304,7 @@ func DeleteGroup(GroupID uuid.UUID) error {
 // Set group membership to disabled
 func DeleteGroupMembership(GroupMembershipID uuid.UUID) error {
 	var groupmembership models.GroupMembership
-	grouprecords := Instance.Model(groupmembership).Where("`group_memberships`.ID= ?", GroupMembershipID).Update("enabled", 0)
+	grouprecords := Instance.Model(groupmembership).Where(&models.GormModel{ID: GroupMembershipID}).Update("enabled", false)
 	if grouprecords.Error != nil {
 		return grouprecords.Error
 	}
@@ -322,7 +317,7 @@ func DeleteGroupMembership(GroupMembershipID uuid.UUID) error {
 // Set wishlist to disabled
 func DeleteWishlist(WishlistID uuid.UUID) error {
 	var wishlist models.Wishlist
-	wishlistrecords := Instance.Model(wishlist).Where("`wishlists`.ID= ?", WishlistID).Update("enabled", 0)
+	wishlistrecords := Instance.Model(wishlist).Where(&models.GormModel{ID: WishlistID}).Update("enabled", false)
 	if wishlistrecords.Error != nil {
 		return wishlistrecords.Error
 	}
@@ -335,7 +330,7 @@ func DeleteWishlist(WishlistID uuid.UUID) error {
 // Set wishlist membership to disabled
 func DeleteWishlistMembership(WishlistMembershipID uuid.UUID) error {
 	var wishlistmembership models.WishlistMembership
-	wishlistmembershiprecords := Instance.Model(wishlistmembership).Where("`wishlist_memberships`.ID= ?", WishlistMembershipID).Update("enabled", 0)
+	wishlistmembershiprecords := Instance.Model(wishlistmembership).Where(&models.GormModel{ID: WishlistMembershipID}).Update("enabled", false)
 	if wishlistmembershiprecords.Error != nil {
 		return wishlistmembershiprecords.Error
 	}
@@ -350,7 +345,11 @@ func GetUserMembersFromGroup(GroupID uuid.UUID) ([]models.User, error) {
 	var users []models.User
 	var group_memberships []models.GroupMembership
 
-	membershiprecords := Instance.Where("`group_memberships`.enabled = ?", 1).Joins("JOIN `groups` on `group_memberships`.group = `groups`.id").Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", GroupID).Joins("JOIN `users` on `group_memberships`.group_id = `users`.id").Where("`users`.enabled = ?", 1).Find(&group_memberships)
+	membershiprecords := Instance.
+		Where(&models.GroupMembership{Enabled: true}).
+		Joins("JOIN groups ON group_memberships.group = groups.id", Instance.Where(&models.Group{Enabled: true}).Where(&models.GormModel{ID: GroupID})).
+		Joins("JOIN users ON group_memberships.group_id = users.id", Instance.Where(&models.User{Enabled: true})).
+		Find(&group_memberships)
 	if membershiprecords.Error != nil {
 		return []models.User{}, membershiprecords.Error
 	}

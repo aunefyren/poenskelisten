@@ -118,7 +118,10 @@ func main() {
 		log.Println("Creating new private key.")
 
 		Config.PrivateKey = randstr.Hex(32)
-		config.SaveConfig(Config)
+		err = config.SaveConfig(Config)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	err = auth.SetPrivateKey(Config.PrivateKey)

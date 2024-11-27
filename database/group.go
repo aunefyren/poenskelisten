@@ -3,7 +3,6 @@ package database
 import (
 	"aunefyren/poenskelisten/models"
 	"errors"
-
 	"github.com/google/uuid"
 )
 
@@ -11,7 +10,7 @@ func VerifyGroupExistsByNameForUser(groupName string, groupOwnerID uuid.UUID) (b
 
 	var groupStruct models.Group
 
-	groupRecords := Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.name = ?", groupName).Where("`groups`.Owner = ?", groupOwnerID).Find(&groupStruct)
+	groupRecords := Instance.Where(&models.Group{Enabled: true, Name: groupName, OwnerID: groupOwnerID}).Find(&groupStruct)
 
 	if groupRecords.Error != nil {
 		return false, models.Group{}, groupRecords.Error
@@ -25,7 +24,7 @@ func VerifyGroupExistsByNameForUser(groupName string, groupOwnerID uuid.UUID) (b
 // Get group by Group ID
 func GetGroupInformation(GroupID uuid.UUID) (models.Group, error) {
 	var group models.Group
-	grouprecord := Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", GroupID).Find(&group)
+	grouprecord := Instance.Where(&models.Group{Enabled: true}).Where(&models.GormModel{ID: GroupID}).Find(&group)
 	if grouprecord.Error != nil {
 		return models.Group{}, grouprecord.Error
 	} else if grouprecord.RowsAffected != 1 {
@@ -40,7 +39,7 @@ func UpdateGroupValuesByID(groupID uuid.UUID, groupName string, groupDesc string
 
 	var group models.Group
 
-	groupRecord := Instance.Model(group).Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", groupID).Update("name", groupName)
+	groupRecord := Instance.Model(group).Where(&models.Group{Enabled: true}).Where(&models.GormModel{ID: groupID}).Update("name", groupName)
 	if groupRecord.Error != nil {
 		return groupRecord.Error
 	}
@@ -48,7 +47,7 @@ func UpdateGroupValuesByID(groupID uuid.UUID, groupName string, groupDesc string
 		return errors.New("Name not changed in database.")
 	}
 
-	groupRecord = Instance.Model(group).Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", groupID).Update("description", groupDesc)
+	groupRecord = Instance.Model(group).Where(&models.Group{Enabled: true}).Where(&models.GormModel{ID: groupID}).Update("description", groupDesc)
 	if groupRecord.Error != nil {
 		return groupRecord.Error
 	}
@@ -64,10 +63,7 @@ func UpdateGroupValuesByID(groupID uuid.UUID, groupName string, groupDesc string
 func VerifyUserOwnershipToGroup(UserID uuid.UUID, GroupID uuid.UUID) (bool, error) {
 	var group models.Group
 
-	grouprecord := Instance.Where("`groups`.enabled = ?", 1).
-		Where("`groups`.id = ?", GroupID).
-		Where("`groups`.owner_id = ?", UserID).
-		Find(&group)
+	grouprecord := Instance.Where(&models.Group{Enabled: true, OwnerID: UserID}).Where(&models.GormModel{ID: GroupID}).Find(&group)
 
 	if grouprecord.Error != nil {
 		return false, grouprecord.Error
@@ -84,15 +80,10 @@ func GetGroupMembersFromWishlist(WishlistID uuid.UUID) ([]models.Group, error) {
 	var groups []models.Group
 
 	groupsrecords := Instance.
-		Where("`groups`.enabled = ?", 1).
-		Joins("JOIN `group_memberships` on `groups`.id = `group_memberships`.group_id").
-		Where("`group_memberships`.enabled = ?", 1).
-		Joins("JOIN `users` on `group_memberships`.member_id = `users`.id").
-		Where("`users`.enabled = ?", 1).
-		Joins("JOIN `wishlist_memberships` on `groups`.id = `wishlist_memberships`.group_id").
-		Where("`wishlist_memberships`.enabled = ?", 1).
-		Where("`wishlist_memberships`.wishlist_id = ?", WishlistID).
-		Group("groups.ID").
+		Where(&models.Group{Enabled: true}).
+		Joins("JOIN group_memberships ON groups.id = group_memberships.group_id", Instance.Where(&models.GroupMembership{Enabled: true})).
+		Joins("JOIN users ON group_memberships.member_id = users.id", Instance.Where(&models.User{Enabled: true})).
+		Joins("JOIN wishlist_memberships ON groups.id = wishlist_memberships.group_id", Instance.Where(&models.WishlistMembership{WishlistID: WishlistID, Enabled: true})).
 		Find(&groups)
 
 	if groupsrecords.Error != nil {
@@ -110,10 +101,9 @@ func GetGroupsAUserIsAMemberOf(UserID uuid.UUID) ([]models.Group, error) {
 	var groups []models.Group
 
 	// Retrieve groups that the user is a member of
-	groupRecords := Instance.Where("`groups`.enabled = ?", 1).
-		Joins("JOIN group_memberships on group_memberships.group_id = groups.id").
-		Where("`group_memberships`.enabled = ?", 1).
-		Where("`group_memberships`.member_id = ?", UserID).
+	groupRecords := Instance.Distinct().
+		Where(&models.Group{Enabled: true}).
+		Joins("JOIN group_memberships ON group_memberships.group_id = groups.id", Instance.Where(&models.GroupMembership{Enabled: true, MemberID: UserID})).
 		Find(&groups)
 
 	if groupRecords.Error != nil {
@@ -135,10 +125,9 @@ func GetGroupMembershipsFromGroup(GroupID uuid.UUID) ([]models.GroupMembership, 
 	var groupMemberships []models.GroupMembership
 
 	groupmembershipRecords := Instance.
-		Where("`group_memberships`.enabled = ?", 1).
-		Where("`group_memberships`.group_id = ?", GroupID).
-		Joins("JOIN `users` on `group_memberships`.member_id = `users`.id").
-		Where("`users`.enabled = ?", 1).Find(&groupMemberships)
+		Where(&models.GroupMembership{Enabled: true, GroupID: GroupID}).
+		Joins("JOIN users ON group_memberships.member_id = users.id", Instance.Where(&models.User{Enabled: true})).
+		Find(&groupMemberships)
 
 	if groupmembershipRecords.Error != nil {
 		return []models.GroupMembership{}, groupmembershipRecords.Error
@@ -158,10 +147,7 @@ func GetGroupMembershipsFromGroup(GroupID uuid.UUID) ([]models.GroupMembership, 
 func VerifyIfGroupWithSameNameAndOwnerDoesNotExist(GroupName string, GroupOwnerID uuid.UUID) (bool, error) {
 	var group = []models.Group{}
 
-	groupRecords := Instance.Where("`groups`.enabled = ?", 1).
-		Where("`groups`.name = ?", GroupName).
-		Where("`groups`.owner_id = ?", GroupOwnerID).
-		Find(&group)
+	groupRecords := Instance.Where(&models.Group{Enabled: true, Name: GroupName, OwnerID: GroupOwnerID}).Find(&group)
 
 	if groupRecords.Error != nil {
 		return true, groupRecords.Error
@@ -174,7 +160,7 @@ func VerifyIfGroupWithSameNameAndOwnerDoesNotExist(GroupName string, GroupOwnerI
 // Verify if a user ID is a member of a group
 func VerifyUserMembershipToGroup(UserID uuid.UUID, GroupID uuid.UUID) (bool, error) {
 	var groupmembership models.GroupMembership
-	groupmembershiprecord := Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group_id = ?", GroupID).Where("`group_memberships`.member_id = ?", UserID).Find(&groupmembership)
+	groupmembershiprecord := Instance.Where(&models.GroupMembership{Enabled: true, GroupID: GroupID, MemberID: UserID}).Find(&groupmembership)
 	if groupmembershiprecord.Error != nil {
 		return false, groupmembershiprecord.Error
 	} else if groupmembershiprecord.RowsAffected != 1 {
@@ -187,7 +173,7 @@ func VerifyUserMembershipToGroup(UserID uuid.UUID, GroupID uuid.UUID) (bool, err
 func VerifyGroupMembershipToWishlist(WishlistID uuid.UUID, GroupID uuid.UUID) (bool, error) {
 	var wishlistmembership models.WishlistMembership
 
-	wishlistmembershipprecord := Instance.Where("`wishlist_memberships`.enabled = ?", 1).Where("`wishlist_memberships`.wishlist_id = ?", WishlistID).Where("`wishlist_memberships`.group_id = ?", GroupID).Find(&wishlistmembership)
+	wishlistmembershipprecord := Instance.Where(&models.WishlistMembership{Enabled: true, WishlistID: WishlistID, GroupID: GroupID}).Find(&wishlistmembership)
 	if wishlistmembershipprecord.Error != nil {
 		return false, wishlistmembershipprecord.Error
 	} else if wishlistmembershipprecord.RowsAffected != 1 {
@@ -202,11 +188,8 @@ func GetGroupUsingGroupIDAndMembershipUsingUserID(UserID uuid.UUID, GroupID uuid
 	var group = models.Group{}
 
 	groupRecord := Instance.
-		Where("`groups`.enabled = ?", 1).
-		Joins("JOIN group_memberships on group_memberships.group_id = groups.id").
-		Where("`group_memberships`.enabled = ?", 1).
-		Where("`group_memberships`.member_id = ?", UserID).
-		Where("`group_memberships`.group_id = ?", GroupID).
+		Where(&models.Group{Enabled: true}).
+		Joins("JOIN group_memberships ON group_memberships.group_id = groups.id", Instance.Where(&models.GroupMembership{Enabled: true, MemberID: UserID, GroupID: GroupID})).
 		Find(&group)
 
 	if groupRecord.Error != nil {
@@ -221,7 +204,7 @@ func GetGroupUsingGroupIDAndMembershipUsingUserID(UserID uuid.UUID, GroupID uuid
 func GetGroupUsingGroupIDAndUserIDAsOwner(UserID uuid.UUID, GroupID uuid.UUID) (models.Group, error) {
 	var group = models.Group{}
 
-	groupRecord := Instance.Where("`groups`.enabled = ?", 1).Where("`groups`.id = ?", GroupID).Where("`groups`.owner_id = ?", UserID).Find(&group)
+	groupRecord := Instance.Where(&models.Group{Enabled: true, OwnerID: UserID}).Where(&models.GormModel{ID: GroupID}).Find(&group)
 	if groupRecord.Error != nil {
 		return group, groupRecord.Error
 	} else if groupRecord.RowsAffected != 1 {
@@ -236,7 +219,7 @@ func GetGroupMembershipByGroupIDAndMemberID(GroupID uuid.UUID, MemberID uuid.UUI
 	groupmembership = models.GroupMembership{}
 	err = nil
 
-	groupMembershipRecord := Instance.Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.group_id = ?", GroupID).Where("`group_memberships`.member_id = ?", MemberID).Find(&groupmembership)
+	groupMembershipRecord := Instance.Where(&models.GroupMembership{Enabled: true, GroupID: GroupID, MemberID: MemberID}).Find(&groupmembership)
 	if groupMembershipRecord.Error != nil {
 		return groupmembership, groupMembershipRecord.Error
 	} else if groupMembershipRecord.RowsAffected != 1 {
