@@ -159,7 +159,6 @@ func RedactUserObject(user models.User) (userObject models.User) {
 
 	// Redact user information
 	userObject.Password = "REDACTED"
-	userObject.Email = "REDACTED"
 	userObject.VerificationCode = "REDACTED"
 	userObject.ResetCode = "REDACTED"
 	userObject.ResetExpiration = time.Now()
@@ -200,6 +199,19 @@ func GetAllUsers() (usersRedacted []models.User, err error) {
 	for _, user := range users {
 		redactedUser := RedactUserObject(user)
 		usersRedacted = append(usersRedacted, redactedUser)
+	}
+
+	return
+}
+
+func UpdateUserInDB(userOriginal models.User) (user models.User, err error) {
+	err = nil
+	user = userOriginal
+
+	record := Instance.Save(&user)
+
+	if record.Error != nil {
+		return user, record.Error
 	}
 
 	return

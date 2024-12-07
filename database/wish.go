@@ -8,69 +8,45 @@ import (
 )
 
 // Get wishlist id from wish id
-func GetWishlistFromWish(WishID uuid.UUID) (bool, uuid.UUID, error) {
+func GetWishlistIDFromWish(WishID uuid.UUID) (*uuid.UUID, error) {
 	var wish models.Wish
-	wishrecord := Instance.Where("`wishes`.enabled = ?", 1).Where("`wishes`.id = ?", WishID).Find(&wish)
-	if wishrecord.Error != nil {
-		return false, uuid.UUID{}, wishrecord.Error
-	} else if wishrecord.RowsAffected != 1 {
-		return false, uuid.UUID{}, nil
+
+	wishRecord := Instance.Where("`wishes`.enabled = ?", 1).Where("`wishes`.id = ?", WishID).Find(&wish)
+
+	if wishRecord.Error != nil {
+		return nil, wishRecord.Error
+	} else if wishRecord.RowsAffected != 1 {
+		return nil, nil
 	}
 
-	return true, wish.WishlistID, nil
+	return &wish.WishlistID, nil
 }
 
 // Get wish by wish ID
-func GetWishByWishID(wishID uuid.UUID) (bool, models.Wish, error) {
-
+func GetWishByWishID(wishID uuid.UUID) (*models.Wish, error) {
 	var wish models.Wish
 
 	wishRecord := Instance.Where("`wishes`.enabled = ?", 1).Where("`wishes`.id = ?", wishID).Find(&wish)
 
 	if wishRecord.Error != nil {
-		return false, models.Wish{}, wishRecord.Error
+		return nil, wishRecord.Error
 	} else if wishRecord.RowsAffected != 1 {
-		return false, models.Wish{}, nil
+		return nil, nil
 	}
 
-	return true, wish, nil
-
+	return &wish, nil
 }
 
-func UpdateWishValuesInDatabase(wishID uuid.UUID, wishName string, wishNote string, wishURL string, wishprice float64) error {
+func UpdateWishInDB(wishOriginal models.Wish) (wish models.Wish, err error) {
+	wish = wishOriginal
+	err = nil
 
-	var wish models.Wish
-
-	wishRecord := Instance.Model(wish).Where("`wishes`.enabled = ?", 1).Where("`wishes`.ID = ?", wishID).Update("name", wishName)
+	wishRecord := Instance.Save(wish)
 	if wishRecord.Error != nil {
-		return wishRecord.Error
-	} else if wishRecord.RowsAffected != 1 {
-		return errors.New("Name not changed in database.")
+		return wish, wishRecord.Error
 	}
 
-	wishRecord = Instance.Model(wish).Where("`wishes`.enabled = ?", 1).Where("`wishes`.ID = ?", wishID).Update("note", wishNote)
-	if wishRecord.Error != nil {
-		return wishRecord.Error
-	} else if wishRecord.RowsAffected != 1 {
-		return errors.New("Note not changed in database.")
-	}
-
-	wishRecord = Instance.Model(wish).Where("`wishes`.enabled = ?", 1).Where("`wishes`.ID = ?", wishID).Update("url", wishURL)
-	if wishRecord.Error != nil {
-		return wishRecord.Error
-	} else if wishRecord.RowsAffected != 1 {
-		return errors.New("URL not changed in database.")
-	}
-
-	wishRecord = Instance.Model(wish).Where("`wishes`.enabled = ?", 1).Where("`wishes`.ID = ?", wishID).Update("price", wishprice)
-	if wishRecord.Error != nil {
-		return wishRecord.Error
-	} else if wishRecord.RowsAffected != 1 {
-		return errors.New("Price not changed in database.")
-	}
-
-	return nil
-
+	return
 }
 
 // Get wishes from wishlist

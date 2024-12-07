@@ -269,30 +269,6 @@ func SetUserVerification(userID uuid.UUID, verified bool) error {
 	return nil
 }
 
-// Update user values
-func UpdateUserValuesByUserID(userID uuid.UUID, email string, password string) error {
-
-	var user models.User
-
-	userrecords := Instance.Model(user).Where("`users`.enabled = ?", 1).Where("`users`.ID = ?", userID).Update("email", email)
-	if userrecords.Error != nil {
-		return userrecords.Error
-	}
-	if userrecords.RowsAffected != 1 {
-		return errors.New("Email not changed in database.")
-	}
-
-	userrecords = Instance.Model(user).Where("`users`.enabled = ?", 1).Where("`users`.ID = ?", userID).Update("password", password)
-	if userrecords.Error != nil {
-		return userrecords.Error
-	}
-	if userrecords.RowsAffected != 1 {
-		return errors.New("Password not changed in database.")
-	}
-
-	return nil
-}
-
 // Set group to disabled
 func DeleteGroup(GroupID uuid.UUID) error {
 	var group models.Group

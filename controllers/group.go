@@ -132,13 +132,60 @@ func RegisterGroup(context *gin.Context) {
 		// Create a new instance of the GroupMembership model
 		var groupMembership models.GroupMembership
 
+		newMember, err := database.GetUserInformationByEmail(member)
+		if err != nil {
+			log.Println("Failed to get user by e-mail. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user by e-mail."})
+			context.Abort()
+			return
+		}
+
 		// Set the member and group ID for the new group membership
-		groupMembership.MemberID = member
+		groupMembership.MemberID = newMember.ID
 		groupMembership.GroupID = group.ID
 		groupMembership.ID = uuid.New()
 
 		// Create the group membership in the database
-		_ = database.Instance.Create(&groupMembership)
+		_, err = database.CreateGroupMembershipInDB(groupMembership)
+		if err != nil {
+			log.Println("Failed to create group memberships. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group memberships."})
+			context.Abort()
+			return
+		}
+	}
+
+	for _, wishlistID := range groupCreationRequest.Wishlists {
+		// Create a new instance of the GroupMembership model
+		var wishlistMembership models.WishlistMembership
+
+		wishlist, err := database.GetWishlist(wishlistID)
+		if err != nil {
+			log.Println("Failed to get wishlist. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wishlist."})
+			context.Abort()
+			return
+		}
+
+		if wishlist.OwnerID != userID {
+			context.JSON(http.StatusUnauthorized, gin.H{"error": "Failed to add wishlist. You must own the wishlist."})
+			context.Abort()
+			return
+		}
+
+		// Set the member and group ID for the new group membership
+		wishlistMembership.GroupID = group.ID
+		wishlistMembership.WishlistID = wishlistID
+		wishlistMembership.ID = uuid.New()
+
+		// Create the group membership in the database
+		_, err = database.CreateWishlistMembershipInDB(wishlistMembership)
+		if err != nil {
+			log.Println("Failed to create wishlist membership. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create wishlist membership."})
+			context.Abort()
+			return
+		}
 	}
 
 	// Get a list of groups with the current user as the owner
@@ -211,21 +258,19 @@ func JoinGroup(context *gin.Context) {
 		// Create a new instance of the GroupMembership model
 		var groupMembershipDB models.GroupMembership
 
-		// Set the member ID for the new group membership
-		groupMembershipDB.MemberID = member
-
-		// Verify that the user exists
-		_, err := database.GetUserInformation(member)
+		memberObject, err := database.GetUserInformationByEmail(member)
 		if err != nil {
-			// If the user does not exist, return a Bad Request response
-			log.Println("Failed to load user from database. Error: " + err.Error())
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load user from database."})
+			log.Println("Failed to find user. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find user."})
 			context.Abort()
 			return
 		}
 
+		// Set the member ID for the new group membership
+		groupMembershipDB.MemberID = memberObject.ID
+
 		// Verify that the user is not already a member of the group
-		membershipStatus, err := database.VerifyUserMembershipToGroup(member, groupIDInt)
+		membershipStatus, err := database.VerifyUserMembershipToGroup(memberObject.ID, groupIDInt)
 		if err != nil {
 			// If there is an error verifying the user's membership, return a Bad Request response
 			log.Println("Failed to verify membership to group. Error: " + err.Error())
@@ -288,7 +333,7 @@ func JoinGroup(context *gin.Context) {
 // It then deletes the group membership and gets an updated list of groups with the owner. It returns a success message and the updated list of groups.
 func RemoveFromGroup(context *gin.Context) {
 	// Bind groupmembership request and get group ID from URL parameter
-	var groupMembershipRequest models.GroupMembership
+	var groupMembershipRequest models.GroupMembershipRemovalRequest
 
 	groupID := context.Param("group_id")
 	if err := context.ShouldBindJSON(&groupMembershipRequest); err != nil {
@@ -319,7 +364,7 @@ func RemoveFromGroup(context *gin.Context) {
 	membershipStatus, err := database.VerifyUserMembershipToGroup(groupMembershipRequest.MemberID, groupIDInt)
 	if err != nil {
 		log.Println("Failed to verify membership to group. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membershop to group."})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership to group."})
 		context.Abort()
 		return
 	} else if !membershipStatus {
@@ -330,15 +375,20 @@ func RemoveFromGroup(context *gin.Context) {
 	}
 
 	// Verify group is owned by requester
-	_, err = database.GetGroupUsingGroupIDAndUserIDAsOwner(groupMembershipRequest.GroupID, userID)
+	group, err := database.GetGroupInformation(groupIDInt)
 	if err != nil {
 		// Return error if user is not owner of group
+		log.Println("Failed to get group object. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get group object."})
+		context.Abort()
+		return
+	} else if group.OwnerID != userID {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Only owners can edit their group memberships."})
 		context.Abort()
 		return
 	}
 
-	if userID == groupMembershipRequest.MemberID {
+	if group.OwnerID == groupMembershipRequest.MemberID {
 		// Return error if user is owner and trying to remove themselves
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Owner cannot be removed as member."})
 		context.Abort()
@@ -559,6 +609,69 @@ func GetGroups(context *gin.Context) {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get your groups."})
 		context.Abort()
 		return
+	}
+
+	ownedString, ownedOkay := context.GetQuery("owned")
+	if ownedOkay {
+		if ownedString == "true" {
+			newGroupList := []models.GroupUser{}
+			for _, group := range groupsWithOwner {
+				if group.Owner.ID == userID {
+					newGroupList = append(newGroupList, group)
+				}
+			}
+			groupsWithOwner = newGroupList
+		}
+	}
+
+	memberOfWishlistString, memberOfWishlistOkay := context.GetQuery("memberOfWishlistID")
+	if memberOfWishlistOkay {
+		memberOfWishlist, err := uuid.Parse(memberOfWishlistString)
+		if err != nil {
+			log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
+			context.Abort()
+			return
+		}
+
+		newGroupList := []models.GroupUser{}
+		for _, group := range groupsWithOwner {
+			membership, err := database.VerifyGroupMembershipToWishlist(memberOfWishlist, group.ID)
+			if err != nil {
+				log.Println("Failed to validate group membership. Error: " + err.Error())
+				context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate group membership."})
+				context.Abort()
+				return
+			} else if membership {
+				newGroupList = append(newGroupList, group)
+			}
+		}
+		groupsWithOwner = newGroupList
+	}
+
+	notAMemberOfWishlistString, notAMemberOfWishlistOkay := context.GetQuery("notAMemberOfWishlistID")
+	if notAMemberOfWishlistOkay {
+		notAMemberOfWishlistID, err := uuid.Parse(notAMemberOfWishlistString)
+		if err != nil {
+			log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
+			context.Abort()
+			return
+		}
+
+		newGroupList := []models.GroupUser{}
+		for _, group := range groupsWithOwner {
+			membership, err := database.VerifyGroupMembershipToWishlist(notAMemberOfWishlistID, group.ID)
+			if err != nil {
+				log.Println("Failed to validate group membership. Error: " + err.Error())
+				context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate group membership."})
+				context.Abort()
+				return
+			} else if !membership {
+				newGroupList = append(newGroupList, group)
+			}
+		}
+		groupsWithOwner = newGroupList
 	}
 
 	// Sort groups by creation date
@@ -941,4 +1054,112 @@ func ConvertGroupsToGroupObjects(groups []models.Group) (groupObjects []models.G
 	}
 
 	return
+}
+
+func APIAddWishlistsToGroup(context *gin.Context) {
+	// Create a new instance of model
+	var wishlistsRequest models.GroupAddWishlistsRequest
+	var groupIDString = context.Param("group_id")
+
+	if err := context.ShouldBindJSON(&wishlistsRequest); err != nil {
+		// If there is an error binding the request, return a Bad Request response
+		log.Println("Failed to parse request. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
+		context.Abort()
+		return
+	}
+
+	if len(wishlistsRequest.Wishlists) < 1 {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You must provide one or more wishlists."})
+		context.Abort()
+		return
+	}
+
+	// Get the user ID from the Authorization header of the request
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		log.Println("Failed to parse header. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse header."})
+		context.Abort()
+		return
+	}
+
+	// Parse the group ID from string to int
+	groupID, err := uuid.Parse(groupIDString)
+	if err != nil {
+		// If there is an error parsing the group ID, return a Bad Request response
+		log.Println("Failed to parse group ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
+		context.Abort()
+		return
+	}
+
+	for _, wishlistID := range wishlistsRequest.Wishlists {
+		var wishlistMembership models.WishlistMembership
+
+		wishlist, err := database.GetWishlist(wishlistID)
+		if err != nil {
+			log.Println("Failed to find wishlist. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
+			context.Abort()
+			return
+		} else if wishlist.OwnerID != userID {
+			context.JSON(http.StatusUnauthorized, gin.H{"error": "You can only add wishlists you own."})
+			context.Abort()
+			return
+		}
+
+		wishlistMembership.WishlistID = wishlistID
+
+		membershipStatus, err := database.VerifyGroupMembershipToWishlist(wishlistID, groupID)
+		if err != nil {
+			log.Println("Failed to verify membership to group. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
+			context.Abort()
+			return
+		} else if membershipStatus {
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Group membership already exists for wishlist."})
+			context.Abort()
+			return
+		}
+
+		membershipStatus, err = database.VerifyUserMembershipToGroup(userID, groupID)
+		if err != nil {
+			log.Println("Failed to verify membership to group. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
+			context.Abort()
+			return
+		} else if !membershipStatus {
+			context.JSON(http.StatusBadRequest, gin.H{"error": "You must be a member of the group."})
+			context.Abort()
+			return
+		}
+
+		wishlistMembership.GroupID = groupID
+		wishlistMembership.ID = uuid.New()
+
+		_, err = database.CreateWishlistMembershipInDB(wishlistMembership)
+		if err != nil {
+			log.Println("Failed to create group membership for wishlist in database. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group membership for wishlist in database."})
+			context.Abort()
+			return
+		}
+	}
+
+	groupsWithOwner, err := GetGroupObjects(userID)
+	if err != nil {
+		log.Println("Failed to get groups for user. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get groups for user."})
+		context.Abort()
+		return
+	}
+
+	// Sort groups by creation date
+	sort.Slice(groupsWithOwner, func(i, j int) bool {
+		return groupsWithOwner[j].CreatedAt.Before(groupsWithOwner[i].CreatedAt)
+	})
+
+	// Return a Created response with a message indicating that the group member(s) joined successfully, and the updated list of groups
+	context.JSON(http.StatusCreated, gin.H{"message": "Wishlists added to group.", "groups": groupsWithOwner})
 }

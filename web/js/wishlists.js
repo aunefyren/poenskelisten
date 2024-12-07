@@ -30,6 +30,14 @@ function load_page(result) {
     }
 
     var html = `
+                <!-- The Modal -->
+                <div id="myModal" class="modal closed">
+                    <span class="close selectable" style="padding: 0 0.25em;" onclick="toggleModal()">&times;</span>
+                    <div class="modalContent" id="modalContent">
+                    </div>
+                    <div id="caption"></div>
+                </div>
+
                 <div class="" id="front-page">
                     
                     <div class="module">
@@ -71,31 +79,7 @@ function load_page(result) {
                         </div>
 
                         <div id="wishlist-input" class="wishlist-input">
-                            <form action="" class="icon-border" onsubmit="event.preventDefault(); create_wishlist('${user_id}');">
-                                
-                                <label for="wishlist_name">Create a new wishlist:</label><br>
-
-                                <input type="text" name="wishlist_name" id="wishlist_name" placeholder="Wishlist name" autocomplete="off" required />
-                                
-                                <input type="text" name="wishlist_description" id="wishlist_description" placeholder="Wishlist description" autocomplete="off" required />
-
-                                <input class="clickable" onclick="toggeWishListDate('wishlist_date_wrapper_new')" style="margin-top: 2em;" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" checked>
-                                <label for="wishlist_expires" style="margin-bottom: 2em;" class="clickable">Does the wishlist expire?</label><br>
-
-                                <div id="wishlist_date_wrapper_new" class="wishlist-date-wrapper wishlist-date-wrapper-extended">
-                                    <label for="wishlist_date">When does your wishlist expire?</label><br>
-                                    <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" autocomplete="off" />
-                                </div>
-
-                                <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" checked>
-                                <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
-
-                                <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm">
-                                <label for="wishlist_public" style="margin-bottom: 1em;" class="clickable">Make this wishlist public and shareable.</label><br>
-                                
-                                <button id="register-button" type="submit">Create wishlist</button>
-
-                            </form>
+                            <button id="register-button" onClick="createNewWishlist(false, '${user_id}');" type="" href="/">Create new wishlist</button>
                         </div>
       
                     </div>
@@ -142,7 +126,7 @@ function get_wishlists(user_id){
                 clearResponse();
                 wishlists = result.wishlists;
                 console.log(result);
-                place_wishlists(wishlists, user_id);
+                placeWishlists(wishlists, user_id);
 
             }
 
@@ -158,7 +142,7 @@ function get_wishlists(user_id){
     return false;
 }
 
-function place_wishlists(wishlists_array, user_id) {
+function placeWishlists(wishlists_array, user_id) {
 
     var html_regular = ''
     var html_expired = ''
@@ -198,9 +182,9 @@ function place_wishlists(wishlists_array, user_id) {
         html += `<div class="wishlist-title clickable underline" onclick="location.href = '/wishlists/${wishlists_array[i].id}'" title="Go to wishlist">`;
         html += '<div class="profile-icon">'
         html += '<img class="icon-img" src="/assets/list.svg">'
-        html += '</div><b>'
+        html += `</div><b id="wishlistName-${wishlists_array[i].id}">`
         html += wishlists_array[i].name
-        html += '</div></b>'
+        html += '</b></div>'
 
         html += '<div class="profile" title="Wishlist owner">'
         html += '<div class="profile-name">'
@@ -234,95 +218,34 @@ function place_wishlists(wishlists_array, user_id) {
         }
         collaboratorsString += ']'
 
-        if(owner_id == user_id) {
-            html += `<div class="profile-icon clickable" onclick="toggle_wishlist('${user_id}', '${wishlists_array[i].id}', '${owner_id}', ${members_string}, ${collaboratorsString})" title="Expandable">`
-            html += '<img id="wishlist_' + wishlists_array[i].id + '_arrow" class="icon-img " src="/assets/chevron-right.svg">'
-            html += '</div>'
-        }
+        html += `
+            <div class="profile-icon clickable" onclick="showGroupsInWishlist('${wishlists_array[i].id}', '${user_id}')" title="Wishlist groups">
+                <img class="icon-img " src="/assets/users.svg">
+            </div>
+        `;
+
+        html += `
+            <div class="profile-icon clickable" onclick="showWishlistCollaboratorsInWishlist('${wishlists_array[i].id}', '${user_id}')" title="Wishlist collaborators">
+                <img class="icon-img " src="/assets/smile.svg">
+            </div>
+        `;
 
         if(owner_id == user_id) {
-            html += `<div class="profile-icon clickable" onclick="delete_wishlist('${wishlists_array[i].id}', '${user_id}')" title="Delete wishlist">`
+            html += `
+                <div class="profile-icon clickable" onclick="editWishlist('${user_id}', '${wishlists_array[i].id}')" title="Edit wishlist">
+                    <img class="icon-img " src="/assets/edit.svg">
+                </div>
+            `;
+
+            html += `<div class="profile-icon clickable" onclick="deleteWishlist('${wishlists_array[i].id}', '${user_id}')" title="Delete wishlist">`
             html += '<img class="icon-img " src="/assets/trash-2.svg">'
-            html += '</div>'
+            html += '</div>' 
         }
 
         html += '</div>'
 
         html += '</div>'
 
-        html += '<div class="group-members collapsed" id="wishlist_' + wishlists_array[i].id + '_members">'
-        for(var j = 0; j < wishlists_array[i].members.length; j++) {
-            if(j == 0) {
-                html += '<div class="text-body">Available in these groups:</div>'
-            }
-
-            html += '<div class="group-member hoverable-opacity" title="Group">'
-
-            html += `<div class="group-title clickable underline" onclick="location.href = '/groups/${wishlists_array[i].members[j].id}'" title="Go to group">`;
-
-            html += '<div class="profile-icon">'
-            html += '<img class="icon-img " src="/assets/users.svg">'
-            html += '</div>'
-
-            html += wishlists_array[i].members[j].name
-
-            html += '</div>'
-
-            if(owner_id == user_id) {
-                html += `<div class="profile-icon clickable" onclick="remove_member('${wishlists_array[i].id}','${wishlists_array[i].members[j].id}', '${user_id}')" title="Remove wishlist from group">`;
-                html += '<img class="icon-img " src="/assets/x.svg">'
-                html += '</div>'
-            }
-            html += '</div>'
-        }
-
-        if(owner_id == user_id) {
-            html += '<hr style="margin: 1.75em 0.5em;">'
-            html += `<form action="" class="" onsubmit="event.preventDefault(); add_groups('${wishlists_array[i].id}', '${user_id}');">`;
-            html += '<label for="wishlist-input-members-' + wishlists_array[i].id + '">Add to groups:</label><br>';
-            html += '<select name="wishlist_members_' + wishlists_array[i].id + '" id="wishlist-input-members-' + wishlists_array[i].id + '" multiple>';
-            html += '</select>';
-            html += '<button id="register-button" type="submit" href="/">Add wishlist to groups</button>';
-            html += '</form>';
-        }
-
-        html += '<hr style="margin: 1.75em 0.5em;">'
-
-        for(var j = 0; j < wishlists_array[i].collaborators.length; j++) {
-            if(j == 0) {
-                html += '<div class="text-body">Wishlist collaborators:</div>'
-            }
-
-            html += '<div class="group-member hoverable-opacity" title="User">'
-
-            html += '<div class="group-title">';
-
-            html += `<div class="profile-icon icon-border icon-background" id="wishlist_${wishlists_array[i].id}_collaborator_${wishlists_array[i].collaborators[j].user.id}">`
-            html += '<img class="icon-img " src="/assets/user.svg">'
-            html += '</div>'
-
-            html += `${wishlists_array[i].collaborators[j].user.first_name} ${wishlists_array[i].collaborators[j].user.last_name}`
-
-            html += '</div>'
-
-            if(owner_id == user_id) {
-                html += `<div class="profile-icon clickable" onclick="removeCollaborator('${wishlists_array[i].id}', '${wishlists_array[i].collaborators[j].user.id}', '${user_id}')" title="Remove collaborator from wishlist">`;
-                html += '<img class="icon-img " src="/assets/x.svg">'
-                html += '</div>'
-            }
-            html += '</div>'
-        }
-
-        if(owner_id == user_id) {
-            html += `<form action="" class="" onsubmit="event.preventDefault(); addCollaborators('${wishlists_array[i].id}', '${user_id}');">`;
-            html += '<label for="wishlist-input-collaborators-' + wishlists_array[i].id + '">Add users to wishlist as collaborators:</label><br>';
-            html += '<select name="wishlist_collaborators_' + wishlists_array[i].id + '" id="wishlist-input-collaborators-' + wishlists_array[i].id + '" multiple>';
-            html += '</select>';
-            html += '<button id="register-collaborators-button" type="submit" href="/">Add collaborators to wishlist</button>';
-            html += '</form>';
-        }
-
-        html += '</div>'
 
         html += '</div>'
 
@@ -365,134 +288,6 @@ function place_wishlists(wishlists_array, user_id) {
             GetProfileImage(wishlists_array[i].collaborators[j].user.id, `wishlist_${wishlists_array[i].id}_collaborator_${wishlists_array[i].collaborators[j].user.id}`)
         }
     }
-}
-
-function create_wishlist(user_id) {
-    var wishlist_name = document.getElementById("wishlist_name").value;
-    var wishlist_description = document.getElementById("wishlist_description").value;
-    var wishlist_date = document.getElementById("wishlist_date").value;
-    var wishlist_expires = document.getElementById("wishlist_expires").checked;
-    var wishlist_claimable = document.getElementById("wishlist_claimable").checked;
-    var wishlist_public = document.getElementById("wishlist_public").checked;
-    
-    if(wishlist_expires) {
-        try {
-            var wishlist_date_object = new Date(wishlist_date)
-            var wishlist_date_string = wishlist_date_object.toISOString();
-        } catch(e) {
-            alert("Invalid date selected.");
-            return;
-        }
-    } else {
-        var wishlist_date_string = "2006-01-02T15:04:05.000Z";
-    }
-
-    var form_obj = { 
-        "name" : wishlist_name,
-        "description" : wishlist_description,
-        "date": wishlist_date_string,
-        "claimable": wishlist_claimable,
-        "expires": wishlist_expires,
-        "public": wishlist_public
-    };
-
-    var form_data = JSON.stringify(form_obj);
-
-    console.log(form_data)
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message);
-                console.log(result);
-
-                console.log("User ID: " + user_id);
-
-                wishlists = result.wishlists;
-                place_wishlists(wishlists, user_id);
-                clear_data();
-                
-            }
-
-        } else {
-            info("Saving wishlist...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlists");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send(form_data);
-    return false;
-
-}
-
-function clear_data() {
-    document.getElementById("wishlist_name").value = "";
-    document.getElementById("wishlist_description").value = "";
-    document.getElementById("wishlist_date").value = "";
-}
-
-function delete_wishlist(wishlist_id, user_id) {
-
-    if(!confirm("Are you sure you want to delete this wishlist?")) {
-        return;
-    }
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message);
-                console.log(result);
-
-                console.log("User ID: " + user_id);
-
-                wishlists = result.wishlists;
-                place_wishlists(wishlists, user_id);
-                
-            }
-
-        } else {
-            info("Deleting wishlist...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("delete", api_url + "auth/wishlists/" + wishlist_id);
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send();
-    return false;
-
 }
 
 function toggle_wishlist(user_id, wishlist_id, owner_id, member_array, collaboratorArray) {
@@ -615,125 +410,6 @@ function place_groups(group_array, wishlist_id, owner_id, user_id, member_array)
     }
 }
 
-function add_groups(wishlist_id, user_id) {
-
-    var selected_members = [];
-    var select_list = document.getElementById("wishlist-input-members-" + wishlist_id)
-
-    for (var i=0; i < select_list.options.length; i++) {
-        opt = select_list.options[i];
-    
-        if (opt.selected) {
-            selected_members.push(opt.value);
-        }
-    }
-
-    var form_obj = { 
-        "groups": selected_members
-    };
-
-    var form_data = JSON.stringify(form_obj);
-
-    console.log(form_data)
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message);
-                console.log(result);
-
-                wishlists = result.wishlists;
-
-                console.log("Placing wishlists after member is added: ")
-                place_wishlists(wishlists, user_id);
-                
-            }
-
-        } else {
-            info("Adding groups...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlists/" + wishlist_id + "/join");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send(form_data);
-    return false;
-
-}
-
-function remove_member(wishlist_id, group_id, user_id) {
-
-    if(!confirm("Are you sure you want to remove your wishlist from this group?")) {
-        return;
-    }
-
-    var form_obj = { 
-        "group_id" : group_id
-    };
-
-    var form_data = JSON.stringify(form_obj);
-
-    console.log(form_data)
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message);
-                console.log(result);
-
-                console.log("User ID: " + user_id);
-
-                wishlists = result.wishlists;
-
-                console.log("Placing groups after member is removed: ")
-                place_wishlists(wishlists, user_id);
-                
-            }
-
-        } else {
-            info("Removing member...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlists/" + wishlist_id + "/remove");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send(form_data);
-    return false;
-
-}
-
 function GetProfileImage(userID, divID) {
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -786,181 +462,6 @@ function PlaceProfileImage(imageBase64, divID) {
     }
 }
 
-function getCollaborators(owner_id, wishlist_id, user_id, collaboratorArray){
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                clearResponse();
-                users = result.users;
-                console.log(users);
-                placeCollaborators(users, wishlist_id, owner_id, user_id, collaboratorArray);
-
-            }
-
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "auth/users");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send();
-    return false;
-}
-
-function placeCollaborators(userArray, wishlist_id, owner_id, user_id, collaboratorArray) {
-    var select_list = document.getElementById("wishlist-input-collaborators-" + wishlist_id)
-    select_list.innerHTML = "";
-
-    console.log(userArray)
-
-    for(var i = 0; i < userArray.length; i++) {
-
-        var found = false;
-        for(var j = 0; j < userArray.length; j++) {
-            if(collaboratorArray[j] == userArray[i].id) {
-                found = true;
-                break;
-            }
-        }
-        if(found || userArray[i].id == owner_id) {
-            continue;
-        }
-
-        var option = document.createElement("option");
-        option.value = userArray[i].id
-        option.text = `${userArray[i].first_name} ${userArray[i].last_name}`
-        select_list.add(option, select_list[0]);
-    }
-}
-
-function addCollaborators(wishlist_id, user_id) {
-    var selected_collaborators = [];
-    var select_list = document.getElementById("wishlist-input-collaborators-" + wishlist_id)
-
-    for (var i=0; i < select_list.options.length; i++) {
-        opt = select_list.options[i];
-    
-        if (opt.selected) {
-            selected_collaborators.push(opt.value);
-        }
-    }
-
-    var form_obj = { 
-        "users": selected_collaborators
-    };
-
-    var form_data = JSON.stringify(form_obj);
-
-    console.log(form_data)
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message);
-                console.log(result);
-
-                wishlists = result.wishlists;
-
-                console.log("Placing wishlists after collaborator is added: ")
-                place_wishlists(wishlists, user_id);
-                
-            }
-
-        } else {
-            info("Adding users...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlists/" + wishlist_id + "/collaborate");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send(form_data);
-    return false;
-}
-
-function removeCollaborator(wishlist_id, collaborator_id, user_id) {
-
-    if(!confirm("Are you sure you want to remove this collaborator from your wishlist?")) {
-        return;
-    }
-
-    var form_obj = { 
-        "user_id" : collaborator_id
-    };
-
-    var form_data = JSON.stringify(form_obj);
-
-    console.log(form_data)
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message);
-                console.log(result);
-
-                console.log("User ID: " + user_id);
-
-                wishlists = result.wishlists;
-
-                console.log("Placing groups after member is removed: ")
-                place_wishlists(wishlists, user_id);
-                
-            }
-
-        } else {
-            info("Removing member...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlists/" + wishlist_id + "/un-collaborate");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send(form_data);
-    return false;
-
+function placeWishlist(wishlistOject, publicURL) {
+    document.getElementById("wishlistName-" + wishlistOject.id).innerHTML = wishlistOject.name
 }

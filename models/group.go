@@ -14,7 +14,8 @@ type Group struct {
 type GroupCreationRequest struct {
 	Name        string      `json:"name"`
 	Description string      `json:"description"`
-	Members     []uuid.UUID `json:"members"`
+	Members     []string    `json:"members"`
+	Wishlists   []uuid.UUID `json:"wishlists"`
 }
 
 type GroupUpdateRequest struct {
@@ -48,5 +49,13 @@ type GroupMembershipUser struct {
 }
 
 type GroupMembershipCreationRequest struct {
-	Members []uuid.UUID `json:"members"`
+	Members []string `json:"members"`
+}
+
+type GroupMembershipRemovalRequest struct {
+	MemberID uuid.UUID `json:"member_id"`
+}
+
+type GroupAddWishlistsRequest struct {
+	Wishlists []uuid.UUID `json:"wishlists"`
 }

@@ -86,7 +86,7 @@ func AuthFunction(context *gin.Context, admin bool) (success bool, errorString s
 func GetAuthUsername(tokenString string) (uuid.UUID, error) {
 
 	if tokenString == "" {
-		return uuid.UUID{}, errors.New("No Auhtorization header given.")
+		return uuid.UUID{}, errors.New("No Authorization header given.")
 	}
 	claims, err := auth.ParseToken(tokenString)
 	if err != nil {
@@ -98,7 +98,7 @@ func GetAuthUsername(tokenString string) (uuid.UUID, error) {
 func GetTokenClaims(tokenString string) (*auth.JWTClaim, error) {
 
 	if tokenString == "" {
-		return &auth.JWTClaim{}, errors.New("No Auhtorization header given.")
+		return &auth.JWTClaim{}, errors.New("No Authorization header given.")
 	}
 	claims, err := auth.ParseToken(tokenString)
 	if err != nil {

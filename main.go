@@ -199,7 +199,8 @@ func initRouter() *gin.Engine {
 			auth.GET("/groups", controllers.GetGroups)
 			auth.GET("/groups/:group_id", controllers.GetGroup)
 			auth.GET("/groups/:group_id/members", controllers.GetGroupMembers)
-			auth.POST("/groups/:group_id/update", controllers.APIUpdateGroup)
+			auth.POST("/groups/:group_id", controllers.APIUpdateGroup)
+			auth.POST("/groups/:group_id/add", controllers.APIAddWishlistsToGroup)
 
 			auth.POST("/wishlists", controllers.RegisterWishlist)
 			auth.GET("/wishlists", controllers.GetWishlists)
@@ -209,14 +210,14 @@ func initRouter() *gin.Engine {
 			auth.POST("/wishlists/:wishlist_id/collaborate", controllers.APICollaborateWishlist)
 			auth.POST("/wishlists/:wishlist_id/remove", controllers.RemoveFromWishlist)
 			auth.POST("/wishlists/:wishlist_id/un-collaborate", controllers.APIUnCollaborateWishlist)
-			auth.POST("/wishlists/:wishlist_id/update", controllers.APIUpdateWishlist)
+			auth.POST("/wishlists/:wishlist_id", controllers.APIUpdateWishlist)
 
 			auth.GET("/wishes", controllers.GetWishesFromWishlist)
 			auth.POST("/wishes", controllers.RegisterWish)
 			auth.DELETE("/wishes/:wish_id", controllers.DeleteWish)
 			auth.POST("/wishes/:wish_id/claim", controllers.RegisterWishClaim)
 			auth.POST("/wishes/:wish_id/unclaim", controllers.RemoveWishClaim)
-			auth.POST("/wishes/:wish_id/update", controllers.APIUpdateWish)
+			auth.POST("/wishes/:wish_id", controllers.APIUpdateWish)
 			auth.GET("/wishes/:wish_id", controllers.APIGetWish)
 
 			auth.GET("/news", controllers.GetNews)

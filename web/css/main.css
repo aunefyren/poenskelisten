@@ -312,7 +312,7 @@ form {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
-  margin: 0.5em 0;
+  margin: 0;
   border-radius: 0.5em;
   background-color: var(--eggshell);
 }
@@ -481,7 +481,7 @@ button:disabled {
  }
 
 .profile-icon {
-  margin: 0 0.25em;
+  margin: 0;
   border-radius: 100%;
   width: 2em;
   height: 2em;
@@ -540,8 +540,8 @@ button:disabled {
   overflow: hidden;
 }
 
-.wish-note, .group-members {
-  display: none;
+.wish-note {
+  display: flex;
   flex-direction: row;
   flex-wrap: wrap;
   justify-content: center;
@@ -554,6 +554,7 @@ button:disabled {
   margin: 0.25em;
   border-radius: 0 0 1em 1em;
   transition: 2s;
+  background-color: var(--eggshell);
 }
 
 .group-member {
@@ -567,6 +568,9 @@ button:disabled {
   border: 0.15em solid var(--darkblue);
   background-color: var(--white);
   margin: 0.25em 1em;
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
 }
 
 .wish-input, .group-input, .wishlist-input {
@@ -574,7 +578,7 @@ button:disabled {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
-  margin: 5em 0.5em 1em 0.5em;
+  margin: 0;
 }
 
 .group-input, .wishlist-input {
@@ -773,11 +777,11 @@ hr {
   width: -webkit-fill-available;
   width: -moz-available;
   display: flex;
-  flex-direction: column;
-  flex-wrap: wrap;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-content: flex-end;
-  justify-content: space-between;
-  align-items: flex-start;
+  justify-content: flex-end;
+  align-items: flex-end;
   box-sizing: border-box;
 }
 
@@ -841,12 +845,22 @@ hr {
 }
 
 /* Modal Content (image) */
-.modal-content {
+.modalContent {
   margin: auto;
+  padding: 1em 0.5em;
   display: block;
   width: 80%;
   max-width: 700px;
-  background-color: var(--white);
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  border-radius: 0.5em;
+  background-color: var(--eggshell);
+  overflow: hidden;
 }
 
 /* Caption of Modal Image */
@@ -862,7 +876,7 @@ hr {
 }
 
 /* Add Animation */
-.modal-content, #caption {  
+.modalContent, #caption {  
   -webkit-animation-name: zoom;
   -webkit-animation-duration: 0.6s;
   animation-name: zoom;
@@ -905,7 +919,7 @@ hr {
 }
 
 label {
-  margin: 1em 0 0 0;
+  margin: 0;
 }
 
 .wishlist-date-wrapper {
@@ -1040,4 +1054,96 @@ label {
   overflow: hidden;
   height: 100%;
   width: auto;
+}
+
+textarea {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  padding: 0.5em;
+  margin: 1em;
+  border-radius: 0.5em;
+  border: solid 0.2em var(--darkblue); 
+  background: var(--white); 
+  box-sizing: border-box;
+  font-family: 'Roboto', sans-serif;
+  font-size: 0.8rem;
+}
+
+.group-members {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  align-content: center;
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  margin: 0;
+}
+
+.newMembers {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+}
+
+.addNewMemberButtons {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  align-content: center;
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+}
+
+.top-left-button {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  justify-content: space-between;
+  align-items: flex-start;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.5em;
+}
+
+.urlWrapper {
+  text-align: center;
+  border-radius: 0.5em;
+  border: solid 0.2em var(--darkblue); 
+  margin: 1em;
+  padding: 0.25em;
+  background-color: var(--white);
+}
+
+.modalWishImage {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+#modal-img {
+  border-radius: 0.5em;
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  max-height: 40em;
 }

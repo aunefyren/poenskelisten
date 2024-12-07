@@ -244,12 +244,19 @@ function toggle_navbar() {
 
 // Toggle navbar if clicked outside
 document.addEventListener('click', function(event) {
+    var myModal = document.getElementById("myModal")
+    if(myModal && myModal.classList.contains("open") && (event.target.id == "myModal" || event.target.id == "caption")) {
+        toggleModal();
+        return;
+    }
+
     var isClickInsideElement = ignoreNav.contains(event.target);
     if (!isClickInsideElement) {
         var nav_classlist = document.getElementById('navbar').classList;
         if (nav_classlist.contains('responsive')) {
             toggle_navbar();
         }
+        return;
     }
 });
 
@@ -273,12 +280,14 @@ function info(message) {
 function success(message) {
     document.getElementById("response").innerHTML = "<div class='alert alert-success'>" + message + "</div>";
     window.scrollTo(0, 0);
+    toggleModal(false);
 }
 
 // Displays a red notification
 function error(message) {
     document.getElementById("response").innerHTML = "<div class='alert alert-danger'>" + message + "</div>";
     window.scrollTo(0, 0);
+    toggleModal(false);
 }
 
 // When log out button is pressed, remove cookie and redirect to home page
@@ -357,22 +366,6 @@ function fromBASE64(base64String) {
     return string;
 }
 
-function toggeWishListDate(wrapperID) {
-    try {
-        var wrapper = document.getElementById(wrapperID)
-
-        if (wrapper.classList.contains('wishlist-date-wrapper-extended')) {
-            wrapper.classList.remove('wishlist-date-wrapper-extended')
-            wrapper.classList.add('wishlist-date-wrapper-minimized')
-        } else if (wrapper.classList.contains('wishlist-date-wrapper-minimized')) {
-            wrapper.classList.remove('wishlist-date-wrapper-minimized')
-            wrapper.classList.add('wishlist-date-wrapper-extended')
-        }
-    } catch(e) {
-        console.log("Failed to toggle wishlist date wrapper: " + e)
-    }
-}
-
 function GetDateString(dateTime, giveWeekday) {
     try {
 
@@ -413,4 +406,23 @@ function GetDateString(dateTime, giveWeekday) {
 function padNumber(num, size) {
     var s = "000000000" + num;
     return s.substr(s.length-size);
+}
+
+function toggleModal(modalHTML) {
+    var x = document.getElementById("myModal");
+    if(x) {
+        if (x.classList.contains("closed") && modalHTML) {
+            x.classList.add("open");
+            x.classList.remove("closed");
+            x.style.display = "block";
+        } else if(!modalHTML){
+            x.classList.add("closed");
+            x.classList.remove("open");
+            x.style.display = "none";
+        }
+        
+        if(modalHTML) {
+            document.getElementById("modalContent").innerHTML = modalHTML
+        }
+    }
 }
