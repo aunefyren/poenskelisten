@@ -128,14 +128,14 @@ func RegisterGroup(context *gin.Context) {
 	}
 
 	// Create group memberships for all members in the group_creation_request.Members slice
-	for _, member := range groupCreationRequest.Members {
+	for _, memberID := range groupCreationRequest.Members {
 		// Create a new instance of the GroupMembership model
 		var groupMembership models.GroupMembership
 
-		newMember, err := database.GetUserInformationByEmail(member)
+		newMember, err := database.GetUserInformation(memberID)
 		if err != nil {
-			log.Println("Failed to get user by e-mail. Error: " + err.Error())
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user by e-mail."})
+			log.Println("Failed to get user. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user."})
 			context.Abort()
 			return
 		}
@@ -254,11 +254,11 @@ func JoinGroup(context *gin.Context) {
 	}
 
 	// Iterate over the members in the groupMembership.Members slice
-	for _, member := range groupMembership.Members {
+	for _, memberID := range groupMembership.Members {
 		// Create a new instance of the GroupMembership model
 		var groupMembershipDB models.GroupMembership
 
-		memberObject, err := database.GetUserInformationByEmail(member)
+		memberObject, err := database.GetUserInformation(memberID)
 		if err != nil {
 			log.Println("Failed to find user. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find user."})

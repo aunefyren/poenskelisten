@@ -233,6 +233,8 @@ func initRouter() *gin.Engine {
 		{
 			admin.POST("/currency/update", controllers.APIUpdateCurrency)
 
+			admin.DELETE("/users/:user_id", controllers.APIDeleteUser)
+
 			admin.POST("/invites", controllers.RegisterInvite)
 			admin.GET("/invites", controllers.APIGetAllInvites)
 			admin.DELETE("/invites/:invite_id", controllers.APIDeleteInvite)

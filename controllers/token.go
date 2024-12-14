@@ -46,7 +46,7 @@ func GenerateToken(context *gin.Context) {
 		return
 	}
 
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, user.ID, *user.Admin, *user.Verified)
+	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, *user.Email, user.ID, user.Admin, *user.Verified)
 	if err != nil {
 		log.Println("Failed to generate token. Error: " + err.Error())
 		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
@@ -92,8 +92,8 @@ func ValidateToken(context *gin.Context) {
 				context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to validate session. Please log in again."})
 				context.Abort()
 				return
-			} else if *userObject.Admin != claims.Admin {
-				claims.Admin = *userObject.Admin
+			} else if userObject.Admin != claims.Admin {
+				claims.Admin = userObject.Admin
 			}
 
 			// Re-generate token with updated claims

@@ -76,7 +76,7 @@ function load_page(result) {
                             </div>
 
                             <div class="bottom-right-button" id="" style="">
-                                <img class="icon-img  clickable" id="groups-wishlist" src="/assets/users.svg" onclick="showGroupsInWishlist('${wishlist_id}', '${user_id}')" title="Wishlist groups" style="margin: 0.25em;">
+                                <img class="icon-img  clickable" id="groups-wishlist" src="/assets/users.svg" onclick="showGroupsInWishlist('${wishlist_id}', '${user_id}')" title="Wishlist groups" style="margin: 0.25em; display: none;">
                                 <img class="icon-img  clickable" id="collaborators-wishlist" src="/assets/smile.svg" onclick="showWishlistCollaboratorsInWishlist('${wishlist_id}', '${user_id}')" title="Wishlist collaborators" style="margin: 0.25em;">
                                 <img class="icon-img  clickable" id="edit-wishlist" src="/assets/edit.svg" onclick="editWishlist('${user_id}', '${wishlist_id}')" title="Edit wishlist" style="margin: 0.25em; display: none;">
                                 <img class="icon-img  clickable" id="delete-wishlist" src="/assets/trash-2.svg" onclick="deleteWishlist('${wishlist_id}', '${user_id}')" title="Delete wishlist" style="margin: 0.25em; display: none;">
@@ -187,7 +187,7 @@ function placeWishlist(wishlist_object, public_url) {
     try {
         
         var expiration = new Date(Date.parse(wishlist_object.date));
-        expiration_string = expiration.toLocaleDateString();
+        expiration_string = GetDateString(expiration)
 
         if(wishlist_object.expires) {
             document.getElementById("wishlist-info").innerHTML += "<br>Expires: " + expiration_string
@@ -345,6 +345,9 @@ function generate_wish_html(wish_object, wishlist_id, user_id) {
         }
     }
 
+    var wishUpdatedAt = new Date(Date.parse(wish_object.updated_at));
+    var wishUpdatedAtString = GetDateString(wishUpdatedAt);
+
     if(wish_object.wishclaim.length > 0 && user_id != owner_id && !collaborator && wish_object.wish_claimable) {
         var transparent = " transparent"
     } else {
@@ -354,6 +357,15 @@ function generate_wish_html(wish_object, wishlist_id, user_id) {
     html += '<div class="wish-wrapper ' + transparent + '" id="wish_wrapper_' + wish_object.id + '">'
 
     html += '<div class="wish" id="wish_' + wish_object.id + '">'
+
+    html += `
+        <div class="unselectable wish-updatedat" title="Updated at">
+            <div class="wish-updatedat-text">Updated at:</div>
+            <div class="wish-updatedat-date">
+                ${wishUpdatedAtString}
+            </div>
+        </div>
+    `;
     
     html += '<div class="wish-title">'
     html += '<div class="profile-icon">'
@@ -434,7 +446,7 @@ function generate_wish_html(wish_object, wishlist_id, user_id) {
     if(wish_object.image) {
         html += '<div class="wish-note expanded" style="display: flex !important;" id="wish_' + wish_object.id + '_note" title="Note">'
     } else {
-        html += '<div class="wish-note collapsed" id="wish_' + wish_object.id + '_note" title="Note">'
+        html += '<div class="wish-note collapsed" style="display: none !important;" id="wish_' + wish_object.id + '_note" title="Note">'
     }
 
     if(wish_object.image) {
@@ -481,13 +493,8 @@ function show_owner_inputs() {
     wishlistedit.style.display = "flex"
     wishlistDelete = document.getElementById("delete-wishlist");
     wishlistDelete.style.display = "flex"
-}
-
-function clear_data() {
-    document.getElementById("wish_name").value = "";
-    document.getElementById("wish_note").value = "";
-    document.getElementById("wish_url").value = "";
-    document.getElementById("wish_price").value = "";
+    wishlistGroups = document.getElementById("groups-wishlist");
+    wishlistGroups.style.display = "flex"
 }
 
 function claim_wish(wish_id, wishlist_id, group_id, user_id) {
@@ -527,9 +534,6 @@ function claim_wish(wish_id, wishlist_id, group_id, user_id) {
 
                 wishes = result.wishes;
                 placeWishes(wishes, wishlist_id, user_id);
-                clear_data();
-                
-               
             }
 
         } else {
@@ -581,9 +585,6 @@ function unclaim_wish(wish_id, wishlist_id, group_id, user_id) {
 
                 wishes = result.wishes;
                 place_wishes(wishes, wishlist_id, group_id, user_id);
-                clear_data();
-                
-               
             }
 
         } else {
@@ -750,9 +751,14 @@ function placeWish(wishObject, wishlistID, groupID, userID) {
     var wish_html = wish_array[0];
     var wish_image = wish_array[1];
 
-    document.getElementById("wish_wrapper_" + wishObject.id).outerHTML = wish_html;
+    document.getElementById("wish_wrapper_" + wishObject.id).remove();
+    document.getElementById("wishes-box").innerHTML = wish_html + document.getElementById("wishes-box").innerHTML
 
     if(wish_image) {
         GetWishImageThumbail(result.wish.id)
     }
+}
+
+function removeWishlist(wishlistID, userID) {
+    window.location.href = "/wishlists";
 }

@@ -167,43 +167,6 @@ function groupMembersTwo(groupObject, userID) {
     }
 }
 
-function getGroupMemberProfileImage(userID, divID) {
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-                error(result.error);
-            } else {
-                if(!result.default) {
-                    placeGroupMemberProfileImage(result.image, divID)
-                }
-            }
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "auth/users/" + userID + "/image?thumbnail=true");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send();
-    return;
-}
-
-function placeGroupMemberProfileImage(imageBase64, divID) {
-    var image = document.getElementById(divID)
-    image.style.backgroundSize = "cover"
-    image.innerHTML = ""
-    image.style.backgroundImage = `url('${imageBase64}')`
-    image.style.backgroundPosition = "center center"
-}
-
 function getUsersForGroupMembers(groupID, userID){
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -232,14 +195,23 @@ function getUsersForGroupMembers(groupID, userID){
 }
 
 function getUsersForGroupMembersTwo(usersArray, groupID, userID) {
-    var userListHTML = '<datalist id="userList">'
-    for (let index = 0; index < usersArray.length; index++) {
-        const displayName = usersArray[index].first_name + " " + usersArray[index].last_name;
-        const email = usersArray[index].email
+    usersArray = addUniqueDisplayNames(usersArray)
 
-        userListHTML += `<option value="${email}">${displayName}</option>`
+    var userListHTML = '<datalist id="userList">'
+    var userListIDHTML = '<datalist id="userIDList">'
+    for (let index = 0; index < usersArray.length; index++) {
+        if(usersArray[index].id == userID) {
+            continue
+        }
+
+        const displayName = usersArray[index].displayName;
+        const id = usersArray[index].id
+
+        userListHTML += `<option value="${displayName}">${displayName}</option>`
+        userListIDHTML += `<option value="${id}">${displayName}</option>`
     }
     userListHTML += '</datalist>'
+    userListIDHTML += '</datalist>'
 
     var html = `
         <div class="profile-icon clickable top-left-button" onclick="groupMembers('${groupID}', '${userID}');" title="Go back" style="">
@@ -255,6 +227,7 @@ function getUsersForGroupMembersTwo(usersArray, groupID, userID) {
         </div>
 
         ${userListHTML}
+        ${userListIDHTML}
 
         <div id="newMembers" class="newMembers">
         </div>
@@ -265,63 +238,6 @@ function getUsersForGroupMembersTwo(usersArray, groupID, userID) {
     `;
 
     toggleModal(html);
-}
-
-function addUserToSelection() {
-    var newMemberMail = document.getElementById("newMemberMail").value
-    if(!newMemberMail || newMemberMail == "") {
-        return;
-    }
-
-    var html = `
-        <div class="group-member hoverable-opacity" title="Group member" id="newMember-${newMemberMail}">
-            <div class="group-title">
-                <div class="profile-icon icon-border icon-background" id="group_member_image_">
-                    <img class="icon-img " src="/assets/user.svg">
-                </div>
-
-                ${newMemberMail}
-            </div>
-
-            <div class="profile-icon clickable" onclick="removeUserFromSelection('${newMemberMail}')" title="Remove member">
-                <img class="icon-img " src="/assets/x.svg">
-            </div>
-        </div>
-    `;
-
-    var membersDiv = document.getElementById("newMembers")
-    var membersDivChildren = membersDiv.children
-
-    for (let index = 0; index < membersDivChildren.length; index++) {
-        var child = membersDivChildren[index]
-        var childString = child.innerText
-        if(childString.includes(newMemberMail)) {
-            return;
-        }
-    }
-
-    var membersDatalistDiv = document.getElementById("userList")
-    for (let index = 0; index < membersDatalistDiv.children.length; index++) {
-        if(membersDatalistDiv.children[index].value == newMemberMail) {
-            membersDatalistDiv.removeChild(membersDatalistDiv.children[index])
-        }
-    }
-
-    membersDiv.innerHTML += html
-    document.getElementById("newMemberMail").value = ""
-}
-
-function removeUserFromSelection(userMail) {
-    var membersDiv = document.getElementById("newMembers")
-    var membersDivChildren = membersDiv.children
-
-    for (let index = 0; index < membersDivChildren.length; index++) {
-        var child = membersDivChildren[index]
-        var childString = child.innerText
-        if(childString.includes(userMail)) {
-            child.remove();
-        }
-    }
 }
 
 function addGroupMembers(groupID, userID) {
@@ -458,7 +374,7 @@ function deleteGroup(group_id, user_id) {
             if(result.error) {
                 error(result.error);
             } else {
-                window.location.href = "/groups"
+                removeGroup(group_id, user_id);
             }
         } else {
             info("Deleting group...");
@@ -472,16 +388,28 @@ function deleteGroup(group_id, user_id) {
     return false;
 }
 
-function createGroup(userID) {
+function createGroup(userID, groupObjectBase64) {
     var html = '';
 
+    try {
+        var groupObject = JSON.parse(fromBASE64(groupObjectBase64))
+    } catch (error) {
+        var groupObject = {
+            "name": "",
+            "description" : "",
+            "members": [],
+            "wishlists": []
+        }
+        groupObjectBase64 = toBASE64(JSON.stringify(groupObject))
+    }
+
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); createGroupTwo('${userID}');">  
+        <form action="" class="" onsubmit="event.preventDefault(); createGroupTwo('${userID}', '${groupObjectBase64}');">  
             <label for="group_name" style="">Create a new group:</label><br>
 
-            <input type="text" name="group_name" id="group_name" placeholder="Group name" autocomplete="off" min="5" required />
+            <input type="text" name="group_name" id="group_name" placeholder="Group name" autocomplete="off" min="5" value="${groupObject.name}" required />
             
-            <textarea type="text" name="group_description" id="group_description" placeholder="Group description" min="5" autocomplete="off" required /></textarea>
+            <textarea type="text" name="group_description" id="group_description" placeholder="Group description" min="5" autocomplete="off" required />${groupObject.description}</textarea>
 
             <div id="newMembers" class="newMembers">
             </div>
@@ -493,14 +421,24 @@ function createGroup(userID) {
     toggleModal(html);
 }
 
-function createGroupTwo(userID){
-    var groupName = document.getElementById("group_name").value;
-    var groupDescription = document.getElementById("group_description").value;
+function createGroupTwo(userID, groupObjectBase64){
+    var groupObject = JSON.parse(fromBASE64(groupObjectBase64))
 
-    if(groupName.length < 5 || groupDescription.length < 5) {
-        alert("Name and description must be five or more characters.")
-        return
+    try {
+        var groupName = document.getElementById("group_name").value;
+        var groupDescription = document.getElementById("group_description").value;
+        groupObject.name = groupName
+        groupObject.description = groupDescription
+
+        if(groupName.length < 5 || groupDescription.length < 5) {
+            alert("Name and description must be five or more characters.")
+            return
+        }
+    } catch (error) {
+        console.log("Failed to get values. Error: " + error)
     }
+
+    groupObjectBase64 = toBASE64(JSON.stringify(groupObject))
 
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -516,7 +454,7 @@ function createGroupTwo(userID){
             if(result.error) {
                 error(result.error);
             } else {
-                createGroupThree(result.users, userID, groupName, groupDescription)
+                createGroupThree(result.users, userID, groupObjectBase64)
             }
         }
     };
@@ -528,20 +466,30 @@ function createGroupTwo(userID){
     return false;
 }
 
-function createGroupThree(usersArray, userID, groupName, groupDescription) {
-    var userListHTML = '<datalist id="userList">'
-    for (let index = 0; index < usersArray.length; index++) {
-        const displayName = usersArray[index].first_name + " " + usersArray[index].last_name;
-        const email = usersArray[index].email
+function createGroupThree(usersArray, userID, groupObjectBase64) {
+    var groupObject = JSON.parse(fromBASE64(groupObjectBase64))
+    usersArray = addUniqueDisplayNames(usersArray)
 
-        userListHTML += `<option value="${email}">${displayName}</option>`
+    var userListHTML = '<datalist id="userList">'
+    var userListIDHTML = '<datalist id="userIDList">'
+    for (let index = 0; index < usersArray.length; index++) {
+        if(usersArray[index].id == userID) {
+            continue
+        }
+
+        const displayName = usersArray[index].displayName;
+        const id = usersArray[index].id
+
+        userListHTML += `<option value="${displayName}">${displayName}</option>`
+        userListIDHTML += `<option value="${id}">${displayName}</option>`
     }
     userListHTML += '</datalist>'
+    userListIDHTML += '</datalist>'
 
     var html = '';
 
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="createGroup('${userID}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" onclick="createGroup('${userID}', '${groupObjectBase64}');" title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
@@ -554,33 +502,55 @@ function createGroupThree(usersArray, userID, groupName, groupDescription) {
         </div>
 
         ${userListHTML}
+        ${userListIDHTML}
 
         <div id="newMembers" class="newMembers">
         </div>
 
-        <form action="" class="" onsubmit="event.preventDefault(); createGroupFour('${userID}');">
-            <input type="hidden" id="group_name" value="${groupName}">
-            <input type="hidden" id="group_description" value="${groupDescription}">
-
+        <form action="" class="" onsubmit="event.preventDefault(); createGroupFour('${userID}', '${groupObjectBase64}');">
             <button id="register-button" type="submit" href="/">Next</button>
         </form>
     `;
 
     toggleModal(html);
+    
+    try {
+        groupObject.members.forEach(memberID => {
+            console.log("Re-adding member: " + memberID)
+            var memberName = ""
+            var membersDatalistDiv = document.getElementById("userIDList")
+            for (let index = 0; index < membersDatalistDiv.children.length; index++) {
+                if(membersDatalistDiv.children[index].value == memberID) {
+                    memberName = membersDatalistDiv.children[index].innerHTML
+                }
+            }
+            console.log("Member name is: " + memberName)
+            document.getElementById("newMemberMail").value = memberName
+            addUserToSelection()
+        });
+    } catch (error) {
+        console.log("Failed to add values. Error: " + error)
+    }
 }
 
-function createGroupFour(userID){
-    var groupName = document.getElementById("group_name").value;
-    var groupDescription = document.getElementById("group_description").value;
-    var newMembersDivChildren = document.getElementById("newMembers").children
-    var selectedMembers = [];
+function createGroupFour(userID, groupObjectBase64){
+    var groupObject = JSON.parse(fromBASE64(groupObjectBase64))
 
-    for (var i=0; i < newMembersDivChildren.length; i++) {
-        var newMemberMail = newMembersDivChildren[i].id.replace("newMember-", "")
-        selectedMembers.push(newMemberMail)
+    try {
+        var newMembersDivChildren = document.getElementById("newMembers").children
+        var selectedMembers = [];
+
+        for (var i=0; i < newMembersDivChildren.length; i++) {
+            var newMemberMail = newMembersDivChildren[i].id.replace("newMember-", "")
+            selectedMembers.push(newMemberMail)
+        }
+
+        groupObject.members = selectedMembers
+    } catch (error) {
+        console.log("Failed to get values. Error: " + error)
     }
 
-    var selectedMembersBase64 = toBASE64(JSON.stringify(selectedMembers))
+    groupObjectBase64 = toBASE64(JSON.stringify(groupObject))
 
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -596,7 +566,7 @@ function createGroupFour(userID){
             if(result.error) {
                 error(result.error);
             } else {
-                createGroupFive(result.wishlists, userID, groupName, groupDescription, selectedMembersBase64)
+                createGroupFive(result.wishlists, userID, groupObjectBase64)
             }
         }
     };
@@ -608,20 +578,23 @@ function createGroupFour(userID){
     return false;
 }
 
-function createGroupFive(wishlistArray, userID, groupName, groupDescription, selectedMembersBase64) {
+function createGroupFive(wishlistArray, userID, groupObjectBase64) {
     var wishlistListHTML = '<datalist id="userList">'
+    var wishlistListIDHTML = '<datalist id="userIDList">'
     for (let index = 0; index < wishlistArray.length; index++) {
         const displayName = wishlistArray[index].name;
         const id = wishlistArray[index].id
 
-        wishlistListHTML += `<option value="${id}">${displayName}</option>`
+        wishlistListHTML += `<option value="${displayName}">${displayName}</option>`
+        wishlistListIDHTML += `<option value="${id}">${displayName}</option>`
     }
     wishlistListHTML += '</datalist>'
+    wishlistListIDHTML += '</datalist>'
 
     var html = '';
 
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="createGroupTwo('${userID}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" onclick="createGroupTwo('${userID}', '${groupObjectBase64}');" title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
@@ -634,15 +607,12 @@ function createGroupFive(wishlistArray, userID, groupName, groupDescription, sel
         </div>
 
         ${wishlistListHTML}
+        ${wishlistListIDHTML}
 
         <div id="newMembers" class="newMembers">
         </div>
 
-        <form action="" class="" onsubmit="event.preventDefault(); createGroupSix('${userID}');">
-            <input type="hidden" id="group_name" value="${groupName}">
-            <input type="hidden" id="group_description" value="${groupDescription}">
-            <input type="hidden" id="group_members" value="${selectedMembersBase64}">
-
+        <form action="" class="" onsubmit="event.preventDefault(); createGroupSix('${userID}', '${groupObjectBase64}');">
             <button id="register-button" type="submit" href="/">Create group</button>
         </form>
     `;
@@ -651,11 +621,9 @@ function createGroupFive(wishlistArray, userID, groupName, groupDescription, sel
 }
 
 
-function createGroupSix(userID) {
-    var groupName = document.getElementById("group_name").value;
-    var groupDescription = document.getElementById("group_description").value;
-    var groupMembersBase64 = document.getElementById("group_members").value;
-    var groupMembers = JSON.parse(fromBASE64(groupMembersBase64))
+function createGroupSix(userID, groupObjectBase64) {
+    var groupObject = JSON.parse(fromBASE64(groupObjectBase64))
+
     var newMembersDivChildren = document.getElementById("newMembers").children
     var selectedWishlists = [];
 
@@ -665,9 +633,9 @@ function createGroupSix(userID) {
     }
 
     var form_obj = { 
-        "name" : groupName,
-        "description" : groupDescription,
-        "members": groupMembers,
+        "name" : groupObject.name,
+        "description" : groupObject.description,
+        "members": groupObject.members,
         "wishlists": selectedWishlists
     };
     var form_data = JSON.stringify(form_obj);
@@ -701,26 +669,31 @@ function createGroupSix(userID) {
 }
 
 function addWishlistToSelection() {
-    var newMemberID = document.getElementById("newMemberID").value
-    if(!newMemberID || newMemberID == "") {
+    var newMemberName = document.getElementById("newMemberID").value
+    var newMemberID = ""
+    if(!newMemberName || newMemberName == "") {
         return;
     }
 
-    var html = `
-        <div class="group-member hoverable-opacity" title="Group member" id="newMember-${newMemberID}">
-            <div class="group-title">
-                <div class="profile-icon icon-background" id="group_member_image_">
-                    <img class="icon-img " src="/assets/list.svg">
-                </div>
+    var membersDatalistDiv = document.getElementById("userIDList")
+    for (let index = 0; index < membersDatalistDiv.children.length; index++) {
+        if(membersDatalistDiv.children[index].innerHTML == newMemberName) {
+            newMemberID = membersDatalistDiv.children[index].value
+            membersDatalistDiv.removeChild(membersDatalistDiv.children[index])
+        }
+    }
 
-                ${newMemberID}
-            </div>
+    if(!newMemberID || newMemberID == "") {
+        alert("Invalid wishlist")
+        return;
+    }
 
-            <div class="profile-icon clickable" onclick="removeUserFromSelection('${newMemberID}')" title="Remove wishlist">
-                <img class="icon-img " src="/assets/x.svg">
-            </div>
-        </div>
-    `;
+    var membersDatalistDiv = document.getElementById("userList")
+    for (let index = 0; index < membersDatalistDiv.children.length; index++) {
+        if(membersDatalistDiv.children[index].value == newMemberName) {
+            membersDatalistDiv.removeChild(membersDatalistDiv.children[index])
+        }
+    }
 
     var membersDiv = document.getElementById("newMembers")
     var membersDivChildren = membersDiv.children
@@ -728,17 +701,29 @@ function addWishlistToSelection() {
     for (let index = 0; index < membersDivChildren.length; index++) {
         var child = membersDivChildren[index]
         var childString = child.innerText
-        if(childString.includes(newMemberID)) {
+        if(childString.includes(newMemberName)) {
             return;
         }
     }
 
-    var membersDatalistDiv = document.getElementById("userList")
-    for (let index = 0; index < membersDatalistDiv.children.length; index++) {
-        if(membersDatalistDiv.children[index].value == newMemberID) {
-            membersDatalistDiv.removeChild(membersDatalistDiv.children[index])
-        }
-    }
+    var html = `
+        <div class="group-member hoverable-opacity" title="Wishlist" id="newMember-${newMemberID}">
+            <input type="hidden" id="newMember-value" value="${newMemberID}">
+            <input type="hidden" id="newMember-name" value="${newMemberName}">
+
+            <div class="group-title">
+                <div class="profile-icon icon-background" id="group_member_image_wrapper_${newMemberID}">
+                    <img class="icon-img " src="/assets/list.svg" id="group_member_image_${newMemberID}">
+                </div>
+
+                ${newMemberName}
+            </div>
+
+            <div class="profile-icon clickable" onclick="removeUserFromSelection('${newMemberID}')" title="Remove wishlist">
+                <img class="icon-img " src="/assets/x.svg">
+            </div>
+        </div>
+    `;
 
     membersDiv.innerHTML += html
     document.getElementById("newMemberID").value = ""
@@ -775,22 +760,26 @@ function showWishlistsInGroupTwo(wishlistArray, userID, groupID) {
     var html = '<div class="group-members" id="group_' + groupID + '_members" style="">'
     html += '<div class="text-body">The wishlists present in this group:</div>'
 
-    for(var j = 0; j < wishlistArray.length; j++) {
-        html += `
-            <div class="group-member hoverable-opacity" title="Wishlist">
-                <div class="group-title">
-                    <div class="profile-icon" id="group_member_image_${wishlistArray[j].id}">
-                        <img class="icon-img " src="/assets/list.svg">
+    if(wishlistArray.length > 0) {
+        for(var j = 0; j < wishlistArray.length; j++) {
+            html += `
+                <div class="group-member hoverable-opacity" title="Wishlist">
+                    <div class="group-title">
+                        <div class="profile-icon" id="group_member_image_${wishlistArray[j].id}">
+                            <img class="icon-img " src="/assets/list.svg">
+                        </div>
+
+                        ${wishlistArray[j].name}
+
                     </div>
-
-                    ${wishlistArray[j].name}
-
+                    <div class="profile-icon clickable" onclick="removeWishlistFromGroup('${wishlistArray[j].id}', '${groupID}', '${userID}')" title="Remove wishlist from group">
+                        <img class="icon-img " src="/assets/x.svg">
+                    </div>
                 </div>
-                <div class="profile-icon clickable" onclick="removeWishlistFromGroup('${wishlistArray[j].id}', '${groupID}', '${userID}')" title="Remove wishlist from group">
-                    <img class="icon-img " src="/assets/x.svg">
-                </div>
-            </div>
-        `;
+            `;
+        }
+    } else {
+        html += `None :(`;
     }
     html += `
         <div id="wishlist-input" class="wishlist-input">
@@ -830,13 +819,16 @@ function addWishlistToGroup(groupID, userID){
 
 function addWishlistToGroupTwo(wishlistArray, userID, groupID) {
     var wishlistListHTML = '<datalist id="userList">'
+    var wishlistListIDHTML = '<datalist id="userIDList">'
     for (let index = 0; index < wishlistArray.length; index++) {
         const displayName = wishlistArray[index].name;
         const id = wishlistArray[index].id
 
-        wishlistListHTML += `<option value="${id}">${displayName}</option>`
+        wishlistListHTML += `<option value="${displayName}">${displayName}</option>`
+        wishlistListIDHTML += `<option value="${id}">${displayName}</option>`
     }
     wishlistListHTML += '</datalist>'
+    wishlistListIDHTML += '</datalist>'
 
     var html = '';
 
@@ -854,6 +846,7 @@ function addWishlistToGroupTwo(wishlistArray, userID, groupID) {
         </div>
 
         ${wishlistListHTML}
+        ${wishlistListIDHTML}
 
         <div id="newMembers" class="newMembers">
         </div>

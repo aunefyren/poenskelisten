@@ -171,13 +171,25 @@ function placeWishlists(wishlists_array, user_id) {
             console.log("Failed to parse datetime. Error: " + err)
         }
 
-        console.log("Wishlist ID: " + wishlists_array[i].id)
+        var wishUpdatedAt = new Date(Date.parse(wishlists_array[i].wish_updated_at));
+        var wishUpdatedAtString = GetDateString(wishUpdatedAt)
 
         owner_id = wishlists_array[i].owner.id
 
-        html += '<div class="wishlist-wrapper">'
+        html += `<div class="wishlist-wrapper" id="wishlistWrapper-${wishlists_array[i].id}">`
 
         html += '<div class="wishlist">'
+
+        if(wishlists_array[i].wish_updated_at) {
+            html += `
+                <div class="unselectable wish-updatedat" title="Updated at">
+                    <div class="wish-updatedat-text">Updated at:</div>
+                    <div class="wish-updatedat-date" id="wishlistUpdatedAt-${wishlists_array[i].id}">
+                        ${wishUpdatedAtString}
+                    </div>
+                </div>
+            `;
+        }
         
         html += `<div class="wishlist-title clickable underline" onclick="location.href = '/wishlists/${wishlists_array[i].id}'" title="Go to wishlist">`;
         html += '<div class="profile-icon">'
@@ -187,36 +199,21 @@ function placeWishlists(wishlists_array, user_id) {
         html += '</b></div>'
 
         html += '<div class="profile" title="Wishlist owner">'
+
+        html += '<div class="profile-wrapper">'
+
         html += '<div class="profile-name">'
         html += wishlists_array[i].owner.first_name + " " + wishlists_array[i].owner.last_name
         html += '</div>'
+        
+
         html += `<div class="profile-icon icon-border icon-background" id="wishlist_owner_image_${owner_id}_${wishlists_array[i].id}">`
         html += `<img class="icon-img " src="/assets/user.svg" id="wishlist_owner_image_img_${owner_id}_${wishlists_array[i].id}">`
         html += '</div>'
 
-        var members_string="["  
-        for(var j = 0; j < wishlists_array[i].members.length; j++) {
-            if(j !== 0) {
-                members_string += ','
-            }
-            members_string += "'" + wishlists_array[i].members[j].id + "'"
-            
-            console.log(wishlists_array[i].id + " " + wishlists_array[i].members[j].id)
-            console.log(wishlists_array[i].members)
-        }
-        members_string += ']'
+        html += '</div>'
 
-        var collaboratorsString="["
-        for(var j = 0; j < wishlists_array[i].collaborators.length; j++) {
-            if(j !== 0) {
-                collaboratorsString += ','
-            }
-            collaboratorsString += "'" + wishlists_array[i].collaborators[j].user.id + "'"
-            
-            console.log(wishlists_array[i].id + " " + wishlists_array[i].collaborators[j].user.id)
-            console.log(wishlists_array[i].collaborators)
-        }
-        collaboratorsString += ']'
+        html += '<div class="icons-wrapper">'
 
         html += `
             <div class="profile-icon clickable" onclick="showGroupsInWishlist('${wishlists_array[i].id}', '${user_id}')" title="Wishlist groups">
@@ -243,12 +240,9 @@ function placeWishlists(wishlists_array, user_id) {
         }
 
         html += '</div>'
-
         html += '</div>'
-
-
         html += '</div>'
-
+        html += '</div>'
         html += '</div>'
 
         if(expired) {
@@ -464,4 +458,31 @@ function PlaceProfileImage(imageBase64, divID) {
 
 function placeWishlist(wishlistOject, publicURL) {
     document.getElementById("wishlistName-" + wishlistOject.id).innerHTML = wishlistOject.name
+    var wishUpdatedAt = new Date(Date.parse(wishlistOject.wish_updated_at));
+    var wishUpdatedAtString = GetDateString(wishUpdatedAt)
+    document.getElementById(`wishlistUpdatedAt-${wishlistOject.id}`).innerHTML = wishUpdatedAtString
+
+    var wishlist = document.getElementById(`wishlistWrapper-${wishlistOject.id}`)
+    var wishlistHTML = wishlist.outerHTML
+    wishlist.remove()
+    
+    if(wishlistOject.expires && wishlistOject.date) {
+        var expiration = new Date(Date.parse(wishlistOject.date));
+        var now = new Date
+
+        if(expiration.getTime() < now.getTime()) {
+            var wishlists = document.getElementById(`wishlists-box-expired`)
+            wishlists.innerHTML = wishlistHTML + wishlists.innerHTML
+        } else {
+            var wishlists = document.getElementById(`wishlists-box`)
+            wishlists.innerHTML = wishlistHTML + wishlists.innerHTML
+        }
+    } else {
+        var wishlists = document.getElementById(`wishlists-box`)
+        wishlists.innerHTML = wishlistHTML + wishlists.innerHTML
+    }
+}
+
+function removeWishlist(wishlistID, userID) {
+    document.getElementById(`wishlistWrapper-${wishlistID}`).remove();
 }

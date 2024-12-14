@@ -56,6 +56,7 @@ type WishlistUser struct {
 	Wishes        []WishObject                 `json:"wishes"`
 	Collaborators []WishlistCollaboratorObject `json:"collaborators"`
 	Currency      string                       `json:"currency"`
+	WishUpdatedAt time.Time                    `json:"wish_updated_at"`
 }
 
 type WishlistMembership struct {
@@ -95,7 +96,7 @@ type WishlistCollaboratorObject struct {
 }
 
 type WishlistCollaboratorCreationRequest struct {
-	Users []string `json:"users"`
+	Users []uuid.UUID `json:"users"`
 }
 
 type WishlistMembershipDeletionRequest struct {

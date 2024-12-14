@@ -1,12 +1,28 @@
-function createNewWishlist(groupContextID, userID) {
+function createNewWishlist(groupContextID, userID, wishlistObjectBase64) {
     var html = '';
 
+    try {
+        var wishlistObject = JSON.parse(fromBASE64(wishlistObjectBase64))
+    } catch (error) {
+        var now = new Date
+        var wishlistDate = now.toISOString().split('T')[0];
+        var wishlistObject = {
+            "name": "",
+            "description" : "",
+            "expires": true,
+            "date": wishlistDate,
+            "claimable": true,
+            "public": false
+        }
+        wishlistObjectBase64 = toBASE64(JSON.stringify(wishlistObject))
+    }
+
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); createNewWishlistTwo('${groupContextID}', '${userID}');">      
+        <form action="" class="" onsubmit="event.preventDefault(); createNewWishlistTwo('${groupContextID}', '${userID}', '${wishlistObjectBase64}');">      
             <label for="wishlist_name" style="">Create a new wishlist:</label><br>
-            <input type="text" name="wishlist_name" id="wishlist_name" placeholder="Wishlist name" autocomplete="off" required />
+            <input type="text" name="wishlist_name" id="wishlist_name" placeholder="Wishlist name" autocomplete="off" required value="${wishlistObject.name}" />
             
-            <textarea name="wishlist_description" id="wishlist_description" placeholder="Wishlist description" autocomplete="off" rows="3" required></textarea>
+            <textarea name="wishlist_description" id="wishlist_description" placeholder="Wishlist description" autocomplete="off" rows="3" required>${wishlistObject.description}</textarea>
             
             <button id="register-button" type="submit" href="/">Next</button>
         </form>
@@ -15,23 +31,54 @@ function createNewWishlist(groupContextID, userID) {
     toggleModal(html);
 }
 
-function createNewWishlistTwo(groupContextID, userID) {
-    var wishlistName = document.getElementById("wishlist_name").value;
-    var wishlistDescription = document.getElementById("wishlist_description").value;
+function createNewWishlistTwo(groupContextID, userID, wishlistObjectBase64) {
+    var wishlistObject = JSON.parse(fromBASE64(wishlistObjectBase64))
+
+    try {
+        var wishlistName = document.getElementById("wishlist_name").value;
+        var wishlistDescription = document.getElementById("wishlist_description").value;
+        wishlistObject.name = wishlistName
+        wishlistObject.description = wishlistDescription
+    } catch (error) {
+        console.log("Failed to get values. Error: " + error)
+    }
+    
+    wishlistObjectBase64 = toBASE64(JSON.stringify(wishlistObject))
+
+    if(wishlistObject.expires && wishlistObject.date) {
+        try {
+            var wishlist_date_object = new Date(wishlistObject.date)
+            var wishlistDate = wishlist_date_object.toISOString().split('T')[0];
+        } catch(e) {
+            alert("Invalid date selected.");
+            return;
+        }
+    } else {
+        var now = new Date
+        var wishlistDate = now.toISOString().split('T')[0];
+    }
+
+    var checkedHTML = ""
+    var extendedHTML = "wishlist-date-wrapper-minimized"
+    if(wishlistObject.expires) {
+        checkedHTML = "checked"
+        extendedHTML = "wishlist-date-wrapper-extended"
+    }
 
     var html = '';
 
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); createNewWishlistThree('${groupContextID}', '${userID}');">
-            <input type="hidden" id="wishlist_name" value="${wishlistName}">
-            <input type="hidden" id="wishlist_description" value="${wishlistDescription}">
-        
-            <input class="clickable" onclick="toggleWishListDate('wishlist_date_wrapper_new')" style="" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" checked>
-            <label for="wishlist_expires" style="margin-bottom: 1em;" class="clickable">Does the wishlist expire?</label><br>
+        <div class="profile-icon clickable top-left-button" onclick="createNewWishlist('${groupContextID}', '${userID}', '${wishlistObjectBase64}');" title="Go back" style="">
+            <img class="icon-img" src="/assets/arrow-left.svg">
+        </div>
+
+        <form action="" class="" onsubmit="event.preventDefault(); createNewWishlistThree('${groupContextID}', '${userID}', '${wishlistObjectBase64}');">
+            <input class="clickable" onclick="toggleWishListDate('wishlist_date_wrapper_new')" style="" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" ${checkedHTML}>
+            <label for="wishlist_expires" style="" class="clickable">Does the wishlist expire?</label><br>
             
-            <div id="wishlist_date_wrapper_new" class="wishlist-date-wrapper wishlist-date-wrapper-extended" style="margin-top: 1em;">
+            <div id="wishlist_date_wrapper_new" class="wishlist-date-wrapper ${extendedHTML}" style="margin-top: 1em;">
                 <label for="wishlist_date">When does your wishlist expire?</label><br>
-                <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" autocomplete="off" />
+                <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" autocomplete="off" value="${wishlistDate}" />
             </div>
 
             <button id="register-button" type="submit" href="/">Next</button>
@@ -41,66 +88,86 @@ function createNewWishlistTwo(groupContextID, userID) {
     toggleModal(html);
 }
 
-function createNewWishlistThree(groupContextID, userID) {
-    var wishlistName = document.getElementById("wishlist_name").value;
-    var wishlistDescription = document.getElementById("wishlist_description").value;
-    var wishlistExpires = document.getElementById("wishlist_expires").checked;
-    var wishlistDate = document.getElementById("wishlist_date").value;
+function createNewWishlistThree(groupContextID, userID, wishlistObjectBase64) {
+    var wishlistObject = JSON.parse(fromBASE64(wishlistObjectBase64))
 
-    if(wishlistExpires) {
-        try {
-            var wishlist_date_object = new Date(wishlistDate)
-            var wishlistDate = wishlist_date_object.toISOString();
-        } catch(e) {
-            alert("Invalid date selected.");
-            return;
+    try {
+        var wishlistExpires = document.getElementById("wishlist_expires").checked;
+        var wishlistDate = document.getElementById("wishlist_date").value;
+
+        if(wishlistExpires) {
+            try {
+                var wishlist_date_object = new Date(wishlistDate)
+                var wishlistDate = wishlist_date_object.toISOString();
+            } catch(e) {
+                alert("Invalid date selected.");
+                return;
+            }
+        } else {
+            var now = new Date
+            var wishlistDate = now.toISOString().split('T')[0];
         }
-    } else {
-        var wishlistDate = "2006-01-02T15:04:05.000Z";
+
+        wishlistObject.expires = wishlistExpires
+        wishlistObject.date = wishlistDate
+    } catch (error) {
+        console.log("Failed to get values. Error: " + error)
+    }
+
+    wishlistObjectBase64 = toBASE64(JSON.stringify(wishlistObject))
+
+    var checkedHTML = ""
+    if(wishlistObject.claimable) {
+        checkedHTML = "checked"
+    }
+    var checkedTwoHTML = ""
+    if(wishlistObject.public) {
+        checkedTwoHTML = "checked"
     }
 
     var html = '';
 
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); createNewWishlistFour('${groupContextID}', '${userID}');">
-            <input type="hidden" id="wishlist_name" value="${wishlistName}">
-            <input type="hidden" id="wishlist_description" value="${wishlistDescription}">
-            <input type="hidden" id="wishlist_expires" value="${wishlistExpires}">
-            <input type="hidden" id="wishlist_date" value="${wishlistDate}">
-        
-            <input class="clickable" onclick="" style="" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" checked>
+        <div class="profile-icon clickable top-left-button" onclick="createNewWishlistTwo('${groupContextID}', '${userID}', '${wishlistObjectBase64}');" title="Go back" style="">
+            <img class="icon-img" src="/assets/arrow-left.svg">
+        </div>
+
+        <form action="" class="" onsubmit="event.preventDefault(); createNewWishlistFour('${groupContextID}', '${userID}', '${wishlistObjectBase64}');">
+            <input class="clickable" onclick="" style="" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" ${checkedHTML}>
             <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
 
-            <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm">
+            <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${checkedTwoHTML}>
             <label for="wishlist_public" style="margin-bottom: 1em;" class="clickable">Make this wishlist public and shareable.</label><br>
             
-            <button id="register-button" type="submit" href="/">Create wishlist</button>
+            <button id="register-button" type="submit" href="/">Next</button>
         </form>
     `;
 
     toggleModal(html);
 }
 
-function createNewWishlistFour(groupContextID, userID) {
-    var wishlistName = document.getElementById("wishlist_name").value;
-    var wishlistDescription = document.getElementById("wishlist_description").value;
-    var wishlistExpires = document.getElementById("wishlist_expires").checked;
-    var wishlistDate = document.getElementById("wishlist_date").value;
-    var wishlistClaimable = document.getElementById("wishlist_claimable").checked;
-    var wishlistpublic = document.getElementById("wishlist_public").checked;
+function createNewWishlistFour(groupContextID, userID, wishlistObjectBase64) {
+    var wishlistObject = JSON.parse(fromBASE64(wishlistObjectBase64))
 
+    try {
+        var wishlistClaimable = document.getElementById("wishlist_claimable").checked;
+        var wishlistPublic = document.getElementById("wishlist_public").checked;
+        wishlistObject.claimable = wishlistClaimable
+        wishlistObject.public = wishlistPublic
+    } catch (error) {
+        console.log("Failed to get values. Error: " + error)
+    }
+    
+    wishlistObjectBase64 = toBASE64(JSON.stringify(wishlistObject))
     var html = '';
 
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); createWishlist('${groupContextID}', '${userID}');">
-            <input type="hidden" id="wishlist_name" value="${wishlistName}">
-            <input type="hidden" id="wishlist_description" value="${wishlistDescription}">
-            <input type="hidden" id="wishlist_expires" value="${wishlistExpires}">
-            <input type="hidden" id="wishlist_date" value="${wishlistDate}">
-            <input type="hidden" id="wishlist_claimable" value="${wishlistClaimable}">
-            <input type="hidden" id="wishlist_public" value="${wishlistpublic}">
+        <div class="profile-icon clickable top-left-button" onclick="createNewWishlistThree('${groupContextID}', '${userID}', '${wishlistObjectBase64}');" title="Go back" style="">
+            <img class="icon-img" src="/assets/arrow-left.svg">
+        </div>
 
-            <label for="addToGroups" style="margin-top: 2em;" class="">Add the wishlist to any groups?</label><br>
+        <form action="" class="" onsubmit="event.preventDefault(); createWishlist('${groupContextID}', '${userID}', '${wishlistObjectBase64}');">
+            <label for="addToGroups" style="" class="">Add the wishlist to any groups?</label><br>
             <div id="addToGroups">
             </div>
 
@@ -161,13 +228,8 @@ function placeGroupCheckboxes(groupArray, groupContextID) {
     });
 }
 
-function createWishlist(groupContextID, userID) {
-    var wishlist_name = document.getElementById("wishlist_name").value;
-    var wishlist_description = document.getElementById("wishlist_description").value;
-    var wishlist_date = document.getElementById("wishlist_date").value;
-    var wishlist_expires = document.getElementById("wishlist_expires").checked;
-    var wishlist_claimable = document.getElementById("wishlist_claimable").checked;
-    var wishlist_public = document.getElementById("wishlist_public").checked;
+function createWishlist(groupContextID, userID, wishlistObjectBase64) {
+    var wishlistObject = JSON.parse(fromBASE64(wishlistObjectBase64))
 
     var groupsToAdd = [];
     var groupsToAddChildren = document.getElementById("addToGroups").children
@@ -179,13 +241,13 @@ function createWishlist(groupContextID, userID) {
     }
 
     var form_obj = { 
-        "name" : wishlist_name,
-        "description" : wishlist_description,
-        "date": wishlist_date,
+        "name" : wishlistObject.name,
+        "description" : wishlistObject.description,
+        "date": wishlistObject.date,
         "groups": groupsToAdd,
-        "claimable": wishlist_claimable,
-        "expires": wishlist_expires,
-        "public": wishlist_public
+        "claimable": wishlistObject.claimable,
+        "expires": wishlistObject.expires,
+        "public": wishlistObject.public
     };
     var form_data = JSON.stringify(form_obj);
 
@@ -323,7 +385,7 @@ function deleteWishlist(wishlistID, userID) {
             if(result.error) {
                 error(result.error);
             } else {
-                window.location.href = "/wishlists";
+                removeWishlist(wishlistID, userID)
             }
         }
     };
@@ -350,7 +412,7 @@ function editWishlist(userID, wishlistID){
             if(result.error) {
                 error(result.error);
             } else {
-                editWishlistTwo(userID, wishlistID, result.wishlist)
+                editWishlistTwo(userID, wishlistID, toBASE64(JSON.stringify(result.wishlist)))
             }
         }
     };
@@ -362,18 +424,16 @@ function editWishlist(userID, wishlistID){
     return false;
 }
 
-function editWishlistTwo(userID, wishlistID, wishlistObject) {
+function editWishlistTwo(userID, wishlistID, wishlistObjectBase64) {
+    var wishlistObject = JSON.parse(fromBASE64(wishlistObjectBase64))
     var html = '';
-    var wishlistObjectBase64 = toBASE64(JSON.stringify(wishlistObject))
 
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); editWishlistThree('${wishlistID}', '${userID}');">      
+        <form action="" class="" onsubmit="event.preventDefault(); editWishlistThree('${wishlistID}', '${userID}', '${wishlistObjectBase64}');">      
             <label for="wishlist_name" style="">Edit wishlist:</label><br>
             <input type="text" name="wishlist_name" id="wishlist_name" placeholder="Wishlist name" autocomplete="off" required value="${wishlistObject.name}" />
             
             <textarea name="wishlist_description" id="wishlist_description" placeholder="Wishlist description" autocomplete="off" rows="3" required>${wishlistObject.description}</textarea>
-            
-            <input type="hidden" id="wishlist_object" value="${wishlistObjectBase64}">
 
             <button id="register-button" type="submit" href="/">Next</button>
         </form>
@@ -382,11 +442,19 @@ function editWishlistTwo(userID, wishlistID, wishlistObject) {
     toggleModal(html);
 }
 
-function editWishlistThree(wishlistID, userID) {
-    var wishlistName = document.getElementById("wishlist_name").value;
-    var wishlistDescription = document.getElementById("wishlist_description").value;
-    var wishlistObjectBase64 = document.getElementById("wishlist_object").value;
+function editWishlistThree(wishlistID, userID, wishlistObjectBase64) {
     var wishlistObject = JSON.parse(fromBASE64(wishlistObjectBase64))
+
+    try {
+        var wishlistName = document.getElementById("wishlist_name").value;
+        var wishlistDescription = document.getElementById("wishlist_description").value;
+        wishlistObject.name = wishlistName
+        wishlistObject.description = wishlistDescription
+    } catch (error) {
+        console.log("Failed to get values. Error: " + error)
+    }
+    
+    wishlistObjectBase64 = toBASE64(JSON.stringify(wishlistObject))
 
     if(wishlistObject.expires && wishlistObject.date) {
         try {
@@ -411,13 +479,13 @@ function editWishlistThree(wishlistID, userID) {
     var html = '';
 
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); editWishlistFour('${wishlistID}', '${userID}');">
-            <input type="hidden" id="wishlist_name" value="${wishlistName}">
-            <input type="hidden" id="wishlist_description" value="${wishlistDescription}">
-            <input type="hidden" id="wishlist_object" value="${wishlistObjectBase64}">
-        
+        <div class="profile-icon clickable top-left-button" onclick="editWishlistTwo('${userID}', '${wishlistID}', '${wishlistObjectBase64}');" title="Go back" style="">
+            <img class="icon-img" src="/assets/arrow-left.svg">
+        </div>
+
+        <form action="" class="" onsubmit="event.preventDefault(); editWishlistFour('${wishlistID}', '${userID}', '${wishlistObjectBase64}');">
             <input class="clickable" onclick="toggleWishListDate('wishlist_date_wrapper_new')" style="" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" ${checkedHTML}>
-            <label for="wishlist_expires" style="margin-bottom: 1em;" class="clickable">Does the wishlist expire?</label><br>
+            <label for="wishlist_expires" style="" class="clickable">Does the wishlist expire?</label><br>
             
             <div id="wishlist_date_wrapper_new" class="wishlist-date-wrapper ${extendedHTML}" style="margin-top: 1em;">
                 <label for="wishlist_date">When does your wishlist expire?</label><br>
@@ -431,25 +499,32 @@ function editWishlistThree(wishlistID, userID) {
     toggleModal(html);
 }
 
-function editWishlistFour(wishlistID, userID) {
-    var wishlistName = document.getElementById("wishlist_name").value;
-    var wishlistDescription = document.getElementById("wishlist_description").value;
-    var wishlistObjectBase64 = document.getElementById("wishlist_object").value;
+function editWishlistFour(wishlistID, userID, wishlistObjectBase64) {
     var wishlistObject = JSON.parse(fromBASE64(wishlistObjectBase64))
-    var wishlistExpires = document.getElementById("wishlist_expires").checked;
-    var wishlistDate = document.getElementById("wishlist_date").value;
 
-    if(wishlistExpires) {
-        try {
-            var wishlist_date_object = new Date(wishlistDate)
-            var wishlistDate = wishlist_date_object.toISOString();
-        } catch(e) {
-            alert("Invalid date selected.");
-            return;
+    try {
+        var wishlistExpires = document.getElementById("wishlist_expires").checked;
+        var wishlistDate = document.getElementById("wishlist_date").value;
+        wishlistObject.expires = wishlistExpires
+
+        if(wishlistExpires) {
+            try {
+                var wishlist_date_object = new Date(wishlistDate)
+                var wishlistDate = wishlist_date_object.toISOString();
+            } catch(e) {
+                alert("Invalid date selected.");
+                return;
+            }
+        } else {
+            var wishlistDate = "2006-01-02T15:04:05.000Z";
         }
-    } else {
-        var wishlistDate = "2006-01-02T15:04:05.000Z";
+
+        wishlistObject.date = wishlistDate
+    } catch (error) {
+        console.log("Failed to get values. Error: " + error)
     }
+    
+    wishlistObjectBase64 = toBASE64(JSON.stringify(wishlistObject))
 
     var claimableHTML = ""
     var publicHTML = ""
@@ -463,12 +538,11 @@ function editWishlistFour(wishlistID, userID) {
     var html = '';
 
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); editWishlistFive('${wishlistID}', '${userID}');">
-            <input type="hidden" id="wishlist_name" value="${wishlistName}">
-            <input type="hidden" id="wishlist_description" value="${wishlistDescription}">
-            <input type="hidden" id="wishlist_expires" value="${wishlistExpires}">
-            <input type="hidden" id="wishlist_date" value="${wishlistDate}">
-        
+        <div class="profile-icon clickable top-left-button" onclick="editWishlistThree('${wishlistID}', '${userID}', '${wishlistObjectBase64}');" title="Go back" style="">
+            <img class="icon-img" src="/assets/arrow-left.svg">
+        </div>
+
+        <form action="" class="" onsubmit="event.preventDefault(); editWishlistFive('${wishlistID}', '${userID}', '${wishlistObjectBase64}');">
             <input class="clickable" onclick="" style="" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" ${claimableHTML}>
             <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
 
@@ -482,36 +556,25 @@ function editWishlistFour(wishlistID, userID) {
     toggleModal(html);
 }
 
-function editWishlistFive(wishlistID, userID) {
-    var wishlist_name = document.getElementById("wishlist_name").value;
-    var wishlist_description = document.getElementById("wishlist_description").value;
-    var wishlist_expires_string = document.getElementById("wishlist_expires").value;
-    var wishlist_date = document.getElementById("wishlist_date").value;
-    var wishlist_date_object = new Date(wishlist_date)
-    var wishlist_date_string = wishlist_date_object.toISOString();
-    var wishlist_claimable = document.getElementById("wishlist_claimable").checked;
-    var wishlist_public = document.getElementById("wishlist_public").checked;
+function editWishlistFive(wishlistID, userID, wishlistObjectBase64) {
+    var wishlistClaimable = document.getElementById("wishlist_claimable").checked;
+    var wishlistPublic = document.getElementById("wishlist_public").checked;
+    var wishlistObject = JSON.parse(fromBASE64(wishlistObjectBase64))
 
-    if(wishlist_public && wishlist_claimable) {
+    if(wishlistPublic && wishlistClaimable) {
         alert("A wishlist cannot have claimable wishes and be public to users without accounts.")
         return;
     }
 
-    var wishlist_expires = false
-    if(wishlist_expires_string == "true") {
-        wishlist_expires = true
-    }
-
     var form_obj = { 
-        "name" : wishlist_name,
-        "description" : wishlist_description,
-        "date": wishlist_date_string,
-        "claimable": wishlist_claimable,
-        "expires": wishlist_expires,
-        "public": wishlist_public
+        "name" : wishlistObject.name,
+        "description" : wishlistObject.description,
+        "date": wishlistObject.date,
+        "claimable": wishlistClaimable,
+        "expires": wishlistObject.expires,
+        "public": wishlistPublic
     };
     var form_data = JSON.stringify(form_obj);
-
 
     if(!confirm("Are you sure you want to update this wishlist?")) {
         return;
@@ -520,7 +583,6 @@ function editWishlistFive(wishlistID, userID) {
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
-            
             try {
                 result = JSON.parse(this.responseText);
             } catch(e) {
@@ -535,7 +597,6 @@ function editWishlistFive(wishlistID, userID) {
                 success(result.message)
                 placeWishlist(result.wishlist, result.public_url);
             }
-
         }
     };
     xhttp.withCredentials = true;
@@ -546,7 +607,7 @@ function editWishlistFive(wishlistID, userID) {
     return false;
 }
 
-function showGroupsInWishlist(wishlistID, userID){
+function showGroupsInWishlist(wishlistID, userID, groupContextID){
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
@@ -561,7 +622,7 @@ function showGroupsInWishlist(wishlistID, userID){
             if(result.error) {
                 error(result.error);
             } else {
-                showGroupsInWishlistTwo(result.groups, userID, wishlistID)
+                showGroupsInWishlistTwo(result.groups, userID, wishlistID, groupContextID)
             }
         }
     };
@@ -573,26 +634,31 @@ function showGroupsInWishlist(wishlistID, userID){
     return false;
 }
 
-function showGroupsInWishlistTwo(groupArray, userID, wishlistID) {
+function showGroupsInWishlistTwo(groupArray, userID, wishlistID, groupContextID) {
     var html = '<div class="group-members" id="group_' + wishlistID + '_members" style="">'
-    html += '<div class="text-body">Your wishlist are in these groups:</div>'
+    html += '<div class="text-body">The wishlist is in these groups:</div>'
 
-    for(var j = 0; j < groupArray.length; j++) {
-        html += `
-            <div class="group-member hoverable-opacity" title="Wishlist">
-                <div class="group-title">
-                    <div class="profile-icon" id="group_member_image_${groupArray[j].id}">
-                        <img class="icon-img " src="/assets/users.svg">
+    if(groupArray.length > 0) {
+        for(var j = 0; j < groupArray.length; j++) {
+            html += `
+                <div class="group-member hoverable-opacity" title="Wishlist">
+                    <div class="group-title">
+                        <div class="profile-icon" id="group_member_image_${groupArray[j].id}">
+                            <img class="icon-img " src="/assets/users.svg">
+                        </div>
+
+                        ${groupArray[j].name}
+
                     </div>
 
-                    ${groupArray[j].name}
-
+                    <div class="profile-icon clickable" onclick="removeWishlistFromGroup('${wishlistID}', '${groupArray[j].id}', '${userID}', '${groupContextID}')" title="Remove wishlist from group">
+                        <img class="icon-img " src="/assets/x.svg">
+                    </div>
                 </div>
-                <div class="profile-icon clickable" onclick="removeWishlistFromGroup('${wishlistID}', '${groupArray[j].id}', '${userID}')" title="Remove wishlist from group">
-                    <img class="icon-img " src="/assets/x.svg">
-                </div>
-            </div>
-        `;
+            `;
+        }
+    } else {
+        html += `None :(`;
     }
     html += `
         <div id="wishlist-input" class="wishlist-input">
@@ -603,7 +669,7 @@ function showGroupsInWishlistTwo(groupArray, userID, wishlistID) {
     toggleModal(html);
 }
 
-function removeWishlistFromGroup(wishlistID, groupID, userID) {
+function removeWishlistFromGroup(wishlistID, groupID, userID, groupContextID) {
     if(!confirm("Are you sure you want to remove your wishlist from this group?")) {
         return;
     }
@@ -628,7 +694,12 @@ function removeWishlistFromGroup(wishlistID, groupID, userID) {
             if(result.error) {
                 error(result.error);
             } else {
-                showGroupsInWishlist(wishlistID, userID);
+                if(groupID == groupContextID) {
+                    removeWishlist(wishlistID, userID)
+                    toggleModal(false);
+                } else {
+                    showGroupsInWishlist(wishlistID, userID);
+                }
             }
 
         }
@@ -670,13 +741,16 @@ function addGroupsToWishlist(wishlistID, userID) {
 
 function addGroupsToWishlistTwo(groupArray, userID, wishlistID) {
     var groupListHTML = '<datalist id="userList">'
+    var groupListIDHTML = '<datalist id="userIDList">'
     for (let index = 0; index < groupArray.length; index++) {
         const displayName = groupArray[index].name;
         const id = groupArray[index].id
 
-        groupListHTML += `<option value="${id}">${displayName}</option>`
+        groupListHTML += `<option value="${displayName}">${displayName}</option>`
+        groupListIDHTML += `<option value="${id}">${displayName}</option>`
     }
     groupListHTML += '</datalist>'
+    groupListIDHTML += '</datalist>'
 
     var html = '';
 
@@ -685,7 +759,7 @@ function addGroupsToWishlistTwo(groupArray, userID, wishlistID) {
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
-        <label for="newMemberID" style="">Add your wishlist to groups:</label><br>
+        <label for="newMemberID" style="">Add the wishlist to groups:</label><br>
         <div class="addNewMemberButtons">
             <input type="text" name="newMemberID" id="newMemberID" list="userList" placeholder="My cool group" value="" autocomplete="off" style="margin: 1em 0.5em 1em 1em;" />
             <div class="profile-icon clickable" onclick="addGroupToSelection()" title="Add member" style="margin: 0 1em 0 0;">
@@ -694,6 +768,7 @@ function addGroupsToWishlistTwo(groupArray, userID, wishlistID) {
         </div>
 
         ${groupListHTML}
+        ${groupListIDHTML}
 
         <div id="newMembers" class="newMembers">
         </div>
@@ -707,26 +782,31 @@ function addGroupsToWishlistTwo(groupArray, userID, wishlistID) {
 }
 
 function addGroupToSelection() {
-    var newMemberID = document.getElementById("newMemberID").value
-    if(!newMemberID || newMemberID == "") {
+    var newMemberName = document.getElementById("newMemberID").value
+    var newMemberID = ""
+    if(!newMemberName || newMemberName == "") {
         return;
     }
 
-    var html = `
-        <div class="group-member hoverable-opacity" title="Group member" id="newMember-${newMemberID}">
-            <div class="group-title">
-                <div class="profile-icon icon-background" id="group_member_image_">
-                    <img class="icon-img " src="/assets/users.svg">
-                </div>
+    var membersDatalistDiv = document.getElementById("userIDList")
+    for (let index = 0; index < membersDatalistDiv.children.length; index++) {
+        if(membersDatalistDiv.children[index].innerHTML == newMemberName) {
+            newMemberID = membersDatalistDiv.children[index].value
+            membersDatalistDiv.removeChild(membersDatalistDiv.children[index])
+        }
+    }
 
-                ${newMemberID}
-            </div>
+    if(!newMemberID || newMemberID == "") {
+        alert("Invalid group")
+        return;
+    }
 
-            <div class="profile-icon clickable" onclick="removeUserFromSelection('${newMemberID}')" title="Remove wishlist">
-                <img class="icon-img " src="/assets/x.svg">
-            </div>
-        </div>
-    `;
+    var membersDatalistDiv = document.getElementById("userList")
+    for (let index = 0; index < membersDatalistDiv.children.length; index++) {
+        if(membersDatalistDiv.children[index].value == newMemberName) {
+            membersDatalistDiv.removeChild(membersDatalistDiv.children[index])
+        }
+    }
 
     var membersDiv = document.getElementById("newMembers")
     var membersDivChildren = membersDiv.children
@@ -734,34 +814,46 @@ function addGroupToSelection() {
     for (let index = 0; index < membersDivChildren.length; index++) {
         var child = membersDivChildren[index]
         var childString = child.innerText
-        if(childString.includes(newMemberID)) {
+        if(childString.includes(newMemberName)) {
             return;
         }
     }
 
-    var membersDatalistDiv = document.getElementById("userList")
-    for (let index = 0; index < membersDatalistDiv.children.length; index++) {
-        if(membersDatalistDiv.children[index].value == newMemberID) {
-            membersDatalistDiv.removeChild(membersDatalistDiv.children[index])
-        }
-    }
+    var html = `
+        <div class="group-member hoverable-opacity" title="Group" id="newMember-${newMemberID}">
+            <input type="hidden" id="newMember-value" value="${newMemberID}">
+            <input type="hidden" id="newMember-name" value="${newMemberName}">
+
+            <div class="group-title">
+                <div class="profile-icon icon-border icon-background" id="group_member_image_wrapper_${newMemberID}">
+                    <img class="icon-img " src="/assets/users.svg" id="group_member_image_${newMemberID}">
+                </div>
+
+                ${newMemberName}
+            </div>
+
+            <div class="profile-icon clickable" onclick="removeUserFromSelection('${newMemberID}')" title="Remove group">
+                <img class="icon-img " src="/assets/x.svg">
+            </div>
+        </div>
+    `;
 
     membersDiv.innerHTML += html
     document.getElementById("newMemberID").value = ""
 }
 
 function addGroupsToWishlistThree(wishlistID, userID) {
-    var newMembersDivChildren = document.getElementById("newMembers").children
     var selectedGroups = [];
+    var newMembersDivChildren = document.getElementById("newMembers").children
+
+    if(newMembersDivChildren.length == 0) {
+        alert("No groups added :(");
+        return;
+    }
 
     for (var i=0; i < newMembersDivChildren.length; i++) {
         var newMemberID = newMembersDivChildren[i].id.replace("newMember-", "")
         selectedGroups.push(newMemberID)
-    }
-
-    if(selectedGroups.length < 1) {
-        alert("You must provide one or more groups.")
-        return;
     }
 
     var form_obj = { 
@@ -828,26 +920,30 @@ function showWishlistCollaboratorsInWishlistTwo(wishlistObject, userID, wishlist
     html += '<div class="text-body">Collaborators in this wishlist:</div>'
     var ownerID = wishlistObject.owner.id;
 
-    for(var j = 0; j < wishlistObject.collaborators.length; j++) {
-        html += '<div class="group-member hoverable-opacity" title="Group member">'
+    if(wishlistObject.collaborators.length > 0) {
+        for(var j = 0; j < wishlistObject.collaborators.length; j++) {
+            html += '<div class="group-member hoverable-opacity" title="Group member">'
 
-        html += '<div class="group-title">';
+            html += '<div class="group-title">';
 
-        html += `<div class="profile-icon icon-border icon-background" id="group_member_image_${wishlistObject.collaborators[j].user.id}_${wishlistID}">`
-        html += '<img class="icon-img " src="/assets/user.svg">'
-        html += '</div>'
+            html += `<div class="profile-icon icon-border icon-background" id="group_member_image_${wishlistObject.collaborators[j].user.id}_${wishlistID}">`
+            html += '<img class="icon-img " src="/assets/user.svg">'
+            html += '</div>'
 
-        html += wishlistObject.collaborators[j].user.first_name + " " + wishlistObject.collaborators[j].user.last_name
+            html += wishlistObject.collaborators[j].user.first_name + " " + wishlistObject.collaborators[j].user.last_name
 
-        html += '</div>'
+            html += '</div>'
 
-        if(ownerID == userID && wishlistObject.collaborators[j].id !== userID) {
-            html += `<div class="profile-icon clickable" onclick="removeWishlistCollaborator('${wishlistID}','${wishlistObject.collaborators[j].user.id}', '${userID}')" title="Remove collaborator">`
-            html += '<img class="icon-img " src="/assets/x.svg">'
+            if(ownerID == userID && wishlistObject.collaborators[j].id !== userID) {
+                html += `<div class="profile-icon clickable" onclick="removeWishlistCollaborator('${wishlistID}','${wishlistObject.collaborators[j].user.id}', '${userID}')" title="Remove collaborator">`
+                html += '<img class="icon-img " src="/assets/x.svg">'
+                html += '</div>'
+            }
+
             html += '</div>'
         }
-
-        html += '</div>'
+    } else {
+        html += 'None :('
     }
     html += "</div>"
 
@@ -929,33 +1025,39 @@ function addWishlistCollaborator(wishlistID, userID){
 }
 
 function addWishlistCollaboratorTwo(usersArray, wishlistID, userID) {
+    usersArray = addUniqueDisplayNames(usersArray)
+
     var userListHTML = '<datalist id="userList">'
+    var userListIDHTML = '<datalist id="userIDList">'
     for (let index = 0; index < usersArray.length; index++) {
         if(usersArray[index].id == userID) {
             continue
         }
 
-        const displayName = usersArray[index].first_name + " " + usersArray[index].last_name;
-        const email = usersArray[index].email
+        const displayName = usersArray[index].displayName;
+        const id = usersArray[index].id
 
-        userListHTML += `<option value="${email}">${displayName}</option>`
+        userListHTML += `<option value="${displayName}">${displayName}</option>`
+        userListIDHTML += `<option value="${id}">${displayName}</option>`
     }
     userListHTML += '</datalist>'
+    userListIDHTML += '</datalist>'
 
     var html = `
         <div class="profile-icon clickable top-left-button" onclick="showWishlistCollaboratorsInWishlist('${wishlistID}', '${userID}');" title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
-        <label for="newMemberMail" style="">Add members:</label><br>
+        <label for="newMemberMail" style="">Add collaborators:</label><br>
         <div class="addNewMemberButtons">
-            <input type="text" name="newMemberMail" id="newMemberMail" list="userList" placeholder="Ola Nordmann" value="" autocomplete="off" style="margin: 1em 0.5em 1em 1em;" />
+            <input type="text" name="newMemberMail" id="newMemberMail" list="userList" placeholder="Ola Nordmann" value="" autocomplete="off" style="margin: 1em 0.5em 1em 1em;" onkeydown="console.log('...')"/>
             <div class="profile-icon clickable" onclick="addUserToSelection()" title="Add member" style="margin: 0 1em 0 0;">
                 <img class="icon-img" src="/assets/plus.svg">
             </div>
         </div>
 
         ${userListHTML}
+        ${userListIDHTML}
 
         <div id="newMembers" class="newMembers">
         </div>
@@ -968,50 +1070,6 @@ function addWishlistCollaboratorTwo(usersArray, wishlistID, userID) {
     toggleModal(html);
 }
 
-function addUserToSelection() {
-    var newMemberMail = document.getElementById("newMemberMail").value
-    if(!newMemberMail || newMemberMail == "") {
-        return;
-    }
-
-    var html = `
-        <div class="group-member hoverable-opacity" title="Group member" id="newMember-${newMemberMail}">
-            <div class="group-title">
-                <div class="profile-icon icon-border icon-background" id="group_member_image_">
-                    <img class="icon-img " src="/assets/user.svg">
-                </div>
-
-                ${newMemberMail}
-            </div>
-
-            <div class="profile-icon clickable" onclick="removeUserFromSelection('${newMemberMail}')" title="Remove member">
-                <img class="icon-img " src="/assets/x.svg">
-            </div>
-        </div>
-    `;
-
-    var membersDiv = document.getElementById("newMembers")
-    var membersDivChildren = membersDiv.children
-
-    for (let index = 0; index < membersDivChildren.length; index++) {
-        var child = membersDivChildren[index]
-        var childString = child.innerText
-        if(childString.includes(newMemberMail)) {
-            return;
-        }
-    }
-
-    var membersDatalistDiv = document.getElementById("userList")
-    for (let index = 0; index < membersDatalistDiv.children.length; index++) {
-        if(membersDatalistDiv.children[index].value == newMemberMail) {
-            membersDatalistDiv.removeChild(membersDatalistDiv.children[index])
-        }
-    }
-
-    membersDiv.innerHTML += html
-    document.getElementById("newMemberMail").value = ""
-}
-
 function addWishlistCollaboratorThree(wishlistID, userID) {
     var selectedMembers = [];
     var newMembersDivChildren = document.getElementById("newMembers").children
@@ -1022,8 +1080,8 @@ function addWishlistCollaboratorThree(wishlistID, userID) {
     }
 
     for (var i=0; i < newMembersDivChildren.length; i++) {
-        var newMemberMail = newMembersDivChildren[i].id.replace("newMember-", "")
-        selectedMembers.push(newMemberMail)
+        var newMemberID = newMembersDivChildren[i].id.replace("newMember-", "")
+        selectedMembers.push(newMemberID)
     }
 
     var form_obj = { 
@@ -1056,33 +1114,4 @@ function addWishlistCollaboratorThree(wishlistID, userID) {
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
     return false;
-}
-
-function getGroupMemberProfileImage(userID, divID) {
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-                error(result.error);
-            } else {
-                if(!result.default) {
-                    placeGroupMemberProfileImage(result.image, divID)
-                }
-            }
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "auth/users/" + userID + "/image?thumbnail=true");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send();
-    return;
 }

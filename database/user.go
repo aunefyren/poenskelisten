@@ -158,10 +158,11 @@ func RedactUserObject(user models.User) (userObject models.User) {
 	userObject = user
 
 	// Redact user information
-	userObject.Password = "REDACTED"
-	userObject.VerificationCode = "REDACTED"
-	userObject.ResetCode = "REDACTED"
-	userObject.ResetExpiration = time.Now()
+	userObject.Password = nil
+	userObject.VerificationCode = nil
+	userObject.Verified = nil
+	userObject.ResetCode = nil
+	userObject.ResetExpiration = nil
 	return
 }
 

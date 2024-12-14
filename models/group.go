@@ -14,7 +14,7 @@ type Group struct {
 type GroupCreationRequest struct {
 	Name        string      `json:"name"`
 	Description string      `json:"description"`
-	Members     []string    `json:"members"`
+	Members     []uuid.UUID `json:"members"`
 	Wishlists   []uuid.UUID `json:"wishlists"`
 }
 
@@ -49,7 +49,7 @@ type GroupMembershipUser struct {
 }
 
 type GroupMembershipCreationRequest struct {
-	Members []string `json:"members"`
+	Members []uuid.UUID `json:"members"`
 }
 
 type GroupMembershipRemovalRequest struct {

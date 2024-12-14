@@ -149,19 +149,6 @@ func DeleteWishClaimByUserAndWish(WishID uuid.UUID, UserID uuid.UUID) error {
 	return nil
 }
 
-// Set wish to disabled
-func DeleteWish(WishID uuid.UUID) error {
-	var wish models.Wish
-	wishrecords := Instance.Model(wish).Where("`wishes`.id = ?", WishID).Update("enabled", 0)
-	if wishrecords.Error != nil {
-		return wishrecords.Error
-	}
-	if wishrecords.RowsAffected != 1 {
-		return errors.New("Failed to delete wish in database.")
-	}
-	return nil
-}
-
 // Get wish by wish ID
 func GetWishlistByWishID(wishID uuid.UUID) (bool, models.Wishlist, error) {
 	var wishlist models.Wishlist

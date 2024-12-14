@@ -142,11 +142,11 @@ function placeGroups(group_array, user_id) {
 
         console.log("Owner:" + owner_id)
 
-        html += '<div class="group-wrapper">'
+        html += `<div class="group-wrapper" id="groupWrapper-${group_array[i].id}">`
 
         html += '<div class="group">'
         
-        html += `<div class="group-title clickable underline" style="margin: 0.5em auto;" onclick="location.href = '/groups/${group_array[i].id}'" title="Go to group">`;
+        html += `<div class="group-title clickable underline" style="" onclick="location.href = '/groups/${group_array[i].id}'" title="Go to group">`;
         html += '<div class="profile-icon">'
         html += '<img class="icon-img " src="/assets/users.svg">'
         html += `</div>`
@@ -313,4 +313,8 @@ function place_users_groups(user_array, group_id, owner_id, user_id, member_arra
 
 function placeGroup(group_object) {
     document.getElementById("groupName-" + group_object.id).innerHTML = group_object.name
+}
+
+function removeGroup(groupID, userID) {
+    document.getElementById(`groupWrapper-${groupID}`).remove();
 }

@@ -40,7 +40,7 @@ function deleteWish(wishID, wishlistID, groupID, userID) {
             if(result.error) {
                 error(result.error);
             } else {
-                place_wishes(result.wishes, wishlistID, groupID, userID);
+                placeWishes(result.wishes, wishlistID, userID);
             }
         }
     };
@@ -67,7 +67,7 @@ function editWish(wishID, wishlistID, groupID, userID) {
             if(result.error) {
                 error(result.error);
             } else {
-                editWishTwo(result.wish, wishID, wishlistID, groupID, userID);
+                editWishTwo(wishID, wishlistID, groupID, userID, toBASE64(JSON.stringify(result.wish)));
             }
         }
     };
@@ -79,17 +79,15 @@ function editWish(wishID, wishlistID, groupID, userID) {
     return false;
 }
 
-function editWishTwo(wishObject, wishID, wishlistID, groupID, userID) {
-    var wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
+function editWishTwo(wishID, wishlistID, groupID, userID, wishObjectBase64) {
+    var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
+    
     var html = '';
     
     html += `
-        <form action="" onsubmit="event.preventDefault(); editWishThree('${wishID}', '${userID}', '${groupID}', '${userID}');">        
+        <form action="" onsubmit="event.preventDefault(); editWishThree('${wishID}', '${userID}', '${groupID}', '${userID}', '${wishObjectBase64}');">        
             <label for="wish_name">Edit wish:</label><br>
             <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" value="${wishObject.name}" autocomplete="off" required />
-
-            <input type="hidden" id="wish_object_base64" value="${wishObjectBase64}">
-
             <button id="register-button" type="submit" href="/">Next</button>
         </form>
     `;
@@ -97,23 +95,31 @@ function editWishTwo(wishObject, wishID, wishlistID, groupID, userID) {
     toggleModal(html);
 }
 
-function editWishThree(wishID, wishlistID, groupID, userID) {
-    var wishName = document.getElementById("wish_name").value
+function editWishThree(wishID, wishlistID, groupID, userID, wishObjectBase64) {
+    var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
 
-    if(wishName == "" || wishName.length < 5) {
-        alert("Wish name too short");
-        return
+    try {
+        var wishName = document.getElementById("wish_name").value
+
+        if(wishName == "" || wishName.length < 5) {
+            alert("Wish name too short");
+            return
+        }
+
+        wishObject.name = wishName
+    } catch (error) {
+        console.log("Failed to get values. Error: " + error)
     }
 
-    var wishObjectBase64 = document.getElementById("wish_object_base64").value
-    var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
+    wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
     var html = '';
     
     html += `
-        <form action="" onsubmit="event.preventDefault(); editWishFour('${wishID}', '${userID}', '${wishlistID}', '${groupID}');">
-            <input type="hidden" id="wish_object_base64" value="${wishObjectBase64}">
-            <input type="hidden" id="wish_name" value="${wishName}">
-    
+        <div class="profile-icon clickable top-left-button" onclick="editWishTwo('${wishID}', '${wishlistID}', '${groupID}', '${userID}', '${wishObjectBase64}');" title="Go back" style="">
+            <img class="icon-img" src="/assets/arrow-left.svg">
+        </div>
+
+        <form action="" onsubmit="event.preventDefault(); editWishFour('${wishID}', '${userID}', '${wishlistID}', '${groupID}', '${wishObjectBase64}');">
             <label for="wish_note" style="">Optional details:</label><br>
 
             <textarea name="wish_note" id="wish_note" placeholder="Wish note" value="" autocomplete="off" rows="3" />${wishObject.note}</textarea>
@@ -129,23 +135,29 @@ function editWishThree(wishID, wishlistID, groupID, userID) {
     toggleModal(html);
 }
 
-function editWishFour(wishID, wishlistID, groupID, userID) {
-    var wishName = document.getElementById("wish_name").value
-    var wishNote = document.getElementById("wish_note").value
-    var wishURL = document.getElementById("wish_url").value
-    var wishPrice = document.getElementById("wish_price").value
-    var wishObjectBase64 = document.getElementById("wish_object_base64").value
+function editWishFour(wishID, wishlistID, groupID, userID, wishObjectBase64) {
     var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
+
+    try {
+        var wishNote = document.getElementById("wish_note").value
+        var wishURL = document.getElementById("wish_url").value
+        var wishPrice = parseFloat(document.getElementById("wish_price").value)
+        wishObject.note = wishNote
+        wishObject.url = wishURL
+        wishObject.price = wishPrice
+    } catch (error) {
+        console.log("Failed to get values. Error: " + error)
+    }
+
+    wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
     var html = '';
     
     html += `
-        <form action="" onsubmit="event.preventDefault(); editWishFive('${wishID}', '${userID}', '${wishlistID}', '${groupID}');">
-            <input type="hidden" id="wish_object_base64" value="${wishObjectBase64}">
-            <input type="hidden" id="wish_name" value="${wishName}">
-            <input type="hidden" id="wish_note" value="${wishNote}">
-            <input type="hidden" id="wish_url" value="${wishURL}">
-            <input type="hidden" id="wish_price" value="${wishPrice}">
+        <div class="profile-icon clickable top-left-button" onclick="editWishThree('${wishID}', '${wishlistID}', '${groupID}', '${userID}', '${wishObjectBase64}');" title="Go back" style="">
+            <img class="icon-img" src="/assets/arrow-left.svg">
+        </div>
 
+        <form action="" onsubmit="event.preventDefault(); editWishFive('${wishID}', '${userID}', '${wishlistID}', '${groupID}', '${wishObjectBase64}');">
             <label id="form-input-icon" for="wish_image" style="">Replace optional image:</label>
             <input type="file" name="wish_image" id="wish_image" placeholder="" value="" accept="image/png, image/jpeg" />
             
@@ -156,15 +168,13 @@ function editWishFour(wishID, wishlistID, groupID, userID) {
     toggleModal(html);
 }
 
-function editWishFive(wishID, userID, wishlistID, groupID) {
+function editWishFive(wishID, userID, wishlistID, groupID, wishObjectBase64) {
+    var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
+
     if(!confirm("Are you sure you want to update this wish?")) {
         return;
     }
 
-    var wish_name = document.getElementById("wish_name").value;
-    var wish_note = document.getElementById("wish_note").value;
-    var wish_url = document.getElementById("wish_url").value;
-    var wish_price = parseFloat(document.getElementById("wish_price").value);
     var wish_image = document.getElementById('wish_image').files[0];
 
     if(wish_image) {
@@ -180,10 +190,10 @@ function editWishFive(wishID, userID, wishlistID, groupID) {
         
         wish_image.then(function(result) {
             var form_obj = { 
-                "name" : wish_name,
-                "note" : wish_note,
-                "url": wish_url,
-                "price": wish_price,
+                "name" : wishObject.name,
+                "note" : wishObject.note,
+                "url": wishObject.url,
+                "price": wishObject.price,
                 "image_data": result
             };
 
@@ -193,10 +203,10 @@ function editWishFive(wishID, userID, wishlistID, groupID) {
         });
     } else {
         var form_obj = { 
-            "name" : wish_name,
-            "note" : wish_note,
-            "url": wish_url,
-            "price": wish_price,
+            "name" : wishObject.name,
+            "note" : wishObject.note,
+            "url": wishObject.url,
+            "price": wishObject.price,
             "image_data": ""
         };
 
@@ -234,42 +244,27 @@ function editWishSix(form_data, wishID, userID, wishlistID, groupID) {
     return false;
 }
 
-function createWish(wishlistID, userID, currency) {
-    var html = '';
-    
-    html += `
-        <form action="" onsubmit="event.preventDefault(); createWishTwo('${wishlistID}', '${userID}', '${currency}');">        
-            <label for="wish_name">Create wish:</label><br>
-            <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" value="" autocomplete="off" required />
-
-            <button id="register-button" type="submit" href="/">Next</button>
-        </form>
-    `;
-
-    toggleModal(html);
-}
-
-function createWishTwo(wishlistID, userID, currency) {
-    var wishName = document.getElementById("wish_name").value
-    
-    if(wishName == "" || wishName.length < 5) {
-        alert("Wish name too short");
-        return
+function createWish(wishlistID, userID, currency, wishObjectBase64) {
+    try {
+        var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
+    } catch (error) {
+        var wishObject = {
+            "name": "",
+            "note" : "",
+            "image": "",
+            "url": "",
+            "price": 0
+        }
+        wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
+        console.log("Remade object. Error: " + error)
     }
 
     var html = '';
     
     html += `
-        <form action="" onsubmit="event.preventDefault(); createWishThree('${wishlistID}', '${userID}');">
-            <input type="hidden" id="wish_name" value="${wishName}">
-    
-            <label for="wish_note" style="">Optional details:</label><br>
-
-            <textarea name="wish_note" id="wish_note" placeholder="Wish note" value="" autocomplete="off" rows="3" /></textarea>
-
-            <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" value="" autocomplete="off" />
-
-            <input type="number" name="wish_price" id="wish_price" step="0.01" min="0" placeholder="Wish price in ${currency}" value="" autocomplete="off" />
+        <form action="" onsubmit="event.preventDefault(); createWishTwo('${wishlistID}', '${userID}', '${currency}', '${wishObjectBase64}');">        
+            <label for="wish_name">Create wish:</label><br>
+            <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" autocomplete="off" value="${wishObject.name}" required />
 
             <button id="register-button" type="submit" href="/">Next</button>
         </form>
@@ -278,22 +273,70 @@ function createWishTwo(wishlistID, userID, currency) {
     toggleModal(html);
 }
 
-function createWishThree(wishlistID, userID) {
-    var wishName = document.getElementById("wish_name").value
-    var wishNote = document.getElementById("wish_note").value
-    var wishURL = document.getElementById("wish_url").value
-    var wishPrice = document.getElementById("wish_price").value
+function createWishTwo(wishlistID, userID, currency, wishObjectBase64) {
+    var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
+
+    try {
+        var wishName = document.getElementById("wish_name").value
+        wishObject.name = wishName
+
+        if(wishName == "" || wishName.length < 5) {
+            alert("Wish name too short");
+            return
+        }
+    } catch (error) {
+        console.log("Failed to get values. Error: " + error)
+    }
+
+    wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
     var html = '';
     
     html += `
-        <form action="" onsubmit="event.preventDefault(); createWishFour('${wishlistID}', '${userID}');">
-            <input type="hidden" id="wish_name" value="${wishName}">
-            <input type="hidden" id="wish_note" value="${wishNote}">
-            <input type="hidden" id="wish_url" value="${wishURL}">
-            <input type="hidden" id="wish_price" value="${wishPrice}">
+        <div class="profile-icon clickable top-left-button" onclick="createWish('${wishlistID}', '${userID}', '${currency}', '${wishObjectBase64}');" title="Go back" style="">
+            <img class="icon-img" src="/assets/arrow-left.svg">
+        </div>
 
+        <form action="" onsubmit="event.preventDefault(); createWishThree('${wishlistID}', '${userID}', '${wishObjectBase64}');">
+            <label for="wish_note" style="">Optional details:</label><br>
+
+            <textarea name="wish_note" id="wish_note" placeholder="Wish note" autocomplete="off" rows="3" />${wishObject.note}</textarea>
+
+            <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" autocomplete="off" value="${wishObject.url}" />
+
+            <input type="number" name="wish_price" id="wish_price" step="0.01" min="0" placeholder="Wish price in ${currency}" value="${wishObject.price}" autocomplete="off" />
+
+            <button id="register-button" type="submit" href="/">Next</button>
+        </form>
+    `;
+
+    toggleModal(html);
+}
+
+function createWishThree(wishlistID, userID, wishObjectBase64) {
+    var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
+
+    try {
+        var wishNote = document.getElementById("wish_note").value
+        var wishURL = document.getElementById("wish_url").value
+        var wishPrice = parseFloat(document.getElementById("wish_price").value)
+        wishObject.note = wishNote
+        wishObject.url = wishURL
+        wishObject.price = wishPrice
+    } catch (error) {
+        console.log("Failed to get values. Error: " + error)
+    }
+
+    wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
+    var html = '';
+    
+    html += `
+        <div class="profile-icon clickable top-left-button" onclick="createWishTwo('${wishlistID}', '${userID}', '${currency}', '${wishObjectBase64}');" title="Go back" style="">
+            <img class="icon-img" src="/assets/arrow-left.svg">
+        </div>
+
+        <form action="" onsubmit="event.preventDefault(); createWishFour('${wishlistID}', '${userID}', '${wishObjectBase64}');">
             <label id="form-input-icon" for="wish_image" style="">Replace optional image:</label>
-            <input type="file" name="wish_image" id="wish_image" placeholder="" value="" accept="image/png, image/jpeg" />
+            <input type="file" name="wish_image" id="wish_image" placeholder="" value="${wishObject.image}" accept="image/png, image/jpeg" />
             
             <button id="register-button" type="submit" href="/">Create wish</button>
         </form>
@@ -302,11 +345,8 @@ function createWishThree(wishlistID, userID) {
     toggleModal(html);
 }
 
-function createWishFour(wishlistID, userID){
-    var wish_name = document.getElementById("wish_name").value;
-    var wish_note = document.getElementById("wish_note").value;
-    var wish_url = document.getElementById("wish_url").value;
-    var wish_price = parseFloat(document.getElementById("wish_price").value);
+function createWishFour(wishlistID, userID, wishObjectBase64){
+    var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
     var wish_image = document.getElementById('wish_image').files[0];
 
     if(wish_image) {
@@ -322,10 +362,10 @@ function createWishFour(wishlistID, userID){
         
         wish_image.then(function(result) {
             var form_obj = { 
-                "name" : wish_name,
-                "note" : wish_note,
-                "url": wish_url,
-                "price": wish_price,
+                "name" : wishObject.name,
+                "note" : wishObject.note,
+                "url": wishObject.url,
+                "price": wishObject.price,
                 "image_data": result
             };
 
@@ -336,10 +376,10 @@ function createWishFour(wishlistID, userID){
 
     } else {
         var form_obj = { 
-                "name" : wish_name,
-                "note" : wish_note,
-                "url": wish_url,
-                "price": wish_price,
+                "name" : wishObject.name,
+                "note" : wishObject.note,
+                "url": wishObject.url,
+                "price": wishObject.price,
                 "image_data": ""
             };
 

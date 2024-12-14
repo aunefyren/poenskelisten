@@ -169,7 +169,7 @@ func VerifyUserHasVerfificationCode(userID uuid.UUID) (bool, error) {
 		return false, errors.New("Couldn't find the user.")
 	}
 
-	if user.VerificationCode == "" {
+	if user.VerificationCode == nil || *user.VerificationCode == "" {
 		return false, nil
 	} else {
 		return true, nil

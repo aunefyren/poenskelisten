@@ -503,7 +503,7 @@ func GetWishlists(context *gin.Context) {
 
 	// Sort wishlists by creation date
 	sort.Slice(wishlistObjects, func(i, j int) bool {
-		return wishlistObjects[j].CreatedAt.Before(wishlistObjects[i].CreatedAt)
+		return wishlistObjects[j].WishUpdatedAt.Before(wishlistObjects[i].WishUpdatedAt)
 	})
 
 	context.JSON(http.StatusOK, gin.H{"wishlists": wishlistObjects, "message": "Wishlists retrieved."})
@@ -539,7 +539,6 @@ func GetWishlistObjects(UserID uuid.UUID) (wishlistObjects []models.WishlistUser
 }
 
 func JoinWishlist(context *gin.Context) {
-
 	// Create groupmembership request
 	var wishlist_id = context.Param("wishlist_id")
 	var wishlistmembership models.WishlistMembershipCreationRequest
@@ -1058,10 +1057,21 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *uu
 
 	// Sort wishes by creation date
 	sort.Slice(wishObjects, func(i, j int) bool {
-		return wishObjects[j].CreatedAt.Before(wishObjects[i].CreatedAt)
+		return wishObjects[j].UpdatedAt.Before(wishObjects[i].UpdatedAt)
 	})
 
 	wishlistObject.Wishes = wishObjects
+
+	if len(wishlistObject.Wishes) > 0 {
+		var wishUpdatedAt = wishlistObject.Wishes[0].UpdatedAt
+		if wishlistObject.UpdatedAt.After(wishUpdatedAt) {
+			wishlistObject.WishUpdatedAt = wishlistObject.UpdatedAt
+		} else {
+			wishlistObject.WishUpdatedAt = wishUpdatedAt
+		}
+	} else {
+		wishlistObject.WishUpdatedAt = wishlistObject.UpdatedAt
+	}
 
 	return
 }
@@ -1117,11 +1127,11 @@ func APICollaborateWishlist(context *gin.Context) {
 		return
 	}
 
-	for _, userEmail := range wishlistCollaboratorsRequest.Users {
+	for _, userID := range wishlistCollaboratorsRequest.Users {
 		wishlistCollaborator := models.WishlistCollaborator{}
 
 		// Verify user exists
-		user, err := database.GetUserInformationByEmail(userEmail)
+		user, err := database.GetUserInformation(userID)
 		if err != nil {
 			log.Println("Failed to get user object. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user object."})
@@ -1131,7 +1141,7 @@ func APICollaborateWishlist(context *gin.Context) {
 
 		wishlistCollaborator.UserID = user.ID
 
-		// Verify collaboration doesnt exist
+		// Verify collaboration doesn't exist
 		collaborationStatus, err := database.VerifyWishlistCollaboratorToWishlist(wishlist_id_int, user.ID)
 		if err != nil {
 			log.Println("Failed to verify wishlist collaborator status. Error: " + err.Error())

@@ -315,16 +315,6 @@ function get_url_parameters(url) {
     return parameters;
 }
 
-function getDateString(date_string) {
-    var today = new Date(date_string);
-    var dd = String(today.getDate()).padStart(2, '0');
-    var mm = String(today.getMonth() + 1).padStart(2, '0');
-    var yyyy = today.getFullYear();
-
-    today =  yyyy + '-' + mm + '-' + dd;
-    return today
-}
-
 // convert a Unicode string to a string in which
 // each 16-bit unit occupies only one byte
 function toBinary(string) {
@@ -423,6 +413,236 @@ function toggleModal(modalHTML) {
         
         if(modalHTML) {
             document.getElementById("modalContent").innerHTML = modalHTML
+        }
+    }
+}
+
+function enumerateUserDisplayNames(users, nameField = "displayName") {
+    const nameCounts = new Map();
+
+    function getUniqueName(name) {
+        // Get the current count for this name
+        const count = nameCounts.get(name) || 0;
+
+        if (count === 0) {
+            // Name is unique, mark it used
+            nameCounts.set(name, 1);
+            return name;
+        }
+
+        // Increment count and generate a new name with a suffix
+        const newName = `${name} (${count + 1})`;
+
+        // Update the count for the original name
+        nameCounts.set(name, count + 1);
+
+        // Check if the new name itself conflicts
+        return getUniqueName(newName);
+    }
+
+    // Iterate over the array and update names
+    users.forEach(user => {
+        if (user.first_name && user.last_name) {
+            displayName = user.first_name + " " + user.last_name
+            user.last_name = getUniqueName(user[nameField]);
+        }
+    });
+
+    return users;
+}
+
+function getGroupMemberProfileImage(userID, divID) {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+                error(result.error);
+            } else {
+                if(!result.default) {
+                    placeGroupMemberProfileImage(result.image, divID)
+                }
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("get", api_url + "auth/users/" + userID + "/image?thumbnail=true");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return;
+}
+
+function placeGroupMemberProfileImage(imageBase64, divID) {
+    var image = document.getElementById(divID)
+    image.style.backgroundSize = "cover"
+    image.innerHTML = ""
+    image.style.backgroundImage = `url('${imageBase64}')`
+    image.style.backgroundPosition = "center center"
+}
+
+function addUniqueDisplayNames(users, nameField = "displayName") {
+    const nameCounts = new Map();
+
+    function getUniqueName(name) {
+        const count = nameCounts.get(name) || 0;
+
+        if (count === 0) {
+            nameCounts.set(name, 1);
+            return name;
+        }
+
+        const newName = `${name} (${count + 1})`;
+        nameCounts.set(name, count + 1);
+        return getUniqueName(newName);
+    }
+
+    function processUser(user) {
+        if (user.first_name && user.last_name) {
+            const baseName = `${user.first_name} ${user.last_name}`;
+            user[nameField] = getUniqueName(baseName);
+        } else if (user.first_name) {
+            user[nameField] = getUniqueName(user.first_name);
+        } else if (user.last_name) {
+            user[nameField] = getUniqueName(user.last_name);
+        } else {
+            user[nameField] = getUniqueName("Anonymous");
+        }
+    }
+
+    if (Array.isArray(users)) {
+        users.forEach(user => processUser(user));
+    } else if (typeof users === "object" && users !== null) {
+        Object.values(users).forEach(user => processUser(user));
+    }
+
+    return users;
+}
+
+function addUniqueDisplayNamesForObjects(objects, nameField = "displayName") {
+    const nameCounts = new Map();
+
+    function getUniqueName(name) {
+        const count = nameCounts.get(name) || 0;
+
+        if (count === 0) {
+            nameCounts.set(name, 1);
+            return name;
+        }
+
+        const newName = `${name} (${count + 1})`;
+        nameCounts.set(name, count + 1);
+        return getUniqueName(newName);
+    }
+
+    function processUser(object) {
+        if (object.name) {
+            const baseName = object.name;
+            user[nameField] = getUniqueName(baseName);
+        } else {
+            user[nameField] = getUniqueName("Anonymous");
+        }
+    }
+
+    if (Array.isArray(objects)) {
+        objects.forEach(user => processUser(objects));
+    } else if (typeof objects === "object" && users !== null) {
+        Object.values(objects).forEach(object => processUser(object));
+    }
+
+    return objects;
+}
+
+function addUserToSelection() {
+    var newMemberName = document.getElementById("newMemberMail").value
+    var newMemberID = ""
+    if(!newMemberName || newMemberName == "") {
+        return;
+    }
+
+    var membersDatalistDiv = document.getElementById("userIDList")
+    for (let index = 0; index < membersDatalistDiv.children.length; index++) {
+        if(membersDatalistDiv.children[index].innerHTML == newMemberName) {
+            newMemberID = membersDatalistDiv.children[index].value
+            membersDatalistDiv.removeChild(membersDatalistDiv.children[index])
+        }
+    }
+
+    if(!newMemberID || newMemberID == "") {
+        alert("Invalid user")
+        return;
+    }
+
+    var membersDatalistDiv = document.getElementById("userList")
+    for (let index = 0; index < membersDatalistDiv.children.length; index++) {
+        if(membersDatalistDiv.children[index].value == newMemberName) {
+            membersDatalistDiv.removeChild(membersDatalistDiv.children[index])
+        }
+    }
+
+    var membersDiv = document.getElementById("newMembers")
+    var membersDivChildren = membersDiv.children
+
+    for (let index = 0; index < membersDivChildren.length; index++) {
+        var child = membersDivChildren[index]
+        var childString = child.innerText
+        if(childString.includes(newMemberName)) {
+            return;
+        }
+    }
+
+    var html = `
+        <div class="group-member hoverable-opacity" title="User" id="newMember-${newMemberID}">
+            <input type="hidden" id="newMember-value" value="${newMemberID}">
+            <input type="hidden" id="newMember-name" value="${newMemberName}">
+
+            <div class="group-title">
+                <div class="profile-icon icon-border icon-background" id="group_member_image_wrapper_${newMemberID}">
+                    <img class="icon-img " src="/assets/user.svg" id="group_member_image_${newMemberID}">
+                </div>
+
+                ${newMemberName}
+            </div>
+
+            <div class="profile-icon clickable" onclick="removeUserFromSelection('${newMemberID}')" title="Remove user">
+                <img class="icon-img " src="/assets/x.svg">
+            </div>
+        </div>
+    `;
+
+    membersDiv.innerHTML += html
+    document.getElementById("newMemberMail").value = ""
+
+    getGroupMemberProfileImage(newMemberID, `group_member_image_wrapper_${newMemberID}`)
+}
+
+function removeUserFromSelection(userID) {
+    var membersDiv = document.getElementById("newMembers")
+    var membersDivChildren = membersDiv.children
+
+    for (let index = 0; index < membersDivChildren.length; index++) {
+        var child = membersDivChildren[index]
+        var childProperties = child.children
+
+        var displayName = childProperties[1].value
+
+        if(childProperties[0].value.includes(userID)) {
+            child.remove();
+
+            var membersDatalistDiv = document.getElementById("userList")
+            var optionHTML = `<option value="${displayName}">${displayName}</option>`
+            membersDatalistDiv.innerHTML += optionHTML
+
+            var membersDatalistDiv = document.getElementById("userIDList")
+            var optionHTML = `<option value="${userID}">${displayName}</option>`
+            membersDatalistDiv.innerHTML += optionHTML
         }
     }
 }
