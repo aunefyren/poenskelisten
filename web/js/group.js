@@ -295,6 +295,12 @@ function placeWishlists(wishlists_array, user_id, group_id) {
 
         html += '<div class="icons-wrapper">'
 
+        html += `
+            <div class="profile-icon clickable" onclick="showWishlistCollaboratorsInWishlist('${wishlists_array[i].id}', '${user_id}')" title="Wishlist collaborators">
+                <img class="icon-img " src="/assets/smile.svg">
+            </div>
+        `;
+
         if(wishlists_array[i].owner.id == user_id) {
             html += `
                 <div class="profile-icon clickable" onclick="showGroupsInWishlist('${wishlists_array[i].id}', '${user_id}', '${group_id}')" title="Wishlist groups">
@@ -302,12 +308,6 @@ function placeWishlists(wishlists_array, user_id, group_id) {
                 </div>
             `;
         }
-
-        html += `
-            <div class="profile-icon clickable" onclick="showWishlistCollaboratorsInWishlist('${wishlists_array[i].id}', '${user_id}')" title="Wishlist collaborators">
-                <img class="icon-img " src="/assets/smile.svg">
-            </div>
-        `;
 
         if(wishlists_array[i].owner.id == user_id) {
             html += `

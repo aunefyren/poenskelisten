@@ -241,6 +241,7 @@ func initRouter() *gin.Engine {
 
 			admin.POST("/news", controllers.RegisterNewsPost)
 			admin.DELETE("/news/:news_id", controllers.DeleteNewsPost)
+			admin.POST("/news/:news_id", controllers.APIEditNewsPost)
 
 			admin.POST("/server/info", controllers.APIGetServerInfo)
 		}

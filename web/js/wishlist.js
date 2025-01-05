@@ -76,8 +76,8 @@ function load_page(result) {
                             </div>
 
                             <div class="bottom-right-button" id="" style="">
-                                <img class="icon-img  clickable" id="groups-wishlist" src="/assets/users.svg" onclick="showGroupsInWishlist('${wishlist_id}', '${user_id}')" title="Wishlist groups" style="margin: 0.25em; display: none;">
                                 <img class="icon-img  clickable" id="collaborators-wishlist" src="/assets/smile.svg" onclick="showWishlistCollaboratorsInWishlist('${wishlist_id}', '${user_id}')" title="Wishlist collaborators" style="margin: 0.25em;">
+                                <img class="icon-img  clickable" id="groups-wishlist" src="/assets/users.svg" onclick="showGroupsInWishlist('${wishlist_id}', '${user_id}')" title="Wishlist groups" style="margin: 0.25em; display: none;">
                                 <img class="icon-img  clickable" id="edit-wishlist" src="/assets/edit.svg" onclick="editWishlist('${user_id}', '${wishlist_id}')" title="Edit wishlist" style="margin: 0.25em; display: none;">
                                 <img class="icon-img  clickable" id="delete-wishlist" src="/assets/trash-2.svg" onclick="deleteWishlist('${wishlist_id}', '${user_id}')" title="Delete wishlist" style="margin: 0.25em; display: none;">
                             </div>

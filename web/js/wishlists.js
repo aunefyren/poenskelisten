@@ -216,14 +216,14 @@ function placeWishlists(wishlists_array, user_id) {
         html += '<div class="icons-wrapper">'
 
         html += `
-            <div class="profile-icon clickable" onclick="showGroupsInWishlist('${wishlists_array[i].id}', '${user_id}')" title="Wishlist groups">
-                <img class="icon-img " src="/assets/users.svg">
+            <div class="profile-icon clickable" onclick="showWishlistCollaboratorsInWishlist('${wishlists_array[i].id}', '${user_id}')" title="Wishlist collaborators">
+                <img class="icon-img " src="/assets/smile.svg">
             </div>
         `;
 
         html += `
-            <div class="profile-icon clickable" onclick="showWishlistCollaboratorsInWishlist('${wishlists_array[i].id}', '${user_id}')" title="Wishlist collaborators">
-                <img class="icon-img " src="/assets/smile.svg">
+            <div class="profile-icon clickable" onclick="showGroupsInWishlist('${wishlists_array[i].id}', '${user_id}')" title="Wishlist groups">
+                <img class="icon-img " src="/assets/users.svg">
             </div>
         `;
 

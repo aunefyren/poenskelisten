@@ -39,6 +39,7 @@ function makeRequest (method, url, data) {
 
 // Set new browser cookie
 function set_cookie(cname, cvalue, exdays) {
+    cvalue = encodeURI(cvalue)
     var d = new Date();
     d.setTime(d.getTime() + (exdays*24*60*60*1000));
     var expires = "expires="+ d.toUTCString();

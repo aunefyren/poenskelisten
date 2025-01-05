@@ -489,6 +489,7 @@ button:disabled {
   font-size: 0.75em;
   text-align: center;
   margin: 0 0.25em 0 0;
+  text-align: right;
  }
 
 .profile-icon {
@@ -1124,7 +1125,22 @@ textarea {
   align-content: flex-start;
   justify-content: space-between;
   align-items: flex-start;
-  box-sizing: border-box;
+  box-sizing: content-box;
+  margin: 0;
+  padding: 0.5em;
+}
+
+.top-right-button {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: flex-end;
+  justify-content: space-between;
+  align-items: flex-end;
+  box-sizing: content-box;
   margin: 0;
   padding: 0.5em;
 }
@@ -1167,6 +1183,7 @@ textarea {
   font-size: 0.75em;
   color: var(--white);
   min-width: 5em;
+  text-align: center;
 }
 
 .wish-updatedat-text {
