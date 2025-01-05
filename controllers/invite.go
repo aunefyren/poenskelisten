@@ -3,6 +3,7 @@ package controllers
 import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
+	"errors"
 	"log"
 	"net/http"
 	"sort"
@@ -140,6 +141,10 @@ func ConvertInviteToInviteObject(invite models.Invite) (models.InviteObject, err
 			return models.InviteObject{}, err
 		}
 		inviteObject.User = user
+
+		if user.Enabled == nil || *user.Enabled == false {
+			return models.InviteObject{}, errors.New("User is deleted.")
+		}
 	}
 
 	inviteObject.ID = invite.ID

@@ -38,11 +38,11 @@ function load_page(result) {
 
    var html = `
         <!-- The Modal -->
-        <div id="myModal" class="modal">
-            <span class="close selectable" onclick="closeModal();">&times;</span>
-            <div class="modal-content" id="modal-content">
-                <img style="width: 100%; height: 100%;" src="/assets/loading.svg">
+        <div id="myModal" class="modal closed">
+            <span class="close selectable" style="padding: 0 0.25em;" onclick="toggleModal()">&times;</span>
+            <div class="modalContent" id="modalContent">
             </div>
+            <div id="caption"></div>
         </div>
 
         <div class="modules" id="admin-page">
@@ -200,7 +200,7 @@ function place_invites(invites_array) {
 
             if(invites_array[i].invite_used) {
                 html += `
-                        <div class="leaderboard-object-user clickable" onclick="openModal('${invites_array[i].user.id}')">
+                        <div class="leaderboard-object-user clickable" onclick="GetUserData('${invites_array[i].user.id}')">
                             Used by: ` + invites_array[i].user.first_name + ` ` + invites_array[i].user.last_name + `
                         </div>
                     `;
@@ -384,23 +384,6 @@ function update_currency() {
 
 }
 
-function openModal(userID) {
-    document.getElementById("myModal").style.display = "block";
-
-    document.getElementById("modal-content").innerHTML = `
-    <div id="user_name"></div>
-    <div id="email"></div>
-    <div id="join_date"></div>
-    <div id="user_admin"></div>
-    `;
-
-    GetUserData(userID);
-}
-
-function closeModal() {
-    document.getElementById("myModal").style.display = "none";
-}
-
 function GetUserData(userID) {
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -438,8 +421,8 @@ function GetUserData(userID) {
 }
 
 function PlaceUserDataInModal(user_object) {
-    document.getElementById("user_name").innerHTML = user_object.first_name + " " + user_object.last_name
-    document.getElementById("email").value = user_object.email
+    displayName = "Name:  " + user_object.first_name + " " + user_object.last_name
+    email = "Email: " + user_object.email
 
     // parse date object
     try {
@@ -450,7 +433,7 @@ function PlaceUserDataInModal(user_object) {
         console.log("Join date error: " + e)
     }
 
-    document.getElementById("join_date").innerHTML = "Joined: " + date_string
+    joinedDate = "Joined: " + date_string
 
     if(user_object.admin) {
         var admin_string = "Yes"
@@ -458,5 +441,95 @@ function PlaceUserDataInModal(user_object) {
         var admin_string = "No"
     }
 
-    document.getElementById("user_admin").innerHTML = "Administrator: " + admin_string
+    adminString = "Administrator: " + admin_string
+
+    html = `
+        <div class="user-wrapper">
+            <div class="profile-icon icon-border icon-background" id="wishlist_owner_image_${user_object.id}" style="width: 5em; height: 5em;">
+                <img class="icon-img " src="/assets/user.svg" id="wishlist_owner_image_img_${user_object.id}">
+            </div>
+            <div class="user-infolist">
+                ${displayName}<br>
+                ${email}<br>
+                ${joinedDate}<br>
+                ${adminString}<br>
+            </div>
+        </div>
+
+        <div id="user-input" class="user-input" style="width: 100%;">
+            <button id="register-button" onClick="deleteUser('${user_object.id}');" type="" href="/">Delete user</button>
+        </div>
+    `;
+
+    toggleModal(html);
+    GetProfileImage(user_object.id, `wishlist_owner_image_${user_object.id}`)
+}
+
+function GetProfileImage(userID, divID) {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {  
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+                error(result.error);
+            } else {
+                if(!result.default) {
+                    PlaceProfileImage(result.image, divID)
+                } 
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("get", api_url + "auth/users/" + userID + "/image?thumbnail=true");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return;
+}
+
+function PlaceProfileImage(imageBase64, divID) {
+    var image = document.getElementById(divID)
+    image.style.backgroundSize = "cover"
+    image.innerHTML = ""
+    image.style.backgroundImage = `url('${imageBase64}')`
+    image.style.backgroundPosition = "center center"
+}
+
+function deleteUser(userID) {
+    if(!confirm("Are you sure you want to delete this user?")) {
+        return;
+    }
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {  
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            
+            if(result.error) {
+                error(result.error);
+            } else {
+                toggleModal(false);
+                get_invites();
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("delete", api_url + "admin/users/" + userID);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return;
 }

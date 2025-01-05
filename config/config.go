@@ -50,6 +50,12 @@ func GetConfig() (*models.ConfigStruct, error) {
 		anythingChanged = true
 	}
 
+	if config.PoenskelistenEnvironment == "" {
+		// Set new value
+		config.PoenskelistenEnvironment = "production"
+		anythingChanged = true
+	}
+
 	if config.PoenskelistenPort == 0 {
 		// Set new value
 		config.PoenskelistenPort = 8080

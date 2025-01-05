@@ -46,7 +46,7 @@ func GenerateToken(context *gin.Context) {
 		return
 	}
 
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, user.ID, *user.Admin, *user.Verified)
+	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, *user.Email, user.ID, user.Admin, *user.Verified)
 	if err != nil {
 		log.Println("Failed to generate token. Error: " + err.Error())
 		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
@@ -86,19 +86,23 @@ func ValidateToken(context *gin.Context) {
 			claims.ExpiresAt.Time = now.Add(time.Hour * 24 * 7)
 
 			// Get user object by ID and check and update admin status
-			userObject, userErr := database.GetUserInformation(claims.UserID)
-			if userErr != nil {
-				log.Println("Failed to check admin status during token refresh.")
+			userObject, err := database.GetUserInformation(claims.UserID)
+			if err != nil {
+				log.Println("Failed to check admin status during token refresh. Error: " + err.Error())
+				context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to validate session. Please log in again."})
+				context.Abort()
 				return
-			} else if *userObject.Admin != claims.Admin {
-				claims.Admin = *userObject.Admin
+			} else if userObject.Admin != claims.Admin {
+				claims.Admin = userObject.Admin
 			}
 
 			// Re-generate token with updated claims
 			token, err = auth.GenerateJWTFromClaims(claims)
 			if err != nil {
 				log.Println("Failed to re-sign JWT from claims. Error: " + err.Error())
-				token = ""
+				context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to validate session. Please log in again."})
+				context.Abort()
+				return
 			}
 		}
 

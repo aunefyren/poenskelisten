@@ -8,16 +8,16 @@ import (
 
 type User struct {
 	GormModel
-	FirstName        string    `json:"first_name" gorm:"not null"`
-	LastName         string    `json:"last_name" gorm:"not null"`
-	Email            string    `json:"email" gorm:"unique; not null"`
-	Password         string    `json:"password" gorm:"not null; type: varchar(256);"`
-	Admin            *bool     `json:"admin" gorm:"not null; default: false"`
-	Enabled          bool      `json:"enabled" gorm:"not null; default: false"`
-	Verified         *bool     `json:"verified" gorm:"not null; default: false"`
-	VerificationCode string    `json:"verification_code"`
-	ResetCode        string    `json:"reset_code"`
-	ResetExpiration  time.Time `json:"reset_expiration"`
+	FirstName        string     `json:"first_name" gorm:"not null"`
+	LastName         string     `json:"last_name" gorm:"not null"`
+	Email            *string    `json:"email" gorm:"unique; not null"`
+	Password         *string    `json:"password" gorm:"not null; type: varchar(256);"`
+	Admin            bool       `json:"admin" gorm:"not null; default: false"`
+	Enabled          *bool      `json:"enabled" gorm:"not null; default: false"`
+	Verified         *bool      `json:"verified" gorm:"not null; default: false"`
+	VerificationCode *string    `json:"verification_code"`
+	ResetCode        *string    `json:"reset_code"`
+	ResetExpiration  *time.Time `json:"reset_expiration"`
 }
 
 type UserCreationRequest struct {
@@ -48,12 +48,12 @@ func (user *User) HashPassword(password string) error {
 	if err != nil {
 		return err
 	}
-	user.Password = string(bytes)
+	*user.Password = string(bytes)
 	return nil
 }
 
 func (user *User) CheckPassword(providedPassword string) error {
-	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(providedPassword))
+	err := bcrypt.CompareHashAndPassword([]byte(*user.Password), []byte(providedPassword))
 	if err != nil {
 		return err
 	}

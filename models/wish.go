@@ -45,6 +45,7 @@ type WishObject struct {
 	WishlistID    uuid.UUID                    `json:"wishlist_id"`
 	WishClaim     []WishClaimObject            `json:"wishclaim"`
 	WishClaimable bool                         `json:"wish_claimable"`
+	Currency      string                       `json:"currency"`
 }
 
 type WishClaim struct {
