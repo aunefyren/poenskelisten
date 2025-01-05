@@ -73,12 +73,11 @@
   .profile {
     width: 20em;
     max-width: 100% !important;
+    min-width: 5em;
     height: 100%;
     display: inline-block;
     box-sizing: border-box;
-    margin: 0;
     padding: 1em;
-    margin: auto;
   }
 
   .image {
@@ -312,7 +311,7 @@ form {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
-  margin: 0.5em 0;
+  margin: 0;
   border-radius: 0.5em;
   background-color: var(--eggshell);
 }
@@ -392,7 +391,7 @@ button:disabled {
   background-color: var(--eggshell);
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: space-between;
   align-items: center;
   align-content: center;
@@ -439,9 +438,9 @@ button:disabled {
   text-align: center;
 }
 
-.wish-title, .wishlist-title {
+.wish-title {
   max-width: 50%;
-  margin: 0.5em auto;
+  margin: 0.5em 0;
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
@@ -449,11 +448,23 @@ button:disabled {
   align-items: center;
   align-content: center;
   text-align: center;
+  min-width: 5em;
+  padding: 0;
+  font-size: 1em;
 }
 
-.wish-title, .wishlist-title {
-  margin: 0.5em auto !important;
-  padding: 0 !important;
+.wishlist-title {
+  max-width: 50%;
+  margin: 0.5em 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  align-content: center;
+  text-align: center;
+  min-width: 10em;
+  padding: 0;
   font-size: 1em;
 }
 
@@ -469,19 +480,20 @@ button:disabled {
   justify-content: center;;
   align-items: center;
   align-content: center;
-  margin: 0.5em auto;
   padding: 0;
   width: auto;
   max-width: 50%;
 }
  .profile-name {
-  max-width: 75%;
-  margin: 0 0.5em;
+  max-width: 66%;
   font-size: 0.75em;
+  text-align: center;
+  margin: 0 0.25em 0 0;
+  text-align: right;
  }
 
 .profile-icon {
-  margin: 0 0.25em;
+  margin: 0;
   border-radius: 100%;
   width: 2em;
   height: 2em;
@@ -540,20 +552,20 @@ button:disabled {
   overflow: hidden;
 }
 
-.wish-note, .group-members {
-  display: none;
+.wish-note {
+  display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: space-around;
   align-items: center;
   align-content: center;
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
-  padding: 0;
-  margin: 0.25em;
+  padding: 0.5em 0.5em;
   border-radius: 0 0 1em 1em;
   transition: 2s;
+  background-color: var(--eggshell);
 }
 
 .group-member {
@@ -567,6 +579,9 @@ button:disabled {
   border: 0.15em solid var(--darkblue);
   background-color: var(--white);
   margin: 0.25em 1em;
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
 }
 
 .wish-input, .group-input, .wishlist-input {
@@ -574,7 +589,7 @@ button:disabled {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
-  margin: 5em 0.5em 1em 0.5em;
+  margin: 0;
 }
 
 .group-input, .wishlist-input {
@@ -583,7 +598,6 @@ button:disabled {
 
 .text-body{
   text-align: center;
-  margin: 0.5em 1em;
 }
 
 .title{
@@ -773,11 +787,11 @@ hr {
   width: -webkit-fill-available;
   width: -moz-available;
   display: flex;
-  flex-direction: column;
-  flex-wrap: wrap;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-content: flex-end;
-  justify-content: space-between;
-  align-items: flex-start;
+  justify-content: flex-end;
+  align-items: flex-end;
   box-sizing: border-box;
 }
 
@@ -791,7 +805,6 @@ hr {
 }
 
 .user-active-profile-photo-img, .wish-image-thumbnail-img {
-  border-radius: 10em;
   object-fit: cover;
   overflow: hidden;
   background-image: var(--white);
@@ -806,22 +819,25 @@ hr {
   max-height: 100%;
   border: solid 0.25em var(--darkblue);
   background-color: var(--white);
+  overflow: hidden;
 }
 
 .wish-image-thumbnail {
-  border-radius: 10em;
+  border-radius: 1em;
+  overflow: hidden;
   margin: 0.25em;
   width: 6em;
   height: 6em;
   max-width: 100%;
   max-height: 100%;
-  border: solid 0.25em var(--mediumblue);
+  border: solid 0.15em var(--mediumblue);
   background-color: var(--white);
 }
 
 .wish-note-text {
   margin: 0.5em;
   flex-basis: auto;
+  min-width: 6em;
 }
 
 /* The Modal (background) */
@@ -841,12 +857,22 @@ hr {
 }
 
 /* Modal Content (image) */
-.modal-content {
+.modalContent {
   margin: auto;
+  padding: 1em;
   display: block;
   width: 80%;
   max-width: 700px;
-  background-color: var(--white);
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  border-radius: 0.5em;
+  background-color: var(--eggshell);
+  overflow: hidden;
 }
 
 /* Caption of Modal Image */
@@ -862,7 +888,7 @@ hr {
 }
 
 /* Add Animation */
-.modal-content, #caption {  
+.modalContent, #caption {  
   -webkit-animation-name: zoom;
   -webkit-animation-duration: 0.6s;
   animation-name: zoom;
@@ -905,7 +931,7 @@ hr {
 }
 
 label {
-  margin: 1em 0 0 0;
+  margin: 0;
 }
 
 .wishlist-date-wrapper {
@@ -1040,4 +1066,170 @@ label {
   overflow: hidden;
   height: 100%;
   width: auto;
+}
+
+textarea {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  padding: 0.5em;
+  margin: 1em;
+  border-radius: 0.5em;
+  border: solid 0.2em var(--darkblue); 
+  background: var(--white); 
+  box-sizing: border-box;
+  font-family: 'Roboto', sans-serif;
+  font-size: 0.8rem;
+}
+
+.group-members {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  align-content: center;
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  margin: 0;
+}
+
+.newMembers {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+}
+
+.addNewMemberButtons {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  align-content: center;
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+}
+
+.top-left-button {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  justify-content: space-between;
+  align-items: flex-start;
+  box-sizing: content-box;
+  margin: 0;
+  padding: 0.5em;
+}
+
+.top-right-button {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: flex-end;
+  justify-content: space-between;
+  align-items: flex-end;
+  box-sizing: content-box;
+  margin: 0;
+  padding: 0.5em;
+}
+
+.urlWrapper {
+  text-align: center;
+  border-radius: 0.5em;
+  border: solid 0.15em var(--darkblue); 
+  margin: 1em;
+  padding: 0.25em;
+  background-color: var(--white);
+}
+
+.modalWishImage {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+#modal-img {
+  border-radius: 0.5em;
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  max-height: 40em;
+}
+
+.wish-updatedat-date {
+  margin: 0;
+  padding: 0.25em 0.5em;
+  background-color: var(--blue);
+  border-radius: 1em;
+  font-size: 0.75em;
+  color: var(--white);
+  min-width: 5em;
+  text-align: center;
+}
+
+.wish-updatedat-text {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  font-size: 0.75em;
+}
+
+.wish-updatedat {
+  margin: 0.25em 0.5em;
+}
+
+.profile-wrapper {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.icons-wrapper {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.user-wrapper {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-content: center;
+  justify-content: space-around;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
 }

@@ -26,6 +26,8 @@ func APIGetServerInfo(context *gin.Context) {
 		PoenskelistenExternalURL: config.PoenskelistenExternalURL,
 		DatabaseType:             config.DBType,
 		SMTPEnabled:              config.SMTPEnabled,
+		PoenskelistenEnvironment: config.PoenskelistenEnvironment,
+		PoenskelistenTestEmail:   config.PoenskelistenTestEmail,
 	}
 
 	// Reply

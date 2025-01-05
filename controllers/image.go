@@ -320,9 +320,13 @@ func APIGetWishImage(context *gin.Context) {
 	}
 
 	// Check if user exists
-	wishFound, _, err := database.GetWishByWishID(wishID)
-	if err != nil || !wishFound {
-		log.Println("Failed to find wish. Error: " + err.Error())
+	wish, err := database.GetWishByWishID(wishID)
+	if err != nil {
+		log.Println("Failed to get wish. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wish."})
+		context.Abort()
+		return
+	} else if wish == nil {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find wish."})
 		context.Abort()
 		return

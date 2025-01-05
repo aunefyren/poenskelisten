@@ -40,9 +40,10 @@ function load_page(result) {
 
     var html = `
                 <!-- The Modal -->
-                <div id="myModal" class="modal">
-                    <span class="close selectable">&times;</span>
-                    <img class="modal-content" id="modal-img" src="/assets/loading.svg">
+                <div id="myModal" class="modal closed">
+                    <span class="close selectable" onclick="toggleModal()">&times;</span>
+                    <div class="modalContent" id="modalContent">
+                    </div>
                     <div id="caption"></div>
                 </div>
 
@@ -74,8 +75,11 @@ function load_page(result) {
                                 </div>
                             </div>
 
-                            <div class="bottom-right-button" id="edit-wishlist" style="display: none;" title="Edit wishlist">
-                                <img class="icon-img  clickable" src="/assets/edit.svg" onclick="wishlist_edit('${user_id}', '${wishlist_id}', '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires}, {wishlist_public});">
+                            <div class="bottom-right-button" id="" style="">
+                                <img class="icon-img  clickable" id="collaborators-wishlist" src="/assets/smile.svg" onclick="showWishlistCollaboratorsInWishlist('${wishlist_id}', '${user_id}')" title="Wishlist collaborators" style="margin: 0.25em;">
+                                <img class="icon-img  clickable" id="groups-wishlist" src="/assets/users.svg" onclick="showGroupsInWishlist('${wishlist_id}', '${user_id}')" title="Wishlist groups" style="margin: 0.25em; display: none;">
+                                <img class="icon-img  clickable" id="edit-wishlist" src="/assets/edit.svg" onclick="editWishlist('${user_id}', '${wishlist_id}')" title="Edit wishlist" style="margin: 0.25em; display: none;">
+                                <img class="icon-img  clickable" id="delete-wishlist" src="/assets/trash-2.svg" onclick="deleteWishlist('${wishlist_id}', '${user_id}')" title="Delete wishlist" style="margin: 0.25em; display: none;">
                             </div>
 
                         </div>
@@ -95,17 +99,7 @@ function load_page(result) {
                         </div>
 
                         <div id="wish-input" class="wish-input">
-                            <form action="" class="icon-border" onsubmit="event.preventDefault(); send_wish('${wishlist_id}','${group_id}','${user_id}');">
-                                <label for="wish_name">Add a new wish:</label><br>
-                                <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" autocomplete="off" required />
-                                <label for="wish_note" style="margin-top: 2em;">Optional details:</label><br>
-                                <input type="text" name="wish_note" id="wish_note" placeholder="Wish note" autocomplete="off" />
-                                <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" autocomplete="off" />
-                                <input type="number" name="wish_price" id="wish_price" placeholder="Wish price in ${currency}" autocomplete="off" />
-                                <label id="form-input-icon" for="wish_image" style="margin-top: 2em;">Optional image:</label>
-                                <input type="file" name="wish_image" id="wish_image" placeholder="" value="" accept="image/png, image/jpeg" />
-                                <button id="register-button" type="submit" href="/">Add wish</button>
-                            </form>
+                            <button id="register-button" onClick="createWish('${wishlist_id}', '${user_id}', '{{currency}}');" type="" href="/">Create new wish</button>
                         </div>
 
                     </div>
@@ -161,7 +155,7 @@ function get_wishlist(wishlist_id){
             } else {
 
                 console.log(result);
-                place_wishlist(result.wishlist, result.public_url);
+                placeWishlist(result.wishlist, result.public_url);
 
             }
 
@@ -175,7 +169,7 @@ function get_wishlist(wishlist_id){
     return false;
 }
 
-function place_wishlist(wishlist_object, public_url) {
+function placeWishlist(wishlist_object, public_url) {
 
     try {
         document.getElementById("loading-icon-wrapper-wishlist").style.display = "none"
@@ -183,14 +177,17 @@ function place_wishlist(wishlist_object, public_url) {
         console.log("Error: " + e)
     }
 
+    newWishButton = document.getElementById("register-button")
+    newWishButton.outerHTML = newWishButton.outerHTML.replace("{{currency}}", wishlist_object.currency)
+
     document.getElementById("wishlist-title").innerHTML = wishlist_object.name
     document.getElementById("wishlist-description").innerHTML = wishlist_object.description
-    document.getElementById("wishlist-info").innerHTML += "<br>By: " + wishlist_object.owner.first_name + " " + wishlist_object.owner.last_name + "."
+    document.getElementById("wishlist-info").innerHTML = "<br>By: " + wishlist_object.owner.first_name + " " + wishlist_object.owner.last_name + "."
 
     try {
         
         var expiration = new Date(Date.parse(wishlist_object.date));
-        expiration_string = expiration.toLocaleDateString();
+        expiration_string = GetDateString(expiration)
 
         if(wishlist_object.expires) {
             document.getElementById("wishlist-info").innerHTML += "<br>Expires: " + expiration_string
@@ -265,7 +262,7 @@ function get_wishes(wishlist_id, group_id, user_id){
                     console.log("Failed to update currency help text. Error: " + e)
                 }
 
-                place_wishes(wishes, wishlist_id, group_id, user_id);
+                placeWishes(wishes, wishlist_id, user_id);
 
                 var collaborator = false;
                 for(var i = 0; i < result.collaborators.length; i++) {
@@ -292,14 +289,14 @@ function get_wishes(wishlist_id, group_id, user_id){
     return false;
 }
 
-function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
+function placeWishes(wishes_array, wishlist_id, user_id) {
 
     var html = ''
     var wish_id_array = []
 
     for(var i = 0; i < wishes_array.length; i++) {
 
-        var function_result = generate_wish_html(wishes_array[i], wishlist_id, group_id, user_id);
+        var function_result = generate_wish_html(wishes_array[i], wishlist_id, user_id);
         var new_html = function_result[0]
         var wish_image = function_result[1]
 
@@ -332,7 +329,7 @@ function place_wishes(wishes_array, wishlist_id, group_id, user_id) {
 
 }
 
-function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
+function generate_wish_html(wish_object, wishlist_id, user_id) {
 
     var html = '';
     var wish_with_image = false;
@@ -348,6 +345,9 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
         }
     }
 
+    var wishUpdatedAt = new Date(Date.parse(wish_object.updated_at));
+    var wishUpdatedAtString = GetDateString(wishUpdatedAt);
+
     if(wish_object.wishclaim.length > 0 && user_id != owner_id && !collaborator && wish_object.wish_claimable) {
         var transparent = " transparent"
     } else {
@@ -357,6 +357,15 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     html += '<div class="wish-wrapper ' + transparent + '" id="wish_wrapper_' + wish_object.id + '">'
 
     html += '<div class="wish" id="wish_' + wish_object.id + '">'
+
+    html += `
+        <div class="unselectable wish-updatedat" title="Updated at">
+            <div class="wish-updatedat-text">Updated at:</div>
+            <div class="wish-updatedat-date">
+                ${wishUpdatedAtString}
+            </div>
+        </div>
+    `;
     
     html += '<div class="wish-title">'
     html += '<div class="profile-icon">'
@@ -394,7 +403,7 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     }
 
     if(wish_object.url !== "") {
-        html += `<div class="profile-icon clickable" onclick="window.open('${wish_object.url}', \'_blank\')" title="Go to webpage">`
+        html += `<div class="profile-icon clickable" onclick="openURLModal('${wish_object.url}');" title="Go to webpage">`
         html += '<img class="icon-img " src="/assets/link.svg">'
         html += '</div>'
     }
@@ -406,11 +415,11 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
         var b64_wish_url = toBASE64(wish_object.url)
         var b64_wish_price = toBASE64(wish_object.price.toString())
 
-        html += `<div class="profile-icon clickable" title="Edit wish" onclick="edit_wish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}', '${b64_wish_name}', '${b64_wish_note}', '${b64_wish_url}', '${b64_wish_price}', '${owner_id}')">`;
+        html += `<div class="profile-icon clickable" title="Edit wish" onclick="editWish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}')">`;
         html += '<img class="icon-img " src="/assets/edit.svg">'
         html += '</div>'
 
-        html += `<div class="profile-icon clickable" title="Delete wish" onclick="delete_wish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}')">`;
+        html += `<div class="profile-icon clickable" title="Delete wish" onclick="deleteWish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}')">`;
         html += '<img class="icon-img " src="/assets/trash-2.svg">'
         html += '</div>'
     } else if(wish_object.wishclaim.length > 0 && wish_object.wish_claimable) {
@@ -437,7 +446,7 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     if(wish_object.image) {
         html += '<div class="wish-note expanded" style="display: flex !important;" id="wish_' + wish_object.id + '_note" title="Note">'
     } else {
-        html += '<div class="wish-note collapsed" id="wish_' + wish_object.id + '_note" title="Note">'
+        html += '<div class="wish-note collapsed" style="display: none !important;" id="wish_' + wish_object.id + '_note" title="Note">'
     }
 
     if(wish_object.image) {
@@ -482,159 +491,10 @@ function show_owner_inputs() {
     wishinput.style.display = "inline-block"
     wishlistedit = document.getElementById("edit-wishlist");
     wishlistedit.style.display = "flex"
-}
-
-function send_wish(wishlist_id, group_id, user_id){
-
-    var wish_name = document.getElementById("wish_name").value;
-    var wish_note = document.getElementById("wish_note").value;
-    var wish_url = document.getElementById("wish_url").value;
-    var wish_price = parseFloat(document.getElementById("wish_price").value);
-    var wish_image = document.getElementById('wish_image').files[0];
-
-    if(wish_image) {
-
-        if(wish_image.size > 10000000) {
-            error("Image exceeds 10MB size limit.")
-            return;
-        } else if(wish_image.size < 10000) {
-            error("Image smaller than 0.01MB size requirement.")
-            return;
-        }
-
-        wish_image = get_base64(wish_image);
-        
-        wish_image.then(function(result) {
-
-            var form_obj = { 
-                "name" : wish_name,
-                "note" : wish_note,
-                "url": wish_url,
-                "price": wish_price,
-                "image_data": result
-            };
-
-            var form_data = JSON.stringify(form_obj);
-
-            send_wish_two(form_data, wishlist_id, group_id, user_id);
-        
-        });
-
-    } else {
-
-        var form_obj = { 
-                "name" : wish_name,
-                "note" : wish_note,
-                "url": wish_url,
-                "price": wish_price,
-                "image_data": ""
-            };
-
-        var form_data = JSON.stringify(form_obj);
-
-        send_wish_two(form_data, wishlist_id, group_id, user_id);
-
-    }
-
-}
-
-function send_wish_two(form_data, wishlist_id, group_id, user_id) {
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message);
-                console.log(result);
-
-                console.log("user id " + user_id);
-
-                wishes = result.wishes;
-                place_wishes(wishes, wishlist_id, group_id, user_id);
-                clear_data();
-                
-               
-            }
-
-        } else {
-            info("Saving wish...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishes?wishlist=" + wishlist_id);
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send(form_data);
-    return false;
-}
-
-function clear_data() {
-    document.getElementById("wish_name").value = "";
-    document.getElementById("wish_note").value = "";
-    document.getElementById("wish_url").value = "";
-    document.getElementById("wish_price").value = "";
-}
-
-function delete_wish(wish_id, wishlist_id, group_id, user_id) {
-
-    if(!confirm("Are you sure you want to delete this wish?")) {
-        return;
-    }
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message);
-                console.log(result);
-
-                console.log("user id " + user_id);
-
-                wishes = result.wishes;
-                place_wishes(wishes, wishlist_id, group_id, user_id);
-                clear_data();
-                
-               
-            }
-
-        } else {
-            info("Deleting wish...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("delete", api_url + "auth/wishes/" + wish_id);
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send();
-    return false;
+    wishlistDelete = document.getElementById("delete-wishlist");
+    wishlistDelete.style.display = "flex"
+    wishlistGroups = document.getElementById("groups-wishlist");
+    wishlistGroups.style.display = "flex"
 }
 
 function claim_wish(wish_id, wishlist_id, group_id, user_id) {
@@ -673,10 +533,7 @@ function claim_wish(wish_id, wishlist_id, group_id, user_id) {
                 console.log("user id " + user_id);
 
                 wishes = result.wishes;
-                place_wishes(wishes, wishlist_id, group_id, user_id);
-                clear_data();
-                
-               
+                placeWishes(wishes, wishlist_id, user_id);
             }
 
         } else {
@@ -728,9 +585,6 @@ function unclaim_wish(wish_id, wishlist_id, group_id, user_id) {
 
                 wishes = result.wishes;
                 place_wishes(wishes, wishlist_id, group_id, user_id);
-                clear_data();
-                
-               
             }
 
         } else {
@@ -743,138 +597,6 @@ function unclaim_wish(wish_id, wishlist_id, group_id, user_id) {
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
     return false;
-}
-
-function wishlist_edit(user_id, wishlist_id, wishlist_expiration_date, wishlist_claimable, wishlist_expires, wishlist_public) {
-
-    var wishlist_title = document.getElementById("wishlist-title").innerHTML;
-    var wishlist_description = document.getElementById("wishlist-description").innerHTML;
-    var wishlist_expiration = getDateString(wishlist_expiration_date)
-
-    var checked_string = ""
-    if(wishlist_claimable) {
-        checked_string = "checked"
-    }
-
-    var expires_string = ""
-    var expireDateClass = ""
-    if(wishlist_expires) {
-        expires_string = "checked"
-        expireDateClass = "wishlist-date-wrapper-extended"
-    } else {
-        expireDateClass = "wishlist-date-wrapper-minimized"
-    }
-
-    var public_string = ""
-    if(wishlist_public) {
-        public_string = "checked"
-    }
-
-    var html = '';
-
-    html += `
-        <div class="bottom-right-button" id="edit-wishlist" style="" onclick="cancel_edit_wishlist('${wishlist_id}', '${user_id}');" title="Cancel edit">
-            <img class="icon-img  clickable" style="" src="/assets/x.svg">
-        </div>
-
-        <form action="" onsubmit="event.preventDefault(); update_wishlist('${wishlist_id}', '${user_id}');">
-                                
-            <label for="wishlist_name">Edit wishlist:</label><br>
-            <input type="text" name="wishlist_name" id="wishlist_name" placeholder="Wishlist name" value="${wishlist_title}" autocomplete="off" required />
-            
-            <input type="text" name="wishlist_description" id="wishlist_description" placeholder="Wishlist description" value="${wishlist_description}" autocomplete="off" required />
-
-            <input class="clickable" onclick="toggeWishListDate('wishlist_date_wrapper_${wishlist_id}')" style="margin-top: 2em;" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" ${expires_string}>
-            <label for="wishlist_expires" style="margin-bottom: 2em;" class="clickable">Does the wishlist expire?</label><br>
-            
-            <div id="wishlist_date_wrapper_${wishlist_id}" class="wishlist-date-wrapper ${expireDateClass}">
-                <label for="wishlist_date">When does your wishlist expire?</label><br>
-                <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" value="${wishlist_expiration}" autocomplete="off" />
-            </div>
-
-            <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" ${checked_string}>
-            <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
-
-            <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${public_string}>
-            <label for="wishlist_public" style="margin-bottom: 1em;" class="clickable">Make this wishlist public and shareable.</label><br>
-            
-            <button id="register-button" type="submit" href="/">Save wishlist</button>
-
-        </form>
-    `;
-
-    document.getElementById("wishlist-info-box").innerHTML = html;
-
-}
-
-function update_wishlist(wishlist_id, user_id) {
-    var wishlist_name = document.getElementById("wishlist_name").value;
-    var wishlist_description = document.getElementById("wishlist_description").value;
-    var wishlist_date = document.getElementById("wishlist_date").value;
-    var wishlist_date_object = new Date(wishlist_date)
-    var wishlist_date_string = wishlist_date_object.toISOString();
-    var wishlist_claimable = document.getElementById("wishlist_claimable").checked;
-    var wishlist_expires = document.getElementById("wishlist_expires").checked;
-    var wishlist_public = document.getElementById("wishlist_public").checked;
-
-    if(wishlist_public && wishlist_claimable) {
-        alert("A wishlist cannot have claimable wishes and be public to users without accounts.")
-        return;
-    }
-
-    var form_obj = { 
-        "name" : wishlist_name,
-        "description" : wishlist_description,
-        "date": wishlist_date_string,
-        "claimable": wishlist_claimable,
-        "expires": wishlist_expires,
-        "public": wishlist_public
-    };
-
-    var form_data = JSON.stringify(form_obj);
-
-    console.log(form_data)
-
-    if(!confirm("Are you sure you want to update this wishlist?")) {
-        return;
-    }
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message);
-                reset_wishlist_info_box(user_id, wishlist_id);
-                place_wishlist(result.wishlist, result.public_url);
-                show_owner_inputs();
-
-            }
-
-        } else {
-            info("Updating wishlist...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlists/" + wishlist_id + "/update");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send(form_data);
-    return false;
-
 }
 
 function reset_wishlist_info_box(user_id, wishlist_id) {
@@ -909,240 +631,14 @@ function reset_wishlist_info_box(user_id, wishlist_id) {
     document.getElementById("wishlist-info-box").innerHTML = html;
 }
 
-function edit_wish(wish_id, wishlist_id, group_id, user_id, b64_wish_name, b64_wish_note, b64_wish_url, b64_wish_price, owner_id) {
-
-    var wish_name = fromBASE64(b64_wish_name)
-    var wish_note = fromBASE64(b64_wish_note)
-    var wish_url = fromBASE64(b64_wish_url)
-    var wish_price = fromBASE64(b64_wish_price)
-
-    var html = '';
-
-    html += `
-
-        <div class="bottom-right-button" id="edit-wish" style="" onclick="cancel_edit_wish('${wish_id}', '${wishlist_id}', '${group_id}', '${user_id}');" title="Cancel edit">
-            <img class="icon-img  clickable" style="margin: 1em 1em 0 0;" src="/assets/x.svg">
-        </div>
-
-        <form action="" onsubmit="event.preventDefault(); update_wish('${wish_id}', '${user_id}', '${wishlist_id}', '${group_id}');">
-                                
-            <label for="wish_name_${wish_id}">Edit wish:</label><br>
-            <input type="text" name="wish_name_${wish_id}" id="wish_name_${wish_id}" placeholder="Wish name" value="" autocomplete="off" required />
-    
-            <label for="wish_note_${wish_id}" style="margin-top: 2em;">Optional details:</label><br>
-
-            <input type="text" name="wish_note_${wish_id}" id="wish_note_${wish_id}" placeholder="Wish note" value="" autocomplete="off" />
-
-            <input type="text" name="wish_url_${wish_id}" id="wish_url_${wish_id}" placeholder="Wish URL" value="" autocomplete="off" />
-
-            <input type="number" name="wish_price_${wish_id}" id="wish_price_${wish_id}" placeholder="Wish price in ${currency}" value="" autocomplete="off" />
-
-            <label id="form-input-icon" for="wish_image_${wish_id}" style="margin-top: 2em;">Replace optional image:</label>
-            <input type="file" name="wish_image_${wish_id}" id="wish_image_${wish_id}" placeholder="" value="" accept="image/png, image/jpeg" />
-            
-            <button id="register-button" type="submit" href="/">Save wish</button>
-
-        </form>
-    `;
-
-    document.getElementById("wish_wrapper_" + wish_id).innerHTML = html;
-
-    document.getElementById("wish_name_" + wish_id).value = wish_name;
-    document.getElementById("wish_note_" + wish_id).value = wish_note;
-    document.getElementById("wish_url_" + wish_id).value = wish_url;
-    document.getElementById("wish_price_" + wish_id).value = wish_price;
-
-}
-
-function update_wish(wish_id, user_id, wishlist_id, group_id) {
-
-    if(!confirm("Are you sure you want to update this wish?")) {
-        return;
-    }
-
-    var wish_name = document.getElementById("wish_name_" + wish_id).value;
-    var wish_note = document.getElementById("wish_note_" + wish_id).value;
-    var wish_url = document.getElementById("wish_url_" + wish_id).value;
-    var wish_price = parseFloat(document.getElementById("wish_price_"+ wish_id).value);
-    var wish_image = document.getElementById('wish_image_' + wish_id).files[0];
-
-    if(wish_image) {
-
-        if(wish_image.size > 10000000) {
-            error("Image exceeds 10MB size limit.")
-            return;
-        } else if(wish_image.size < 10000) {
-            error("Image smaller than 0.01MB size requirement.")
-            return;
-        }
-
-        wish_image = get_base64(wish_image);
-        
-        wish_image.then(function(result) {
-
-            var form_obj = { 
-                "name" : wish_name,
-                "note" : wish_note,
-                "url": wish_url,
-                "price": wish_price,
-                "image_data": result
-            };
-
-            var form_data = JSON.stringify(form_obj);
-
-            update_wish_two(form_data, wish_id, user_id, wishlist_id, group_id);
-        
-        });
-
-    } else {
-
-        var form_obj = { 
-            "name" : wish_name,
-            "note" : wish_note,
-            "url": wish_url,
-            "price": wish_price,
-            "image_data": ""
-        };
-
-        var form_data = JSON.stringify(form_obj);
-        update_wish_two(form_data, wish_id, user_id, wishlist_id, group_id)
-
-    }
-
-}
-
-function update_wish_two(form_data, wish_id, user_id, wishlist_id, group_id) {
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message);
-
-                var wish_array = generate_wish_html(result.wish, wishlist_id, group_id, user_id);
-                var wish_html = wish_array[0];
-                var wish_image = wish_array[1];
-
-                document.getElementById("wish_wrapper_" + wish_id).outerHTML = wish_html;
-
-                if(wish_image) {
-                    GetWishImageThumbail(result.wish.id)
-                }
-
-            }
-
-        } else {
-            info("Updating wishlist...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishes/" + wish_id + "/update");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send(form_data);
-    return false;
-
-}
-
-function cancel_edit_wish(wish_id, wishlist_id, group_id, user_id) {
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                var wish_array = generate_wish_html(result.wish, wishlist_id, group_id, user_id);
-                var wish_html = wish_array[0];
-                var wish_image = wish_array[1];
-
-                document.getElementById("wish_wrapper_" + wish_id).outerHTML = wish_html;
-
-                if(wish_image) {
-                    GetWishImageThumbail(result.wish.id)
-                }
-
-            }
-
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "auth/wishes/" + wish_id);
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send();
-    return false;
-
-}
-
-function cancel_edit_wishlist(wishlist_id, user_id) {
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                reset_wishlist_info_box(user_id, wishlist_id);
-                place_wishlist(result.wishlist, result.public_url);
-                show_owner_inputs();
-
-            }
-
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "auth/wishlists/" + wishlist_id);
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send();
-    return false;
-
-}
-
 function toggle_wish_modal(wishID) {
-
-    document.getElementById("myModal").style.display = "block";
+    modalHTML = `
+        <div class="modalWishImage">
+            <img id="modal-img" src="/assets/loading.gif">
+        </div>
+    `;
+    toggleModal(modalHTML);
     GetWishImage(wishID);
-
 }
 
 function GetWishImage(wishID) {
@@ -1189,7 +685,7 @@ function GetWishImage(wishID) {
 }
 
 function PlaceWishImageInModal(imageBase64) {
-
+    
     document.getElementById("modal-img").src = imageBase64
 
 }
@@ -1248,4 +744,21 @@ function copyPublicLink() {
 
     alert("URL copied to clipboard.")
 
+}
+
+function placeWish(wishObject, wishlistID, groupID, userID) {
+    var wish_array = generate_wish_html(wishObject, wishlistID, groupID, userID);
+    var wish_html = wish_array[0];
+    var wish_image = wish_array[1];
+
+    document.getElementById("wish_wrapper_" + wishObject.id).remove();
+    document.getElementById("wishes-box").innerHTML = wish_html + document.getElementById("wishes-box").innerHTML
+
+    if(wish_image) {
+        GetWishImageThumbail(result.wish.id)
+    }
+}
+
+function removeWishlist(wishlistID, userID) {
+    window.location.href = "/wishlists";
 }

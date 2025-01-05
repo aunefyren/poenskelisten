@@ -95,11 +95,6 @@ func GetWishesFromWishlist(context *gin.Context) {
 		return
 	}
 
-	// Sort wishes by creation date
-	sort.Slice(wishObjects, func(i, j int) bool {
-		return wishObjects[j].CreatedAt.Before(wishObjects[i].CreatedAt)
-	})
-
 	owner_id, err := database.GetWishlistOwner(wishlist_id_int)
 	if err != nil {
 		log.Println("Failed to get wishlist owner. Error: " + err.Error())
@@ -120,6 +115,11 @@ func GetWishesFromWishlist(context *gin.Context) {
 	for _, wishlistCollab := range wishlistCollabs {
 		wishlistCollabsIntArray = append(wishlistCollabsIntArray, wishlistCollab.UserID)
 	}
+
+	// Sort wishes by creation date
+	sort.Slice(wishObjects, func(i, j int) bool {
+		return wishObjects[j].UpdatedAt.Before(wishObjects[i].UpdatedAt)
+	})
 
 	context.JSON(http.StatusOK, gin.H{"owner_id": owner_id, "collaborators": wishlistCollabsIntArray, "wishes": wishObjects, "message": "Wishes retrieved.", "currency": config.PoenskelistenCurrency, "padding": config.PoenskelistenCurrencyPad})
 }
@@ -173,6 +173,12 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 		return models.WishObject{}, errors.New("Failed to convert wishlist collaborators to objects.")
 	}
 
+	configFile, err := config.GetConfig()
+	if err != nil {
+		log.Println("Failed to get config. Error: " + err.Error())
+		return models.WishObject{}, errors.New("Failed to get config.")
+	}
+
 	// Purge the reply if the requester is the owner
 	if requestUserID != nil {
 		if wish.OwnerID == *requestUserID {
@@ -205,6 +211,7 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 	wishObject.WishlistID = wish.WishlistID
 	wishObject.WishClaimable = *wishlist.Claimable
 	wishObject.Collaborators = wishlistCollabObjects
+	wishObject.Currency = configFile.PoenskelistenCurrency
 
 	return wishObject, nil
 
@@ -442,22 +449,28 @@ func DeleteWish(context *gin.Context) {
 		return
 	}
 
-	// get wishlist id
-	wishlistFound, wishlist_id, err := database.GetWishlistFromWish(wish_id_int)
+	wish, err := database.GetWishByWishID(wish_id_int)
 	if err != nil {
-		log.Println("Failed to get wishlist. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist."})
+		log.Println("Failed to get wish. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wish."})
 		context.Abort()
 		return
-	} else if !wishlistFound {
-		log.Println("Failed to get wishlist. Error: " + err.Error())
-		context.JSON(http.StatusNotFound, gin.H{"error": "Failed to get wishlist."})
+	} else if wish == nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find wish."})
+		context.Abort()
+		return
+	}
+
+	wishObject, err := ConvertWishToWishObject(*wish, nil)
+	if err != nil {
+		log.Println("Failed to convert wish to wish object. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert wish to wish object."})
 		context.Abort()
 		return
 	}
 
 	// Verify if collaboration exists
-	collaborationStatus, err := database.VerifyWishlistCollaboratorToWishlist(wishlist_id, UserID)
+	collaborationStatus, err := database.VerifyWishlistCollaboratorToWishlist(wish.WishlistID, UserID)
 	if err != nil {
 		log.Println("Failed to verify wishlist collaborator status. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wishlist collaborator status."})
@@ -466,21 +479,22 @@ func DeleteWish(context *gin.Context) {
 	}
 
 	// Verify ownership exists
-	MembershipStatus, err := database.VerifyUserOwnershipToWishlist(UserID, wishlist_id)
+	MembershipStatus, err := database.VerifyUserOwnershipToWishlist(UserID, wish.WishlistID)
 	if err != nil {
 		log.Println("Failed to verify ownership of wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of wishlist."})
 		context.Abort()
 		return
 	} else if !MembershipStatus && !collaborationStatus {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
 		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not an owner or collaborator of this wishlist."})
 		context.Abort()
 		return
 	}
 
+	wish.Enabled = false
+
 	// delete wish
-	err = database.DeleteWish(wish_id_int)
+	*wish, err = database.UpdateWishInDB(*wish)
 	if err != nil {
 		log.Println("Failed to delete wish. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete wish."})
@@ -488,7 +502,7 @@ func DeleteWish(context *gin.Context) {
 		return
 	}
 
-	_, wishes, err := database.GetWishesFromWishlist(wishlist_id)
+	_, wishes, err := database.GetWishesFromWishlist(wish.WishlistID)
 	if err != nil {
 		log.Println("Failed to get wishes from database. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishes from database."})
@@ -512,6 +526,25 @@ func DeleteWish(context *gin.Context) {
 	// Return response
 	context.JSON(http.StatusCreated, gin.H{"message": "Wish deleted.", "wishes": wishObjects})
 
+	if wishObject.WishClaimable {
+		for _, wishClaim := range wishObject.WishClaim {
+			if wishClaim.Enabled {
+				wishlist, err := database.GetWishlist(wish.WishlistID)
+				if err != nil {
+					log.Println("Failed to get wishlist. Error: " + err.Error())
+					return
+				}
+
+				wishlistObject, err := ConvertWishlistToWishlistObject(wishlist, nil)
+				if err != nil {
+					log.Println("Failed to convert wishlist to wishlist object. Error: " + err.Error())
+					return
+				}
+
+				utilities.SendSMTPDeletedClaimedWish(wishClaim.User, wishObject, wishlistObject)
+			}
+		}
+	}
 }
 
 func parseRawURLFunction(rawurl string) (domain string, scheme string, err error) {
@@ -563,20 +596,19 @@ func RegisterWishClaim(context *gin.Context) {
 		return
 	}
 
-	wishlistFound, db_wishlist_id, err := database.GetWishlistFromWish(wish_id_int)
+	db_wishlist_id, err := database.GetWishlistIDFromWish(wish_id_int)
 	if err != nil {
 		log.Println("Failed to get wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist."})
 		context.Abort()
 		return
-	} else if !wishlistFound {
-		log.Println("Failed to get wishlist ID. Error: " + err.Error())
+	} else if db_wishlist_id == nil {
 		context.JSON(http.StatusNotFound, gin.H{"error": "Failed to get wishlist ID."})
 		context.Abort()
 		return
 	}
 
-	wishlistFound, wishlistObject, err := database.GetWishlistByWishlistID(db_wishlist_id)
+	wishlistFound, wishlistObject, err := database.GetWishlistByWishlistID(*db_wishlist_id)
 	if err != nil {
 		log.Println("Failed to get wishlist object. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist object."})
@@ -592,7 +624,7 @@ func RegisterWishClaim(context *gin.Context) {
 		return
 	}
 
-	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(UserID, db_wishlist_id)
+	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(UserID, *db_wishlist_id)
 	if err != nil {
 		log.Println("Failed to verify ownership of wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of wishlist."})
@@ -600,7 +632,7 @@ func RegisterWishClaim(context *gin.Context) {
 		return
 	}
 
-	WishlistMembership, err := database.VerifyUserMembershipToGroupmembershipToWishlist(UserID, db_wishlist_id)
+	WishlistMembership, err := database.VerifyUserMembershipToGroupmembershipToWishlist(UserID, *db_wishlist_id)
 	if err != nil {
 		log.Println("Failed to verify membership to wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to wishlist."})
@@ -615,7 +647,7 @@ func RegisterWishClaim(context *gin.Context) {
 	}
 
 	// Verify if collaboration exists
-	collaborationStatus, err := database.VerifyWishlistCollaboratorToWishlist(db_wishlist_id, UserID)
+	collaborationStatus, err := database.VerifyWishlistCollaboratorToWishlist(*db_wishlist_id, UserID)
 	if err != nil {
 		log.Println("Failed to verify wishlist collaborator status. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wishlist collaborator status."})
@@ -669,7 +701,7 @@ func RegisterWishClaim(context *gin.Context) {
 
 	if wishclaim.WishlistID != nil {
 
-		_, wishes, err := database.GetWishesFromWishlist(db_wishlist_id)
+		_, wishes, err := database.GetWishesFromWishlist(*db_wishlist_id)
 		if err != nil {
 			log.Println("Failed to get wishes from database. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishes from database."})
@@ -729,20 +761,19 @@ func RemoveWishClaim(context *gin.Context) {
 		return
 	}
 
-	wishlistFound, db_wishlist_id, err := database.GetWishlistFromWish(wish_id_int)
+	db_wishlist_id, err := database.GetWishlistIDFromWish(wish_id_int)
 	if err != nil {
 		log.Println("Failed to get wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist."})
 		context.Abort()
 		return
-	} else if !wishlistFound {
-		log.Println("Failed to get wishlist. Error: " + err.Error())
+	} else if db_wishlist_id == nil {
 		context.JSON(http.StatusNotFound, gin.H{"error": "Failed to get wishlist."})
 		context.Abort()
 		return
 	}
 
-	wishlistFound, wishlistObject, err := database.GetWishlistByWishlistID(db_wishlist_id)
+	wishlistFound, wishlistObject, err := database.GetWishlistByWishlistID(*db_wishlist_id)
 	if err != nil {
 		log.Println("Failed to get wishlist object. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist object."})
@@ -758,7 +789,7 @@ func RemoveWishClaim(context *gin.Context) {
 		return
 	}
 
-	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(UserID, db_wishlist_id)
+	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(UserID, *db_wishlist_id)
 	if err != nil {
 		log.Println("Failed to verify ownership of wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of wishlist."})
@@ -766,7 +797,7 @@ func RemoveWishClaim(context *gin.Context) {
 		return
 	}
 
-	WishlistMembership, err := database.VerifyUserMembershipToGroupmembershipToWishlist(UserID, db_wishlist_id)
+	WishlistMembership, err := database.VerifyUserMembershipToGroupmembershipToWishlist(UserID, *db_wishlist_id)
 	if err != nil {
 		log.Println("Failed to verify membership to wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to wishlist."})
@@ -781,7 +812,7 @@ func RemoveWishClaim(context *gin.Context) {
 	}
 
 	// Verify if collaboration exists
-	collaborationStatus, err := database.VerifyWishlistCollaboratorToWishlist(db_wishlist_id, UserID)
+	collaborationStatus, err := database.VerifyWishlistCollaboratorToWishlist(*db_wishlist_id, UserID)
 	if err != nil {
 		log.Println("Failed to verify wishlist collaborator status. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wishlist collaborator status."})
@@ -818,7 +849,7 @@ func RemoveWishClaim(context *gin.Context) {
 
 	if wishclaim.WishlistID != nil {
 
-		_, wishes, err := database.GetWishesFromWishlist(db_wishlist_id)
+		_, wishes, err := database.GetWishesFromWishlist(*db_wishlist_id)
 		if err != nil {
 			log.Println("Failed to get wishes from database. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishes from database."})
@@ -851,7 +882,7 @@ func RemoveWishClaim(context *gin.Context) {
 func APIUpdateWish(context *gin.Context) {
 
 	// Create wish request
-	var wishID = context.Param("wish_id")
+	var wishIDString = context.Param("wish_id")
 	var wish models.WishCreationRequest
 
 	// Bind the incoming request body to the model
@@ -878,7 +909,7 @@ func APIUpdateWish(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wishIDInt, err := uuid.Parse(wishID)
+	wishID, err := uuid.Parse(wishIDString)
 	if err != nil {
 		log.Println("Failed to parse wish ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})
@@ -886,21 +917,21 @@ func APIUpdateWish(context *gin.Context) {
 		return
 	}
 
-	// Get wishlist ID
-	wishlistFound, wishlistID, err := database.GetWishlistFromWish(wishIDInt)
+	// Get original wish
+	wishOriginal, err := database.GetWishByWishID(wishID)
 	if err != nil {
-		log.Println("Failed to get wishlist ID. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist ID."})
+		log.Println("Failed to get wish. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wish."})
 		context.Abort()
 		return
-	} else if !wishlistFound {
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
+	} else if wishOriginal == nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wish."})
 		context.Abort()
 		return
 	}
 
 	// Verify if collaboration exists
-	collaborationStatus, err := database.VerifyWishlistCollaboratorToWishlist(wishlistID, userID)
+	collaborationStatus, err := database.VerifyWishlistCollaboratorToWishlist(wishOriginal.WishlistID, userID)
 	if err != nil {
 		log.Println("Failed to verify wishlist collaborator status. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wishlist collaborator status."})
@@ -909,35 +940,20 @@ func APIUpdateWish(context *gin.Context) {
 	}
 
 	// Verify ownership exists
-	MembershipStatus, err := database.VerifyUserOwnershipToWishlist(userID, wishlistID)
+	MembershipStatus, err := database.VerifyUserOwnershipToWishlist(userID, wishOriginal.WishlistID)
 	if err != nil {
 		log.Println("Failed to verify ownership of wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of wishlist."})
 		context.Abort()
 		return
 	} else if !MembershipStatus && !collaborationStatus {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
 		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not an owner or collaborator of this wishlist."})
-		context.Abort()
-		return
-	}
-
-	// Get original wish
-	wishFound, wishOriginal, err := database.GetWishByWishID(wishIDInt)
-	if err != nil {
-		log.Println("Failed to get wish. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wish."})
-		context.Abort()
-		return
-	} else if !wishFound {
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wish."})
 		context.Abort()
 		return
 	}
 
 	// If new wish name, verify name
 	if wish.Name != wishOriginal.Name {
-
 		if len(wish.Name) < 5 || wish.Name == "" {
 			context.JSON(http.StatusBadRequest, gin.H{"error": "The name of the wish must be five or more letters."})
 			context.Abort()
@@ -958,7 +974,7 @@ func APIUpdateWish(context *gin.Context) {
 			return
 		}
 
-		unique_wish_name, err := database.VerifyUniqueWishNameinWishlist(wish.Name, wishlistID)
+		unique_wish_name, err := database.VerifyUniqueWishNameinWishlist(wish.Name, wishOriginal.WishlistID)
 		if err != nil {
 			log.Println("Failed to verify wish name. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wish name."})
@@ -970,10 +986,10 @@ func APIUpdateWish(context *gin.Context) {
 			return
 		}
 
+		wishOriginal.Name = strings.TrimSpace(wish.Name)
 	}
 
-	if wish.URL != wishOriginal.URL && wishOriginal.URL != "" {
-
+	if wish.URL != wishOriginal.URL && wish.URL != "" {
 		// Validate wish URL format
 		stringMatch, requirements, err := utilities.ValidateTextCharacters(wish.URL)
 		if err != nil {
@@ -994,9 +1010,11 @@ func APIUpdateWish(context *gin.Context) {
 			context.Abort()
 			return
 		}
+
+		wishOriginal.URL = strings.TrimSpace(wish.URL)
 	}
 
-	if wish.Note != wishOriginal.Note && wishOriginal.Note != "" {
+	if wish.Note != wishOriginal.Note && wish.Note != "" {
 
 		// Validate wish note format
 		stringMatch, requirements, err := utilities.ValidateTextCharacters(wish.Note)
@@ -1012,11 +1030,16 @@ func APIUpdateWish(context *gin.Context) {
 			return
 		}
 
+		wishOriginal.Note = strings.TrimSpace(wish.Note)
+	}
+
+	if wish.Price != wishOriginal.Price && wish.Price != 0 {
+		wishOriginal.Price = wish.Price
 	}
 
 	// Save image
 	if wish.Image != "" {
-		err = SaveWishImage(wishIDInt, wish.Image)
+		err = SaveWishImage(wishID, wish.Image)
 		if err != nil {
 			log.Println("Failed to save wish image. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save wish image."})
@@ -1025,8 +1048,7 @@ func APIUpdateWish(context *gin.Context) {
 		}
 	}
 
-	// Create user in DB
-	err = database.UpdateWishValuesInDatabase(wishIDInt, wish.Name, wish.Note, wish.URL, wish.Price)
+	*wishOriginal, err = database.UpdateWishInDB(*wishOriginal)
 	if err != nil {
 		log.Println("Failed to update wish in database. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update wish in database."})
@@ -1034,20 +1056,7 @@ func APIUpdateWish(context *gin.Context) {
 		return
 	}
 
-	wishFound, wishNew, err := database.GetWishByWishID(wishIDInt)
-	if err != nil {
-		log.Println("Failed to get wish from database. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wish from database."})
-		context.Abort()
-		return
-	} else if !wishFound {
-		log.Println("Failed to find wish in database. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wish in database."})
-		context.Abort()
-		return
-	}
-
-	wishObject, err := ConvertWishToWishObject(wishNew, &userID)
+	wishObject, err := ConvertWishToWishObject(*wishOriginal, &userID)
 	if err != nil {
 		log.Println("Failed to convert wish to wish object. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert wish to wish object."})
@@ -1082,20 +1091,20 @@ func APIGetWish(context *gin.Context) {
 		return
 	}
 
-	wishlistFound, wishlistID, err := database.GetWishlistFromWish(wishIDInt)
+	wishlistID, err := database.GetWishlistIDFromWish(wishIDInt)
 	if err != nil {
 		log.Println("Failed to get wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist."})
 		context.Abort()
 		return
-	} else if !wishlistFound {
+	} else if wishlistID == nil {
 		log.Println("Failed to find wishlist. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
 		context.Abort()
 		return
 	}
 
-	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(userID, wishlistID)
+	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(userID, *wishlistID)
 	if err != nil {
 		log.Println("Failed to verify wishlist ownership. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wishlist ownership."})
@@ -1103,7 +1112,7 @@ func APIGetWish(context *gin.Context) {
 		return
 	}
 
-	WishlistMembership, err := database.VerifyUserMembershipToGroupmembershipToWishlist(userID, wishlistID)
+	WishlistMembership, err := database.VerifyUserMembershipToGroupmembershipToWishlist(userID, *wishlistID)
 	if err != nil {
 		log.Println("Failed to verify wishlist membership. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wishlist membership."})
@@ -1117,15 +1126,19 @@ func APIGetWish(context *gin.Context) {
 		return
 	}
 
-	_, wish, err := database.GetWishByWishID(wishIDInt)
+	wish, err := database.GetWishByWishID(wishIDInt)
 	if err != nil {
 		log.Println("Failed to get wish from database. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wish from database."})
 		context.Abort()
 		return
+	} else if wish == nil {
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find wish in the database."})
+		context.Abort()
+		return
 	}
 
-	wishObject, err := ConvertWishToWishObject(wish, &userID)
+	wishObject, err := ConvertWishToWishObject(*wish, &userID)
 	if err != nil {
 		log.Println("Failed to convert wish to wish object. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert wish to wish object."})

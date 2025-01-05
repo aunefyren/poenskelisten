@@ -3,10 +3,12 @@ package database
 import (
 	"aunefyren/poenskelisten/models"
 	"errors"
+
+	"github.com/google/uuid"
 )
 
 // Set news post to disabled
-func DeleteNewsPost(newsID int) error {
+func DeleteNewsPost(newsID uuid.UUID) error {
 	var news models.News
 	newsRecords := Instance.Model(news).Where("`news`.ID= ?", newsID).Update("enabled", 0)
 	if newsRecords.Error != nil {
@@ -38,7 +40,7 @@ func GetNewsPosts() ([]models.News, error) {
 
 }
 
-func GetNewsPostByNewsID(newsID int) (models.News, error) {
+func GetNewsPostByNewsID(newsID uuid.UUID) (models.News, error) {
 
 	var newsPost models.News
 
@@ -52,4 +54,17 @@ func GetNewsPostByNewsID(newsID int) (models.News, error) {
 
 	return newsPost, nil
 
+}
+
+func UpdateNewsPostInDB(newsPostOriginal models.News) (newsPost models.News, err error) {
+	err = nil
+	newsPost = newsPostOriginal
+
+	record := Instance.Save(&newsPost)
+
+	if record.Error != nil {
+		return newsPost, record.Error
+	}
+
+	return
 }

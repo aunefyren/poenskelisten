@@ -40,6 +40,14 @@ function load_page(result) {
     }
 
     var html = `
+                <!-- The Modal -->
+                <div id="myModal" class="modal closed">
+                    <span class="close selectable" style="padding: 0 0.25em;" onclick="toggleModal()">&times;</span>
+                    <div class="modalContent" id="modalContent">
+                    </div>
+                    <div id="caption"></div>
+                </div>
+
                 <div class="" id="front-page">
                     
                     <div class="module">
@@ -59,8 +67,11 @@ function load_page(result) {
                             <div class="text-body" id="group-info">
                             </div>
 
-                            <div class="bottom-right-button" id="edit-group" style="display: none;">
-                                <img class="icon-img  clickable" src="/assets/edit.svg" onclick="group_edit('${user_id}', '${group_id}');" title="Edit group">
+                            <div class="bottom-right-button" id="" style="">
+                                <img class="icon-img clickable" src="/assets/user.svg" onclick="groupMembers('${group_id}', '${user_id}')" title="Configure members" style="margin: 0.25em;">
+                                <img class="icon-img clickable" src="/assets/list.svg" onclick="showWishlistsInGroup('${group_id}', '${user_id}')" title="Configure wishlists" style="margin: 0.25em;">
+                                <img class="icon-img clickable" id="edit-group" src="/assets/edit.svg" onclick="editGroup('${user_id}', '${group_id}');" title="Edit group" style="margin: 0.25em; display: none;">
+                                <img class="icon-img clickable" id="delete-group" src="/assets/trash-2.svg" onclick="deleteGroup('${group_id}');" title="Delete group" style="margin: 0.25em; display: none;"></img>
                             </div>
 
                         </div>
@@ -94,31 +105,7 @@ function load_page(result) {
                         </div>
 
                         <div id="wishlist-input" class="wishlist-input">
-                            <form action="" class="icon-border" onsubmit="event.preventDefault(); create_wishlist('${group_id}', '${user_id}');">
-                                
-                                <label for="wishlist_name">Create a new wishlist in this group:</label><br>
-
-                                <input type="text" name="wishlist_name" id="wishlist_name" placeholder="Wishlist name" autocomplete="off" required />
-                                
-                                <input type="text" name="wishlist_description" id="wishlist_description" placeholder="Wishlist description" autocomplete="off" required />
-                                
-                                <input class="clickable" onclick="toggeWishListDate('wishlist_date_wrapper_new')" style="margin-top: 2em;" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" checked>
-                                <label for="wishlist_expires" style="margin-bottom: 2em;" class="clickable">Does the wishlist expire?</label><br>
-                                
-                                <div id="wishlist_date_wrapper_new" class="wishlist-date-wrapper wishlist-date-wrapper-extended">
-                                    <label for="wishlist_date">When does your wishlist expire?</label><br>
-                                    <input type="date" name="wishlist_date" id="wishlist_date" placeholder="Wishlist expiration" autocomplete="off" />
-                                </div>
-
-                                <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" checked>
-                                <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
-
-                                <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm">
-                                <label for="wishlist_public" style="margin-bottom: 1em;" class="clickable">Make this wishlist public and shareable.</label><br>
-                                
-                                <button id="register-button" type="submit" href="/">Create wishlist in this group</button>
-
-                            </form>
+                            <button id="register-button" onClick="createNewWishlist('${group_id}', '${user_id}');" type="" href="/">Create new wishlist</button>
                         </div>
       
                     </div>
@@ -162,10 +149,10 @@ function get_group(group_id){
             } else {
 
                 console.log(result);
-                place_group(result.group);
+                placeGroup(result.group);
 
                 if(result.group.owner.id == user_id) {
-                    show_owner_inputs();
+                    showOwnerInputs();
                     groupOwnerID = result.group.owner.id;
                 }
 
@@ -181,7 +168,7 @@ function get_group(group_id){
     return false;
 }
 
-function place_group(group_object) {
+function placeGroup(group_object, showOwnerInput) {
     try {
         document.getElementById("loading-icon-wrapper-group").style.display = "none"
     } catch(e) {
@@ -190,7 +177,12 @@ function place_group(group_object) {
 
     document.getElementById("group-title").innerHTML = group_object.name
     document.getElementById("group-description").innerHTML = group_object.description
-    document.getElementById("group-info").innerHTML += "<br>Owner: " + group_object.owner.first_name + " " + group_object.owner.last_name
+    document.getElementById("group-info").innerHTML = "<br>Owner: " + group_object.owner.first_name + " " + group_object.owner.last_name
+    
+    if(showOwnerInput) {
+        console.log("Showing")
+        showOwnerInputs();
+    }
 }
 
 function get_wishlists(group_id, user_id){
@@ -218,7 +210,7 @@ function get_wishlists(group_id, user_id){
                 clearResponse();
                 wishlists = result.wishlists;
                 console.log(result);
-                place_wishlists(wishlists, group_id, user_id);
+                placeWishlists(wishlists, user_id, group_id);
 
             }
 
@@ -234,7 +226,7 @@ function get_wishlists(group_id, user_id){
     return false;
 }
 
-function place_wishlists(wishlists_array, group_id, user_id) {
+function placeWishlists(wishlists_array, user_id, group_id) {
 
     var html_regular = ''
     var html_expired = ''
@@ -263,18 +255,35 @@ function place_wishlists(wishlists_array, group_id, user_id) {
             console.log("Failed to parse datetime. Error: " + err)
         }
 
-        html += '<div class="wishlist-wrapper">'
+        var wishUpdatedAt = new Date(Date.parse(wishlists_array[i].wish_updated_at));
+        var wishUpdatedAtString = GetDateString(wishUpdatedAt)
+
+        html += `<div class="wishlist-wrapper" id="wishlistWrapper-${wishlists_array[i].id}">`
 
         html += '<div class="wishlist hoverable-light">'
+
+        if(wishlists_array[i].wish_updated_at) {
+            html += `
+                <div class="unselectable wish-updatedat" title="Updated at">
+                    <div class="wish-updatedat-text">Updated at:</div>
+                    <div class="wish-updatedat-date" id="wishlistUpdatedAt-${wishlists_array[i].id}">
+                        ${wishUpdatedAtString}
+                    </div>
+                </div>
+            `;
+        }
         
         html += `<div class="wishlist-title clickable underline" onclick="location.href = '/wishlists/${wishlists_array[i].id}'" title="Go to wishlist">`;
         html += `<div class="profile-icon">`
         html += '<img class="icon-img " src="/assets/list.svg">'
-        html += '</div>'
+        html += `</div><b id="wishlistName-${wishlists_array[i].id}">`
         html += wishlists_array[i].name
-        html += '</div>'
+        html += '</b></div>'
 
         html += '<div class="profile" title="Wishlist owner">'
+
+        html += '<div class="profile-wrapper">'
+
         html += `<div class="profile-name">`
         html += wishlists_array[i].owner.first_name + " " + wishlists_array[i].owner.last_name
         html += '</div>'
@@ -282,22 +291,39 @@ function place_wishlists(wishlists_array, group_id, user_id) {
         html += '<img class="icon-img " src="/assets/user.svg">'
         html += '</div>'
 
+        html += '</div>'
+
+        html += '<div class="icons-wrapper">'
+
+        html += `
+            <div class="profile-icon clickable" onclick="showWishlistCollaboratorsInWishlist('${wishlists_array[i].id}', '${user_id}')" title="Wishlist collaborators">
+                <img class="icon-img " src="/assets/smile.svg">
+            </div>
+        `;
+
         if(wishlists_array[i].owner.id == user_id) {
-            html += `<div class="profile-icon clickable" onclick="delete_wishlist('${wishlists_array[i].id}', '${group_id}', '${user_id}')" title="Delete wishlist">`;
+            html += `
+                <div class="profile-icon clickable" onclick="showGroupsInWishlist('${wishlists_array[i].id}', '${user_id}', '${group_id}')" title="Wishlist groups">
+                    <img class="icon-img " src="/assets/users.svg">
+                </div>
+            `;
+        }
+
+        if(wishlists_array[i].owner.id == user_id) {
+            html += `
+                <div class="profile-icon clickable" onclick="editWishlist('${user_id}', '${wishlists_array[i].id}')" title="Edit wishlist">
+                    <img class="icon-img " src="/assets/edit.svg">
+                </div>
+            `;
+
+            html += `<div class="profile-icon clickable" onclick="deleteWishlist('${wishlists_array[i].id}', '${user_id}')" title="Delete wishlist">`;
             html += '<img class="icon-img " src="/assets/trash-2.svg">'
             html += '</div>'
         }
 
-        if(groupOwnerID == user_id) {
-            html += `<div class="profile-icon clickable" onclick="remove_member('${wishlists_array[i].id}','${group_id}', '${user_id}')" title="Remove wishlist from group">`;
-            html += '<img class="icon-img " src="/assets/x.svg">'
-            html += '</div>'
-        }
-
         html += '</div>'
-
         html += '</div>'
-
+        html += '</div>'
         html += '</div>'
 
         if(expired) {
@@ -335,138 +361,7 @@ function place_wishlists(wishlists_array, group_id, user_id) {
     }
 }
 
-function create_wishlist(group_id, user_id) {
-
-    var wishlist_name = document.getElementById("wishlist_name").value;
-    var wishlist_description = document.getElementById("wishlist_description").value;
-    var wishlist_date = document.getElementById("wishlist_date").value;
-    var wishlist_expires = document.getElementById("wishlist_expires").checked;
-    var wishlist_claimable = document.getElementById("wishlist_claimable").checked;
-    var wishlist_public = document.getElementById("wishlist_public").checked;
-
-    if(wishlist_expires) {
-        try {
-            var wishlist_date_object = new Date(wishlist_date)
-            var wishlist_date_string = wishlist_date_object.toISOString();
-        } catch(e) {
-            alert("Invalid date selected.");
-            return;
-        }
-    } else {
-        var wishlist_date_string = "2006-01-02T15:04:05.000Z";
-    }
-
-    var form_obj = { 
-        "name" : wishlist_name,
-        "description" : wishlist_description,
-        "date": wishlist_date_string,
-        "group": group_id,
-        "claimable": wishlist_claimable,
-        "expires": wishlist_expires,
-        "public": wishlist_public
-    };
-
-    var form_data = JSON.stringify(form_obj);
-
-    console.log(form_data)
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message);
-                console.log(result);
-
-                console.log("User ID: " + user_id);
-
-                wishlists = result.wishlists;
-                place_wishlists(wishlists, group_id, user_id);
-                clear_data();
-                
-            }
-
-        } else {
-            info("Saving wishlist...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishlists");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send(form_data);
-    return false;
-
-}
-
-function clear_data() {
-    document.getElementById("wishlist_name").value = "";
-    document.getElementById("wishlist_description").value = "";
-    document.getElementById("wishlist_date").value = "";
-}
-
-function delete_wishlist(wishlist_id, group_id, user_id) {
-
-    if(!confirm("Are you sure you want to delete this wishlist?")) {
-        return;
-    }
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message);
-                console.log(result);
-
-                console.log("User ID: " + user_id);
-
-                wishlists = result.wishlists;
-                place_wishlists(wishlists, group_id, user_id);
-                
-            }
-
-        } else {
-            info("Deleting group...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("delete", api_url + "auth/wishlists/" + wishlist_id + "?group=" + group_id);
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send();
-    return false;
-
-}
-
 function toggle_expired_wishlists() {
-
     wishlist_expired = document.getElementById("wishlists-box-expired");
     wishlist_expired_arrow = document.getElementById("wishlist_expired_arrow");
 
@@ -483,152 +378,11 @@ function toggle_expired_wishlists() {
     }
 }
 
-function reset_group_info_box(user_id, group_id) {
-    var html = `
-    <div class="loading-icon-wrapper" id="loading-icon-wrapper-group">
-        <img class="loading-icon" src="/assets/loading.svg">
-    </div>
-
-    <div id="group-title" class="title">
-    </div>
-
-    <div class="text-body" id="group-description">
-    </div>
-
-    <div class="text-body" id="group-info">
-    </div>
-
-    <div class="bottom-right-button" id="edit-group" style="display: none;">
-        <img class="icon-img  clickable" src="/assets/edit.svg" onclick="group_edit('${user_id}', '${group_id}');">
-    </div>
-    `;
-
-    document.getElementById("group-info-box").innerHTML = html;
-}
-
-function show_owner_inputs() {
-    wishlistedit = document.getElementById("edit-group");
-    wishlistedit.style.display = "flex"
-}
-
-function group_edit(user_id, group_id) {
-
-    var group_title = document.getElementById("group-title").innerHTML;
-    var group_description = document.getElementById("group-description").innerHTML;
-
-    var html = '';
-
-    html += `
-        <div class="bottom-right-button" id="edit-group" style="" onclick="cancel_edit_group('${group_id}', '${user_id}');" title="Cancel edit">
-            <img class="icon-img  clickable" style="" src="/assets/x.svg">
-        </div>
-
-        <form action="" class="" onsubmit="event.preventDefault(); update_group('${group_id}', '${user_id}');">
-                                
-            <label for="group_name">Edit group:</label><br>
-            <input type="text" name="group_name" id="group_name" placeholder="Group name" value="${group_title}" autocomplete="off" required />
-            
-            <input type="text" name="group_description" id="group_description" placeholder="Group description" value="${group_description}" autocomplete="off" required />
-
-            <button id="register-button" type="submit" href="/">Save group</button>
-
-        </form>
-    `;
-
-    document.getElementById("group-info-box").innerHTML = html;
-
-}
-
-function update_group(group_id, user_id) {
-
-    if(!confirm("Are you sure you want to update this group?")) {
-        return;
-    }
-
-    var group_title = document.getElementById("group_name").value;
-    var group_description = document.getElementById("group_description").value;
-
-    var form_obj = { 
-        "name" : group_title,
-        "description" : group_description
-    };
-
-    var form_data = JSON.stringify(form_obj);
-
-    console.log(form_data)
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message);
-                reset_group_info_box(user_id, group_id);
-                place_group(result.group);
-                show_owner_inputs();
-
-            }
-
-        } else {
-            info("Updating group...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/groups/" + group_id + "/update");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send(form_data);
-    return false;
-
-}
-
-function cancel_edit_group(group_id, user_id){
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                reset_group_info_box(user_id, group_id);
-                place_group(result.group);
-                show_owner_inputs();
-
-            }
-
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "auth/groups/" + group_id);
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send();
-    return false;
+function showOwnerInputs() {
+    groupEdit = document.getElementById("edit-group");
+    groupEdit.style.display = "flex";
+    groupDelete = document.getElementById("delete-group");
+    groupDelete.style.display = "flex";
 }
 
 function GetProfileImage(userID, divID) {
@@ -719,7 +473,7 @@ function remove_member(wishlist_id, group_id, user_id) {
                 wishlists = result.wishlists;
 
                 console.log("Placing groups after member is removed: ")
-                place_wishlists(wishlists, user_id);
+                placeWishlists(wishlists, user_id, group_id);
                 
             }
 
@@ -734,4 +488,39 @@ function remove_member(wishlist_id, group_id, user_id) {
     xhttp.send(form_data);
     return false;
 
+}
+
+function placeWishlist(wishlistOject, publicURL) {
+    document.getElementById("wishlistName-" + wishlistOject.id).innerHTML = wishlistOject.name
+    var wishUpdatedAt = new Date(Date.parse(wishlistOject.wish_updated_at));
+    var wishUpdatedAtString = GetDateString(wishUpdatedAt)
+    document.getElementById(`wishlistUpdatedAt-${wishlistOject.id}`).innerHTML = wishUpdatedAtString
+
+    var wishlist = document.getElementById(`wishlistWrapper-${wishlistOject.id}`)
+    var wishlistHTML = wishlist.outerHTML
+    wishlist.remove()
+    
+    if(wishlistOject.expires && wishlistOject.date) {
+        var expiration = new Date(Date.parse(wishlistOject.date));
+        var now = new Date
+
+        if(expiration.getTime() < now.getTime()) {
+            var wishlists = document.getElementById(`wishlists-box-expired`)
+            wishlists.innerHTML = wishlistHTML + wishlists.innerHTML
+        } else {
+            var wishlists = document.getElementById(`wishlists-box`)
+            wishlists.innerHTML = wishlistHTML + wishlists.innerHTML
+        }
+    } else {
+        var wishlists = document.getElementById(`wishlists-box`)
+        wishlists.innerHTML = wishlistHTML + wishlists.innerHTML
+    }
+}
+
+function removeWishlist(wishlistID, userID) {
+    document.getElementById(`wishlistWrapper-${wishlistID}`).remove();
+}
+
+function removeGroup(groupID, userID) {
+    window.location.href = "/groups"
 }

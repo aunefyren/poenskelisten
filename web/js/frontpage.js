@@ -33,6 +33,14 @@ function load_page(result) {
     }
 
     var html = `
+                <!-- The Modal -->
+                <div id="myModal" class="modal closed">
+                    <span class="close selectable" onclick="toggleModal()">&times;</span>
+                    <div class="modalContent" id="modalContent">
+                    </div>
+                    <div id="caption"></div>
+                </div>
+
                 <div class="" id="front-page">
                     
                     <div class="module">
@@ -77,17 +85,7 @@ function load_page(result) {
                     </div>
 
                     <div class="module" id="new-news" style="display: none;">
-                        <form action="" class="icon-border" onsubmit="event.preventDefault(); create_news();">
-                            
-                            <label for="news_title">Create post:</label><br>
-                            <input type="text" name="news_title" id="news_title" placeholder="Post title" autocomplete="off" required />
-                            
-                            <input type="text" name="news_body" id="news_body" placeholder="Post body" autocomplete="off" required />
-                            <label for="news_date">When was this posted?</label><br>
-                            <input type="date" name="news_date" id="news_date" placeholder="Post date" autocomplete="off" required />
-                            
-                            <button id="register-button" type="submit" href="/">Create post</button>
-                        </form>
+                        <button id="register-button" onClick="createNewsPost(${admin});" type="" href="/">Create news post</button>
                     </div>
 
                 </div>
@@ -100,7 +98,7 @@ function load_page(result) {
     if(result !== false) {
 
         showLoggedInMenu();
-        get_news(login_data.admin);
+        get_news(admin);
 
         if(admin) {
             document.getElementById('new-news').style.display = "flex";
@@ -120,7 +118,6 @@ function load_page(result) {
 }
 
 function get_news(admin){
-
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
@@ -145,7 +142,7 @@ function get_news(admin){
                 console.log(news);
 
                 console.log("Placing intial news: ")
-                place_news(news, admin);
+                placeNewsPosts(news, admin);
 
             }
 
@@ -159,10 +156,9 @@ function get_news(admin){
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
     return false;
-
 }
 
-function place_news(news_array, admin) {
+function placeNewsPosts(news_array, admin) {
     try {
         document.getElementById("loading-icon-wrapper-news").style.display = "none"
     } catch(e) {
@@ -178,102 +174,106 @@ function place_news(news_array, admin) {
     var html = ''
 
     for(var i = 0; i < news_array.length; i++) {
-
-        // parse date object
-        try {
-            var date = new Date(Date.parse(news_array[i].date));
-            var date_string = date.toLocaleDateString();
-        } catch {
-            var date_string = "Error"
-        }
-
-        html += '<div class="news-post">'
-        
-        html += '<div id="news-title" class="title">';
-        html += news_array[i].title
-        html += '</div>';
-
-        html += '<div id="news-body" class="text-body">';
-        html += news_array[i].body
-        html += '</div>';
-
-        html += '<div id="news-body" class="text-date">';
-        html += date_string
-        html += '</div>';
-
-        html += '</div>'
-
+        html += buildNewsPostHTML(news_array[i], admin)
     }
 
     news_object = document.getElementById("news-box")
     news_object.innerHTML = html
-
 }
 
-function create_news() {
-
-    var news_title = document.getElementById("news_title").value;
-    var news_body = document.getElementById("news_body").value;
-
-    try {
-        var news_date = document.getElementById("news_date").value;
-        var news_date_object = new Date(Date.parse(news_date));
-        var news_date_str = news_date_object.toISOString();
-    } catch(e) {
-        error("Failed to parse date request.")
-        console.log("Error: " + e)
-        return;
-    }
-    var form_obj = { 
-            "title" : news_title,
-            "body" : news_body,
-            "date": news_date_str
-        };
-
-    var form_data = JSON.stringify(form_obj);
-
-    console.log(form_data)
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-
-            } else {
-
-                success(result.message);
-
-                news = result.news;
-                place_news(news);
-                
-            }
-
-        } else {
-            info("Creating post...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "admin/news");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send(form_data);
-    return false;
-
+function removeNewsPost(newsPostID) {
+    document.getElementById(`newsPost-${newsPostID}`).remove()
 }
 
 function verifyRedirect() {
-
     window.location = '/verify'
-
 }
+
+function placeNewsPost(newsPostObject, adminStatus) {
+    try {
+        var now = new Date();
+        var date = new Date(Date.parse(newsPostObject.expiry_date));
+        if(date.getTime() < now.getTime()) {
+            removeNewsPost(newsPostObject.id)
+            return
+        }
+    } catch(error) {
+        console.log("Error: " + error)
+    }
+
+    document.getElementById(`newsPost-${newsPostObject.id}`).outerHTML = buildNewsPostHTML(newsPostObject, adminStatus)
+    reorderPostsByDate();
+}
+
+function buildNewsPostHTML(newsPostObject, adminStatus) {
+    html = "";
+
+    // parse date object
+    var transparentHTML = "";
+    try {
+        var now = new Date();
+        var date = new Date(Date.parse(newsPostObject.date));
+        var date_string = date.toLocaleDateString();
+        if(date.getTime() > now.getTime()) {
+            transparentHTML = "transparent"
+        }
+    } catch {
+        var date_string = "Error"
+    }
+
+    html += `<div class="news-post ${transparentHTML}" id="newsPost-${newsPostObject.id}">`
+
+    html += `<input type="hidden" id="newsPostDate-${newsPostObject.id}" value="${newsPostObject.date}"></input>`
+
+    if(adminStatus) {
+        html += `
+            <div class="profile-icon top-right-button" style="padding-top: 0;">
+                <img class="icon-img clickable" src="/assets/edit.svg" title="Edit news post" onclick="editNewsPost('${newsPostObject.id}');">
+                <img class="icon-img clickable" src="/assets/trash-2.svg" title="Delete news post" onclick="deleteNewsPost('${newsPostObject.id}');">
+            </div>
+        `
+    }
+    
+    html += '<div id="news-title" class="title">';
+    html += newsPostObject.title
+    html += '</div>';
+
+    html += '<div id="news-body" class="text-body">';
+    html += newsPostObject.body
+    html += '</div>';
+
+    html += '<div id="news-body" class="text-date">';
+    html += date_string
+    html += '</div>';
+
+    html += '</div>'
+
+    return html
+}
+
+function reorderPostsByDate() {
+    var wrapperId = "news-box"
+
+    // Get the wrapper element
+    const wrapper = document.getElementById(wrapperId);
+  
+    if (!wrapper) {
+      console.error('Wrapper element not found');
+      return;
+    }
+  
+    // Convert child elements into an array for sorting
+    const posts = Array.from(wrapper.children);
+  
+    // Sort posts based on the date in the hidden input
+    posts.sort((a, b) => {
+      const dateA = new Date(a.querySelector('input[type="hidden"]').value);
+      const dateB = new Date(b.querySelector('input[type="hidden"]').value);
+  
+      // Sort in descending order (latest date first)
+      return dateB - dateA;
+    });
+  
+    // Append sorted posts back to the wrapper
+    posts.forEach(post => wrapper.appendChild(post));
+  }

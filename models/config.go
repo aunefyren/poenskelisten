@@ -17,6 +17,8 @@ type ConfigStruct struct {
 	PoenskelistenVersion     string `json:"poenskelisten_version"`
 	PoenskelistenCurrency    string `json:"poenskelisten_currency"`
 	PoenskelistenCurrencyPad bool   `json:"poenskelisten_currency_pad"`
+	PoenskelistenEnvironment string `json:"poenskelisten_environment"`
+	PoenskelistenTestEmail   string `json:"poenskelisten_test_email"`
 	SMTPEnabled              bool   `json:"smtp_enabled"`
 	SMTPHost                 string `json:"smtp_host"`
 	SMTPPort                 int    `json:"smtp_port"`

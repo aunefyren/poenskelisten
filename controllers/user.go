@@ -21,10 +21,10 @@ func RegisterUser(context *gin.Context) {
 
 	// Initialize variables
 	var user models.User
-	var usercreationrequest models.UserCreationRequest
+	var userCreationRequest models.UserCreationRequest
 
 	// Parse creation request
-	if err := context.ShouldBindJSON(&usercreationrequest); err != nil {
+	if err := context.ShouldBindJSON(&userCreationRequest); err != nil {
 		log.Println("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
@@ -32,20 +32,20 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	// Trim request input
-	usercreationrequest.Email = strings.TrimSpace(usercreationrequest.Email)
-	usercreationrequest.FirstName = strings.TrimSpace(usercreationrequest.FirstName)
-	usercreationrequest.LastName = strings.TrimSpace(usercreationrequest.LastName)
-	usercreationrequest.InviteCode = strings.TrimSpace(usercreationrequest.InviteCode)
+	userCreationRequest.Email = strings.TrimSpace(userCreationRequest.Email)
+	userCreationRequest.FirstName = strings.TrimSpace(userCreationRequest.FirstName)
+	userCreationRequest.LastName = strings.TrimSpace(userCreationRequest.LastName)
+	userCreationRequest.InviteCode = strings.TrimSpace(userCreationRequest.InviteCode)
 
 	// Make sure password match
-	if usercreationrequest.Password != usercreationrequest.PasswordRepeat {
+	if userCreationRequest.Password != userCreationRequest.PasswordRepeat {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Passwords must match."})
 		context.Abort()
 		return
 	}
 
 	// Make password is strong enough
-	valid, requirements, err := utilities.ValidatePasswordFormat(usercreationrequest.Password)
+	valid, requirements, err := utilities.ValidatePasswordFormat(userCreationRequest.Password)
 	if err != nil {
 		log.Println("Failed to verify password quality. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify password quality."})
@@ -58,9 +58,9 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	// Move values from request to object
-	user.Email = usercreationrequest.Email
-	user.Password = usercreationrequest.Password
-	user.FirstName = usercreationrequest.FirstName
+	*user.Email = userCreationRequest.Email
+	*user.Password = userCreationRequest.Password
+	user.FirstName = userCreationRequest.FirstName
 
 	stringMatch, requirements, err := utilities.ValidateTextCharacters(user.FirstName)
 	if err != nil {
@@ -75,7 +75,7 @@ func RegisterUser(context *gin.Context) {
 		return
 	}
 
-	user.LastName = usercreationrequest.LastName
+	user.LastName = userCreationRequest.LastName
 
 	stringMatch, requirements, err = utilities.ValidateTextCharacters(user.LastName)
 	if err != nil {
@@ -90,16 +90,13 @@ func RegisterUser(context *gin.Context) {
 		return
 	}
 
-	user.Enabled = true
+	*user.Enabled = true
 	user.ID = uuid.New()
-
-	user.ResetExpiration = time.Now()
-
+	*user.ResetExpiration = time.Now()
 	randomString := randstr.String(8)
-	user.VerificationCode = strings.ToUpper(randomString)
-
+	*user.VerificationCode = strings.ToUpper(randomString)
 	randomString = randstr.String(8)
-	user.ResetCode = strings.ToUpper(randomString)
+	*user.ResetCode = strings.ToUpper(randomString)
 
 	// Check if any users exist, if not, make new user admin
 	userAmount, err := database.GetAmountOfEnabledUsers()
@@ -109,8 +106,7 @@ func RegisterUser(context *gin.Context) {
 		context.Abort()
 		return
 	} else if userAmount == 0 {
-		var adminBool bool = true
-		user.Admin = &adminBool
+		user.Admin = true
 		log.Println("No other users found. New user is set to admin.")
 	}
 
@@ -133,7 +129,7 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	// Hash the selected password
-	if err := user.HashPassword(user.Password); err != nil {
+	if err := user.HashPassword(*user.Password); err != nil {
 		log.Println("Failed to hash password. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password."})
 		context.Abort()
@@ -141,7 +137,7 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	// Verify unsued invite code exists
-	unique_invitecode, err := database.VerifyUnusedUserInviteCode(usercreationrequest.InviteCode)
+	unique_invitecode, err := database.VerifyUnusedUserInviteCode(userCreationRequest.InviteCode)
 	if err != nil {
 		log.Println("Failed to verify invite code. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify invite code."})
@@ -154,7 +150,7 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	// Verify e-mail is not in use
-	unique_email, err := database.VerifyUniqueUserEmail(user.Email)
+	unique_email, err := database.VerifyUniqueUserEmail(*user.Email)
 	if err != nil {
 		log.Println("Failed to verify unique e-mail. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify unique e-mail."})
@@ -176,7 +172,7 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	// Set code to used
-	err = database.SetUsedUserInviteCode(usercreationrequest.InviteCode, user.ID)
+	err = database.SetUsedUserInviteCode(userCreationRequest.InviteCode, user.ID)
 	if err != nil {
 		log.Println("Failed to set invite code to used. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to set invite code to used."})
@@ -235,7 +231,7 @@ func GetUser(context *gin.Context) {
 	}
 
 	userObject := models.User{}
-	if userID == user_id_int || (requestingUserObject.Admin != nil && *requestingUserObject.Admin == true) {
+	if userID == user_id_int || (requestingUserObject.Admin) {
 		userObject, err = database.GetAllUserInformationAnyState(user_id_int)
 		if err != nil {
 			log.Println("Failed to get user. Error: " + err.Error())
@@ -258,7 +254,6 @@ func GetUser(context *gin.Context) {
 }
 
 func GetUsers(context *gin.Context) {
-
 	// Get user ID
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
@@ -279,7 +274,7 @@ func GetUsers(context *gin.Context) {
 	users := []models.User{}
 
 	includeDisabled, okay := context.GetQuery("includeDisabled")
-	if okay && strings.ToLower(includeDisabled) == "true" && requestingUserObject.Admin != nil && *requestingUserObject.Admin == true {
+	if okay && strings.ToLower(includeDisabled) == "true" && requestingUserObject.Admin == true {
 		users, err = database.GetAllUsers()
 		if err != nil {
 			log.Println("Failed to get all users. Error: " + err.Error())
@@ -295,6 +290,79 @@ func GetUsers(context *gin.Context) {
 			context.Abort()
 			return
 		}
+	}
+
+	notAMemberOfGroupIDString, notAMemberOfGroupIDOkay := context.GetQuery("notAMemberOfGroupID")
+	if notAMemberOfGroupIDOkay {
+		newUsers := []models.User{}
+		notAMemberOfGroupID, err := uuid.Parse(notAMemberOfGroupIDString)
+		if err != nil {
+			log.Println("Failed to parse group ID. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
+			context.Abort()
+			return
+		}
+
+		for _, user := range users {
+			member, err := database.VerifyUserMembershipToGroup(user.ID, notAMemberOfGroupID)
+			if err != nil {
+				log.Println("Failed to verify ownership to group. Error: " + err.Error())
+				context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify ownership to group."})
+				context.Abort()
+				return
+			}
+
+			if !member {
+				newUsers = append(newUsers, user)
+			}
+		}
+
+		users = newUsers
+	}
+
+	notACollaboratorOfWishlistString, notACollaboratorOfWishlistOkay := context.GetQuery("notACollaboratorOfWishlistID")
+	if notACollaboratorOfWishlistOkay {
+		newUsers := []models.User{}
+		notACollaboratorOfWishlistID, err := uuid.Parse(notACollaboratorOfWishlistString)
+		if err != nil {
+			log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
+			context.Abort()
+			return
+		}
+
+		wishlist, err := database.GetWishlist(notACollaboratorOfWishlistID)
+		if err != nil {
+			log.Println("Failed to get wishlist. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist."})
+			context.Abort()
+			return
+		}
+
+		wishlistObject, err := ConvertWishlistToWishlistObject(wishlist, nil)
+		if err != nil {
+			log.Println("Failed to convert wishlist to wishlist object. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert wishlist to wishlist object."})
+			context.Abort()
+			return
+		}
+
+		for _, user := range users {
+			userFound := false
+
+			for _, collaborator := range wishlistObject.Collaborators {
+				if collaborator.User.ID == user.ID {
+					userFound = true
+					break
+				}
+			}
+
+			if !userFound {
+				newUsers = append(newUsers, user)
+			}
+		}
+
+		users = newUsers
 	}
 
 	// Reply
@@ -357,7 +425,7 @@ func VerifyUser(context *gin.Context) {
 	}
 
 	// Generate new JWT token
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, user.ID, *user.Admin, *user.Verified)
+	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, *user.Email, user.ID, user.Admin, *user.Verified)
 	if err != nil {
 		log.Println("Failed to generate JWT token. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT token."})
@@ -484,7 +552,7 @@ func UpdateUser(context *gin.Context) {
 		return
 	}
 
-	if userOriginal.Email != userUpdateRequest.Email {
+	if *userOriginal.Email != userUpdateRequest.Email {
 
 		// Verify e-mail is not in use
 		unique_email, err := database.VerifyUniqueUserEmail(userUpdateRequest.Email)
@@ -508,7 +576,7 @@ func UpdateUser(context *gin.Context) {
 			return
 		}
 
-		userOriginal.Email = userUpdateRequest.Email
+		*userOriginal.Email = userUpdateRequest.Email
 
 	}
 
@@ -534,7 +602,7 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// Update user in database
-	err = database.UpdateUserValuesByUserID(userOriginal.ID, userOriginal.Email, userOriginal.Password)
+	userOriginal, err = database.UpdateUserInDB(userOriginal)
 	if err != nil {
 		log.Println("Failed to update user. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user."})
@@ -552,7 +620,7 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// Generate new JWT token
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, user.Email, user.ID, *user.Admin, *user.Verified)
+	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, *user.Email, user.ID, user.Admin, *user.Verified)
 	if err != nil {
 		log.Println("Failed to generate JWT token. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT token."})
@@ -580,7 +648,7 @@ func UpdateUser(context *gin.Context) {
 			return
 		}
 
-		user.VerificationCode = verificationCode
+		*user.VerificationCode = verificationCode
 
 		log.Println("Sending verification e-mail to new user: " + user.FirstName + " " + user.LastName + ".")
 
@@ -732,10 +800,10 @@ func APIChangePassword(context *gin.Context) {
 	}
 
 	// Save new password
-	err = database.UpdateUserValuesByUserID(user.ID, user.Email, user.Password)
+	user, err = database.UpdateUserInDB(user)
 	if err != nil {
-		log.Println("Failed to update password. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password."})
+		log.Println("Failed to update user. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user."})
 		context.Abort()
 		return
 	}
@@ -751,4 +819,54 @@ func APIChangePassword(context *gin.Context) {
 
 	context.JSON(http.StatusOK, gin.H{"message": "Password reset. You can now log in."})
 
+}
+
+func APIDeleteUser(context *gin.Context) {
+	var userIDString = context.Param("user_id")
+
+	// Get user ID
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		log.Println("Failed to get user ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
+		context.Abort()
+		return
+	}
+
+	// Parse group id
+	userToDeleteID, err := uuid.Parse(userIDString)
+	if err != nil {
+		log.Println("Failed to parse user ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse user ID."})
+		context.Abort()
+		return
+	}
+
+	if userID == userToDeleteID {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You can't delete yourself."})
+		context.Abort()
+		return
+	}
+
+	user, err := database.GetAllUserInformation(userToDeleteID)
+	if err != nil {
+		log.Println("Failed to get user object. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user object."})
+		context.Abort()
+		return
+	}
+
+	*user.Enabled = false
+
+	user, err = database.UpdateUserInDB(user)
+	if err != nil {
+		log.Println("Failed to update user object. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user object."})
+		context.Abort()
+		return
+	}
+
+	user = database.RedactUserObject(user)
+
+	context.JSON(http.StatusOK, gin.H{"user": user, "message": "User deleted."})
 }
