@@ -608,8 +608,10 @@ function addUserToSelection() {
                 <div class="profile-icon icon-border icon-background" id="group_member_image_wrapper_${newMemberID}">
                     <img class="icon-img " src="/assets/user.svg" id="group_member_image_${newMemberID}">
                 </div>
-
-                ${newMemberName}
+                
+                <div class="group-title-text">
+                    ${newMemberName}
+                </div>
             </div>
 
             <div class="profile-icon clickable" onclick="removeUserFromSelection('${newMemberID}')" title="Remove user">

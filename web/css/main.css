@@ -427,11 +427,11 @@ button:disabled {
 }
 
 .group-title {
-  max-width: 50%;
+  max-width: 66%;
   margin: 0.5em 0.25em;
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
   align-items: center;
   align-content: center;
@@ -458,7 +458,7 @@ button:disabled {
   margin: 0.5em 0;
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
   align-items: center;
   align-content: center;
@@ -544,7 +544,7 @@ button:disabled {
   justify-content: space-between;
   align-items: center;
   align-content: center;
-  margin: 2em 0.5em;
+  margin: 2em 0;
   border: 0.15em solid var(--darkblue);
   border-radius: 1em;
   background-color: var(--eggshell);
@@ -859,7 +859,7 @@ hr {
 /* Modal Content (image) */
 .modalContent {
   margin: auto;
-  padding: 1em;
+  padding: 0.5em;
   display: block;
   width: 80%;
   max-width: 700px;
@@ -1232,4 +1232,11 @@ textarea {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
+}
+
+.group-title-text {
+  box-sizing: inherit;
+  max-width: 75%;
+  text-align: left;
+  padding-left: 0.25em;
 }

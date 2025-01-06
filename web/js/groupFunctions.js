@@ -132,7 +132,11 @@ function groupMembersTwo(groupObject, userID) {
         html += '<img class="icon-img " src="/assets/user.svg">'
         html += '</div>'
 
-        html += groupObject.members[j].first_name + " " + groupObject.members[j].last_name
+        html += `
+            <div class="group-title-text">
+                ${groupObject.members[j].first_name} ${groupObject.members[j].last_name}
+            </div>
+        `;
 
         html += '</div>'
 
@@ -716,7 +720,9 @@ function addWishlistToSelection() {
                     <img class="icon-img " src="/assets/list.svg" id="group_member_image_${newMemberID}">
                 </div>
 
-                ${newMemberName}
+                <div class="group-title-text">
+                    ${newMemberName}
+                </div>
             </div>
 
             <div class="profile-icon clickable" onclick="removeUserFromSelection('${newMemberID}')" title="Remove wishlist">
@@ -769,8 +775,9 @@ function showWishlistsInGroupTwo(wishlistArray, userID, groupID) {
                             <img class="icon-img " src="/assets/list.svg">
                         </div>
 
-                        ${wishlistArray[j].name}
-
+                        <div class="group-title-text">
+                            ${wishlistArray[j].name}
+                        </div>
                     </div>
                     <div class="profile-icon clickable" onclick="removeWishlistFromGroup('${wishlistArray[j].id}', '${groupID}', '${userID}')" title="Remove wishlist from group">
                         <img class="icon-img " src="/assets/x.svg">
