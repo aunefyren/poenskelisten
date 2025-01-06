@@ -647,8 +647,9 @@ function showGroupsInWishlistTwo(groupArray, userID, wishlistID, groupContextID)
                             <img class="icon-img " src="/assets/users.svg">
                         </div>
 
-                        ${groupArray[j].name}
-
+                        <div class="group-title-text">
+                            ${groupArray[j].name}
+                        </div>
                     </div>
 
                     <div class="profile-icon clickable" onclick="removeWishlistFromGroup('${wishlistID}', '${groupArray[j].id}', '${userID}', '${groupContextID}')" title="Remove wishlist from group">
@@ -829,7 +830,9 @@ function addGroupToSelection() {
                     <img class="icon-img " src="/assets/users.svg" id="group_member_image_${newMemberID}">
                 </div>
 
-                ${newMemberName}
+                <div class="group-title-text">
+                    ${newMemberName}
+                </div>
             </div>
 
             <div class="profile-icon clickable" onclick="removeUserFromSelection('${newMemberID}')" title="Remove group">
@@ -926,11 +929,15 @@ function showWishlistCollaboratorsInWishlistTwo(wishlistObject, userID, wishlist
 
             html += '<div class="group-title">';
 
-            html += `<div class="profile-icon icon-border icon-background" id="group_member_image_${wishlistObject.collaborators[j].user.id}_${wishlistID}">`
-            html += '<img class="icon-img " src="/assets/user.svg">'
-            html += '</div>'
+                html += `<div class="profile-icon icon-border icon-background" id="group_member_image_${wishlistObject.collaborators[j].user.id}_${wishlistID}">`
+                html += '<img class="icon-img " src="/assets/user.svg">'
+                html += '</div>'
 
-            html += wishlistObject.collaborators[j].user.first_name + " " + wishlistObject.collaborators[j].user.last_name
+                html += `
+                    <div class="group-title-text">
+                        ${wishlistObject.collaborators[j].user.first_name} ${wishlistObject.collaborators[j].user.last_name}
+                    </div>
+                `;
 
             html += '</div>'
 
