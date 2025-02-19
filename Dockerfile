@@ -10,14 +10,15 @@ COPY . .
 RUN GO111MODULE=on CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build
 
 FROM debian:bullseye-slim as runtime
-
+ARG DEBIAN_FRONTEND=noninteractive
 LABEL org.opencontainers.image.source=https://github.com/aunefyren/poenskelisten
 
 WORKDIR /app
 
 COPY --from=builder /app .
 
+RUN apt clean
 RUN apt update
-RUN apt install -y curl
+RUN apt install -y ca-certificates curl
 
 ENTRYPOINT /app/entrypoint.sh
