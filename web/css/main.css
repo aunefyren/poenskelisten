@@ -1080,6 +1080,7 @@ textarea {
   box-sizing: border-box;
   font-family: 'Roboto', sans-serif;
   font-size: 0.8rem;
+  resize: vertical;
 }
 
 .group-members {
