@@ -60,7 +60,7 @@ func AuthFunction(context *gin.Context, admin bool) (success bool, errorString s
 		if !verified {
 
 			// Verify user has verification code
-			hasVerficationCode, err := database.VerifyUserHasVerfificationCode(userID)
+			hasVerficationCode, err := database.VerifyUserHasVerificationCode(userID)
 			if err != nil {
 				log.Println("Failed to get verification code. Error: " + err.Error())
 				return false, "Failed to get verification code.", http.StatusInternalServerError
@@ -68,7 +68,7 @@ func AuthFunction(context *gin.Context, admin bool) (success bool, errorString s
 
 			// If the user doesn't have a code, set one
 			if !hasVerficationCode {
-				_, err := database.GenrateRandomVerificationCodeForuser(userID)
+				_, err := database.GenerateRandomVerificationCodeForUser(userID)
 				if err != nil {
 					log.Println("Failed to generate verification code. Error: " + err.Error())
 					return false, "Failed to generate verification code.", http.StatusInternalServerError

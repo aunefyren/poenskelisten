@@ -193,7 +193,7 @@ func GetWishlist(WishlistID uuid.UUID) (models.Wishlist, error) {
 }
 
 // Verify if a wish name in wishlist is unique
-func VerifyUniqueWishNameinWishlist(WishName string, WishlistID uuid.UUID) (bool, error) {
+func VerifyUniqueWishNameInWishlist(WishName string, WishlistID uuid.UUID) (bool, error) {
 	var wish models.Wish
 	wishesrecord := Instance.Where("`wishes`.enabled = ?", 1).Where("`wishes`.wishlist_id = ?", WishlistID).Where("`wishes`.name = ?", WishName).Find(&wish)
 	if wishesrecord.Error != nil {

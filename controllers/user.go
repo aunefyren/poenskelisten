@@ -450,7 +450,7 @@ func SendUserVerificationCode(context *gin.Context) {
 	}
 
 	// Create a new code
-	_, err = database.GenrateRandomVerificationCodeForuser(userID)
+	_, err = database.GenerateRandomVerificationCodeForUser(userID)
 	if err != nil {
 		log.Println("Failed to generate verification code. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate verification code."})
@@ -640,7 +640,7 @@ func UpdateUser(context *gin.Context) {
 	// If user is not verified and SMTP is enabled, send verification e-mail
 	if config.SMTPEnabled && !*user.Verified {
 
-		verificationCode, err := database.GenrateRandomVerificationCodeForuser(userID)
+		verificationCode, err := database.GenerateRandomVerificationCodeForUser(userID)
 		if err != nil {
 			log.Println("Failed to generate verification code. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate verification code."})
