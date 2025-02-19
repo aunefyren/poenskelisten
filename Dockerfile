@@ -17,6 +17,7 @@ WORKDIR /app
 
 COPY --from=builder /app .
 
+RUN rm /var/lib/dpkg/info/libc-bin.*
 RUN apt clean
 RUN apt update
 RUN apt install -y ca-certificates curl
