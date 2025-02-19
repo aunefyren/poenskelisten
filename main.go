@@ -69,7 +69,7 @@ func main() {
 	log.SetOutput(mw)
 
 	// Load config file
-	Config, err := config.GetConfig()
+	configFile, err := config.GetConfig()
 	if err != nil {
 		log.Println("Failed to load configuration file. Error: " + err.Error())
 
@@ -77,10 +77,10 @@ func main() {
 	}
 	log.Println("Configuration file loaded.")
 
-	log.Println("Running Pønskelisten version: " + Config.PoenskelistenVersion)
+	log.Println("Running Pønskelisten version: " + configFile.PoenskelistenVersion)
 
 	// Change the config to respect flags
-	Config, generateInvite, upgradeToV2, err := parseFlags(Config)
+	configFile, generateInvite, err := parseFlags(configFile)
 	if err != nil {
 		log.Println("Failed to parse input flags. Error: " + err.Error())
 
@@ -88,20 +88,15 @@ func main() {
 	}
 	log.Println("Flags parsed.")
 
-	if upgradeToV2 {
-		utilities.MigrateDBToV2()
-		os.Exit(1)
-	}
-
 	// Set time zone from config if it is not empty
-	if Config.Timezone != "" {
-		loc, err := time.LoadLocation(Config.Timezone)
+	if configFile.Timezone != "" {
+		loc, err := time.LoadLocation(configFile.Timezone)
 		if err != nil {
 			log.Println("Failed to set time zone from config. Error: " + err.Error())
 			log.Println("Removing value...")
 
-			Config.Timezone = ""
-			err = config.SaveConfig(Config)
+			configFile.Timezone = ""
+			err = config.SaveConfig(configFile)
 			if err != nil {
 				log.Println("Failed to set new time zone in the config. Error: " + err.Error())
 
@@ -114,15 +109,15 @@ func main() {
 	}
 	log.Println("Timezone set.")
 
-	if Config.PrivateKey == "" || len(Config.PrivateKey) < 16 {
+	if configFile.PrivateKey == "" || len(configFile.PrivateKey) < 16 {
 		log.Println("Creating new private key.")
 
-		Config.PrivateKey = randstr.Hex(32)
-		config.SaveConfig(Config)
+		configFile.PrivateKey = randstr.Hex(32)
+		config.SaveConfig(configFile)
 	}
 
-	err = auth.SetPrivateKey(Config.PrivateKey)
-	if Config.PrivateKey == "" || len(Config.PrivateKey) < 16 {
+	err = auth.SetPrivateKey(configFile.PrivateKey)
+	if configFile.PrivateKey == "" || len(configFile.PrivateKey) < 16 {
 		log.Println("Failed to set private key. Error: " + err.Error())
 
 		os.Exit(1)
@@ -132,7 +127,7 @@ func main() {
 	// Initialize Database
 	log.Println("Connecting to database...")
 
-	err = database.Connect(Config.DBType, Config.Timezone, Config.DBUsername, Config.DBPassword, Config.DBIP, Config.DBPort, Config.DBName, Config.DBSSL, Config.DBLocation)
+	err = database.Connect(configFile.DBType, configFile.Timezone, configFile.DBUsername, configFile.DBPassword, configFile.DBIP, configFile.DBPort, configFile.DBName, configFile.DBSSL, configFile.DBLocation)
 	if err != nil {
 		log.Println("Failed to connect to database. Error: " + err.Error())
 		os.Exit(1)
@@ -142,7 +137,7 @@ func main() {
 	log.Println("Database connected.")
 
 	if generateInvite {
-		invite, err := database.GenrateRandomInvite()
+		invite, err := database.GenerateRandomInvite()
 		if err != nil {
 			log.Println("Failed to generate random invitation code. Error: " + err.Error())
 
@@ -153,10 +148,8 @@ func main() {
 
 	// Initialize Router
 	router := initRouter()
-
-	log.Println("Router initialized.")
-
-	log.Fatal(router.Run(":" + strconv.Itoa(Config.PoenskelistenPort)))
+	log.Println("Router initialized. Starting Pønskelisten at http://*:" + strconv.Itoa(configFile.PoenskelistenPort))
+	log.Fatal(router.Run(":" + strconv.Itoa(configFile.PoenskelistenPort)))
 }
 
 func initRouter() *gin.Engine {
@@ -350,185 +343,144 @@ func initRouter() *gin.Engine {
 	return router
 }
 
-func parseFlags(Config *models.ConfigStruct) (*models.ConfigStruct, bool, bool, error) {
+func parseFlags(configFile *models.ConfigStruct) (*models.ConfigStruct, bool, error) {
+	generateInviteBool := false
 
 	// Define flag variables with the configuration file as default values
-	var port int
-	flag.IntVar(&port, "port", Config.PoenskelistenPort, "The port Pønskelisten is listening on.")
+	var port = flag.Int("port", configFile.PoenskelistenPort, "The port Pønskelisten is listening on.")
+	var externalURL = flag.String("externalurl", configFile.PoenskelistenExternalURL, "The URL others would use to access Pønskelisten.")
+	var timezone = flag.String("timezone", configFile.Timezone, "The timezone Pønskelisten is running in.")
 
-	var externalURL string
-	flag.StringVar(&externalURL, "externalurl", Config.PoenskelistenExternalURL, "The URL others would use to access Pønskelisten.")
+	// DB values
+	var dbPort = flag.Int("dbport", configFile.DBPort, "The port the database is listening on.")
+	var dbType = flag.String("dbtype", configFile.DBType, "The type of database Pønskelisten is interacting with.")
+	var dbUsername = flag.String("dbusername", configFile.DBUsername, "The username used to interact with the database.")
+	var dbPassword = flag.String("dbpassword", configFile.DBPassword, "The password used to interact with the database.")
+	var dbName = flag.String("dbname", configFile.DBName, "The database table used within the database.")
+	var dbIP = flag.String("dbip", configFile.DBIP, "The IP address used to reach the database.")
+	var dbSSL = flag.String("dbssl", "false", "If the database connection uses SSL.")
+	var dbLocation = flag.String("dblocation", "", "The database is a local file, what is the system file path.")
 
-	var timezone string
-	flag.StringVar(&timezone, "timezone", Config.Timezone, "The timezone Pønskelisten is running in.")
+	// SMTP values
+	var smtpDisabled = flag.String("disablesmtp", "false", "Disables user verification using e-mail.")
+	var smtpHost = flag.String("smtphost", configFile.SMTPHost, "The SMTP server which sends e-mail.")
+	var smtpPort = flag.Int("smtpport", configFile.SMTPPort, "The SMTP server port.")
+	var smtpUsername = flag.String("smtpusername", configFile.SMTPUsername, "The username used to verify against the SMTP server.")
+	var smtpPassword = flag.String("smtppassword", configFile.SMTPPassword, "The password used to verify against the SMTP server.")
+	var smtpFrom = flag.String("smtpfrom", configFile.SMTPFrom, "The sender address when sending e-mail from Pønskelisten.")
+	var generateInvite = flag.String("generateinvite", "false", "If an invite code should be automatically generate on startup.")
 
-	var dbPort int
-	flag.IntVar(&dbPort, "dbport", Config.DBPort, "The port the database is listening on.")
-
-	var dbType string
-	flag.StringVar(&dbType, "dbtype", Config.DBType, "The type of database Pønskelisten is interacting with.")
-
-	var dbUsername string
-	flag.StringVar(&dbUsername, "dbusername", Config.DBUsername, "The username used to interact with the database.")
-
-	var dbPassword string
-	flag.StringVar(&dbPassword, "dbpassword", Config.DBPassword, "The password used to interact with the database.")
-
-	var dbName string
-	flag.StringVar(&dbName, "dbname", Config.DBName, "The database table used within the database.")
-
-	var dbIP string
-	flag.StringVar(&dbIP, "dbip", Config.DBIP, "The IP address used to reach the database.")
-
-	var dbSSL string
-	var dbSSLBool bool
-	flag.StringVar(&dbSSL, "dbssl", "false", "If the database connection uses SSL.")
-
-	var dbLocation string
-	flag.StringVar(&dbLocation, "dblocation", "", "The database is a local file, what is the system file path.")
-
-	var smtpDisabled string
-	flag.StringVar(&smtpDisabled, "disablesmtp", "false", "Disables user verification using e-mail.")
-
-	var smtpHost string
-	flag.StringVar(&smtpHost, "smtphost", Config.SMTPHost, "The SMTP server which sends e-mail.")
-
-	var smtpPort int
-	flag.IntVar(&smtpPort, "smtpport", Config.SMTPPort, "The SMTP server port.")
-
-	var smtpUsername string
-	flag.StringVar(&smtpUsername, "smtpusername", Config.SMTPUsername, "The username used to verify against the SMTP server.")
-
-	var smtpPassword string
-	flag.StringVar(&smtpPassword, "smtppassword", Config.SMTPPassword, "The password used to verify against the SMTP server.")
-
-	var smtpFrom string
-	flag.StringVar(&smtpFrom, "smtpfrom", Config.SMTPFrom, "The sender address when sending e-mail from Pønskelisten.")
-
-	var generateInvite string
-	var generateInviteBool bool
-	flag.StringVar(&generateInvite, "generateinvite", "false", "If an invite code should be automatically generate on startup.")
-
-	var upgradeToV2 string
-	var upgradeToV2Bool bool
-	flag.StringVar(&upgradeToV2, "upgradetov2", "false", "If have placed your old pre-V2 database .json in the files folder as 'db.json' we will attempt to migrate the data.")
-
-	// Parse the flags from input
+	// Parse flags
 	flag.Parse()
 
-	// Respect the flag if config is empty
-	if Config.PoenskelistenPort == 0 {
-		Config.PoenskelistenPort = port
+	// Respect the flag if provided
+	if port != nil {
+		configFile.PoenskelistenPort = *port
 	}
 
-	// Respect the flag if config is empty
-	if Config.PoenskelistenExternalURL == "" {
-		Config.PoenskelistenExternalURL = externalURL
+	// Respect the flag if provided
+	if externalURL != nil {
+		configFile.PoenskelistenExternalURL = *externalURL
 	}
 
-	// Respect the flag if config is empty
-	if Config.Timezone == "" {
-		Config.Timezone = timezone
+	// Respect the flag if provided
+	if timezone != nil {
+		configFile.Timezone = *timezone
 	}
 
-	// Respect the flag if config is empty
-	if Config.DBPort == 0 {
-		Config.DBPort = dbPort
+	// Respect the flag if provided
+	if dbPort != nil {
+		configFile.DBPort = *dbPort
 	}
 
-	// Respect the flag if config is empty
-	if Config.DBType == "" {
-		Config.DBType = dbUsername
+	// Respect the flag if provided
+	if dbType != nil {
+		configFile.DBType = *dbType
 	}
 
-	// Respect the flag if config is empty
-	if Config.DBUsername == "" {
-		Config.DBUsername = dbUsername
+	// Respect the flag if provided
+	if dbUsername != nil {
+		configFile.DBUsername = *dbUsername
 	}
 
-	// Respect the flag if config is empty
-	if Config.DBPassword == "" {
-		Config.DBPassword = dbPassword
+	// Respect the flag if provided
+	if dbPassword != nil {
+		configFile.DBPassword = *dbPassword
 	}
 
-	// Respect the flag if config is empty
-	if Config.DBName == "" {
-		Config.DBName = dbName
+	// Respect the flag if provided
+	if dbName != nil {
+		configFile.DBName = *dbName
 	}
 
-	// Respect the flag if config is empty
-	if Config.DBIP == "" {
-		Config.DBIP = dbIP
-	}
-
-	// Respect the flag if string is true
-	if strings.ToLower(dbSSL) == "true" {
-		dbSSLBool = true
-	} else {
-		dbSSLBool = false
-	}
-	Config.DBSSL = dbSSLBool
-
-	// Respect the flag if config is empty
-	if Config.DBLocation == "" {
-		Config.DBLocation = dbLocation
+	// Respect the flag if provided
+	if dbIP != nil {
+		configFile.DBIP = *dbIP
 	}
 
 	// Respect the flag if string is true
-	if strings.ToLower(smtpDisabled) == "true" {
-		Config.SMTPEnabled = false
+	if dbSSL != nil {
+		dbSSLBool := false
+		if strings.ToLower(*dbSSL) == "true" {
+			dbSSLBool = true
+		}
+		configFile.DBSSL = dbSSLBool
 	}
 
-	// Respect the flag if config is empty
-	if Config.SMTPHost == "" {
-		Config.SMTPHost = smtpHost
-	}
-
-	// Respect the flag if config is empty
-	if Config.SMTPPort == 0 {
-		Config.SMTPPort = smtpPort
-	}
-
-	// Respect the flag if config is empty
-	if Config.SMTPUsername == "" {
-		Config.SMTPUsername = smtpUsername
-	}
-
-	// Respect the flag if config is empty
-	if Config.SMTPPassword == "" {
-		Config.SMTPPassword = smtpPassword
-	}
-
-	// Respect the flag if config is empty
-	if Config.SMTPFrom == "" {
-		Config.SMTPFrom = smtpFrom
+	// Respect the flag if provided
+	if dbLocation != nil {
+		configFile.DBLocation = *dbLocation
 	}
 
 	// Respect the flag if string is true
-	if strings.ToLower(generateInvite) == "true" {
-		generateInviteBool = true
-	} else {
-		generateInviteBool = false
+	if smtpDisabled != nil {
+		if strings.ToLower(*smtpDisabled) == "true" {
+			configFile.SMTPEnabled = false
+		}
+	}
+
+	// Respect the flag if provided
+	if smtpHost != nil {
+		configFile.SMTPHost = *smtpHost
+	}
+
+	// Respect the flag if provided
+	if smtpPort != nil {
+		configFile.SMTPPort = *smtpPort
+	}
+
+	// Respect the flag if provided
+	if smtpUsername != nil {
+		configFile.SMTPUsername = *smtpUsername
+	}
+
+	// Respect the flag if provided
+	if smtpPassword != nil {
+		configFile.SMTPPassword = *smtpPassword
+	}
+
+	// Respect the flag if provided
+	if smtpFrom != nil {
+		configFile.SMTPFrom = *smtpFrom
 	}
 
 	// Respect the flag if string is true
-	if strings.ToLower(upgradeToV2) == "true" {
-		upgradeToV2Bool = true
-	} else {
-		upgradeToV2Bool = false
+	if generateInvite != nil {
+		if strings.ToLower(*generateInvite) == "true" {
+			generateInviteBool = true
+		}
 	}
 
 	// Failsafe, if port is 0, set to default 8080
-	if Config.PoenskelistenPort == 0 {
-		Config.PoenskelistenPort = 8080
+	if configFile.PoenskelistenPort == 0 {
+		configFile.PoenskelistenPort = 8080
 	}
 
-	// Save the new config
-	err := config.SaveConfig(Config)
+	// Save the new configFile
+	err := config.SaveConfig(configFile)
 	if err != nil {
-		return &models.ConfigStruct{}, false, false, err
+		return &models.ConfigStruct{}, false, err
 	}
 
-	return Config, generateInviteBool, upgradeToV2Bool, nil
-
+	return configFile, generateInviteBool, nil
 }

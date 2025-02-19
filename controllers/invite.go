@@ -14,7 +14,7 @@ import (
 
 func RegisterInvite(context *gin.Context) {
 
-	invite, err := database.GenrateRandomInvite()
+	invite, err := database.GenerateRandomInvite()
 	if err != nil {
 		log.Println("Failed to create new invite. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create new invite."})

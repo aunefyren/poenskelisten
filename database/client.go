@@ -110,8 +110,8 @@ func Migrate() {
 	log.Println("Database Migration Completed!")
 }
 
-// Genrate a random invite code an return ut
-func GenrateRandomInvite() (string, error) {
+// Generate a random invite code an return ut
+func GenerateRandomInvite() (string, error) {
 	var invite models.Invite
 
 	randomString := randstr.String(16)
@@ -126,8 +126,8 @@ func GenrateRandomInvite() (string, error) {
 	return invite.Code, nil
 }
 
-// Genrate a random verification code an return ut
-func GenrateRandomVerificationCodeForuser(userID uuid.UUID) (string, error) {
+// Generate a random verification code an return ut
+func GenerateRandomVerificationCodeForUser(userID uuid.UUID) (string, error) {
 
 	randomString := randstr.String(8)
 	verificationCode := strings.ToUpper(randomString)
@@ -159,7 +159,7 @@ func VerifyUniqueUserEmail(providedEmail string) (bool, error) {
 }
 
 // Verify if user has a verification code set
-func VerifyUserHasVerfificationCode(userID uuid.UUID) (bool, error) {
+func VerifyUserHasVerificationCode(userID uuid.UUID) (bool, error) {
 	var user models.User
 	userrecords := Instance.Where("enabled = ?", true).Where("ID = ?", userID).Find(&user)
 	if userrecords.Error != nil {

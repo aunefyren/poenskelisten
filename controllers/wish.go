@@ -353,7 +353,7 @@ func RegisterWish(context *gin.Context) {
 	}
 
 	// Verify unique wish name in wishlist
-	unique_wish_name, err := database.VerifyUniqueWishNameinWishlist(wish.Name, wishlist_id_int)
+	unique_wish_name, err := database.VerifyUniqueWishNameInWishlist(wish.Name, wishlist_id_int)
 	if err != nil {
 		log.Println("Failed to verify unique wishlist name. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify unique wishlist name."})
@@ -974,7 +974,7 @@ func APIUpdateWish(context *gin.Context) {
 			return
 		}
 
-		unique_wish_name, err := database.VerifyUniqueWishNameinWishlist(wish.Name, wishOriginal.WishlistID)
+		unique_wish_name, err := database.VerifyUniqueWishNameInWishlist(wish.Name, wishOriginal.WishlistID)
 		if err != nil {
 			log.Println("Failed to verify wish name. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wish name."})
@@ -989,7 +989,7 @@ func APIUpdateWish(context *gin.Context) {
 		wishOriginal.Name = strings.TrimSpace(wish.Name)
 	}
 
-	if wish.URL != wishOriginal.URL && wish.URL != "" {
+	if wish.URL != wishOriginal.URL {
 		// Validate wish URL format
 		stringMatch, requirements, err := utilities.ValidateTextCharacters(wish.URL)
 		if err != nil {
@@ -1014,8 +1014,7 @@ func APIUpdateWish(context *gin.Context) {
 		wishOriginal.URL = strings.TrimSpace(wish.URL)
 	}
 
-	if wish.Note != wishOriginal.Note && wish.Note != "" {
-
+	if wish.Note != wishOriginal.Note {
 		// Validate wish note format
 		stringMatch, requirements, err := utilities.ValidateTextCharacters(wish.Note)
 		if err != nil {
@@ -1033,7 +1032,7 @@ func APIUpdateWish(context *gin.Context) {
 		wishOriginal.Note = strings.TrimSpace(wish.Note)
 	}
 
-	if wish.Price != wishOriginal.Price && wish.Price != 0 {
+	if wish.Price != wishOriginal.Price {
 		wishOriginal.Price = wish.Price
 	}
 
