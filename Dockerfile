@@ -21,6 +21,6 @@ RUN rm /var/lib/dpkg/info/libc-bin.*
 RUN apt clean
 RUN apt update
 RUN apt install -y ca-certificates curl
-RUN RUN chmod +x /app/poenskelisten /app/entrypoint.sh
+RUN chmod +x /app/poenskelisten /app/entrypoint.sh
 
 ENTRYPOINT /app/entrypoint.sh
