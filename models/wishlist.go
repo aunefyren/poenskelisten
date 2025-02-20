@@ -8,37 +8,40 @@ import (
 
 type Wishlist struct {
 	GormModel
-	Name        string     `json:"name" gorm:"not null"`
-	Description string     `json:"description"`
-	Enabled     bool       `json:"enabled" gorm:"not null; default: true"`
-	OwnerID     uuid.UUID  `json:"" gorm:"type:varchar(100);"`
-	Owner       User       `json:"owner" gorm:"not null;"`
-	Date        *time.Time `json:"date" gorm:"not null"`
-	Expires     *bool      `json:"expires" gorm:"not null; default: true"`
-	Claimable   *bool      `json:"claimable" gorm:"not null; default: false"`
-	Public      *bool      `json:"public" gorm:"not null; default: false"`
-	PublicHash  uuid.UUID  `json:"public_hash" gorm:"type:varchar(100);"`
+	Name         string     `json:"name" gorm:"not null"`
+	Description  string     `json:"description"`
+	Enabled      bool       `json:"enabled" gorm:"not null; default: true"`
+	OwnerID      uuid.UUID  `json:"" gorm:"type:varchar(100);"`
+	Owner        User       `json:"owner" gorm:"not null;"`
+	Date         *time.Time `json:"date" gorm:"not null"`
+	Expires      *bool      `json:"expires" gorm:"not null; default: true"`
+	Claimable    *bool      `json:"claimable" gorm:"not null; default: false"`
+	HideClaimers *bool      `json:"hide_claimers" gorm:"default: false"`
+	Public       *bool      `json:"public" gorm:"not null; default: false"`
+	PublicHash   uuid.UUID  `json:"public_hash" gorm:"type:varchar(100);"`
 }
 
 type WishlistCreationRequest struct {
 	GormModel
-	Name        string       `json:"name"`
-	Description string       `json:"description"`
-	Date        *string      `json:"date"`
-	Expires     bool         `json:"expires"`
-	Groups      *[]uuid.UUID `json:"groups"`
-	Claimable   bool         `json:"claimable"`
-	Public      bool         `json:"public"`
+	Name         string       `json:"name"`
+	Description  string       `json:"description"`
+	Date         *string      `json:"date"`
+	Expires      bool         `json:"expires"`
+	Groups       *[]uuid.UUID `json:"groups"`
+	Claimable    bool         `json:"claimable"`
+	HideClaimers bool         `json:"hide_claimers"`
+	Public       bool         `json:"public"`
 }
 
 type WishlistUpdateRequest struct {
 	GormModel
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Date        *string `json:"date"`
-	Expires     bool    `json:"expires"`
-	Claimable   bool    `json:"claimable"`
-	Public      bool    `json:"public"`
+	Name         string  `json:"name"`
+	Description  string  `json:"description"`
+	Date         *string `json:"date"`
+	Expires      bool    `json:"expires"`
+	Claimable    bool    `json:"claimable"`
+	HideClaimers bool    `json:"hide_claimers"`
+	Public       bool    `json:"public"`
 }
 
 type WishlistUser struct {
@@ -50,6 +53,7 @@ type WishlistUser struct {
 	Date          *time.Time                   `json:"date"`
 	Expires       *bool                        `json:"expires"`
 	Claimable     *bool                        `json:"claimable"`
+	HideClaimers  *bool                        `json:"hide_claimers"`
 	Public        *bool                        `json:"public" gorm:"not null; default: false"`
 	PublicHash    uuid.UUID                    `json:"public_hash" gorm:"type:varchar(100);"`
 	Members       []GroupUser                  `json:"members"`

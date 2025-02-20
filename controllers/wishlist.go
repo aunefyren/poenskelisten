@@ -132,6 +132,7 @@ func RegisterWishlist(context *gin.Context) {
 	wishlistdb.Description = wishlist.Description
 	wishlistdb.Name = wishlist.Name
 	wishlistdb.Claimable = &wishlist.Claimable
+	wishlistdb.HideClaimers = &wishlist.HideClaimers
 	wishlistdb.ID = uuid.New()
 	wishlistdb.Public = &wishlist.Public
 	wishlistdb.PublicHash = uuid.New()
@@ -357,7 +358,7 @@ func GetWishlist(context *gin.Context) {
 		return
 	}
 
-	WishlistMembership, err := database.VerifyUserMembershipToGroupmembershipToWishlist(UserID, wishlist_id_int)
+	WishlistMembership, err := database.VerifyUserMembershipToGroupMembershipToWishlist(UserID, wishlist_id_int)
 	if err != nil {
 		log.Println("Failed to verify membership to group. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
@@ -915,6 +916,7 @@ func APIUpdateWishlist(context *gin.Context) {
 	wishlistOriginal.Description = wishlist.Description
 	wishlistOriginal.Name = wishlist.Name
 	wishlistOriginal.Claimable = &wishlist.Claimable
+	wishlistOriginal.HideClaimers = &wishlist.HideClaimers
 	wishlistOriginal.Expires = &wishlist.Expires
 	wishlistOriginal.Public = &wishlist.Public
 	wishlistOriginal.PublicHash = uuid.New()
@@ -946,7 +948,7 @@ func APIUpdateWishlist(context *gin.Context) {
 	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist updated.", "wishlist": wishlistObject, "public_url": configFile.PoenskelistenExternalURL})
 }
 
-func ConvertWishlistCollaberatorToWishlistCollaberatorObject(wishlistCollab models.WishlistCollaborator) (wishlistCollabObject models.WishlistCollaboratorObject, err error) {
+func ConvertWishlistCollaboratorToWishlistCollaboratorObject(wishlistCollab models.WishlistCollaborator) (wishlistCollabObject models.WishlistCollaboratorObject, err error) {
 	err = nil
 	wishlistCollabObject = models.WishlistCollaboratorObject{}
 
@@ -970,12 +972,12 @@ func ConvertWishlistCollaberatorToWishlistCollaberatorObject(wishlistCollab mode
 	return
 }
 
-func ConvertWishlistCollaberatorsToWishlistCollaberatorObjects(wishlistCollabs []models.WishlistCollaborator) (wishlistCollabObjects []models.WishlistCollaboratorObject, err error) {
+func ConvertWishlistCollaboratorsToWishlistCollaboratorsObjects(wishlistCollabs []models.WishlistCollaborator) (wishlistCollabObjects []models.WishlistCollaboratorObject, err error) {
 	err = nil
 	wishlistCollabObjects = []models.WishlistCollaboratorObject{}
 
 	for _, wishlistCollab := range wishlistCollabs {
-		wishlistCollabObject, err := ConvertWishlistCollaberatorToWishlistCollaberatorObject(wishlistCollab)
+		wishlistCollabObject, err := ConvertWishlistCollaboratorToWishlistCollaboratorObject(wishlistCollab)
 		if err != nil {
 			log.Println("Failed to get wishlist collaberator object for '" + wishlistCollab.ID.String() + "'. Skipping. Error: " + err.Error())
 			continue
@@ -1007,7 +1009,7 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *uu
 		return models.WishlistUser{}, err
 	}
 
-	wishlistsCollabObjects, err := ConvertWishlistCollaberatorsToWishlistCollaberatorObjects(wishlistsCollabs)
+	wishlistsCollabObjects, err := ConvertWishlistCollaboratorsToWishlistCollaboratorsObjects(wishlistsCollabs)
 	if err != nil {
 		log.Println("Failed to convert wishlist collaberators to wishlist collaberator objects. Returning. Error: " + err.Error())
 		return models.WishlistUser{}, err
@@ -1036,6 +1038,7 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *uu
 	wishlistObject.Name = wishlist.Name
 	wishlistObject.UpdatedAt = wishlist.UpdatedAt
 	wishlistObject.Claimable = wishlist.Claimable
+	wishlistObject.HideClaimers = wishlist.HideClaimers
 	wishlistObject.Collaborators = wishlistsCollabObjects
 	wishlistObject.Expires = wishlist.Expires
 	wishlistObject.Public = wishlist.Public

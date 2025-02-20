@@ -20,6 +20,13 @@ type User struct {
 	ResetExpiration  *time.Time `json:"reset_expiration"`
 }
 
+type UserMinimal struct {
+	GormModel
+	FirstName string  `json:"first_name"`
+	LastName  string  `json:"last_name"`
+	Email     *string `json:"email"`
+}
+
 type UserCreationRequest struct {
 	FirstName      string `json:"first_name"`
 	LastName       string `json:"last_name"`

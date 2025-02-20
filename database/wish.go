@@ -87,7 +87,14 @@ func GetWishClaimFromWish(WishID uuid.UUID) ([]models.WishClaimObject, error) {
 		return []models.WishClaimObject{}, err
 	}
 
-	wish_with_user.User = user_object
+	userObjectMinimal := models.UserMinimal{
+		GormModel: user_object.GormModel,
+		FirstName: user_object.FirstName,
+		LastName:  user_object.LastName,
+		Email:     user_object.Email,
+	}
+
+	wish_with_user.User = userObjectMinimal
 	wish_with_user.CreatedAt = wish_claim.CreatedAt
 	wish_with_user.DeletedAt = wish_claim.DeletedAt
 	wish_with_user.Enabled = wish_claim.Enabled
