@@ -230,7 +230,7 @@ func GetWishlistOwner(WishlistID uuid.UUID) (uuid.UUID, error) {
 }
 
 // Verify if a group ID is a member of a wishlist
-func VerifyUserMembershipToGroupmembershipToWishlist(UserID uuid.UUID, WishlistID uuid.UUID) (bool, error) {
+func VerifyUserMembershipToGroupMembershipToWishlist(UserID uuid.UUID, WishlistID uuid.UUID) (bool, error) {
 	var wishlistmembership models.WishlistMembership
 	wishlistmembershiprecord := Instance.Where("`wishlist_memberships`.enabled = ?", 1).Where("`wishlist_memberships`.wishlist_id = ?", WishlistID).Joins("JOIN `groups` on `groups`.id = `wishlist_memberships`.group_id").Where("`groups`.enabled = ?", 1).Joins("JOIN `group_memberships` on `group_memberships`.group_id = `groups`.id").Where("`group_memberships`.enabled = ?", 1).Where("`group_memberships`.member_id = ?", UserID).Find(&wishlistmembership)
 	if wishlistmembershiprecord.Error != nil {

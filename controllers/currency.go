@@ -6,12 +6,12 @@ import (
 	"aunefyren/poenskelisten/utilities"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
 func APIGetCurrency(context *gin.Context) {
-
 	// Get configuration
 	config, err := config.GetConfig()
 	if err != nil {
@@ -21,13 +21,11 @@ func APIGetCurrency(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"message": "Currency retrieved.", "currency": config.PoenskelistenCurrency, "padding": config.PoenskelistenCurrencyPad})
-
+	context.JSON(http.StatusOK, gin.H{"message": "Currency retrieved.", "currency": config.PoenskelistenCurrency, "padding": config.PoenskelistenCurrencyPad, "left": config.PoenskelistenCurrencyLeft})
 }
 
 func APIUpdateCurrency(context *gin.Context) {
-
-	var currency models.UpdateCurrencyrequest
+	var currency models.UpdateCurrencyRequest
 
 	if err := context.ShouldBindJSON(&currency); err != nil {
 		log.Println("Failed to parse request. Error: " + err.Error())
@@ -44,7 +42,7 @@ func APIUpdateCurrency(context *gin.Context) {
 		context.Abort()
 		return
 	} else if !stringMatch {
-		log.Println("Currencystring failed validation.")
+		log.Println("Currency string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
@@ -59,8 +57,9 @@ func APIUpdateCurrency(context *gin.Context) {
 		return
 	}
 
-	configFile.PoenskelistenCurrency = currency.PoenskelistenCurrency
+	configFile.PoenskelistenCurrency = strings.TrimSpace(currency.PoenskelistenCurrency)
 	configFile.PoenskelistenCurrencyPad = currency.PoenskelistenCurrencyPad
+	configFile.PoenskelistenCurrencyLeft = currency.PoenskelistenCurrencyLeft
 
 	err = config.SaveConfig(configFile)
 	if err != nil {
@@ -70,6 +69,5 @@ func APIUpdateCurrency(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"message": "Currency updated.", "currency": configFile.PoenskelistenCurrency, "padding": configFile.PoenskelistenCurrencyPad})
-
+	context.JSON(http.StatusOK, gin.H{"message": "Currency updated.", "currency": configFile.PoenskelistenCurrency, "padding": configFile.PoenskelistenCurrencyPad, "left": configFile.PoenskelistenCurrencyLeft})
 }

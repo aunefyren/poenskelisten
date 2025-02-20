@@ -249,13 +249,13 @@ function get_wishes(wishlist_id, group_id, user_id){
                 error(result.error);
 
             } else {
-
                 clearResponse();
                 wishes = result.wishes;
-                console.log(wishes);
+                //console.log(wishes);
 
                 currency = result.currency;
-                currency_padding = result.padding;
+                currency_padding = result.currency_padding;
+                currency_left = result.currency_left;
                 try {
                     document.getElementById("wish_price").placeholder = "Wish price in " + currency
                 } catch(e) {
@@ -374,15 +374,25 @@ function generate_wish_html(wish_object, wishlist_id, user_id) {
 
     html += wish_object.name
 
-    if(wish_object.price != 0) {
+    if(wish_object.price && wish_object.price != 0) {
 
         var currency_string = currency
         if(currency_padding) {
-            currency_string = " " + currency_string;
+            if(currency_left) {
+                currency_string = currency_string + " ";
+            } else {
+                currency_string = " " + currency_string;
+            }
         }
 
         html += '<div class="wish-price unselectable" title="Price">'
-        html += wish_object.price + currency_string
+
+        if(currency_left) {
+            html += currency_string + wish_object.price
+        } else {
+            html += wish_object.price + currency_string
+        }
+        
         html += '</div>'
     }
 
@@ -409,12 +419,6 @@ function generate_wish_html(wish_object, wishlist_id, user_id) {
     }
 
     if(user_id == owner_id || collaborator || user_id == wishlist_ownerID) {
-
-        var b64_wish_name = toBASE64(wish_object.name)
-        var b64_wish_note = toBASE64(wish_object.note)
-        var b64_wish_url = toBASE64(wish_object.url)
-        var b64_wish_price = toBASE64(wish_object.price.toString())
-
         html += `<div class="profile-icon clickable" title="Edit wish" onclick="editWish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}')">`;
         html += '<img class="icon-img " src="/assets/edit.svg">'
         html += '</div>'

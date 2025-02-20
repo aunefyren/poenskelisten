@@ -253,7 +253,7 @@ function createWish(wishlistID, userID, currency, wishObjectBase64) {
             "note" : "",
             "image": "",
             "url": "",
-            "price": 0
+            "price": null
         }
         wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
         console.log("Remade object. Error: " + error)
