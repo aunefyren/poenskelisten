@@ -5,13 +5,15 @@ function createNewWishlist(groupContextID, userID, wishlistObjectBase64) {
         var wishlistObject = JSON.parse(fromBASE64(wishlistObjectBase64))
     } catch (error) {
         var now = new Date
-        var wishlistDate = now.toISOString().split('T')[0];
+        var later = new Date(now.getTime() + (86400000))
+        var wishlistDate = later.toISOString().split('T')[0];
         var wishlistObject = {
             "name": "",
             "description" : "",
             "expires": true,
             "date": wishlistDate,
             "claimable": true,
+            "hide_claimers": false,
             "public": false
         }
         wishlistObjectBase64 = toBASE64(JSON.stringify(wishlistObject))
@@ -117,12 +119,18 @@ function createNewWishlistThree(groupContextID, userID, wishlistObjectBase64) {
     wishlistObjectBase64 = toBASE64(JSON.stringify(wishlistObject))
 
     var checkedHTML = ""
+    var checkedDisplay = "none"
     if(wishlistObject.claimable) {
         checkedHTML = "checked"
+        var checkedDisplay = "flex"
     }
     var checkedTwoHTML = ""
     if(wishlistObject.public) {
         checkedTwoHTML = "checked"
+    }
+    var checkedThreeHTML = ""
+    if(wishlistObject.hide_claimers) {
+        checkedThreeHTML = "checked"
     }
 
     var html = '';
@@ -133,10 +141,13 @@ function createNewWishlistThree(groupContextID, userID, wishlistObjectBase64) {
         </div>
 
         <form action="" class="" onsubmit="event.preventDefault(); createNewWishlistFour('${groupContextID}', '${userID}', '${wishlistObjectBase64}');">
-            <input class="clickable" onclick="" style="" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" ${checkedHTML}>
+            <input class="clickable" onclick="ToggleHideClaimersOption();" style="" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" ${checkedHTML}>
             <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
 
-            <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${checkedTwoHTML}>
+            <input class="clickable" onclick="" style="display: ${checkedDisplay};" type="checkbox" id="wishlist_hide_claimers" name="wishlist_hide_claimers" value="confirm" ${checkedThreeHTML}>
+            <label for="wishlist_hide_claimers" id="wishlist_hide_claimers_label" style="margin-bottom: 1em; display: ${checkedDisplay};" class="clickable">Hide claimers from other users.</label><br>
+
+            <input class="clickable" onclick="" style="" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${checkedTwoHTML}>
             <label for="wishlist_public" style="margin-bottom: 1em;" class="clickable">Make this wishlist public and shareable.</label><br>
             
             <button id="register-button" type="submit" href="/">Next</button>
@@ -151,8 +162,10 @@ function createNewWishlistFour(groupContextID, userID, wishlistObjectBase64) {
 
     try {
         var wishlistClaimable = document.getElementById("wishlist_claimable").checked;
+        var wishlistHideClaimers = document.getElementById("wishlist_hide_claimers").checked;
         var wishlistPublic = document.getElementById("wishlist_public").checked;
         wishlistObject.claimable = wishlistClaimable
+        wishlistObject.hide_claimers = wishlistHideClaimers
         wishlistObject.public = wishlistPublic
     } catch (error) {
         console.log("Failed to get values. Error: " + error)
@@ -246,6 +259,7 @@ function createWishlist(groupContextID, userID, wishlistObjectBase64) {
         "date": wishlistObject.date,
         "groups": groupsToAdd,
         "claimable": wishlistObject.claimable,
+        "hide_claimers": wishlistObject.hide_claimers,
         "expires": wishlistObject.expires,
         "public": wishlistObject.public
     };
@@ -528,11 +542,17 @@ function editWishlistFour(wishlistID, userID, wishlistObjectBase64) {
 
     var claimableHTML = ""
     var publicHTML = ""
+    var checkedDisplay = "none"
+    var hideClaimersHTML = ""
     if(wishlistObject.claimable) {
         claimableHTML = "checked"
+        checkedDisplay = "flex"
     }
     if(wishlistObject.public) {
         publicHTML = "checked"
+    }
+    if(wishlistObject.hide_claimers) {
+        hideClaimersHTML = "checked"
     }
 
     var html = '';
@@ -543,8 +563,11 @@ function editWishlistFour(wishlistID, userID, wishlistObjectBase64) {
         </div>
 
         <form action="" class="" onsubmit="event.preventDefault(); editWishlistFive('${wishlistID}', '${userID}', '${wishlistObjectBase64}');">
-            <input class="clickable" onclick="" style="" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" ${claimableHTML}>
+            <input class="clickable" onclick="ToggleHideClaimersOption();" style="" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" ${claimableHTML}>
             <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
+
+            <input class="clickable" onclick="" style="display: ${checkedDisplay};" type="checkbox" id="wishlist_hide_claimers" name="wishlist_hide_claimers" value="confirm" ${hideClaimersHTML}>
+            <label for="wishlist_hide_claimers" id="wishlist_hide_claimers_label" style="margin-bottom: 1em; display: ${checkedDisplay};" class="clickable">Hide claimers from other users.</label><br>
 
             <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${publicHTML}>
             <label for="wishlist_public" style="margin-bottom: 1em;" class="clickable">Make this wishlist public and shareable.</label><br>
@@ -558,6 +581,7 @@ function editWishlistFour(wishlistID, userID, wishlistObjectBase64) {
 
 function editWishlistFive(wishlistID, userID, wishlistObjectBase64) {
     var wishlistClaimable = document.getElementById("wishlist_claimable").checked;
+    var wishlistHideClaimers = document.getElementById("wishlist_hide_claimers").checked;
     var wishlistPublic = document.getElementById("wishlist_public").checked;
     var wishlistObject = JSON.parse(fromBASE64(wishlistObjectBase64))
 
@@ -571,6 +595,7 @@ function editWishlistFive(wishlistID, userID, wishlistObjectBase64) {
         "description" : wishlistObject.description,
         "date": wishlistObject.date,
         "claimable": wishlistClaimable,
+        "hide_claimers": wishlistHideClaimers,
         "expires": wishlistObject.expires,
         "public": wishlistPublic
     };
@@ -1121,4 +1146,21 @@ function addWishlistCollaboratorThree(wishlistID, userID) {
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
     return false;
+}
+
+function ToggleHideClaimersOption() {
+    try {
+        allowClaiming = document.getElementById('wishlist_claimable').checked
+        hideClaimers = document.getElementById('wishlist_hide_claimers')
+        hideClaimersLabel = document.getElementById('wishlist_hide_claimers_label')
+        if(allowClaiming) {
+            hideClaimers.style.display = "flex"
+            hideClaimersLabel.style.display = "flex"
+        } else {
+            hideClaimers.style.display = "none"
+            hideClaimersLabel.style.display = "none"
+        }
+    } catch (error) {
+        console.log("Failed to toggle hide claimers section. Error: " + error)
+    }
 }

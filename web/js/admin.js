@@ -70,8 +70,11 @@ function load_page(result) {
 
                 <input type="text" name="currency" id="currency" placeholder="What currency can wishes be listed in?" value="" autocomplete="off" required />
 
-                <input class="clickable" onclick="" style="" type="checkbox" id="currency-padding" name="currency-padding" value="confirm" >
+                <input class="clickable" onclick="" style="margin-top: 0.5em;" type="checkbox" id="currency-padding" name="currency-padding" value="confirm" >
                 <label for="currency-padding" class="clickable">Pad the currency string</label><br>
+
+                <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="currency-left" name="currency-left" value="confirm" >
+                <label for="currency-left" class="clickable">Currency on the left side</label><br>
 
                 <button type="submit" onclick="update_currency();" id="update_currency_button" style=""><img src="assets/check.svg" class="btn_logo"><p2>Update</p2></button>
             
@@ -301,11 +304,9 @@ function delete_invite(invide_id) {
 }
 
 function get_currency() {
-
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
-            
             try {
                 result = JSON.parse(this.responseText);
             } catch(e) {
@@ -313,19 +314,14 @@ function get_currency() {
                 error("Could not reach API.");
                 return;
             }
-            
             if(result.error) {
-
                 error(result.error);
-
             } else {
-
                 //console.log(result)
                 document.getElementById('currency').value = result.currency;
                 document.getElementById('currency-padding').checked = result.padding;
-                
+                document.getElementById('currency-left').checked = result.left;
             }
-
         }
     };
     xhttp.withCredentials = true;
@@ -334,17 +330,18 @@ function get_currency() {
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
     return false;
-
 }
 
 function update_currency() {
 
     var currency = document.getElementById('currency').value;
     var padding = document.getElementById('currency-padding').checked;
+    var left = document.getElementById('currency-left').checked;
 
     var form_obj = { 
         "poenskelisten_currency" : currency,
-        "poenskelisten_currency_pad": padding
+        "poenskelisten_currency_pad": padding,
+        "poenskelisten_currency_left": left
     };
 
     var form_data = JSON.stringify(form_obj);
@@ -370,7 +367,7 @@ function update_currency() {
                 success(result.message)
                 document.getElementById('currency').value = result.currency;
                 document.getElementById('currency-padding').checked = result.padding;
-                
+                document.getElementById('currency-left').checked = result.left;
             }
 
         }
@@ -388,7 +385,6 @@ function GetUserData(userID) {
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
-            
             try {
                 result = JSON.parse(this.responseText);
             } catch(e) {
@@ -398,17 +394,10 @@ function GetUserData(userID) {
             }
             
             if(result.error) {
-
                 error(result.error);
-
             } else {
-
                 PlaceUserDataInModal(result.user)
-                
             }
-
-        } else {
-            // info("Loading week...");
         }
     };
     xhttp.withCredentials = true;

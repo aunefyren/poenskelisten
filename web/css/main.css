@@ -1241,3 +1241,7 @@ textarea {
   text-align: left;
   padding-left: 0.25em;
 }
+
+#wishlists-box-expired {
+  padding: 0 0.5em;
+}

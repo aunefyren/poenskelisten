@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -65,7 +66,7 @@ func GetWishesFromWishlist(context *gin.Context) {
 		return
 	}
 
-	WishlistMembership, err := database.VerifyUserMembershipToGroupmembershipToWishlist(UserID, wishlist_id_int)
+	WishlistMembership, err := database.VerifyUserMembershipToGroupMembershipToWishlist(UserID, wishlist_id_int)
 	if err != nil {
 		log.Println("Failed to verify membership of group. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership of group."})
@@ -121,7 +122,14 @@ func GetWishesFromWishlist(context *gin.Context) {
 		return wishObjects[j].UpdatedAt.Before(wishObjects[i].UpdatedAt)
 	})
 
-	context.JSON(http.StatusOK, gin.H{"owner_id": owner_id, "collaborators": wishlistCollabsIntArray, "wishes": wishObjects, "message": "Wishes retrieved.", "currency": config.PoenskelistenCurrency, "padding": config.PoenskelistenCurrencyPad})
+	context.JSON(http.StatusOK, gin.H{
+		"owner_id":      owner_id,
+		"collaborators": wishlistCollabsIntArray,
+		"wishes":        wishObjects, "message": "Wishes retrieved.",
+		"currency":         config.PoenskelistenCurrency,
+		"currency_padding": config.PoenskelistenCurrencyPad,
+		"currency_left":    config.PoenskelistenCurrencyLeft,
+	})
 }
 
 func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models.WishObject, error) {
@@ -134,7 +142,7 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 		return models.WishObject{}, err
 	}
 
-	wishclaimobject, err := database.GetWishClaimFromWish(wish.ID)
+	wishClaimObject, err := database.GetWishClaimFromWish(wish.ID)
 	if err != nil {
 		log.Println("Failed to get wish claims wish'" + wish.ID.String() + "'. Returning. Error: " + err.Error())
 		return models.WishObject{}, err
@@ -167,7 +175,8 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 		log.Println("Failed to get wishlist collaborator from database. Error: " + err.Error())
 		return models.WishObject{}, errors.New("Failed to get wishlist from database.")
 	}
-	wishlistCollabObjects, err := ConvertWishlistCollaberatorsToWishlistCollaberatorObjects(wishlistCollabs)
+
+	wishlistCollabObjects, err := ConvertWishlistCollaboratorsToWishlistCollaboratorsObjects(wishlistCollabs)
 	if err != nil {
 		log.Println("Failed to convert wishlist collaborators to objects. Error: " + err.Error())
 		return models.WishObject{}, errors.New("Failed to convert wishlist collaborators to objects.")
@@ -182,18 +191,32 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 	// Purge the reply if the requester is the owner
 	if requestUserID != nil {
 		if wish.OwnerID == *requestUserID {
-			wishclaimobject = []models.WishClaimObject{}
+			wishClaimObject = []models.WishClaimObject{}
 		}
 
 		if wishlistOwnerUser.ID == *requestUserID {
-			wishclaimobject = []models.WishClaimObject{}
+			wishClaimObject = []models.WishClaimObject{}
 		}
 
 		for _, wishCollaborator := range wishlistCollabObjects {
 			if wishCollaborator.User.ID == *requestUserID {
-				wishclaimobject = []models.WishClaimObject{}
+				wishClaimObject = []models.WishClaimObject{}
 			}
 		}
+	}
+
+	// Purge claim details if claimers are hidden
+	if wishlist.HideClaimers != nil && *wishlist.HideClaimers == true {
+		newClaimers := []models.WishClaimObject{}
+		for _, wishClaim := range wishClaimObject {
+			wishClaim.User.CreatedAt = time.Now()
+			wishClaim.User.UpdatedAt = time.Now()
+			wishClaim.User.Email = nil
+			wishClaim.User.FirstName = "Hidden"
+			wishClaim.User.LastName = "User"
+			newClaimers = append(newClaimers, wishClaim)
+		}
+		wishClaimObject = newClaimers
 	}
 
 	wishObject.CreatedAt = wish.CreatedAt
@@ -204,7 +227,7 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 	wishObject.Note = wish.Note
 	wishObject.Owner = user_object
 	wishObject.WishlistOwner = wishlistOwnerUser
-	wishObject.WishClaim = wishclaimobject
+	wishObject.WishClaim = wishClaimObject
 	wishObject.URL = wish.URL
 	wishObject.Price = wish.Price
 	wishObject.UpdatedAt = wish.UpdatedAt
@@ -212,6 +235,8 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 	wishObject.WishClaimable = *wishlist.Claimable
 	wishObject.Collaborators = wishlistCollabObjects
 	wishObject.Currency = configFile.PoenskelistenCurrency
+	wishObject.CurrencyPadding = configFile.PoenskelistenCurrencyPad
+	wishObject.CurrencyLeft = configFile.PoenskelistenCurrencyLeft
 
 	return wishObject, nil
 
@@ -298,7 +323,6 @@ func RegisterWish(context *gin.Context) {
 		context.Abort()
 		return
 	} else if !MembershipStatus && !collaborationStatus {
-		//context.JSON(http.StatusInternalServerError, gin.H{"error": groupmembershiprecord.Error.Error()})
 		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not an owner or collaborator of this wishlist."})
 		context.Abort()
 		return
@@ -541,7 +565,13 @@ func DeleteWish(context *gin.Context) {
 					return
 				}
 
-				utilities.SendSMTPDeletedClaimedWish(wishClaim.User, wishObject, wishlistObject)
+				wishClaimUser, err := database.GetAllUserInformation(wishClaim.User.ID)
+				if err != nil {
+					log.Println("Failed to get user object for user. Error: " + err.Error())
+					return
+				}
+
+				utilities.SendSMTPDeletedClaimedWish(wishClaimUser, wishObject, wishlistObject)
 			}
 		}
 	}
@@ -632,7 +662,7 @@ func RegisterWishClaim(context *gin.Context) {
 		return
 	}
 
-	WishlistMembership, err := database.VerifyUserMembershipToGroupmembershipToWishlist(UserID, *db_wishlist_id)
+	WishlistMembership, err := database.VerifyUserMembershipToGroupMembershipToWishlist(UserID, *db_wishlist_id)
 	if err != nil {
 		log.Println("Failed to verify membership to wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to wishlist."})
@@ -797,7 +827,7 @@ func RemoveWishClaim(context *gin.Context) {
 		return
 	}
 
-	WishlistMembership, err := database.VerifyUserMembershipToGroupmembershipToWishlist(UserID, *db_wishlist_id)
+	WishlistMembership, err := database.VerifyUserMembershipToGroupMembershipToWishlist(UserID, *db_wishlist_id)
 	if err != nil {
 		log.Println("Failed to verify membership to wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to wishlist."})
@@ -1111,7 +1141,7 @@ func APIGetWish(context *gin.Context) {
 		return
 	}
 
-	WishlistMembership, err := database.VerifyUserMembershipToGroupmembershipToWishlist(userID, *wishlistID)
+	WishlistMembership, err := database.VerifyUserMembershipToGroupMembershipToWishlist(userID, *wishlistID)
 	if err != nil {
 		log.Println("Failed to verify wishlist membership. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wishlist membership."})
