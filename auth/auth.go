@@ -9,8 +9,6 @@ import (
 	"github.com/google/uuid"
 )
 
-var jwtKey = config.GetPrivateKey(1)
-
 type JWTClaim struct {
 	Firstname string    `json:"first_name"`
 	Lastname  string    `json:"last_name"`
@@ -38,17 +36,20 @@ func GenerateJWT(firstname string, lastname string, email string, userid uuid.UU
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	jwtKey := config.GetPrivateKey(1)
 	tokenString, err = token.SignedString(jwtKey)
 	return
 }
 
 func GenerateJWTFromClaims(claims *JWTClaim) (tokenString string, err error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	jwtKey := config.GetPrivateKey(1)
 	tokenString, err = token.SignedString(jwtKey)
 	return
 }
 
 func ValidateToken(signedToken string, admin bool) (err error) {
+	jwtKey := config.GetPrivateKey(1)
 	token, err := jwt.ParseWithClaims(
 		signedToken,
 		&JWTClaim{},
@@ -84,6 +85,7 @@ func ValidateToken(signedToken string, admin bool) (err error) {
 }
 
 func ParseToken(signedToken string) (*JWTClaim, error) {
+	jwtKey := config.GetPrivateKey(1)
 	token, err := jwt.ParseWithClaims(
 		signedToken,
 		&JWTClaim{},
