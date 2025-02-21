@@ -3,7 +3,7 @@ name: Update Release Tag in File
 on:
   push:
     tags:
-      - '*'  # Triggers on any tag push
+      - '*'  # Triggers when any tag is pushed
 
 jobs:
   update-file:
@@ -24,13 +24,23 @@ jobs:
           git checkout $TAG_NAME
           git switch -c temp-branch  # Create a new branch from the tag
 
+      - name: Check if file already contains the tag
+        id: check-tag
+        run: |
+          if grep -q "${TAG_NAME}" config/config.go; then
+            echo "Tag already present. Skipping commit."
+            echo "SKIP_COMMIT=true" >> $GITHUB_ENV
+          fi
+
       - name: Replace template string in file
+        if: env.SKIP_COMMIT != 'true'
         run: sed -i "s/{{RELEASE_TAG}}/${TAG_NAME}/g" config/config.go
 
       - name: Commit and push changes
+        if: env.SKIP_COMMIT != 'true'
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git commit -am "Update release tag to ${TAG_NAME}"
           git tag -f $TAG_NAME  # Force update the tag
-          git push origin temp-branch:$TAG_NAME --force  # Update the tag with the new commit
+          git push origin temp-branch:$TAG_NAME --force  # Update the tag
