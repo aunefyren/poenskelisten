@@ -2,6 +2,8 @@ package config
 
 import (
 	"aunefyren/poenskelisten/models"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -44,6 +46,17 @@ func GetConfig() (*models.ConfigStruct, error) {
 
 	anythingChanged := false
 
+	if config.PrivateKey == "" {
+		// Set new value
+		newKey, err := GenerateSecureKey(64)
+		if err != nil {
+			return nil, errors.New("Failed to generate secure key. Error: " + err.Error())
+		}
+		config.PrivateKey = newKey
+		anythingChanged = true
+		log.Println("New private key set.")
+	}
+
 	if config.PoenskelistenName == "" {
 		// Set new value
 		config.PoenskelistenName = "Pønskelisten"
@@ -53,6 +66,12 @@ func GetConfig() (*models.ConfigStruct, error) {
 	if config.PoenskelistenEnvironment == "" {
 		// Set new value
 		config.PoenskelistenEnvironment = "production"
+		anythingChanged = true
+	}
+
+	if config.Timezone == "" {
+		// Set new value
+		config.Timezone = "Europe/Paris"
 		anythingChanged = true
 	}
 
@@ -96,12 +115,10 @@ func GetConfig() (*models.ConfigStruct, error) {
 
 	// Return config object
 	return &config, nil
-
 }
 
 // Creates empty config.json
 func CreateConfigFile() error {
-
 	var config models.ConfigStruct
 
 	config.PoenskelistenPort = 8080
@@ -119,7 +136,6 @@ func CreateConfigFile() error {
 	}
 
 	return nil
-
 }
 
 // Saves the given config struct as config.json
@@ -136,4 +152,55 @@ func SaveConfig(config *models.ConfigStruct) error {
 	}
 
 	return nil
+}
+
+func GetPrivateKey(epoch int) []byte {
+	if epoch > 5 {
+		log.Println("Failed to load private key. Exiting...")
+		os.Exit(1)
+	}
+
+	configFile, err := GetConfig()
+	if err != nil {
+		log.Println("Failed to load config for private key. Exiting...")
+		os.Exit(1)
+	}
+
+	secretKey, err := base64.StdEncoding.DecodeString(configFile.PrivateKey)
+	if err != nil {
+		ResetSecureKey()
+		return GetPrivateKey(epoch + 1)
+	}
+
+	return secretKey
+}
+
+// GenerateSecureKey creates a cryptographically secure random key of the given length (in bytes).
+func GenerateSecureKey(length int) (string, error) {
+	key := make([]byte, length)
+	_, err := rand.Read(key)
+	if err != nil {
+		return "", err
+	}
+	// Encode to Base64 to make it easy to store
+	return base64.StdEncoding.EncodeToString(key), nil
+}
+
+func ResetSecureKey() {
+	configFile, err := GetConfig()
+	if err != nil {
+		log.Println("Failed to load config for private key. Exiting...")
+		os.Exit(1)
+	}
+	configFile.PrivateKey, err = GenerateSecureKey(64)
+	if err != nil {
+		log.Println("Failed to generate new secret key. Exiting...")
+		os.Exit(1)
+	}
+	SaveConfig(configFile)
+	if err != nil {
+		log.Println("Failed to save new config. Exiting...")
+		os.Exit(1)
+	}
+	log.Println("New private key set.")
 }
