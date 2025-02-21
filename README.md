@@ -64,7 +64,7 @@ Create a table for Pønskelisten (Docker image does this automatically), and rem
 
 ### 2. Start Pønskelisten
 
-If you want to edit the configuration file manually, start up Pønskelisten and then let it complain a bunch. You can edit the configuration file manually afterward. If not, look further down at the `Startup flags` for starting Pønsklisten with configuration options.
+If you want to edit the configuration file manually, start up Pønskelisten and then let it complain a bunch. You can edit the configuration file manually afterward. If not, look further down at the `Startup flags` for starting Pønskelisten with configuration options.
 
 Either compile your chosen branch/tag with Go installed and run it:
 
@@ -86,14 +86,14 @@ If you want to start up Pønskelisten with some startup flags for a smoother exp
 
 #### Startup flags
 
-You can use startup flags to generate values to populate the configuration file with. They are only used if the configuration file doesn't have a pre-configured value to prioritize. The moment the configuration file has values, these flags are useless. Sort of a one-time thing.
+You can use startup flags to generate values to populate the configuration file with. 
 
-The exceptions are `generateinvite`, which will generate a new, random invitation code at each usage, and `disablesmtp` which will always disable the SMTP function.
+The exception is `generateinvite`, which will generate a new, random invitation code at each usage.
 
 <br>
 <br>
 
-| Flag | Type | Explaination |
+| Flag | Type | Explanation |
 |:-:|:-:|--:|
 | port | integer | Which port Pønskelisten starts on. |
 | timezone | string | The timezone Pønskelisten uses. Given in the TZ database name format. List can be found [here](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones). |
@@ -101,14 +101,13 @@ The exceptions are `generateinvite`, which will generate a new, random invitatio
 | dbip | string | The connection address Pønskelisten uses to reach the database. |
 | dbport | integer | The port Pønskelisten can reach the database at. |
 | dbname | string | The name of the table within the database. |
-| dbusername | string | The username used to autnenicate with the database. |
-| dbpassword | string | The password used to autnenicate with the database. |
-| disablesmtp | string (true/false) | Disables SMTP, meaning user verificaton is disabled. SMTP is enabled by default. |
+| dbusername | string | The username used to authenticate with the database. |
+| dbpassword | string | The password used to authenticate with the database. |
+| disablesmtp | string (true/false) | Disables SMTP, meaning user verification is disabled. SMTP is enabled by default. |
 | smtphost | string | The SMTP server host used. |
 | smtpport | integer | The SMTP server host port used. |
 | smtpusername | string | The username used to authenticate towards the SMTP server used. |
 | smtppassword | string | The username used to authenticate towards the SMTP server used. |
-| upgradetov2 | string (true/false) | Converts `db.sql` in the `/files` folder to the v2.00 format. |
 
 <br>
 <br>
@@ -137,7 +136,7 @@ Edit the configuration file so it can reach the MySQL database, and possibly an 
 
 Restart Pønskelisten for the changes to take effect.
 
-You should not be able to access Pønskelisten. By default, you can find the front end at `localhost:8080`.
+You should not be able to access Pønskelisten. By default, you can find the front end at `https://localhost:8080`.
 
 <br>
 <br>
@@ -158,7 +157,7 @@ I recommend installing PHPMyAdmin (a database interface) either as a [Docker ima
 
 The first user who signs up is automatically an admin. You need an invitation code for every user who wants to sign up. This can be generated on the admin page.
 
-Be prepared to access the DB every time a user manages to screw up their e-mail while signing up or someone needs an invitation code.
+Be prepared to access the DB every time a user manages to screw up their e-mail.
 
 <br>
 <br>
@@ -167,9 +166,9 @@ Be prepared to access the DB every time a user manages to screw up their e-mail 
 
 ### Environment variables
 
-All the startup flags in the table given previously can be used as environment variables. Do keep in mind that the flags, and in turn the environment variables, are only used if the value is not already defined in the configuration file. 
+All the startup flags in the table given previously can be used as environment variables.
 
-The only exceptions are the `generateinvite` and the `disablesmtp`. Consider removing the `generateinvite` environment variable from your Docker compose file so you don't generate a new code at every restart.
+Consider removing the `generateinvite` environment variable from your Docker compose file so you don't generate a new code at every restart.
 
 <br>
 <br>
@@ -220,17 +219,17 @@ services:
     # Where our Pønskeliste files are
     volumes:
       - ./data/:/app/files/
+      - ./images/:/app/images/
 
     ports:
       - '8080:8080'
-    environment:
 
+    environment:
       # Generate an unused invite code on startup
       # Remove this value to avoid continuous code-generation
       generateinvite: true
 
-      # The container will only respect these ENV if they are empty in the config.json
-      # Useful for first setup
+      # These will overwrite the config.json
       port: 8080
       timezone: Europe/Oslo
       dbip: db
