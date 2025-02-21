@@ -569,7 +569,7 @@ function editWishlistFour(wishlistID, userID, wishlistObjectBase64) {
             <input class="clickable" onclick="" style="display: ${checkedDisplay};" type="checkbox" id="wishlist_hide_claimers" name="wishlist_hide_claimers" value="confirm" ${hideClaimersHTML}>
             <label for="wishlist_hide_claimers" id="wishlist_hide_claimers_label" style="margin-bottom: 1em; display: ${checkedDisplay};" class="clickable">Hide claimers from other users.</label><br>
 
-            <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${publicHTML}>
+            <input class="clickable" onclick="" style="" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${publicHTML}>
             <label for="wishlist_public" style="margin-bottom: 1em;" class="clickable">Make this wishlist public and shareable.</label><br>
             
             <button id="register-button" type="submit" href="/">Update wishlist</button>
