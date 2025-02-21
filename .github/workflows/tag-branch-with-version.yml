@@ -10,24 +10,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository (fetch all branches)
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Ensure full history is available
+          fetch-depth: 0  # Fetch full history
           token: ${{ secrets.GIT_HUB_TOKEN }}
-
-      - name: Get the default branch
-        id: default_branch
-        run: echo "DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')" >> $GITHUB_ENV
-
-      - name: Switch to default branch
-        run: |
-          git fetch --all
-          git checkout $DEFAULT_BRANCH
-          git pull origin $DEFAULT_BRANCH
 
       - name: Extract tag name
         run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Checkout the tagged commit
+        run: |
+          git checkout $TAG_NAME
+          git switch -c temp-branch  # Create a new branch from the tag
 
       - name: Replace template string in file
         run: sed -i "s/{{RELEASE_TAG}}/${TAG_NAME}/g" config/config.go
@@ -37,4 +32,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git commit -am "Update release tag to ${TAG_NAME}"
-          git push origin $DEFAULT_BRANCH
+          git tag -f $TAG_NAME  # Force update the tag
+          git push origin temp-branch:$TAG_NAME --force  # Update the tag with the new commit
