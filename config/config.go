@@ -128,7 +128,15 @@ func CreateConfigFile() error {
 	config.SMTPEnabled = true
 	config.PoenskelistenVersion = poenskelisten_version_parameter
 
-	err := SaveConfig(&config)
+	privateKey, err := GenerateSecureKey(64)
+	if err != nil {
+		log.Println("Failed to generate private key. Error: " + err.Error())
+		fmt.Println("Failed to generate private key. Error: " + err.Error())
+		return err
+	}
+	config.PrivateKey = privateKey
+
+	err = SaveConfig(&config)
 	if err != nil {
 		log.Println("Create config file threw error trying to save the file.")
 		fmt.Println("Create config file threw error trying to save the file.")
