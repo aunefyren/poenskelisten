@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"aunefyren/poenskelisten/config"
 	"errors"
 	"time"
 
@@ -8,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-var jwtKey = []byte("supersecretkey")
+var jwtKey = config.GetPrivateKey(1)
 
 type JWTClaim struct {
 	Firstname string    `json:"first_name"`
@@ -18,15 +19,6 @@ type JWTClaim struct {
 	Verified  bool      `json:"verified"`
 	UserID    uuid.UUID `json:"id"`
 	jwt.RegisteredClaims
-}
-
-func SetPrivateKey(PrivateKey string) error {
-	if len(PrivateKey) < 16 {
-		return errors.New("Private key must be atleast 16 characters.")
-	}
-
-	jwtKey = []byte(PrivateKey)
-	return nil
 }
 
 func GenerateJWT(firstname string, lastname string, email string, userid uuid.UUID, admin bool, verified bool) (tokenString string, err error) {

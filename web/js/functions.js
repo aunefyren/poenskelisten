@@ -66,7 +66,6 @@ function get_cookie(cname) {
 
 // Validate login token and get login details
 function get_login(cookie) {
-
     if(jwt == "") {
         load_page(false);
         return
@@ -85,17 +84,20 @@ function get_login(cookie) {
             }
 
             // If the error is to verify, allow loading page anyways
-            if(result.error === "You must verify your account.") {
-                // If not front-page, redirect
-                if(window.location.pathname !== "/verify") {
-                    location.href = '/verify';
+            if(result.error === "You must verify your account." && window.location.pathname !== "/verify") {
+                verifyPageRedirect();
+                return;
+            } else if(result.error === "Failed to validate token.") {
+                jwt = "";
+                if(window.location.pathname !== "/login") {
+                    logInPageRedirect();
                     return;
+                } else {
+                    load_page(false);
                 }
-                // Load page
-                load_page(this.responseText)
             } else if (result.error) {
                 error(result.error)
-                showLoggedInMenu();
+                showLoggedOutMenu();
                 return;
             } else {
                 // If new token, save it
@@ -648,4 +650,20 @@ function removeUserFromSelection(userID) {
             membersDatalistDiv.innerHTML += optionHTML
         }
     }
+}
+
+function logInPageRedirect() {
+    if(window.location.pathname !== "/login") {
+        window.location = '/login';
+        return true
+    }
+    return false
+}
+
+function verifyPageRedirect() {
+    if(window.location.pathname !== "/verify") {
+        window.location = '/verify';
+        return true
+    }
+    return false
 }
