@@ -1,7 +1,6 @@
 package main
 
 import (
-	"aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/controllers"
 	"aunefyren/poenskelisten/database"
@@ -24,7 +23,6 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/thanhpk/randstr"
 )
 
 func main() {
@@ -89,40 +87,22 @@ func main() {
 	log.Println("Flags parsed.")
 
 	// Set time zone from config if it is not empty
-	if configFile.Timezone != "" {
-		loc, err := time.LoadLocation(configFile.Timezone)
+	loc, err := time.LoadLocation(configFile.Timezone)
+	if err != nil {
+		log.Println("Failed to set time zone from config. Error: " + err.Error())
+		log.Println("Removing value...")
+
+		configFile.Timezone = ""
+		err = config.SaveConfig(configFile)
 		if err != nil {
-			log.Println("Failed to set time zone from config. Error: " + err.Error())
-			log.Println("Removing value...")
-
-			configFile.Timezone = ""
-			err = config.SaveConfig(configFile)
-			if err != nil {
-				log.Println("Failed to set new time zone in the config. Error: " + err.Error())
-
-				os.Exit(1)
-			}
-
-		} else {
-			time.Local = loc
+			log.Println("Failed to set new time zone in the config. Error: " + err.Error())
+			os.Exit(1)
 		}
+
+	} else {
+		time.Local = loc
 	}
 	log.Println("Timezone set.")
-
-	if configFile.PrivateKey == "" || len(configFile.PrivateKey) < 16 {
-		log.Println("Creating new private key.")
-
-		configFile.PrivateKey = randstr.Hex(32)
-		config.SaveConfig(configFile)
-	}
-
-	err = auth.SetPrivateKey(configFile.PrivateKey)
-	if configFile.PrivateKey == "" || len(configFile.PrivateKey) < 16 {
-		log.Println("Failed to set private key. Error: " + err.Error())
-
-		os.Exit(1)
-	}
-	log.Println("Private key set.")
 
 	// Initialize Database
 	log.Println("Connecting to database...")
@@ -133,7 +113,6 @@ func main() {
 		os.Exit(1)
 	}
 	database.Migrate()
-
 	log.Println("Database connected.")
 
 	if generateInvite {
