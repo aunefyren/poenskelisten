@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-var poenskelisten_version_parameter = "{{RELEASE_TAG}}"
+var poenskelisten_version_parameter = "v2.1.4"
 var config_path, _ = filepath.Abs("./files/config.json")
 
 func GetConfig() (*models.ConfigStruct, error) {
