@@ -329,6 +329,9 @@ func parseFlags(configFile *models.ConfigStruct) (*models.ConfigStruct, bool, er
 	var port = flag.Int("port", configFile.PoenskelistenPort, "The port Pønskelisten is listening on.")
 	var externalURL = flag.String("externalurl", configFile.PoenskelistenExternalURL, "The URL others would use to access Pønskelisten.")
 	var timezone = flag.String("timezone", configFile.Timezone, "The timezone Pønskelisten is running in.")
+	var environment = flag.String("environment", configFile.PoenskelistenEnvironment, "The environment Pønskelisten is running in. It will behave differently in 'test'.")
+	var testemail = flag.String("testemail", configFile.PoenskelistenTestEmail, "The email all emails are sent to in test mode.")
+	var name = flag.String("name", configFile.PoenskelistenName, "The name of the application. Replaces 'Pønskelisten'.")
 
 	// DB values
 	var dbPort = flag.Int("dbport", configFile.DBPort, "The port the database is listening on.")
@@ -347,6 +350,8 @@ func parseFlags(configFile *models.ConfigStruct) (*models.ConfigStruct, bool, er
 	var smtpUsername = flag.String("smtpusername", configFile.SMTPUsername, "The username used to verify against the SMTP server.")
 	var smtpPassword = flag.String("smtppassword", configFile.SMTPPassword, "The password used to verify against the SMTP server.")
 	var smtpFrom = flag.String("smtpfrom", configFile.SMTPFrom, "The sender address when sending e-mail from Pønskelisten.")
+
+	// Generate invite
 	var generateInvite = flag.String("generateinvite", "false", "If an invite code should be automatically generate on startup.")
 
 	// Parse flags
@@ -365,6 +370,21 @@ func parseFlags(configFile *models.ConfigStruct) (*models.ConfigStruct, bool, er
 	// Respect the flag if provided
 	if timezone != nil {
 		configFile.Timezone = *timezone
+	}
+
+	// Respect the flag if provided
+	if environment != nil {
+		configFile.PoenskelistenEnvironment = *environment
+	}
+
+	// Respect the flag if provided
+	if testemail != nil {
+		configFile.PoenskelistenTestEmail = *testemail
+	}
+
+	// Respect the flag if provided
+	if name != nil {
+		configFile.PoenskelistenName = *name
 	}
 
 	// Respect the flag if provided
