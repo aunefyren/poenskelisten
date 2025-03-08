@@ -1,4 +1,4 @@
-FROM golang:1.21.5-bullseye as builder
+FROM golang:1.23.0-bullseye as builder
 
 ARG TARGETARCH
 ARG TARGETOS
