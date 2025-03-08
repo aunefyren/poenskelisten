@@ -3,27 +3,38 @@
 # Initialize the command with the binary
 CMD="/app/poenskelisten"
 
-# Add the --port flag if the PORT environment variable is set
+# Add the Pønskelisten environment variables if set
 if [ -n "$port" ]; then
   CMD="$CMD --port $port"
 fi
 
-# Add the --timezone flag if the TIMEZONE environment variable is set
+if [ -n "$externalurl" ]; then
+  CMD="$CMD --externalurl $externalurl"
+fi
+
 if [ -n "$timezone" ]; then
   CMD="$CMD --timezone $timezone"
 fi
 
-# Add database-related flags if the corresponding environment variables are set
-if [ -n "$dbip" ]; then
-  CMD="$CMD --dbip $dbip"
+if [ -n "$environment" ]; then
+  CMD="$CMD --environment $environment"
 fi
 
+if [ -n "$testemail" ]; then
+  CMD="$CMD --testemail $testemail"
+fi
+
+if [ -n "$name" ]; then
+  CMD="$CMD --name $name"
+fi
+
+# Add database-related flags if the corresponding environment variables are set
 if [ -n "$dbport" ]; then
   CMD="$CMD --dbport $dbport"
 fi
 
-if [ -n "$dbname" ]; then
-  CMD="$CMD --dbname $dbname"
+if [ -n "$dbtype" ]; then
+  CMD="$CMD --dbtype $dbtype"
 fi
 
 if [ -n "$dbusername" ]; then
@@ -34,11 +45,28 @@ if [ -n "$dbpassword" ]; then
   CMD="$CMD --dbpassword $dbpassword"
 fi
 
-# Add flags for invite generation and SMTP settings if those environment variables are set
+if [ -n "$dbname" ]; then
+  CMD="$CMD --dbname $dbname"
+fi
+
+if [ -n "$dbip" ]; then
+  CMD="$CMD --dbip $dbip"
+fi
+
+if [ -n "$dbssl" ]; then
+  CMD="$CMD --dbssl $dbssl"
+fi
+
+if [ -n "$dblocation" ]; then
+  CMD="$CMD --dblocation $dblocation"
+fi
+
+# Add flags for invite generation if those environment variables are set
 if [ -n "$generateinvite" ]; then
   CMD="$CMD --generateinvite $generateinvite"
 fi
 
+# Add flags for SMTP settings if those environment variables are set
 if [ -n "$disablesmtp" ]; then
   CMD="$CMD --disablesmtp $disablesmtp"
 fi
@@ -57,6 +85,10 @@ fi
 
 if [ -n "$smtppassword" ]; then
   CMD="$CMD --smtppassword $smtppassword"
+fi
+
+if [ -n "$smtpfrom" ]; then
+  CMD="$CMD --smtpfrom $smtpfrom"
 fi
 
 # Execute the final command
