@@ -58,8 +58,8 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	// Move values from request to object
-	*user.Email = userCreationRequest.Email
-	*user.Password = userCreationRequest.Password
+	user.Email = &userCreationRequest.Email
+	user.Password = &userCreationRequest.Password
 	user.FirstName = userCreationRequest.FirstName
 
 	stringMatch, requirements, err := utilities.ValidateTextCharacters(user.FirstName)
@@ -90,13 +90,17 @@ func RegisterUser(context *gin.Context) {
 		return
 	}
 
-	*user.Enabled = true
-	user.ID = uuid.New()
-	*user.ResetExpiration = time.Now()
+	var trueVariable = true
+	var now = time.Now()
 	randomString := randstr.String(8)
-	*user.VerificationCode = strings.ToUpper(randomString)
+	var verificationCode = strings.ToUpper(randomString)
 	randomString = randstr.String(8)
-	*user.ResetCode = strings.ToUpper(randomString)
+	var resetCode = strings.ToUpper(randomString)
+	user.Enabled = &trueVariable
+	user.ID = uuid.New()
+	user.ResetExpiration = &now
+	user.VerificationCode = &verificationCode
+	user.ResetCode = &resetCode
 
 	// Check if any users exist, if not, make new user admin
 	userAmount, err := database.GetAmountOfEnabledUsers()
@@ -711,6 +715,14 @@ func APIResetPassword(context *gin.Context) {
 		return
 	}
 
+	user, err = database.GetAllUserInformation(user.ID)
+	if err != nil {
+		log.Println("Failed to get all user information. Replied with okay 200. Error: " + err.Error())
+		context.JSON(http.StatusOK, gin.H{"message": "If the user exists, an email with a password reset has been sent."})
+		context.Abort()
+		return
+	}
+
 	_, err = database.GenerateRandomResetCodeForUser(user.ID)
 	if err != nil {
 		log.Println("Failed to generate reset code for user during password reset. Error: " + err.Error())
@@ -730,7 +742,7 @@ func APIResetPassword(context *gin.Context) {
 	err = utilities.SendSMTPResetEmail(user)
 	if err != nil {
 		log.Println("Failed to send email to user during password reset. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})
+		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error. Failed to send e-mail."})
 		context.Abort()
 		return
 	}

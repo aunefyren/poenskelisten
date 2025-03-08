@@ -95,7 +95,7 @@ function get_login(cookie) {
                 } else {
                     load_page(false);
                 }
-            } else if (result.error) {
+            } else if (result.error && result.error !== "You must verify your account.") {
                 error(result.error)
                 showLoggedOutMenu();
                 return;
