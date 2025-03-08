@@ -167,8 +167,8 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	// Create user in DB
-	record := database.Instance.Create(&user)
-	if record.Error != nil {
+	user, err = database.CreateUserInDB(user)
+	if err != nil {
 		log.Println("Failed to get create user. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get create user."})
 		context.Abort()
@@ -200,7 +200,6 @@ func RegisterUser(context *gin.Context) {
 
 	// Return response
 	context.JSON(http.StatusCreated, gin.H{"message": "User created!"})
-
 }
 
 func GetUser(context *gin.Context) {

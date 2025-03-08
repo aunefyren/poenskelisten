@@ -67,6 +67,8 @@ func GetConfig() (*models.ConfigStruct, error) {
 		// Set new value
 		config.PoenskelistenEnvironment = "production"
 		anythingChanged = true
+	} else if config.PoenskelistenEnvironment == "test" && config.PoenskelistenTestEmail == "" {
+		return nil, errors.New("Pønskelisten environment is set to 'test', but no test e-mail is configured.")
 	}
 
 	if config.Timezone == "" {
