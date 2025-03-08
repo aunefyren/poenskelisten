@@ -96,18 +96,26 @@ The exception is `generateinvite`, which will generate a new, random invitation 
 | Flag | Type | Explanation |
 |:-:|:-:|--:|
 | port | integer | Which port Pønskelisten starts on. |
+| externalurl | string | The URL others would use to access Pønskelisten. |
 | timezone | string | The timezone Pønskelisten uses. Given in the TZ database name format. List can be found [here](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones). |
+| environment | string | The environment Pønskelisten is running in. It will behave differently in 'test'. |
+| testemail | string | The email all emails are sent to in test mode. |
+| name | string | The name of the application. Replaces 'Pønskelisten'. |
 | generateinvite | string (true/false) | If Pønskelisten should generate an invitation code on startup. |
-| dbip | string | The connection address Pønskelisten uses to reach the database. |
 | dbport | integer | The port Pønskelisten can reach the database at. |
-| dbname | string | The name of the table within the database. |
+| dbtype | string | The type of database running. 'mysql'. |
 | dbusername | string | The username used to authenticate with the database. |
 | dbpassword | string | The password used to authenticate with the database. |
+| dbname | string | The name of the table within the database. |
+| dbip | string | The connection address Pønskelisten uses to reach the database. |
+| dbssl | string | If the database connection uses SSL. |
+| dblocation | string | The database is a local file, what is the system file path. |
 | disablesmtp | string (true/false) | Disables SMTP, meaning user verification is disabled. SMTP is enabled by default. |
 | smtphost | string | The SMTP server host used. |
 | smtpport | integer | The SMTP server host port used. |
 | smtpusername | string | The username used to authenticate towards the SMTP server used. |
-| smtppassword | string | The username used to authenticate towards the SMTP server used. |
+| smtppassword | string | The password used to authenticate towards the SMTP server used. |
+| smtpfrom | string | The sender address when sending e-mail from Pønskelisten. |
 
 <br>
 <br>
