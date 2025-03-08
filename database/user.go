@@ -3,6 +3,7 @@ package database
 import (
 	"aunefyren/poenskelisten/models"
 	"errors"
+	"log"
 	"strings"
 	"time"
 
@@ -213,6 +214,18 @@ func UpdateUserInDB(userOriginal models.User) (user models.User, err error) {
 
 	if record.Error != nil {
 		return user, record.Error
+	}
+
+	return
+}
+
+func CreateUserInDB(userRequest models.User) (user models.User, err error) {
+	user = userRequest
+
+	record := Instance.Create(&user)
+	if record.Error != nil {
+		log.Println("Failed to create user in DB. Error: " + record.Error.Error())
+		return user, errors.New("Failed to create user in DB.")
 	}
 
 	return
