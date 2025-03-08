@@ -10,7 +10,6 @@ import (
 )
 
 func SendSMTPVerificationEmail(user models.User) error {
-
 	// Get configuration
 	config, err := config.GetConfig()
 	if err != nil {
@@ -38,11 +37,9 @@ func SendSMTPVerificationEmail(user models.User) error {
 	}
 
 	return nil
-
 }
 
 func SendSMTPResetEmail(user models.User) error {
-
 	// Get configuration
 	config, err := config.GetConfig()
 	if err != nil {
@@ -72,11 +69,9 @@ func SendSMTPResetEmail(user models.User) error {
 	}
 
 	return nil
-
 }
 
 func SendSMTPDeletedClaimedWish(user models.User, wish models.WishObject, wishlist models.WishlistUser) error {
-
 	// Get configuration
 	config, err := config.GetConfig()
 	if err != nil {
@@ -106,5 +101,4 @@ func SendSMTPDeletedClaimedWish(user models.User, wish models.WishObject, wishli
 	}
 
 	return nil
-
 }
