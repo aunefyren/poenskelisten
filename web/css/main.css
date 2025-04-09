@@ -1188,19 +1188,24 @@ textarea {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
+  height: 100%;
+  height: -webkit-fill-available;
+  height: -moz-available;
+  overflow: hidden;
+  box-sizing: inherit;
   display: flex;
   flex-direction: column;
   flex-wrap: wrap;
   align-content: center;
   justify-content: center;
   align-items: center;
-  box-sizing: inherit;
 }
 
 #modal-img {
   border-radius: 0.5em;
-  width: auto;
-  max-height: 40em;
+  max-width: 100%;
+  height: 100%;
+  box-sizing: inherit;
 }
 
 .wish-updatedat-date {
@@ -1304,12 +1309,6 @@ textarea {
 #front-page {
   box-sizing: inherit;
   overflow-x: hidden;
-  width: 100%;
-  width: -webkit-fill-available;
-  width: -moz-available;
-}
-
-#modal-img {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
