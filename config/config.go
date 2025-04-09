@@ -1,47 +1,49 @@
 package config
 
 import (
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 var poenskelisten_version_parameter = "{{RELEASE_TAG}}"
 var config_path, _ = filepath.Abs("./files/config.json")
 
-func GetConfig() (*models.ConfigStruct, error) {
+func GetConfig() (config models.ConfigStruct, err error) {
 	// Create config.json if it doesn't exist
 	if _, err := os.Stat(config_path); errors.Is(err, os.ErrNotExist) {
-		log.Println("Config file does not exist. Creating...")
+		logger.Log.Warn("Config file does not exist. Creating...")
 		fmt.Println("Config file does not exist. Creating...")
 
 		err := CreateConfigFile()
 		if err != nil {
-			return nil, err
+			return config, err
 		}
 	}
 
 	file, err := os.Open(config_path)
 	if err != nil {
-		log.Println("Get config file threw error trying to open the file.")
+		logger.Log.Error("Get config file threw error trying to open the file.")
 		fmt.Println("Get config file threw error trying to open the file.")
-		return nil, err
+		return config, err
 	}
 	defer file.Close()
 	decoder := json.NewDecoder(file)
-	config := models.ConfigStruct{}
+	config = models.ConfigStruct{}
 	err = decoder.Decode(&config)
 	if err != nil {
-		log.Println("Get config file threw error trying to parse the file.")
+		logger.Log.Error("Get config file threw error trying to parse the file.")
 		fmt.Println("Get config file threw error trying to parse the file.")
-		return nil, err
+		return config, err
 	}
 
 	anythingChanged := false
@@ -50,11 +52,11 @@ func GetConfig() (*models.ConfigStruct, error) {
 		// Set new value
 		newKey, err := GenerateSecureKey(64)
 		if err != nil {
-			return nil, errors.New("Failed to generate secure key. Error: " + err.Error())
+			return config, errors.New("Failed to generate secure key. Error: " + err.Error())
 		}
 		config.PrivateKey = newKey
 		anythingChanged = true
-		log.Println("New private key set.")
+		logger.Log.Info("New private key set.")
 	}
 
 	if config.PoenskelistenName == "" {
@@ -68,7 +70,7 @@ func GetConfig() (*models.ConfigStruct, error) {
 		config.PoenskelistenEnvironment = "production"
 		anythingChanged = true
 	} else if config.PoenskelistenEnvironment == "test" && config.PoenskelistenTestEmail == "" {
-		return nil, errors.New("Pønskelisten environment is set to 'test', but no test e-mail is configured.")
+		return config, errors.New("Pønskelisten environment is set to 'test', but no test e-mail is configured.")
 	}
 
 	if config.Timezone == "" {
@@ -107,16 +109,30 @@ func GetConfig() (*models.ConfigStruct, error) {
 		anythingChanged = true
 	}
 
+	if config.PoenskelistenLogLevel == "" {
+		level := logrus.InfoLevel
+		config.PoenskelistenLogLevel = level.String()
+		anythingChanged = true
+	} else {
+		_, err := logrus.ParseLevel(config.PoenskelistenLogLevel)
+		if err != nil {
+			logger.Log.Error("Failed to load log level: %v", err)
+			level := logrus.InfoLevel
+			config.PoenskelistenLogLevel = level.String()
+			anythingChanged = true
+		}
+	}
+
 	if anythingChanged {
 		// Save new version of config json
-		err = SaveConfig(&config)
+		err = SaveConfig(config)
 		if err != nil {
-			return nil, err
+			return config, err
 		}
 	}
 
 	// Return config object
-	return &config, nil
+	return config, nil
 }
 
 // Creates empty config.json
@@ -132,15 +148,15 @@ func CreateConfigFile() error {
 
 	privateKey, err := GenerateSecureKey(64)
 	if err != nil {
-		log.Println("Failed to generate private key. Error: " + err.Error())
+		logger.Log.Error("Failed to generate private key. Error: " + err.Error())
 		fmt.Println("Failed to generate private key. Error: " + err.Error())
 		return err
 	}
 	config.PrivateKey = privateKey
 
-	err = SaveConfig(&config)
+	err = SaveConfig(config)
 	if err != nil {
-		log.Println("Create config file threw error trying to save the file.")
+		logger.Log.Error("Create config file threw error trying to save the file.")
 		fmt.Println("Create config file threw error trying to save the file.")
 		return err
 	}
@@ -149,8 +165,7 @@ func CreateConfigFile() error {
 }
 
 // Saves the given config struct as config.json
-func SaveConfig(config *models.ConfigStruct) error {
-
+func SaveConfig(config models.ConfigStruct) error {
 	file, err := json.MarshalIndent(config, "", "	")
 	if err != nil {
 		return err
@@ -166,13 +181,13 @@ func SaveConfig(config *models.ConfigStruct) error {
 
 func GetPrivateKey(epoch int) []byte {
 	if epoch > 5 {
-		log.Println("Failed to load private key. Exiting...")
+		logger.Log.Error("Failed to load private key. Exiting...")
 		os.Exit(1)
 	}
 
 	configFile, err := GetConfig()
 	if err != nil {
-		log.Println("Failed to load config for private key. Exiting...")
+		logger.Log.Error("Failed to load config for private key. Exiting...")
 		os.Exit(1)
 	}
 
@@ -199,18 +214,18 @@ func GenerateSecureKey(length int) (string, error) {
 func ResetSecureKey() {
 	configFile, err := GetConfig()
 	if err != nil {
-		log.Println("Failed to load config for private key. Exiting...")
+		logger.Log.Error("Failed to load config for private key. Exiting...")
 		os.Exit(1)
 	}
 	configFile.PrivateKey, err = GenerateSecureKey(64)
 	if err != nil {
-		log.Println("Failed to generate new secret key. Exiting...")
+		logger.Log.Error("Failed to generate new secret key. Exiting...")
 		os.Exit(1)
 	}
 	SaveConfig(configFile)
 	if err != nil {
-		log.Println("Failed to save new config. Exiting...")
+		logger.Log.Error("Failed to save new config. Exiting...")
 		os.Exit(1)
 	}
-	log.Println("New private key set.")
+	logger.Log.Info("New private key set.")
 }

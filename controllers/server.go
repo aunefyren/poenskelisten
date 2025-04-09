@@ -2,8 +2,8 @@ package controllers
 
 import (
 	"aunefyren/poenskelisten/config"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -13,7 +13,7 @@ func APIGetServerInfo(context *gin.Context) {
 
 	config, err := config.GetConfig()
 	if err != nil {
-		log.Println("Failed to get config. Error: " + err.Error())
+		logger.Log.Error("Failed to get config. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config."})
 		context.Abort()
 		return
@@ -28,6 +28,7 @@ func APIGetServerInfo(context *gin.Context) {
 		SMTPEnabled:              config.SMTPEnabled,
 		PoenskelistenEnvironment: config.PoenskelistenEnvironment,
 		PoenskelistenTestEmail:   config.PoenskelistenTestEmail,
+		PoenskelistenLogLevel:    config.PoenskelistenLogLevel,
 	}
 
 	// Reply

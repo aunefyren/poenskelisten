@@ -1,8 +1,8 @@
 package utilities
 
 import (
+	"aunefyren/poenskelisten/logger"
 	"bufio"
-	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -57,16 +57,16 @@ func MigrateSQL(sqlContent *bufio.Scanner) (modifiedSQL2 string, err error) {
 			currentMode = "none"
 			currentTable = "none"
 		} else {
-			// log.Println("No Regex matched: " + line)
+			// logger.Log.Info("No Regex matched: " + line)
 		}
 
 		if currentMode == "insert" && valueLineRegEx.Match([]byte(line)) {
-			log.Println("INSERT MODE ON TABLE: " + currentTable)
+			logger.Log.Info("INSERT MODE ON TABLE: " + currentTable)
 			modifiedLine, IDMaps = ReplaceValues(modifiedLine, currentTable, IDMaps, false)
 		} else if currentMode == "insert" && insertIntoRegEx.Match([]byte(line)) {
 			modifiedLine = ChangeColumns(modifiedLine, currentTable)
 		} else if currentMode == "create" {
-			log.Println("CREATE MODE ON TABLE: " + currentTable)
+			logger.Log.Info("CREATE MODE ON TABLE: " + currentTable)
 			modifiedLine = ChangeColumns(modifiedLine, currentTable)
 		}
 
@@ -92,14 +92,14 @@ func MigrateSQL(sqlContent *bufio.Scanner) (modifiedSQL2 string, err error) {
 			currentMode = "none"
 			currentTable = "none"
 		} else {
-			// log.Println("No Regex matched: " + line)
+			// logger.Log.Info("No Regex matched: " + line)
 		}
 
 		if currentMode == "insert" && valueLineRegEx.Match([]byte(line)) {
-			log.Println("INSERT MODE ON TABLE: " + currentTable)
+			logger.Log.Info("INSERT MODE ON TABLE: " + currentTable)
 			modifiedLine, IDMaps = ReplaceValues(modifiedLine, currentTable, IDMaps, true)
 		} else if currentMode == "create" {
-			log.Println("CREATE MODE ON TABLE: " + currentTable)
+			logger.Log.Info("CREATE MODE ON TABLE: " + currentTable)
 			modifiedLine = ChangeColumns(modifiedLine, currentTable)
 		}
 
@@ -123,7 +123,7 @@ func MigrateSQL(sqlContent *bufio.Scanner) (modifiedSQL2 string, err error) {
 		}
 	}
 
-	log.Println(len(Tables))
+	logger.Log.Info(len(Tables))
 
 	for _, TableName := range Tables {
 		modifiedSQL2 += "\n" +
@@ -170,7 +170,7 @@ func ChangeColumns(line string, currentTable string) (newLine string) {
 		newLine = strings.ReplaceAll(newLine, "`wish`", "`wish_id`")
 		newLine = strings.ReplaceAll(newLine, "`user`", "`user_id`")
 	default:
-		log.Println("No column updates on: " + currentTable)
+		logger.Log.Info("No column updates on: " + currentTable)
 	}
 
 	return
@@ -194,7 +194,7 @@ func ReplaceValues(line string, currentTable string, IDMaps []IDMap, secondRun b
 
 	values := strings.Split(newLine, ", ")
 	if len(values) == 0 {
-		log.Println("Failed to split values for table: " + currentTable)
+		logger.Log.Info("Failed to split values for table: " + currentTable)
 		return
 	}
 
@@ -272,7 +272,7 @@ func ReplaceValues(line string, currentTable string, IDMaps []IDMap, secondRun b
 			newUUID = MatchIDToUUID(UpdatedIDMaps, "users", values[5])
 			values[5] = newUUID
 		default:
-			log.Println("No column updates on: " + currentTable)
+			logger.Log.Info("No column updates on: " + currentTable)
 		}
 
 	}
@@ -322,5 +322,5 @@ func MigrateDBToV2() {
 		panic(err)
 	}
 
-	log.Println("Modification complete. Check './files/db_modified_sql_file.sql'")
+	logger.Log.Info("Modification complete. Check './files/db_modified_sql_file.sql'")
 }

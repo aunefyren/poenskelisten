@@ -32,7 +32,7 @@ function load_page(result) {
     var html = `
                 <!-- The Modal -->
                 <div id="myModal" class="modal closed">
-                    <span class="close selectable" style="padding: 0 0.25em;" onclick="toggleModal()">&times;</span>
+                    <span class="close clickable" style="padding: 0 0.25em;" onclick="toggleModal()">&times;</span>
                     <div class="modalContent" id="modalContent">
                     </div>
                     <div id="caption"></div>
@@ -135,7 +135,7 @@ function get_wishlists(user_id){
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "auth/wishlists");
+    xhttp.open("get", api_url + "auth/wishlists?owned=true");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();

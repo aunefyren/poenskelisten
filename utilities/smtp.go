@@ -2,8 +2,8 @@ package utilities
 
 import (
 	"aunefyren/poenskelisten/config"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
-	"log"
 	"strings"
 
 	"github.com/go-mail/mail"
@@ -20,7 +20,7 @@ func SendSMTPVerificationEmail(user models.User) error {
 		user.Email = &config.PoenskelistenTestEmail
 	}
 
-	log.Println("Sending e-mail to: " + *user.Email + ".")
+	logger.Log.Debug("Sending e-mail to: " + *user.Email + ".")
 
 	m := mail.NewMessage()
 	m.SetAddressHeader("From", config.SMTPFrom, config.PoenskelistenName)
@@ -50,7 +50,7 @@ func SendSMTPResetEmail(user models.User) error {
 		user.Email = &config.PoenskelistenTestEmail
 	}
 
-	log.Println("Sending e-mail to: " + *user.Email + ".")
+	logger.Log.Debug("Sending e-mail to: " + *user.Email + ".")
 
 	link := config.PoenskelistenExternalURL + "/login?reset_code=" + *user.ResetCode
 
@@ -82,7 +82,7 @@ func SendSMTPDeletedClaimedWish(user models.User, wish models.WishObject, wishli
 		user.Email = &config.PoenskelistenTestEmail
 	}
 
-	log.Println("Sending e-mail to: " + *user.Email + ".")
+	logger.Log.Debug("Sending e-mail to: " + *user.Email + ".")
 
 	link := config.PoenskelistenExternalURL + "/wishlists/" + wishlist.ID.String()
 

@@ -141,6 +141,32 @@ func GetWishlistsByUserIDThroughWishlistCollaborations(UserID uuid.UUID) (wishli
 	return wishlists, err
 }
 
+// Get all wishlists a user is a member of
+func GetWishlistsByUserIDThroughWishlistMemberships(UserID uuid.UUID) (wishlists []models.Wishlist, err error) {
+	wishlists = []models.Wishlist{}
+	err = nil
+
+	wishlistRecords := Instance.Order("`wishlists`.date desc, `wishlists`.name").
+		Distinct().
+		Where("`wishlists`.enabled = ?", 1).
+		Joins("JOIN `wishlist_memberships` on `wishlists`.id = `wishlist_memberships`.wishlist_id").
+		Where("`wishlist_memberships`.enabled = ?", 1).
+		Joins("JOIN `groups` on `wishlist_memberships`.group_id = `groups`.id").
+		Where("`groups`.enabled = ?", 1).
+		Joins("JOIN `group_memberships` on `groups`.id = `group_memberships`.group_id").
+		Where("`group_memberships`.enabled = ?", 1).
+		Joins("JOIN `users` on `group_memberships`.member_id = `users`.id").
+		Where("`users`.enabled = ?", 1).
+		Where("`users`.id = ?", UserID).
+		Find(&wishlists)
+
+	if wishlistRecords.Error != nil {
+		return []models.Wishlist{}, wishlistRecords.Error
+	}
+
+	return wishlists, err
+}
+
 // Get all wishlists in groups
 func GetWishlistsFromGroup(GroupID uuid.UUID) ([]models.Wishlist, error) {
 	var wishlists []models.Wishlist

@@ -2,11 +2,11 @@ package controllers
 
 import (
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
 	"errors"
-	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -25,7 +25,7 @@ func RegisterGroup(context *gin.Context) {
 	// Bind the incoming request body to the GroupCreationRequest model
 	if err := context.ShouldBindJSON(&groupCreationRequest); err != nil {
 		// If there is an error binding the request, return a Bad Request response
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -44,7 +44,7 @@ func RegisterGroup(context *gin.Context) {
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
 		// If there is an error getting the user ID, return a Bad Request response
-		log.Println("Failed to get user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
@@ -63,12 +63,12 @@ func RegisterGroup(context *gin.Context) {
 
 	stringMatch, requirements, err := utilities.ValidateTextCharacters(group.Name)
 	if err != nil {
-		log.Println("Failed to validate group name text string. Error: " + err.Error())
+		logger.Log.Error("Failed to validate group name text string. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
 		context.Abort()
 		return
 	} else if !stringMatch {
-		log.Println("Group name text string failed validation.")
+		logger.Log.Error("Group name text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
@@ -76,12 +76,12 @@ func RegisterGroup(context *gin.Context) {
 
 	stringMatch, requirements, err = utilities.ValidateTextCharacters(group.Description)
 	if err != nil {
-		log.Println("Failed to validate group description text string. Error: " + err.Error())
+		logger.Log.Error("Failed to validate group description text string. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
 		context.Abort()
 		return
 	} else if !stringMatch {
-		log.Println("Group description text string failed validation.")
+		logger.Log.Error("Group description text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
@@ -90,7 +90,7 @@ func RegisterGroup(context *gin.Context) {
 	// Check if owner already has a group with this name
 	groupExists, err := database.VerifyIfGroupWithSameNameAndOwnerDoesNotExist(group.Name, group.OwnerID)
 	if err != nil {
-		log.Println("Failed to check for existing groups. Error: " + err.Error())
+		logger.Log.Error("Failed to check for existing groups. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check for existing groups."})
 		context.Abort()
 		return
@@ -103,7 +103,7 @@ func RegisterGroup(context *gin.Context) {
 	// Create the group in the database
 	record := database.Instance.Create(&group)
 	if record.Error != nil {
-		log.Println("Failed to create group in database. Error: " + err.Error())
+		logger.Log.Error("Failed to create group in database. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group in database."})
 		context.Abort()
 		return
@@ -121,7 +121,7 @@ func RegisterGroup(context *gin.Context) {
 	membershipRecord := database.Instance.Create(&groupMembership)
 	if membershipRecord.Error != nil {
 		// If there is an error creating the group membership, return an Internal Server Error response
-		log.Println("Failed to create membership. Error: " + err.Error())
+		logger.Log.Error("Failed to create membership. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create membership."})
 		context.Abort()
 		return
@@ -134,7 +134,7 @@ func RegisterGroup(context *gin.Context) {
 
 		newMember, err := database.GetUserInformation(memberID)
 		if err != nil {
-			log.Println("Failed to get user. Error: " + err.Error())
+			logger.Log.Error("Failed to get user. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user."})
 			context.Abort()
 			return
@@ -148,7 +148,7 @@ func RegisterGroup(context *gin.Context) {
 		// Create the group membership in the database
 		_, err = database.CreateGroupMembershipInDB(groupMembership)
 		if err != nil {
-			log.Println("Failed to create group memberships. Error: " + err.Error())
+			logger.Log.Error("Failed to create group memberships. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group memberships."})
 			context.Abort()
 			return
@@ -161,7 +161,7 @@ func RegisterGroup(context *gin.Context) {
 
 		wishlist, err := database.GetWishlist(wishlistID)
 		if err != nil {
-			log.Println("Failed to get wishlist. Error: " + err.Error())
+			logger.Log.Error("Failed to get wishlist. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wishlist."})
 			context.Abort()
 			return
@@ -181,7 +181,7 @@ func RegisterGroup(context *gin.Context) {
 		// Create the group membership in the database
 		_, err = database.CreateWishlistMembershipInDB(wishlistMembership)
 		if err != nil {
-			log.Println("Failed to create wishlist membership. Error: " + err.Error())
+			logger.Log.Error("Failed to create wishlist membership. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create wishlist membership."})
 			context.Abort()
 			return
@@ -192,7 +192,7 @@ func RegisterGroup(context *gin.Context) {
 	groupsWithOwner, err := GetGroupObjects(userID)
 	if err != nil {
 		// If there is an error getting the list of groups, return a Bad Request response
-		log.Println("Failed to get group objects. Error: " + err.Error())
+		logger.Log.Error("Failed to get group objects. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get group objects."})
 		context.Abort()
 		return
@@ -219,7 +219,7 @@ func JoinGroup(context *gin.Context) {
 	// Bind the incoming request body to the GroupMembershipCreationRequest model
 	if err := context.ShouldBindJSON(&groupMembership); err != nil {
 		// If there is an error binding the request, return a Bad Request response
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -237,7 +237,7 @@ func JoinGroup(context *gin.Context) {
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
 		// If there is an error getting the user ID, return a Bad Request response
-		log.Println("Failed to parse header. Error: " + err.Error())
+		logger.Log.Error("Failed to parse header. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse header."})
 		context.Abort()
 		return
@@ -247,7 +247,7 @@ func JoinGroup(context *gin.Context) {
 	groupIDInt, err := uuid.Parse(groupID)
 	if err != nil {
 		// If there is an error parsing the group ID, return a Bad Request response
-		log.Println("Failed to parse group ID. Error: " + err.Error())
+		logger.Log.Error("Failed to parse group ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
@@ -260,7 +260,7 @@ func JoinGroup(context *gin.Context) {
 
 		memberObject, err := database.GetUserInformation(memberID)
 		if err != nil {
-			log.Println("Failed to find user. Error: " + err.Error())
+			logger.Log.Error("Failed to find user. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find user."})
 			context.Abort()
 			return
@@ -273,7 +273,7 @@ func JoinGroup(context *gin.Context) {
 		membershipStatus, err := database.VerifyUserMembershipToGroup(memberObject.ID, groupIDInt)
 		if err != nil {
 			// If there is an error verifying the user's membership, return a Bad Request response
-			log.Println("Failed to verify membership to group. Error: " + err.Error())
+			logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
 			context.Abort()
 			return
@@ -287,7 +287,7 @@ func JoinGroup(context *gin.Context) {
 		// Verify that the group is owned by the current user
 		_, err = database.GetGroupUsingGroupIDAndUserIDAsOwner(userID, groupIDInt)
 		if err != nil {
-			log.Println("Failed to verify ownership of group. Error: " + err.Error())
+			logger.Log.Error("Failed to verify ownership of group. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of group."})
 			context.Abort()
 			return
@@ -301,7 +301,7 @@ func JoinGroup(context *gin.Context) {
 		record := database.Instance.Create(&groupMembershipDB)
 		if record.Error != nil {
 			// If there is an error adding the group membership to the database, return an Internal Server Error response
-			log.Println("Failed to create group membership in database.")
+			logger.Log.Error("Failed to create group membership in database.")
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group membership in database."})
 			context.Abort()
 			return
@@ -312,7 +312,7 @@ func JoinGroup(context *gin.Context) {
 	groupsWithOwner, err := GetGroupObjects(userID)
 	if err != nil {
 		// If there is an error getting the updated list of groups, return a Bad Request response
-		log.Println("Failed to get groups for user. Error: " + err.Error())
+		logger.Log.Error("Failed to get groups for user. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get groups for user."})
 		context.Abort()
 		return
@@ -337,7 +337,7 @@ func RemoveFromGroup(context *gin.Context) {
 
 	groupID := context.Param("group_id")
 	if err := context.ShouldBindJSON(&groupMembershipRequest); err != nil {
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -345,7 +345,7 @@ func RemoveFromGroup(context *gin.Context) {
 	// Get user ID from authorization header
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to get user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
@@ -354,7 +354,7 @@ func RemoveFromGroup(context *gin.Context) {
 	// Parse group ID as integer
 	groupIDInt, err := uuid.Parse(groupID)
 	if err != nil {
-		log.Println("Failed to parse group ID. Error: " + err.Error())
+		logger.Log.Error("Failed to parse group ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
@@ -363,7 +363,7 @@ func RemoveFromGroup(context *gin.Context) {
 	// Verify user membership to group
 	membershipStatus, err := database.VerifyUserMembershipToGroup(groupMembershipRequest.MemberID, groupIDInt)
 	if err != nil {
-		log.Println("Failed to verify membership to group. Error: " + err.Error())
+		logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership to group."})
 		context.Abort()
 		return
@@ -378,7 +378,7 @@ func RemoveFromGroup(context *gin.Context) {
 	group, err := database.GetGroupInformation(groupIDInt)
 	if err != nil {
 		// Return error if user is not owner of group
-		log.Println("Failed to get group object. Error: " + err.Error())
+		logger.Log.Error("Failed to get group object. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get group object."})
 		context.Abort()
 		return
@@ -399,7 +399,7 @@ func RemoveFromGroup(context *gin.Context) {
 	groupMembership, err := database.GetGroupMembershipByGroupIDAndMemberID(groupIDInt, groupMembershipRequest.MemberID)
 	if err != nil {
 		// Return error if membership does not exist
-		log.Println("Failed to verify membership. Error: " + err.Error())
+		logger.Log.Error("Failed to verify membership. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership."})
 		context.Abort()
 		return
@@ -408,7 +408,7 @@ func RemoveFromGroup(context *gin.Context) {
 	// Delete group membership
 	err = database.DeleteGroupMembership(groupMembership.ID)
 	if err != nil {
-		log.Println("Failed to delete group membership. Error: " + err.Error())
+		logger.Log.Error("Failed to delete group membership. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete group membership."})
 		context.Abort()
 		return
@@ -417,7 +417,7 @@ func RemoveFromGroup(context *gin.Context) {
 	// Get updated list of groups with owner
 	groupsWithOwner, err := GetGroupObjects(userID)
 	if err != nil {
-		log.Println("Failed to get group objects. Error: " + err.Error())
+		logger.Log.Error("Failed to get group objects. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get group objects."})
 		context.Abort()
 		return
@@ -443,7 +443,7 @@ func RemoveSelfFromGroup(context *gin.Context) {
 	// Get user ID from authorization header
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to get user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
@@ -452,7 +452,7 @@ func RemoveSelfFromGroup(context *gin.Context) {
 	// Parse group ID as integer
 	groupIDInt, err := uuid.Parse(groupID)
 	if err != nil {
-		log.Println("Failed to parse group ID. Error: " + err.Error())
+		logger.Log.Error("Failed to parse group ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
@@ -461,7 +461,7 @@ func RemoveSelfFromGroup(context *gin.Context) {
 	// Verify user membership to group
 	membershipStatus, err := database.VerifyUserMembershipToGroup(userID, groupIDInt)
 	if err != nil {
-		log.Println("Failed to verify membership to group. Error: " + err.Error())
+		logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
 		context.Abort()
 		return
@@ -475,7 +475,7 @@ func RemoveSelfFromGroup(context *gin.Context) {
 	// Verify group is not owned by requester
 	ownershipStatus, err := database.VerifyUserOwnershipToGroup(groupMembershipRequest.MemberID, groupIDInt)
 	if err != nil {
-		log.Println("Failed to verify ownership of group. Error: " + err.Error())
+		logger.Log.Error("Failed to verify ownership of group. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of group."})
 		context.Abort()
 		return
@@ -490,7 +490,7 @@ func RemoveSelfFromGroup(context *gin.Context) {
 	groupMembership, err := database.GetGroupMembershipByGroupIDAndMemberID(groupIDInt, userID)
 	if err != nil {
 		// Return error if membership does not exist
-		log.Println("Failed to verify membership to group. Error: " + err.Error())
+		logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
 		context.Abort()
 		return
@@ -499,7 +499,7 @@ func RemoveSelfFromGroup(context *gin.Context) {
 	// Delete group membership
 	err = database.DeleteGroupMembership(groupMembership.ID)
 	if err != nil {
-		log.Println("Failed to delete group membership. Error: " + err.Error())
+		logger.Log.Error("Failed to delete group membership. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete group membership."})
 		context.Abort()
 		return
@@ -508,7 +508,7 @@ func RemoveSelfFromGroup(context *gin.Context) {
 	// Get updated list of groups with owner
 	groupsWithOwner, err := GetGroupObjects(userID)
 	if err != nil {
-		log.Println("Failed to get group objects. Error: " + err.Error())
+		logger.Log.Error("Failed to get group objects. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get group objects."})
 		context.Abort()
 		return
@@ -535,7 +535,7 @@ func DeleteGroup(context *gin.Context) {
 	// Parse group ID as integer
 	groupIDInt, err := uuid.Parse(groupID)
 	if err != nil {
-		log.Println("Failed to parse group ID. Error: " + err.Error())
+		logger.Log.Error("Failed to parse group ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
@@ -544,7 +544,7 @@ func DeleteGroup(context *gin.Context) {
 	// Get user ID from authorization header
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to get user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
@@ -553,7 +553,7 @@ func DeleteGroup(context *gin.Context) {
 	// Verify group is owned by requester
 	ownershipStatus, err := database.VerifyUserOwnershipToGroup(userID, groupIDInt)
 	if err != nil {
-		log.Println("Failed to verify ownership of group. Error: " + err.Error())
+		logger.Log.Error("Failed to verify ownership of group. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of group."})
 		context.Abort()
 		return
@@ -567,7 +567,7 @@ func DeleteGroup(context *gin.Context) {
 	// Set the group to disabled in the database
 	err = database.DeleteGroup(groupIDInt)
 	if err != nil {
-		log.Println("Failed to delete the group. Error: " + err.Error())
+		logger.Log.Error("Failed to delete the group. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete the group."})
 		context.Abort()
 		return
@@ -576,7 +576,7 @@ func DeleteGroup(context *gin.Context) {
 	// Get updated list of groups with owner
 	groupsWithOwner, err := GetGroupObjects(userID)
 	if err != nil {
-		log.Println("Failed to get group objects. Error: " + err.Error())
+		logger.Log.Error("Failed to get group objects. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get group objects."})
 		context.Abort()
 		return
@@ -596,7 +596,7 @@ func GetGroups(context *gin.Context) {
 	// Get user ID from authorization header
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to verify login session. Error: " + err.Error())
+		logger.Log.Error("Failed to verify login session. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Invalid session."})
 		context.Abort()
 		return
@@ -605,7 +605,7 @@ func GetGroups(context *gin.Context) {
 	// Retrieve list of groups with owner
 	groupsWithOwner, err := GetGroupObjects(userID)
 	if err != nil {
-		log.Println("Failed to get your groups. Error: " + err.Error())
+		logger.Log.Error("Failed to get your groups. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get your groups."})
 		context.Abort()
 		return
@@ -628,7 +628,7 @@ func GetGroups(context *gin.Context) {
 	if memberOfWishlistOkay {
 		memberOfWishlist, err := uuid.Parse(memberOfWishlistString)
 		if err != nil {
-			log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+			logger.Log.Error("Failed to parse wishlist ID. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
 			context.Abort()
 			return
@@ -638,7 +638,7 @@ func GetGroups(context *gin.Context) {
 		for _, group := range groupsWithOwner {
 			membership, err := database.VerifyGroupMembershipToWishlist(memberOfWishlist, group.ID)
 			if err != nil {
-				log.Println("Failed to validate group membership. Error: " + err.Error())
+				logger.Log.Error("Failed to validate group membership. Error: " + err.Error())
 				context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate group membership."})
 				context.Abort()
 				return
@@ -653,7 +653,7 @@ func GetGroups(context *gin.Context) {
 	if notAMemberOfWishlistOkay {
 		notAMemberOfWishlistID, err := uuid.Parse(notAMemberOfWishlistString)
 		if err != nil {
-			log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+			logger.Log.Error("Failed to parse wishlist ID. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
 			context.Abort()
 			return
@@ -663,7 +663,7 @@ func GetGroups(context *gin.Context) {
 		for _, group := range groupsWithOwner {
 			membership, err := database.VerifyGroupMembershipToWishlist(notAMemberOfWishlistID, group.ID)
 			if err != nil {
-				log.Println("Failed to validate group membership. Error: " + err.Error())
+				logger.Log.Error("Failed to validate group membership. Error: " + err.Error())
 				context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate group membership."})
 				context.Abort()
 				return
@@ -692,13 +692,13 @@ func GetGroupObjects(userID uuid.UUID) ([]models.GroupUser, error) {
 	// Retrieve groups that the user is a member of
 	groups, err := database.GetGroupsAUserIsAMemberOf(userID)
 	if err != nil {
-		log.Println("Failed to get groups from database. Error: " + err.Error())
+		logger.Log.Error("Failed to get groups from database. Error: " + err.Error())
 		return []models.GroupUser{}, errors.New("Failed to get groups from database.")
 	}
 
 	groupObjects, err := ConvertGroupsToGroupObjects(groups)
 	if err != nil {
-		log.Println("Failed to convert groups to group objects. Error: " + err.Error())
+		logger.Log.Error("Failed to convert groups to group objects. Error: " + err.Error())
 		return []models.GroupUser{}, errors.New("Failed to convert groups to group objects.")
 	}
 
@@ -715,7 +715,7 @@ func GetGroup(context *gin.Context) {
 	// Get user ID from authorization header
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to get user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
@@ -724,7 +724,7 @@ func GetGroup(context *gin.Context) {
 	// Parse group ID as integer
 	groupIDInt, err := uuid.Parse(groupID)
 	if err != nil {
-		log.Println("Failed to parse group ID. Error: " + err.Error())
+		logger.Log.Error("Failed to parse group ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
@@ -733,7 +733,7 @@ func GetGroup(context *gin.Context) {
 	// Verify user membership to group
 	membershipStatus, err := database.VerifyUserMembershipToGroup(userID, groupIDInt)
 	if err != nil {
-		log.Println("Failed to verify membership to group. Error: " + err.Error())
+		logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
 		context.Abort()
 		return
@@ -746,7 +746,7 @@ func GetGroup(context *gin.Context) {
 	// Retrieve group object with owner
 	groupWithOwner, err := GetGroupObject(userID, groupIDInt)
 	if err != nil {
-		log.Println("Failed process group object. Error: " + err.Error())
+		logger.Log.Error("Failed process group object. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed process group object."})
 		context.Abort()
 		return
@@ -765,13 +765,13 @@ func GetGroupObject(userID uuid.UUID, groupID uuid.UUID) (models.GroupUser, erro
 	// Get group
 	group, err := database.GetGroupUsingGroupIDAndMembershipUsingUserID(userID, groupID)
 	if err != nil {
-		log.Println("Failed to get group for user. Error: " + err.Error())
+		logger.Log.Error("Failed to get group for user. Error: " + err.Error())
 		return models.GroupUser{}, errors.New("Failed to get group for user.")
 	}
 
 	groupObject, err := ConvertGroupToGroupObject(group)
 	if err != nil {
-		log.Println("Failed to convert group to group object. Error: " + err.Error())
+		logger.Log.Error("Failed to convert group to group object. Error: " + err.Error())
 		return models.GroupUser{}, errors.New("Failed to convert group to group object.")
 	}
 
@@ -787,7 +787,7 @@ func GetGroupMembers(context *gin.Context) {
 	// Get user ID from header
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to get user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
@@ -796,7 +796,7 @@ func GetGroupMembers(context *gin.Context) {
 	// Parse group id for usage
 	groupIDInt, err := uuid.Parse(group)
 	if err != nil {
-		log.Println("Failed to parse group ID. Error: " + err.Error())
+		logger.Log.Error("Failed to parse group ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
@@ -805,7 +805,7 @@ func GetGroupMembers(context *gin.Context) {
 	// Verify membership does exist
 	MembershipStatus, err := database.VerifyUserMembershipToGroup(userID, groupIDInt)
 	if err != nil {
-		log.Println("Failed to verify membership to group. Error: " + err.Error())
+		logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
 		context.Abort()
 		return
@@ -818,7 +818,7 @@ func GetGroupMembers(context *gin.Context) {
 	// Get group members from the group
 	groupMemberships, err := database.GetGroupMembershipsFromGroup(groupIDInt)
 	if err != nil {
-		log.Println("Failed to get group memberships for group. Error: " + err.Error())
+		logger.Log.Error("Failed to get group memberships for group. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get group memberships for group."})
 		context.Abort()
 		return
@@ -829,7 +829,7 @@ func GetGroupMembers(context *gin.Context) {
 
 		userObject, err := database.GetUserInformation(membership.MemberID)
 		if err != nil {
-			log.Println("Failed to get user object for group member. Error: " + err.Error())
+			logger.Log.Error("Failed to get user object for group member. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user object for group member."})
 			context.Abort()
 			return
@@ -862,7 +862,7 @@ func APIUpdateGroup(context *gin.Context) {
 	// Bind the incoming request body to the GroupCreationRequest model
 	if err := context.ShouldBindJSON(&groupUpdateRequest); err != nil {
 		// If there is an error binding the request, return a Bad Request response
-		log.Println(("Failed to parse request. Error: " + err.Error()))
+		logger.Log.Error(("Failed to parse request. Error: " + err.Error()))
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -875,7 +875,7 @@ func APIUpdateGroup(context *gin.Context) {
 	// Parse group id for usage
 	groupIDInt, err := uuid.Parse(groupID)
 	if err != nil {
-		log.Println("Failed to parse group ID. Error: " + err.Error())
+		logger.Log.Error("Failed to parse group ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
@@ -885,7 +885,7 @@ func APIUpdateGroup(context *gin.Context) {
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
 		// If there is an error getting the user ID, return a Bad Request response
-		log.Println(("Failed to get user ID. Error: " + err.Error()))
+		logger.Log.Error(("Failed to get user ID. Error: " + err.Error()))
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
@@ -894,7 +894,7 @@ func APIUpdateGroup(context *gin.Context) {
 	// Verify group is owned by requester
 	ownershipStatus, err := database.VerifyUserOwnershipToGroup(userID, groupIDInt)
 	if err != nil {
-		log.Println(("Failed to verify group ownership. Error: " + err.Error()))
+		logger.Log.Error(("Failed to verify group ownership. Error: " + err.Error()))
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify group ownership."})
 		context.Abort()
 		return
@@ -912,7 +912,7 @@ func APIUpdateGroup(context *gin.Context) {
 
 	groupOriginal, err := database.GetGroupInformation(groupIDInt)
 	if err != nil {
-		log.Println(("Failed to find group. Error: " + err.Error()))
+		logger.Log.Error(("Failed to find group. Error: " + err.Error()))
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find group."})
 		context.Abort()
 		return
@@ -930,12 +930,12 @@ func APIUpdateGroup(context *gin.Context) {
 
 		stringMatch, requirements, err := utilities.ValidateTextCharacters(group.Name)
 		if err != nil {
-			log.Println("Failed to validate group name text string. Error: " + err.Error())
+			logger.Log.Error("Failed to validate group name text string. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
 			context.Abort()
 			return
 		} else if !stringMatch {
-			log.Println("Group name text string failed validation.")
+			logger.Log.Error("Group name text string failed validation.")
 			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 			context.Abort()
 			return
@@ -944,7 +944,7 @@ func APIUpdateGroup(context *gin.Context) {
 		// Verify that a group with the same name and owner does not already exist
 		groupExists, _, err := database.VerifyGroupExistsByNameForUser(group.Name, group.OwnerID)
 		if err != nil {
-			log.Println(("Failed verify group name. Error: " + err.Error()))
+			logger.Log.Error(("Failed verify group name. Error: " + err.Error()))
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed verify group name."})
 			context.Abort()
 			return
@@ -966,12 +966,12 @@ func APIUpdateGroup(context *gin.Context) {
 
 		stringMatch, requirements, err := utilities.ValidateTextCharacters(group.Description)
 		if err != nil {
-			log.Println("Failed to validate group description text string. Error: " + err.Error())
+			logger.Log.Error("Failed to validate group description text string. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
 			context.Abort()
 			return
 		} else if !stringMatch {
-			log.Println("Group description text string failed validation.")
+			logger.Log.Error("Group description text string failed validation.")
 			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 			context.Abort()
 			return
@@ -980,7 +980,7 @@ func APIUpdateGroup(context *gin.Context) {
 
 	err = database.UpdateGroupValuesByID(groupIDInt, group.Name, group.Description)
 	if err != nil {
-		log.Println(("Failed update group. Error: " + err.Error()))
+		logger.Log.Error(("Failed update group. Error: " + err.Error()))
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed update group."})
 		context.Abort()
 		return
@@ -988,7 +988,7 @@ func APIUpdateGroup(context *gin.Context) {
 
 	groupObjectNew, err := GetGroupObject(userID, groupIDInt)
 	if err != nil {
-		log.Println(("Failed convert group to group object. Error: " + err.Error()))
+		logger.Log.Error(("Failed convert group to group object. Error: " + err.Error()))
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed convert group to group object."})
 		context.Abort()
 		return
@@ -1005,7 +1005,7 @@ func ConvertGroupToGroupObject(group models.Group) (groupObject models.GroupUser
 	// Add owner information to group
 	userObject, err := database.GetUserInformation(group.OwnerID)
 	if err != nil {
-		log.Println("Failed to get user object for user ID " + group.ID.String() + ". Returning. Error: " + err.Error())
+		logger.Log.Error("Failed to get user object for user ID " + group.ID.String() + ". Returning. Error: " + err.Error())
 		return models.GroupUser{}, errors.New("Failed to get user object for user ID " + group.ID.String() + ".")
 	}
 
@@ -1022,7 +1022,7 @@ func ConvertGroupToGroupObject(group models.Group) (groupObject models.GroupUser
 	// Get group members
 	groupMemberships, err := database.GetGroupMembershipsFromGroup(group.ID)
 	if err != nil {
-		log.Println("Failed to get group memberships for group " + group.ID.String() + ". Returning. Error: " + err.Error())
+		logger.Log.Error("Failed to get group memberships for group " + group.ID.String() + ". Returning. Error: " + err.Error())
 		return groupObject, errors.New("Failed to get group memberships for group " + group.ID.String() + ".")
 	}
 
@@ -1030,7 +1030,7 @@ func ConvertGroupToGroupObject(group models.Group) (groupObject models.GroupUser
 	for _, membership := range groupMemberships {
 		userObject, err := database.GetUserInformation(membership.MemberID)
 		if err != nil {
-			log.Println("Failed to get user information for group '" + group.ID.String() + "' member '" + membership.MemberID.String() + "'. Returning. Error: " + err.Error())
+			logger.Log.Error("Failed to get user information for group '" + group.ID.String() + "' member '" + membership.MemberID.String() + "'. Returning. Error: " + err.Error())
 			return models.GroupUser{}, errors.New("Failed to get user information for group '" + group.ID.String() + "' member '" + membership.MemberID.String() + "'.")
 		}
 
@@ -1047,7 +1047,7 @@ func ConvertGroupsToGroupObjects(groups []models.Group) (groupObjects []models.G
 	for _, group := range groups {
 		groupObject, err := ConvertGroupToGroupObject(group)
 		if err != nil {
-			log.Println("Failed to get group object for '" + group.ID.String() + "'. Skipping. Error: " + err.Error())
+			logger.Log.Warn("Failed to get group object for '" + group.ID.String() + "'. Skipping. Error: " + err.Error())
 			continue
 		}
 		groupObjects = append(groupObjects, groupObject)
@@ -1063,7 +1063,7 @@ func APIAddWishlistsToGroup(context *gin.Context) {
 
 	if err := context.ShouldBindJSON(&wishlistsRequest); err != nil {
 		// If there is an error binding the request, return a Bad Request response
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -1078,7 +1078,7 @@ func APIAddWishlistsToGroup(context *gin.Context) {
 	// Get the user ID from the Authorization header of the request
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to parse header. Error: " + err.Error())
+		logger.Log.Error("Failed to parse header. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse header."})
 		context.Abort()
 		return
@@ -1088,7 +1088,7 @@ func APIAddWishlistsToGroup(context *gin.Context) {
 	groupID, err := uuid.Parse(groupIDString)
 	if err != nil {
 		// If there is an error parsing the group ID, return a Bad Request response
-		log.Println("Failed to parse group ID. Error: " + err.Error())
+		logger.Log.Error("Failed to parse group ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
@@ -1099,7 +1099,7 @@ func APIAddWishlistsToGroup(context *gin.Context) {
 
 		wishlist, err := database.GetWishlist(wishlistID)
 		if err != nil {
-			log.Println("Failed to find wishlist. Error: " + err.Error())
+			logger.Log.Error("Failed to find wishlist. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
 			context.Abort()
 			return
@@ -1113,7 +1113,7 @@ func APIAddWishlistsToGroup(context *gin.Context) {
 
 		membershipStatus, err := database.VerifyGroupMembershipToWishlist(wishlistID, groupID)
 		if err != nil {
-			log.Println("Failed to verify membership to group. Error: " + err.Error())
+			logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
 			context.Abort()
 			return
@@ -1125,7 +1125,7 @@ func APIAddWishlistsToGroup(context *gin.Context) {
 
 		membershipStatus, err = database.VerifyUserMembershipToGroup(userID, groupID)
 		if err != nil {
-			log.Println("Failed to verify membership to group. Error: " + err.Error())
+			logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
 			context.Abort()
 			return
@@ -1140,7 +1140,7 @@ func APIAddWishlistsToGroup(context *gin.Context) {
 
 		_, err = database.CreateWishlistMembershipInDB(wishlistMembership)
 		if err != nil {
-			log.Println("Failed to create group membership for wishlist in database. Error: " + err.Error())
+			logger.Log.Error("Failed to create group membership for wishlist in database. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group membership for wishlist in database."})
 			context.Abort()
 			return
@@ -1149,7 +1149,7 @@ func APIAddWishlistsToGroup(context *gin.Context) {
 
 	groupsWithOwner, err := GetGroupObjects(userID)
 	if err != nil {
-		log.Println("Failed to get groups for user. Error: " + err.Error())
+		logger.Log.Error("Failed to get groups for user. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get groups for user."})
 		context.Abort()
 		return

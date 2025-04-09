@@ -28,6 +28,10 @@ if [ -n "$name" ]; then
   CMD="$CMD --name $name"
 fi
 
+if [ -n "$loglevel" ]; then
+  CMD="$CMD --loglevel $loglevel"
+fi
+
 # Add database-related flags if the corresponding environment variables are set
 if [ -n "$dbport" ]; then
   CMD="$CMD --dbport $dbport"

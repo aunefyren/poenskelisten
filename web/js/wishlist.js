@@ -41,7 +41,7 @@ function load_page(result) {
     var html = `
                 <!-- The Modal -->
                 <div id="myModal" class="modal closed">
-                    <span class="close selectable" onclick="toggleModal()">&times;</span>
+                    <span class="close clickable" onclick="toggleModal()">&times;</span>
                     <div class="modalContent" id="modalContent">
                     </div>
                     <div id="caption"></div>
@@ -110,15 +110,6 @@ function load_page(result) {
     document.getElementById('content').innerHTML = html;
     document.getElementById('card-header').innerHTML = 'Lists...';
     clearResponse();
-
-    // Get the <span> element that closes the modal
-    var span = document.getElementsByClassName("close")[0];
-
-    // When the user clicks on <span> (x), close the modal
-    span.onclick = function() { 
-        document.getElementById("myModal").style.display = "none";
-        document.getElementById("modal-img").src = "/assets/loading.svg"
-    }
 
     if(result !== false) {
         showLoggedInMenu();
