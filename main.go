@@ -362,7 +362,7 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 	}
 
 	// Respect the flag if provided
-	if logLevel != nil {
+	if logLevel != nil && *logLevel != configFile.PoenskelistenLogLevel {
 		parsedLogLevel, err := logrus.ParseLevel(*logLevel)
 		if err == nil {
 			configFile.PoenskelistenLogLevel = parsedLogLevel.String()
