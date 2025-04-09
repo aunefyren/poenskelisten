@@ -2,10 +2,10 @@ package controllers
 
 import (
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
-	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -19,7 +19,7 @@ func GetNews(context *gin.Context) {
 	// Get user ID
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to get user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
@@ -27,7 +27,7 @@ func GetNews(context *gin.Context) {
 
 	userObject, err := database.GetUserInformation(userID)
 	if err != nil {
-		log.Println("Failed to get user. Error: " + err.Error())
+		logger.Log.Error("Failed to get user. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
 		context.Abort()
 		return
@@ -37,7 +37,7 @@ func GetNews(context *gin.Context) {
 	newsPosts, err := database.GetNewsPosts()
 	if err != nil {
 		// If there is an error getting the list of news, return an internal server error
-		log.Println("Failed to get news. Error: " + err.Error())
+		logger.Log.Error("Failed to get news. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get news."})
 		context.Abort()
 		return
@@ -71,7 +71,7 @@ func GetNewsPost(context *gin.Context) {
 
 	newsID, err := uuid.Parse(newsIDString)
 	if err != nil {
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed parse request."})
 		context.Abort()
 		return
@@ -81,7 +81,7 @@ func GetNewsPost(context *gin.Context) {
 	newsPost, err := database.GetNewsPostByNewsID(newsID)
 	if err != nil {
 		// If there is an error getting the news, return an internal server error
-		log.Println("Failed to get news post. Error: " + err.Error())
+		logger.Log.Error("Failed to get news post. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed get news post."})
 		context.Abort()
 		return
@@ -95,7 +95,7 @@ func RegisterNewsPost(context *gin.Context) {
 	// Get user ID
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to get user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
@@ -103,7 +103,7 @@ func RegisterNewsPost(context *gin.Context) {
 
 	userObject, err := database.GetUserInformation(userID)
 	if err != nil {
-		log.Println("Failed to get user. Error: " + err.Error())
+		logger.Log.Error("Failed to get user. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
 		context.Abort()
 		return
@@ -116,7 +116,7 @@ func RegisterNewsPost(context *gin.Context) {
 	// Bind the incoming request body to the NewsCreationRequest model
 	if err := context.ShouldBindJSON(&newsCreationRequest); err != nil {
 		// If there is an error binding the request, return a Bad Request response
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -139,12 +139,12 @@ func RegisterNewsPost(context *gin.Context) {
 
 	stringMatch, requirements, err := utilities.ValidateTextCharacters(news.Title)
 	if err != nil {
-		log.Println("Failed to validate news title text string. Error: " + err.Error())
+		logger.Log.Error("Failed to validate news title text string. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
 		context.Abort()
 		return
 	} else if !stringMatch {
-		log.Println("News title text string failed validation.")
+		logger.Log.Error("News title text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
@@ -159,12 +159,12 @@ func RegisterNewsPost(context *gin.Context) {
 
 	stringMatch, requirements, err = utilities.ValidateTextCharacters(news.Body)
 	if err != nil {
-		log.Println("Failed to validate news body text string. Error: " + err.Error())
+		logger.Log.Error("Failed to validate news body text string. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
 		context.Abort()
 		return
 	} else if !stringMatch {
-		log.Println("News body text string failed validation.")
+		logger.Log.Error("News body text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
@@ -178,7 +178,7 @@ func RegisterNewsPost(context *gin.Context) {
 	newsRecord := database.Instance.Create(&news)
 	if newsRecord.Error != nil {
 		// If there is an error creating the news, return an Internal Server Error response
-		log.Println("Failed to create news post. Error: " + err.Error())
+		logger.Log.Error("Failed to create news post. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create news post."})
 		context.Abort()
 		return
@@ -187,7 +187,7 @@ func RegisterNewsPost(context *gin.Context) {
 	newsPosts, err := database.GetNewsPosts()
 	if err != nil {
 		// If there is an error getting the list of news, return an internal server error
-		log.Println("Failed to get news posts. Error: " + err.Error())
+		logger.Log.Error("Failed to get news posts. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get news posts."})
 		context.Abort()
 		return
@@ -219,7 +219,7 @@ func DeleteNewsPost(context *gin.Context) {
 	// Parse news ID
 	newsID, err := uuid.Parse(newsIDString)
 	if err != nil {
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -229,7 +229,7 @@ func DeleteNewsPost(context *gin.Context) {
 	_, err = database.GetNewsPostByNewsID(newsID)
 	if err != nil {
 		// If there is an error getting the news, return an internal server error
-		log.Println("Failed to get news post. Error: " + err.Error())
+		logger.Log.Error("Failed to get news post. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get news post."})
 		context.Abort()
 		return
@@ -238,7 +238,7 @@ func DeleteNewsPost(context *gin.Context) {
 	// Set the news post to disabled in the database
 	err = database.DeleteNewsPost(newsID)
 	if err != nil {
-		log.Println("Failed to delete news post. Error: " + err.Error())
+		logger.Log.Error("Failed to delete news post. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete news post."})
 		context.Abort()
 		return
@@ -248,7 +248,7 @@ func DeleteNewsPost(context *gin.Context) {
 	newsPosts, err := database.GetNewsPosts()
 	if err != nil {
 		// If there is an error getting the list of news, return an internal server error
-		log.Println("Failed to get news posts. Error: " + err.Error())
+		logger.Log.Error("Failed to get news posts. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get news posts."})
 		context.Abort()
 		return
@@ -265,7 +265,7 @@ func APIEditNewsPost(context *gin.Context) {
 	// Parse news ID
 	newsID, err := uuid.Parse(newsIDString)
 	if err != nil {
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -277,7 +277,7 @@ func APIEditNewsPost(context *gin.Context) {
 	// Bind the incoming request body to the NewsCreationRequest model
 	if err := context.ShouldBindJSON(&newsUpdateRequest); err != nil {
 		// If there is an error binding the request, return a Bad Request response
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -285,7 +285,7 @@ func APIEditNewsPost(context *gin.Context) {
 
 	news, err = database.GetNewsPostByNewsID(newsID)
 	if err != nil {
-		log.Println("Failed to get news post. Error: " + err.Error())
+		logger.Log.Error("Failed to get news post. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get news post."})
 		context.Abort()
 		return
@@ -308,12 +308,12 @@ func APIEditNewsPost(context *gin.Context) {
 
 	stringMatch, requirements, err := utilities.ValidateTextCharacters(news.Title)
 	if err != nil {
-		log.Println("Failed to validate news title text string. Error: " + err.Error())
+		logger.Log.Error("Failed to validate news title text string. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
 		context.Abort()
 		return
 	} else if !stringMatch {
-		log.Println("News title text string failed validation.")
+		logger.Log.Error("News title text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
@@ -328,12 +328,12 @@ func APIEditNewsPost(context *gin.Context) {
 
 	stringMatch, requirements, err = utilities.ValidateTextCharacters(news.Body)
 	if err != nil {
-		log.Println("Failed to validate news body text string. Error: " + err.Error())
+		logger.Log.Error("Failed to validate news body text string. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
 		context.Abort()
 		return
 	} else if !stringMatch {
-		log.Println("News body text string failed validation.")
+		logger.Log.Error("News body text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
@@ -346,7 +346,7 @@ func APIEditNewsPost(context *gin.Context) {
 	news, err = database.UpdateNewsPostInDB(news)
 	if err != nil {
 		// If there is an error creating the news, return an Internal Server Error response
-		log.Println("Failed to create news post. Error: " + err.Error())
+		logger.Log.Error("Failed to create news post. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create news post."})
 		context.Abort()
 		return

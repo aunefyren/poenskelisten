@@ -408,15 +408,19 @@ function toggleModal(modalHTML) {
             x.classList.add("open");
             x.classList.remove("closed");
             x.style.display = "block";
+            document.getElementsByTagName("BODY")[0].style.overflow = 'hidden';
         } else if(!modalHTML){
             x.classList.add("closed");
             x.classList.remove("open");
             x.style.display = "none";
+            document.getElementsByTagName("BODY")[0].style.overflow = 'scroll';
         }
         
         if(modalHTML) {
             document.getElementById("modalContent").innerHTML = modalHTML
         }
+    } else {
+        document.getElementsByTagName("BODY")[0].style.overflow = 'scroll';
     }
 }
 

@@ -2,9 +2,9 @@ package controllers
 
 import (
 	"aunefyren/poenskelisten/config"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
-	"log"
 	"net/http"
 	"strings"
 
@@ -15,7 +15,7 @@ func APIGetCurrency(context *gin.Context) {
 	// Get configuration
 	config, err := config.GetConfig()
 	if err != nil {
-		log.Println("Failed to get config file. Error: " + err.Error())
+		logger.Log.Error("Failed to get config file. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
 		context.Abort()
 		return
@@ -28,7 +28,7 @@ func APIUpdateCurrency(context *gin.Context) {
 	var currency models.UpdateCurrencyRequest
 
 	if err := context.ShouldBindJSON(&currency); err != nil {
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -37,12 +37,12 @@ func APIUpdateCurrency(context *gin.Context) {
 	// Validate currency format
 	stringMatch, requirements, err := utilities.ValidateTextCharacters(currency.PoenskelistenCurrency)
 	if err != nil {
-		log.Println("Failed to validate currency text string. Error: " + err.Error())
+		logger.Log.Error("Failed to validate currency text string. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
 		context.Abort()
 		return
 	} else if !stringMatch {
-		log.Println("Currency string failed validation.")
+		logger.Log.Error("Currency string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
@@ -51,7 +51,7 @@ func APIUpdateCurrency(context *gin.Context) {
 	// Get configuration
 	configFile, err := config.GetConfig()
 	if err != nil {
-		log.Println("Failed to get config file. Error: " + err.Error())
+		logger.Log.Error("Failed to get config file. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
 		context.Abort()
 		return
@@ -63,7 +63,7 @@ func APIUpdateCurrency(context *gin.Context) {
 
 	err = config.SaveConfig(configFile)
 	if err != nil {
-		log.Println("Failed to save config file. Error: " + err.Error())
+		logger.Log.Error("Failed to save config file. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save config file."})
 		context.Abort()
 		return

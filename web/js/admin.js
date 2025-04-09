@@ -39,7 +39,7 @@ function load_page(result) {
    var html = `
         <!-- The Modal -->
         <div id="myModal" class="modal closed">
-            <span class="close selectable" style="padding: 0 0.25em;" onclick="toggleModal()">&times;</span>
+            <span class="close clickable" style="padding: 0 0.25em;" onclick="toggleModal()">&times;</span>
             <div class="modalContent" id="modalContent">
             </div>
             <div id="caption"></div>
@@ -54,6 +54,7 @@ function load_page(result) {
                 <p id="server-poenskelisten-database-title" style="">Database: <a id="server-poenskelisten-database">...</a></p>
                 <p id="server-poenskelisten-url-title" style="">External URL: <a id="server-poenskelisten-url">...</a></p>
                 <p id="server-timezone-title" style="">Timezone: <a id="server-timezone">...</a></p>
+                <p id="server-poenskelisten-loglevel-title" style="">Log level: <a id="server-poenskelisten-loglevel">...</a></p>
             </div>
 
             <div class="invites" id="invites">
@@ -146,6 +147,7 @@ function place_server_info(server_info) {
     document.getElementById('server-poenskelisten-url').innerHTML = server_info.poenskelisten_external_url
     document.getElementById('server-poenskelisten-database').innerHTML = server_info.database_type
     document.getElementById('server-poenskelisten-port').innerHTML = server_info.poenskelisten_port
+    document.getElementById('server-poenskelisten-loglevel').innerHTML = server_info.poenskelisten_log_level
 }
 
 function get_invites() {

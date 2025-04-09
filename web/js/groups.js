@@ -35,7 +35,7 @@ function load_page(result) {
     var html = `
                 <!-- The Modal -->
                 <div id="myModal" class="modal closed">
-                    <span class="close selectable" style="padding: 0 0.25em;" onclick="toggleModal()">&times;</span>
+                    <span class="close clickable" style="padding: 0 0.25em;" onclick="toggleModal()">&times;</span>
                     <div class="modalContent" id="modalContent">
                     </div>
                     <div id="caption"></div>

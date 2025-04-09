@@ -2,9 +2,9 @@ package controllers
 
 import (
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"errors"
-	"log"
 	"net/http"
 	"sort"
 
@@ -16,7 +16,7 @@ func RegisterInvite(context *gin.Context) {
 
 	invite, err := database.GenerateRandomInvite()
 	if err != nil {
-		log.Println("Failed to create new invite. Error: " + err.Error())
+		logger.Log.Error("Failed to create new invite. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create new invite."})
 		context.Abort()
 		return
@@ -24,7 +24,7 @@ func RegisterInvite(context *gin.Context) {
 
 	invites, err := database.GetAllEnabledInvites()
 	if err != nil {
-		log.Println("Failed to get invites from database. Error: " + err.Error())
+		logger.Log.Error("Failed to get invites from database. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get invites from database."})
 		context.Abort()
 		return
@@ -32,7 +32,7 @@ func RegisterInvite(context *gin.Context) {
 
 	inviteObjects, err := ConvertInvitesToInviteObjects(invites)
 	if err != nil {
-		log.Println("Failed to process invites. Error: " + err.Error())
+		logger.Log.Error("Failed to process invites. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process invites."})
 		context.Abort()
 		return
@@ -55,7 +55,7 @@ func APIDeleteInvite(context *gin.Context) {
 	// Parse group id
 	inviteIDInt, err := uuid.Parse(inviteID)
 	if err != nil {
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -63,7 +63,7 @@ func APIDeleteInvite(context *gin.Context) {
 
 	invite, err := database.GetInviteByID(inviteIDInt)
 	if err != nil {
-		log.Println("Failed to find invite. Error: " + err.Error())
+		logger.Log.Error("Failed to find invite. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find invite."})
 		context.Abort()
 		return
@@ -77,7 +77,7 @@ func APIDeleteInvite(context *gin.Context) {
 
 	err = database.DeleteInviteByID(inviteIDInt)
 	if err != nil {
-		log.Println("Failed to delete invite. Error: " + err.Error())
+		logger.Log.Error("Failed to delete invite. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete invite."})
 		context.Abort()
 		return
@@ -85,7 +85,7 @@ func APIDeleteInvite(context *gin.Context) {
 
 	invites, err := database.GetAllEnabledInvites()
 	if err != nil {
-		log.Println("Failed to get invites from database. Error: " + err.Error())
+		logger.Log.Error("Failed to get invites from database. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get invites from database."})
 		context.Abort()
 		return
@@ -93,7 +93,7 @@ func APIDeleteInvite(context *gin.Context) {
 
 	inviteObjects, err := ConvertInvitesToInviteObjects(invites)
 	if err != nil {
-		log.Println("Failed to process invites. Error: " + err.Error())
+		logger.Log.Error("Failed to process invites. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process invites."})
 		context.Abort()
 		return
@@ -106,7 +106,7 @@ func APIGetAllInvites(context *gin.Context) {
 
 	invites, err := database.GetAllEnabledInvites()
 	if err != nil {
-		log.Println("Failed to get invites from database. Error: " + err.Error())
+		logger.Log.Error("Failed to get invites from database. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get invites from database."})
 		context.Abort()
 		return
@@ -114,7 +114,7 @@ func APIGetAllInvites(context *gin.Context) {
 
 	inviteObjects, err := ConvertInvitesToInviteObjects(invites)
 	if err != nil {
-		log.Println("Failed to process invites. Error: " + err.Error())
+		logger.Log.Error("Failed to process invites. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process invites."})
 		context.Abort()
 		return
@@ -137,7 +137,7 @@ func ConvertInviteToInviteObject(invite models.Invite) (models.InviteObject, err
 	} else {
 		user, err := database.GetUserInformationAnyState(*invite.RecipientID)
 		if err != nil {
-			log.Println("Failed to get user information for user '" + invite.RecipientID.String() + "'. Returning. Error: " + err.Error())
+			logger.Log.Error("Failed to get user information for user '" + invite.RecipientID.String() + "'. Returning. Error: " + err.Error())
 			return models.InviteObject{}, err
 		}
 		inviteObject.User = user
@@ -166,7 +166,7 @@ func ConvertInvitesToInviteObjects(invites []models.Invite) ([]models.InviteObje
 	for _, invite := range invites {
 		inviteObject, err := ConvertInviteToInviteObject(invite)
 		if err != nil {
-			log.Println("Failed convert invite '" + invite.ID.String() + "' to invite object. Skipping. Error: " + err.Error())
+			logger.Log.Warn("Failed convert invite '" + invite.ID.String() + "' to invite object. Skipping. Error: " + err.Error())
 			continue
 		}
 		inviteObjects = append(inviteObjects, inviteObject)

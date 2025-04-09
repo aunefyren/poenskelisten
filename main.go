@@ -4,12 +4,12 @@ import (
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/controllers"
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -23,6 +23,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -30,104 +31,76 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 
 	// Create files directory
-	newpath := filepath.Join(".", "files")
-	err := os.MkdirAll(newpath, os.ModePerm)
+	newPath := filepath.Join(".", "files")
+	err := os.MkdirAll(newPath, os.ModePerm)
 	if err != nil {
 		fmt.Println("Failed to create 'files' directory. Error: " + err.Error())
-
 		os.Exit(1)
 	}
 	fmt.Println("Directory 'files' valid.")
 
-	// Create and define file for logging
-	logFile, err := os.OpenFile("files/poenskelisten.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		fmt.Println("Failed to load log file. Error: " + err.Error())
-
-		os.Exit(1)
-	}
-
-	// Set log file as log destination
-	log.SetOutput(logFile)
-	fmt.Println("Log file set.")
-
-	var mw io.Writer
-
-	out := os.Stdout
-	mw = io.MultiWriter(out, logFile)
-
-	// Get pipe reader and writer | writes to pipe writer come out pipe reader
-	_, w, _ := os.Pipe()
-
-	// Replace stdout,stderr with pipe writer | all writes to stdout, stderr will go through pipe instead (log.print, log)
-	os.Stdout = w
-	os.Stderr = w
-
-	// writes with log.Print should also write to mw
-	log.SetOutput(mw)
-
 	// Load config file
 	configFile, err := config.GetConfig()
 	if err != nil {
-		log.Println("Failed to load configuration file. Error: " + err.Error())
-
+		fmt.Println("Failed to load configuration file. Error: " + err.Error())
 		os.Exit(1)
 	}
-	log.Println("Configuration file loaded.")
+	fmt.Println("Configuration file loaded.")
 
-	log.Println("Running Pønskelisten version: " + configFile.PoenskelistenVersion)
+	// Create and define file for logging
+	logger.InitLogger(configFile)
+
+	logger.Log.Info("Running Pønskelisten version: " + configFile.PoenskelistenVersion)
 
 	// Change the config to respect flags
 	configFile, generateInvite, err := parseFlags(configFile)
 	if err != nil {
-		log.Println("Failed to parse input flags. Error: " + err.Error())
-
+		logger.Log.Error("Failed to parse input flags. Error: " + err.Error())
 		os.Exit(1)
 	}
-	log.Println("Flags parsed.")
+	logger.Log.Info("Flags parsed.")
 
 	// Set time zone from config if it is not empty
 	loc, err := time.LoadLocation(configFile.Timezone)
 	if err != nil {
-		log.Println("Failed to set time zone from config. Error: " + err.Error())
-		log.Println("Removing value...")
+		logger.Log.Error("Failed to set time zone from config. Error: " + err.Error())
+		logger.Log.Warn("Removing value...")
 
-		configFile.Timezone = ""
+		configFile.Timezone = "Europe/Paris"
 		err = config.SaveConfig(configFile)
 		if err != nil {
-			log.Println("Failed to set new time zone in the config. Error: " + err.Error())
+			logger.Log.Error("Failed to set new time zone in the config. Error: " + err.Error())
 			os.Exit(1)
 		}
 
 	} else {
 		time.Local = loc
 	}
-	log.Println("Timezone set.")
+	logger.Log.Info("Timezone set.")
 
 	// Initialize Database
-	log.Println("Connecting to database...")
+	logger.Log.Info("Connecting to database...")
 
 	err = database.Connect(configFile.DBType, configFile.Timezone, configFile.DBUsername, configFile.DBPassword, configFile.DBIP, configFile.DBPort, configFile.DBName, configFile.DBSSL, configFile.DBLocation)
 	if err != nil {
-		log.Println("Failed to connect to database. Error: " + err.Error())
+		logger.Log.Error("Failed to connect to database. Error: " + err.Error())
 		os.Exit(1)
 	}
 	database.Migrate()
-	log.Println("Database connected.")
+	logger.Log.Info("Database connected.")
 
 	if generateInvite {
 		invite, err := database.GenerateRandomInvite()
 		if err != nil {
-			log.Println("Failed to generate random invitation code. Error: " + err.Error())
-
+			logger.Log.Error("Failed to generate random invitation code. Error: " + err.Error())
 			os.Exit(1)
 		}
-		log.Println("Generated new invite code. Code: " + invite)
+		logger.Log.Info("Generated new invite code. Code: " + invite)
 	}
 
 	// Initialize Router
 	router := initRouter()
-	log.Println("Router initialized. Starting Pønskelisten at http://*:" + strconv.Itoa(configFile.PoenskelistenPort))
+	logger.Log.Info("Router initialized. Starting Pønskelisten at http://*:" + strconv.Itoa(configFile.PoenskelistenPort))
 	log.Fatal(router.Run(":" + strconv.Itoa(configFile.PoenskelistenPort)))
 }
 
@@ -296,7 +269,7 @@ func initRouter() *gin.Engine {
 	router.GET("/service-worker.js", func(c *gin.Context) {
 		JSfile, err := os.ReadFile("./web/js/service-worker.js")
 		if err != nil {
-			fmt.Println("Reading service-worker threw error trying to open the file. Error: " + err.Error())
+			logger.Log.Error("Reading service-worker threw error trying to open the file. Error: " + err.Error())
 		}
 		c.Data(http.StatusOK, "text/javascript", JSfile)
 	})
@@ -305,7 +278,7 @@ func initRouter() *gin.Engine {
 	router.GET("/manifest.json", func(c *gin.Context) {
 		JSONfile, err := os.ReadFile("./web/json/manifest.json")
 		if err != nil {
-			fmt.Println("Reading manifest threw error trying to open the file. Error: " + err.Error())
+			logger.Log.Error("Reading manifest threw error trying to open the file. Error: " + err.Error())
 		}
 		c.Data(http.StatusOK, "text/json", JSONfile)
 	})
@@ -314,7 +287,7 @@ func initRouter() *gin.Engine {
 	router.GET("/robots.txt", func(c *gin.Context) {
 		TXTfile, err := os.ReadFile("./web/txt/robots.txt")
 		if err != nil {
-			fmt.Println("Reading manifest threw error trying to open the file. Error: " + err.Error())
+			logger.Log.Error("Reading manifest threw error trying to open the file. Error: " + err.Error())
 		}
 		c.Data(http.StatusOK, "text/plain", TXTfile)
 	})
@@ -322,7 +295,7 @@ func initRouter() *gin.Engine {
 	return router
 }
 
-func parseFlags(configFile *models.ConfigStruct) (*models.ConfigStruct, bool, error) {
+func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, error) {
 	generateInviteBool := false
 
 	// Define flag variables with the configuration file as default values
@@ -332,6 +305,7 @@ func parseFlags(configFile *models.ConfigStruct) (*models.ConfigStruct, bool, er
 	var environment = flag.String("environment", configFile.PoenskelistenEnvironment, "The environment Pønskelisten is running in. It will behave differently in 'test'.")
 	var testemail = flag.String("testemail", configFile.PoenskelistenTestEmail, "The email all emails are sent to in test mode.")
 	var name = flag.String("name", configFile.PoenskelistenName, "The name of the application. Replaces 'Pønskelisten'.")
+	var logLevel = flag.String("loglevel", configFile.PoenskelistenLogLevel, "The log level of the application. Default 'info'.")
 
 	// DB values
 	var dbPort = flag.Int("dbport", configFile.DBPort, "The port the database is listening on.")
@@ -385,6 +359,18 @@ func parseFlags(configFile *models.ConfigStruct) (*models.ConfigStruct, bool, er
 	// Respect the flag if provided
 	if name != nil {
 		configFile.PoenskelistenName = *name
+	}
+
+	// Respect the flag if provided
+	if logLevel != nil {
+		parsedLogLevel, err := logrus.ParseLevel(*logLevel)
+		if err == nil {
+			configFile.PoenskelistenLogLevel = parsedLogLevel.String()
+			logger.Log.SetLevel(parsedLogLevel)
+			logger.Log.Info("Log level changed to: " + parsedLogLevel.String())
+		} else {
+			logger.Log.Warn("Failed to parse log level: " + *logLevel)
+		}
 	}
 
 	// Respect the flag if provided
@@ -478,7 +464,7 @@ func parseFlags(configFile *models.ConfigStruct) (*models.ConfigStruct, bool, er
 	// Save the new configFile
 	err := config.SaveConfig(configFile)
 	if err != nil {
-		return &models.ConfigStruct{}, false, err
+		return models.ConfigStruct{}, false, err
 	}
 
 	return configFile, generateInviteBool, nil

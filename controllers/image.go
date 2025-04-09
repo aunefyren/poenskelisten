@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/middlewares"
 	"bytes"
 	"encoding/base64"
@@ -9,7 +10,6 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -48,7 +48,7 @@ func APIGetUserProfileImage(context *gin.Context) {
 	// Parse user id
 	userID, err := uuid.Parse(userIDString)
 	if err != nil {
-		log.Println("Failed to parse group ID. Error: " + err.Error())
+		logger.Log.Error("Failed to parse group ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
@@ -57,7 +57,7 @@ func APIGetUserProfileImage(context *gin.Context) {
 	// Check if user exists
 	_, err = database.GetUserInformation(userID)
 	if err != nil {
-		log.Println("Failed to find user. Error: " + err.Error())
+		logger.Log.Error("Failed to find user. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find user."})
 		context.Abort()
 		return
@@ -70,7 +70,7 @@ func APIGetUserProfileImage(context *gin.Context) {
 	if err != nil {
 		imageBytes, err = LoadDefaultProfileImage()
 		if err != nil {
-			log.Println("Failed to load default profile image. Error: " + err.Error())
+			logger.Log.Error("Failed to load default profile image. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load default profile image."})
 			context.Abort()
 			return
@@ -82,7 +82,7 @@ func APIGetUserProfileImage(context *gin.Context) {
 	if resize {
 		imageBytes, err = ResizeImage(imageWidth, imageHeight, imageBytes)
 		if err != nil {
-			log.Println("Failed to resize image. Error: " + err.Error())
+			logger.Log.Error("Failed to resize image. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resize image."})
 			context.Abort()
 			return
@@ -91,7 +91,7 @@ func APIGetUserProfileImage(context *gin.Context) {
 
 	base64, err := ImageBytesToBase64(imageBytes)
 	if err != nil {
-		log.Println("Failed to convert image file to Base64. Error: " + err.Error())
+		logger.Log.Error("Failed to convert image file to Base64. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert image file to Base64."})
 		context.Abort()
 		return
@@ -126,18 +126,18 @@ func LoadImageFile(filePath string) ([]byte, error) {
 func SaveImageFile(filePath string, fileName string, imageFile image.Image) error {
 	err := os.MkdirAll(filePath, 0755)
 	if err != nil {
-		log.Println("Failed to create directory for image. Error: " + err.Error())
+		logger.Log.Error("Failed to create directory for image. Error: " + err.Error())
 		return errors.New("Failed to create directory for image.")
 	}
 
 	file, err := os.Create(filePath + "/" + fileName)
 	if err != nil {
-		log.Println("Failed to create file for image. Error: " + err.Error())
+		logger.Log.Error("Failed to create file for image. Error: " + err.Error())
 		return errors.New("Failed to create file for image.")
 	}
 	defer file.Close()
 	if err = jpeg.Encode(file, imageFile, nil); err != nil {
-		log.Println("Failed to encode file for image. Error: " + err.Error())
+		logger.Log.Error("Failed to encode file for image. Error: " + err.Error())
 		return errors.New("Failed to encode file for image.")
 	}
 
@@ -189,7 +189,7 @@ func Base64ToImageBytes(base64String string) ([]byte, string, error) {
 	// Append the base64 encoded output
 	imageBytes, err := base64.StdEncoding.DecodeString(b64Data)
 	if err != nil {
-		log.Println("Failed to convert Base64 string to byte array. Returning. Error: " + err.Error())
+		logger.Log.Error("Failed to convert Base64 string to byte array. Returning. Error: " + err.Error())
 		return nil, "", errors.New("Invalid Base64 string.")
 	}
 
@@ -199,7 +199,7 @@ func Base64ToImageBytes(base64String string) ([]byte, string, error) {
 func LoadDefaultProfileImage() ([]byte, error) {
 	imageBytes, err := LoadImageFile(default_profile_image_path)
 	if err != nil {
-		log.Println("Failed to load default profile image. Error: " + err.Error() + ". Returning.")
+		logger.Log.Error("Failed to load default profile image. Error: " + err.Error() + ". Returning.")
 		return nil, errors.New("Failed to load default profile image.")
 	}
 
@@ -210,7 +210,7 @@ func ResizeImage(maxWidth uint, maxHeight uint, imageBytes []byte) ([]byte, erro
 	// decode jpeg into image.Image
 	img, _, err := image.Decode(bytes.NewReader(imageBytes))
 	if err != nil {
-		log.Println("Failed to convert bytes to image object. Error: " + err.Error() + ". Returning.")
+		logger.Log.Error("Failed to convert bytes to image object. Error: " + err.Error() + ". Returning.")
 		return nil, errors.New("Failed to convert bytes to image object.")
 	}
 
@@ -221,7 +221,7 @@ func ResizeImage(maxWidth uint, maxHeight uint, imageBytes []byte) ([]byte, erro
 	buf := new(bytes.Buffer)
 	err = jpeg.Encode(buf, resizedImage, nil)
 	if err != nil {
-		log.Println("Failed to convert resized image file to bytes. Error: " + err.Error() + ". Returning.")
+		logger.Log.Error("Failed to convert resized image file to bytes. Error: " + err.Error() + ". Returning.")
 		return nil, errors.New("Failed to convert resized image file to bytes.")
 	}
 	resizedImageBytes := buf.Bytes()
@@ -232,7 +232,7 @@ func ResizeImage(maxWidth uint, maxHeight uint, imageBytes []byte) ([]byte, erro
 func UpdateUserProfileImage(userID uuid.UUID, base64String string) error {
 	imageBytes, mimeType, err := Base64ToImageBytes(base64String)
 	if err != nil {
-		log.Println("Failed to convert Base64 String to bytes. Error: " + err.Error())
+		logger.Log.Error("Failed to convert Base64 String to bytes. Error: " + err.Error())
 		return errors.New("Invalid Base64 string.")
 	}
 
@@ -249,17 +249,17 @@ func UpdateUserProfileImage(userID uuid.UUID, base64String string) error {
 	if mimeType == "image/jpeg" {
 		imageObject, err = jpeg.Decode(bytes.NewReader(imageBytes))
 		if err != nil {
-			log.Println("Failed to create image from byte array. Returning. Error: " + err.Error())
+			logger.Log.Error("Failed to create image from byte array. Returning. Error: " + err.Error())
 			return errors.New("Failed to create image from, byte array.")
 		}
 	} else if mimeType == "image/png" {
 		imageObject, err = png.Decode(bytes.NewReader(imageBytes))
 		if err != nil {
-			log.Println("Failed to create image from byte array. Returning. Error: " + err.Error())
+			logger.Log.Error("Failed to create image from byte array. Returning. Error: " + err.Error())
 			return errors.New("Failed to create image from, byte array.")
 		}
 	} else {
-		log.Println("Invalid mime type for image. Type: " + mimeType)
+		logger.Log.Error("Invalid mime type for image. Type: " + mimeType)
 		return errors.New("Invalid image type.")
 	}
 
@@ -267,7 +267,7 @@ func UpdateUserProfileImage(userID uuid.UUID, base64String string) error {
 
 	err = SaveImageFile(profile_image_path, userIDString+".jpg", imageObject)
 	if err != nil {
-		log.Println("Failed to save image to disk. Returning. Error: " + err.Error())
+		logger.Log.Error("Failed to save image to disk. Returning. Error: " + err.Error())
 		return errors.New("Failed to save image to disk.")
 	}
 
@@ -292,7 +292,7 @@ func APIGetWishImage(context *gin.Context) {
 	// Parse user id
 	wishID, err := uuid.Parse(wishIDString)
 	if err != nil {
-		log.Println("Failed to parse wish ID. Error: " + err.Error())
+		logger.Log.Error("Failed to parse wish ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})
 		context.Abort()
 		return
@@ -301,7 +301,7 @@ func APIGetWishImage(context *gin.Context) {
 	// Get wishlist object
 	wishlistFound, wishlist, err := database.GetWishlistByWishID(wishID)
 	if err != nil {
-		log.Println("Failed to get wishlist. Error: " + err.Error())
+		logger.Log.Error("Failed to get wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist."})
 		context.Abort()
 		return
@@ -322,7 +322,7 @@ func APIGetWishImage(context *gin.Context) {
 	// Check if user exists
 	wish, err := database.GetWishByWishID(wishID)
 	if err != nil {
-		log.Println("Failed to get wish. Error: " + err.Error())
+		logger.Log.Error("Failed to get wish. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wish."})
 		context.Abort()
 		return
@@ -337,10 +337,10 @@ func APIGetWishImage(context *gin.Context) {
 	imageBytes, err := LoadImageFile(filePath)
 	resize := true
 	if err != nil {
-		log.Println("Failed to find wish image. Loading default.")
+		logger.Log.Warn("Failed to find wish image. Loading default.")
 		imageBytes, err = LoadDefaultProfileImage()
 		if err != nil {
-			log.Println("Failed to load default profile image. Error: " + err.Error())
+			logger.Log.Error("Failed to load default profile image. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load default profile image."})
 			context.Abort()
 			return
@@ -351,7 +351,7 @@ func APIGetWishImage(context *gin.Context) {
 	if resize {
 		imageBytes, err = ResizeImage(imageWidth, imageHeight, imageBytes)
 		if err != nil {
-			log.Println("Failed to resize image. Error: " + err.Error())
+			logger.Log.Error("Failed to resize image. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resize image."})
 			context.Abort()
 			return
@@ -360,7 +360,7 @@ func APIGetWishImage(context *gin.Context) {
 
 	base64, err := ImageBytesToBase64(imageBytes)
 	if err != nil {
-		log.Println("Failed to convert image file to Base64. Error: " + err.Error())
+		logger.Log.Error("Failed to convert image file to Base64. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert image file to Base64."})
 		context.Abort()
 		return
@@ -373,7 +373,7 @@ func APIGetWishImage(context *gin.Context) {
 func SaveWishImage(wishID uuid.UUID, base64String string) error {
 	imageBytes, mimeType, err := Base64ToImageBytes(base64String)
 	if err != nil {
-		log.Println("Failed to convert Base64 String to bytes. Error: " + err.Error())
+		logger.Log.Error("Failed to convert Base64 String to bytes. Error: " + err.Error())
 		return errors.New("Invalid Base64 string.")
 	}
 
@@ -390,17 +390,17 @@ func SaveWishImage(wishID uuid.UUID, base64String string) error {
 	if mimeType == "image/jpeg" {
 		imageObject, err = jpeg.Decode(bytes.NewReader(imageBytes))
 		if err != nil {
-			log.Println("Failed to create image from byte array. Returning. Error: " + err.Error())
+			logger.Log.Error("Failed to create image from byte array. Returning. Error: " + err.Error())
 			return errors.New("Failed to create image from, byte array.")
 		}
 	} else if mimeType == "image/png" {
 		imageObject, err = png.Decode(bytes.NewReader(imageBytes))
 		if err != nil {
-			log.Println("Failed to create image from byte array. Returning. Error: " + err.Error())
+			logger.Log.Error("Failed to create image from byte array. Returning. Error: " + err.Error())
 			return errors.New("Failed to create image from, byte array.")
 		}
 	} else {
-		log.Println("Invalid mime type for image. Type: " + mimeType)
+		logger.Log.Error("Invalid mime type for image. Type: " + mimeType)
 		return errors.New("Invalid image type.")
 	}
 
@@ -408,7 +408,7 @@ func SaveWishImage(wishID uuid.UUID, base64String string) error {
 
 	err = SaveImageFile(wish_image_path, wishIDString+".jpg", imageObject)
 	if err != nil {
-		log.Println("Failed to save image to disk. Returning. Error: " + err.Error())
+		logger.Log.Error("Failed to save image to disk. Returning. Error: " + err.Error())
 		return errors.New("Failed to save image to disk.")
 	}
 

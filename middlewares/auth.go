@@ -4,8 +4,8 @@ import (
 	"aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/logger"
 	"errors"
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -34,14 +34,14 @@ func AuthFunction(context *gin.Context, admin bool) (success bool, errorString s
 
 	err := auth.ValidateToken(tokenString, admin)
 	if err != nil {
-		log.Println("Failed to validate token. Error: " + err.Error())
+		logger.Log.Error("Failed to validate token. Error: " + err.Error())
 		return false, "Failed to validate token.", http.StatusBadRequest
 	}
 
 	// Get configuration
 	config, err := config.GetConfig()
 	if err != nil {
-		log.Println("Failed to get config. Error: " + err.Error())
+		logger.Log.Error("Failed to get config. Error: " + err.Error())
 		return false, "Failed to get config.", http.StatusInternalServerError
 	}
 
@@ -51,7 +51,7 @@ func AuthFunction(context *gin.Context, admin bool) (success bool, errorString s
 		// Get userID from header
 		userID, err := GetAuthUsername(context.GetHeader("Authorization"))
 		if err != nil {
-			log.Println("Failed to get user ID from token. Error: " + err.Error())
+			logger.Log.Error("Failed to get user ID from token. Error: " + err.Error())
 			return false, "Failed to get user ID from token.", http.StatusInternalServerError
 		}
 
@@ -60,17 +60,17 @@ func AuthFunction(context *gin.Context, admin bool) (success bool, errorString s
 		if !verified {
 
 			// Verify user has verification code
-			hasVerficationCode, err := database.VerifyUserHasVerificationCode(userID)
+			hasVerificationCode, err := database.VerifyUserHasVerificationCode(userID)
 			if err != nil {
-				log.Println("Failed to get verification code. Error: " + err.Error())
+				logger.Log.Error("Failed to get verification code. Error: " + err.Error())
 				return false, "Failed to get verification code.", http.StatusInternalServerError
 			}
 
 			// If the user doesn't have a code, set one
-			if !hasVerficationCode {
+			if !hasVerificationCode {
 				_, err := database.GenerateRandomVerificationCodeForUser(userID)
 				if err != nil {
-					log.Println("Failed to generate verification code. Error: " + err.Error())
+					logger.Log.Error("Failed to generate verification code. Error: " + err.Error())
 					return false, "Failed to generate verification code.", http.StatusInternalServerError
 				}
 			}

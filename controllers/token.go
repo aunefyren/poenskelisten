@@ -3,9 +3,9 @@ package controllers
 import (
 	"aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
-	"log"
 	"net/http"
 	"time"
 
@@ -23,7 +23,7 @@ func GenerateToken(context *gin.Context) {
 
 	err := context.ShouldBindJSON(&request)
 	if err != nil {
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -32,7 +32,7 @@ func GenerateToken(context *gin.Context) {
 	// check if email exists and password is correct
 	user, err = database.GetAllUserInformationByEmail(request.Email)
 	if err != nil {
-		log.Println("Failed to get user by e-mail. Error: " + err.Error())
+		logger.Log.Error("Failed to get user by e-mail. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid credentials."})
 		context.Abort()
 		return
@@ -40,7 +40,7 @@ func GenerateToken(context *gin.Context) {
 
 	err = user.CheckPassword(request.Password)
 	if err != nil {
-		log.Println("Failed to verify password. Error: " + err.Error())
+		logger.Log.Error("Failed to verify password. Error: " + err.Error())
 		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
 		context.Abort()
 		return
@@ -48,7 +48,7 @@ func GenerateToken(context *gin.Context) {
 
 	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, *user.Email, user.ID, user.Admin, *user.Verified)
 	if err != nil {
-		log.Println("Failed to generate token. Error: " + err.Error())
+		logger.Log.Error("Failed to generate token. Error: " + err.Error())
 		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
 		context.Abort()
 		return
@@ -62,7 +62,7 @@ func ValidateToken(context *gin.Context) {
 
 	claims, err := middlewares.GetTokenClaims(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to validate session. Error: " + err.Error())
+		logger.Log.Error("Failed to validate session. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Invalid session. Please log in again."})
 		context.Abort()
 		return
@@ -88,7 +88,7 @@ func ValidateToken(context *gin.Context) {
 			// Get user object by ID and check and update admin status
 			userObject, err := database.GetUserInformation(claims.UserID)
 			if err != nil {
-				log.Println("Failed to check admin status during token refresh. Error: " + err.Error())
+				logger.Log.Error("Failed to check admin status during token refresh. Error: " + err.Error())
 				context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to validate session. Please log in again."})
 				context.Abort()
 				return
@@ -99,7 +99,7 @@ func ValidateToken(context *gin.Context) {
 			// Re-generate token with updated claims
 			token, err = auth.GenerateJWTFromClaims(claims)
 			if err != nil {
-				log.Println("Failed to re-sign JWT from claims. Error: " + err.Error())
+				logger.Log.Error("Failed to re-sign JWT from claims. Error: " + err.Error())
 				context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to validate session. Please log in again."})
 				context.Abort()
 				return

@@ -4,10 +4,10 @@ import (
 	"aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -25,7 +25,7 @@ func RegisterUser(context *gin.Context) {
 
 	// Parse creation request
 	if err := context.ShouldBindJSON(&userCreationRequest); err != nil {
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -47,7 +47,7 @@ func RegisterUser(context *gin.Context) {
 	// Make password is strong enough
 	valid, requirements, err := utilities.ValidatePasswordFormat(userCreationRequest.Password)
 	if err != nil {
-		log.Println("Failed to verify password quality. Error: " + err.Error())
+		logger.Log.Error("Failed to verify password quality. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify password quality."})
 		context.Abort()
 		return
@@ -64,12 +64,12 @@ func RegisterUser(context *gin.Context) {
 
 	stringMatch, requirements, err := utilities.ValidateTextCharacters(user.FirstName)
 	if err != nil {
-		log.Println("Failed to validate first name text string. Error: " + err.Error())
+		logger.Log.Error("Failed to validate first name text string. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
 		context.Abort()
 		return
 	} else if !stringMatch {
-		log.Println("First name text string failed validation.")
+		logger.Log.Error("First name text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
@@ -79,12 +79,12 @@ func RegisterUser(context *gin.Context) {
 
 	stringMatch, requirements, err = utilities.ValidateTextCharacters(user.LastName)
 	if err != nil {
-		log.Println("Failed to validate last name text string. Error: " + err.Error())
+		logger.Log.Error("Failed to validate last name text string. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
 		context.Abort()
 		return
 	} else if !stringMatch {
-		log.Println("Last name text string failed validation.")
+		logger.Log.Error("Last name text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
@@ -105,19 +105,19 @@ func RegisterUser(context *gin.Context) {
 	// Check if any users exist, if not, make new user admin
 	userAmount, err := database.GetAmountOfEnabledUsers()
 	if err != nil {
-		log.Println("Failed to verify user amount. Error: " + err.Error())
+		logger.Log.Error("Failed to verify user amount. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify user amount."})
 		context.Abort()
 		return
 	} else if userAmount == 0 {
 		user.Admin = true
-		log.Println("No other users found. New user is set to admin.")
+		logger.Log.Info("No other users found. New user is set to admin.")
 	}
 
 	// Get configuration
 	config, err := config.GetConfig()
 	if err != nil {
-		log.Println("Failed to get config. Error: " + err.Error())
+		logger.Log.Error("Failed to get config. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config."})
 		context.Abort()
 		return
@@ -134,7 +134,7 @@ func RegisterUser(context *gin.Context) {
 
 	// Hash the selected password
 	if err := user.HashPassword(*user.Password); err != nil {
-		log.Println("Failed to hash password. Error: " + err.Error())
+		logger.Log.Error("Failed to hash password. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password."})
 		context.Abort()
 		return
@@ -143,7 +143,7 @@ func RegisterUser(context *gin.Context) {
 	// Verify unsued invite code exists
 	unique_invitecode, err := database.VerifyUnusedUserInviteCode(userCreationRequest.InviteCode)
 	if err != nil {
-		log.Println("Failed to verify invite code. Error: " + err.Error())
+		logger.Log.Error("Failed to verify invite code. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify invite code."})
 		context.Abort()
 		return
@@ -156,7 +156,7 @@ func RegisterUser(context *gin.Context) {
 	// Verify e-mail is not in use
 	unique_email, err := database.VerifyUniqueUserEmail(*user.Email)
 	if err != nil {
-		log.Println("Failed to verify unique e-mail. Error: " + err.Error())
+		logger.Log.Error("Failed to verify unique e-mail. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify unique e-mail."})
 		context.Abort()
 		return
@@ -169,7 +169,7 @@ func RegisterUser(context *gin.Context) {
 	// Create user in DB
 	user, err = database.CreateUserInDB(user)
 	if err != nil {
-		log.Println("Failed to get create user. Error: " + err.Error())
+		logger.Log.Error("Failed to get create user. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get create user."})
 		context.Abort()
 		return
@@ -178,7 +178,7 @@ func RegisterUser(context *gin.Context) {
 	// Set code to used
 	err = database.SetUsedUserInviteCode(userCreationRequest.InviteCode, user.ID)
 	if err != nil {
-		log.Println("Failed to set invite code to used. Error: " + err.Error())
+		logger.Log.Error("Failed to set invite code to used. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to set invite code to used."})
 		context.Abort()
 		return
@@ -187,11 +187,11 @@ func RegisterUser(context *gin.Context) {
 	// If user is not verified and SMTP is enabled, send verification e-mail
 	if !*user.Verified && config.SMTPEnabled {
 
-		log.Println("Sending verification e-mail to new user: " + user.FirstName + " " + user.LastName + ".")
+		logger.Log.Debug("Sending verification e-mail to new user: " + user.FirstName + " " + user.LastName + ".")
 
 		err = utilities.SendSMTPVerificationEmail(user)
 		if err != nil {
-			log.Println("Failed to send e-mail. Error: " + err.Error())
+			logger.Log.Error("Failed to send e-mail. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to send e-mail."})
 			context.Abort()
 			return
@@ -210,7 +210,7 @@ func GetUser(context *gin.Context) {
 	// Get user ID
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to get user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
@@ -218,7 +218,7 @@ func GetUser(context *gin.Context) {
 
 	requestingUserObject, err := database.GetUserInformation(userID)
 	if err != nil {
-		log.Println("Failed to get user object. Error: " + err.Error())
+		logger.Log.Error("Failed to get user object. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user object."})
 		context.Abort()
 		return
@@ -227,7 +227,7 @@ func GetUser(context *gin.Context) {
 	// Parse group id
 	user_id_int, err := uuid.Parse(user)
 	if err != nil {
-		log.Println("Failed to parse group ID. Error: " + err.Error())
+		logger.Log.Error("Failed to parse group ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 		context.Abort()
 		return
@@ -237,7 +237,7 @@ func GetUser(context *gin.Context) {
 	if userID == user_id_int || (requestingUserObject.Admin) {
 		userObject, err = database.GetAllUserInformationAnyState(user_id_int)
 		if err != nil {
-			log.Println("Failed to get user. Error: " + err.Error())
+			logger.Log.Error("Failed to get user. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user (all)."})
 			context.Abort()
 			return
@@ -245,7 +245,7 @@ func GetUser(context *gin.Context) {
 	} else {
 		userObject, err = database.GetUserInformation(user_id_int)
 		if err != nil {
-			log.Println("Failed to get user. Error: " + err.Error())
+			logger.Log.Error("Failed to get user. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
 			context.Abort()
 			return
@@ -260,7 +260,7 @@ func GetUsers(context *gin.Context) {
 	// Get user ID
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to get user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
@@ -268,7 +268,7 @@ func GetUsers(context *gin.Context) {
 
 	requestingUserObject, err := database.GetUserInformation(userID)
 	if err != nil {
-		log.Println("Failed to get user object. Error: " + err.Error())
+		logger.Log.Error("Failed to get user object. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user object."})
 		context.Abort()
 		return
@@ -280,7 +280,7 @@ func GetUsers(context *gin.Context) {
 	if okay && strings.ToLower(includeDisabled) == "true" && requestingUserObject.Admin == true {
 		users, err = database.GetAllUsers()
 		if err != nil {
-			log.Println("Failed to get all users. Error: " + err.Error())
+			logger.Log.Error("Failed to get all users. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get all users."})
 			context.Abort()
 			return
@@ -288,7 +288,7 @@ func GetUsers(context *gin.Context) {
 	} else {
 		users, err = database.GetEnabledUsers()
 		if err != nil {
-			log.Println("Failed to get enabled users. Error: " + err.Error())
+			logger.Log.Error("Failed to get enabled users. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get enabled users."})
 			context.Abort()
 			return
@@ -300,7 +300,7 @@ func GetUsers(context *gin.Context) {
 		newUsers := []models.User{}
 		notAMemberOfGroupID, err := uuid.Parse(notAMemberOfGroupIDString)
 		if err != nil {
-			log.Println("Failed to parse group ID. Error: " + err.Error())
+			logger.Log.Error("Failed to parse group ID. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
 			context.Abort()
 			return
@@ -309,7 +309,7 @@ func GetUsers(context *gin.Context) {
 		for _, user := range users {
 			member, err := database.VerifyUserMembershipToGroup(user.ID, notAMemberOfGroupID)
 			if err != nil {
-				log.Println("Failed to verify ownership to group. Error: " + err.Error())
+				logger.Log.Error("Failed to verify ownership to group. Error: " + err.Error())
 				context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify ownership to group."})
 				context.Abort()
 				return
@@ -328,7 +328,7 @@ func GetUsers(context *gin.Context) {
 		newUsers := []models.User{}
 		notACollaboratorOfWishlistID, err := uuid.Parse(notACollaboratorOfWishlistString)
 		if err != nil {
-			log.Println("Failed to parse wishlist ID. Error: " + err.Error())
+			logger.Log.Error("Failed to parse wishlist ID. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
 			context.Abort()
 			return
@@ -336,7 +336,7 @@ func GetUsers(context *gin.Context) {
 
 		wishlist, err := database.GetWishlist(notACollaboratorOfWishlistID)
 		if err != nil {
-			log.Println("Failed to get wishlist. Error: " + err.Error())
+			logger.Log.Error("Failed to get wishlist. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist."})
 			context.Abort()
 			return
@@ -344,7 +344,7 @@ func GetUsers(context *gin.Context) {
 
 		wishlistObject, err := ConvertWishlistToWishlistObject(wishlist, nil)
 		if err != nil {
-			log.Println("Failed to convert wishlist to wishlist object. Error: " + err.Error())
+			logger.Log.Error("Failed to convert wishlist to wishlist object. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert wishlist to wishlist object."})
 			context.Abort()
 			return
@@ -387,16 +387,16 @@ func VerifyUser(context *gin.Context) {
 	// Get user ID
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to get user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
 	}
 
 	// Verify if code matches
-	match, err := database.VerifyUserVerfificationCodeMatches(userID, code)
+	match, err := database.VerifyUserVerificationCodeMatches(userID, code)
 	if err != nil {
-		log.Println("Failed to get verification code. Error: " + err.Error())
+		logger.Log.Error("Failed to get verification code. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get verification code."})
 		context.Abort()
 		return
@@ -412,7 +412,7 @@ func VerifyUser(context *gin.Context) {
 	// Set account to verified
 	err = database.SetUserVerification(userID, true)
 	if err != nil {
-		log.Println("Failed to set user verification. Error: " + err.Error())
+		logger.Log.Error("Failed to set user verification. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set user verification."})
 		context.Abort()
 		return
@@ -421,7 +421,7 @@ func VerifyUser(context *gin.Context) {
 	// Get user object
 	user, err := database.GetAllUserInformation(userID)
 	if err != nil {
-		log.Println("Failed to get user details. Error: " + err.Error())
+		logger.Log.Error("Failed to get user details. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details."})
 		context.Abort()
 		return
@@ -430,7 +430,7 @@ func VerifyUser(context *gin.Context) {
 	// Generate new JWT token
 	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, *user.Email, user.ID, user.Admin, *user.Verified)
 	if err != nil {
-		log.Println("Failed to generate JWT token. Error: " + err.Error())
+		logger.Log.Error("Failed to generate JWT token. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT token."})
 		context.Abort()
 		return
@@ -446,7 +446,7 @@ func SendUserVerificationCode(context *gin.Context) {
 	// Get user ID
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to get user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
@@ -455,7 +455,7 @@ func SendUserVerificationCode(context *gin.Context) {
 	// Create a new code
 	_, err = database.GenerateRandomVerificationCodeForUser(userID)
 	if err != nil {
-		log.Println("Failed to generate verification code. Error: " + err.Error())
+		logger.Log.Error("Failed to generate verification code. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate verification code."})
 		context.Abort()
 		return
@@ -464,7 +464,7 @@ func SendUserVerificationCode(context *gin.Context) {
 	// Get user object
 	user, err := database.GetAllUserInformation(userID)
 	if err != nil {
-		log.Println("Failed to get user. Error: " + err.Error())
+		logger.Log.Error("Failed to get user. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
 		context.Abort()
 		return
@@ -473,7 +473,7 @@ func SendUserVerificationCode(context *gin.Context) {
 	// Send new e-mail
 	err = utilities.SendSMTPVerificationEmail(user)
 	if err != nil {
-		log.Println("Failed to send e-mail. Error: " + err.Error())
+		logger.Log.Error("Failed to send e-mail. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send e-mail."})
 		context.Abort()
 		return
@@ -492,7 +492,7 @@ func UpdateUser(context *gin.Context) {
 
 	// Parse creation request
 	if err := context.ShouldBindJSON(&userUpdateRequest); err != nil {
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -504,7 +504,7 @@ func UpdateUser(context *gin.Context) {
 	// Get user ID
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to get user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
@@ -512,7 +512,7 @@ func UpdateUser(context *gin.Context) {
 
 	user, err := database.GetAllUserInformation(userID)
 	if err != nil {
-		log.Println("Failed to get user. Error: " + err.Error())
+		logger.Log.Error("Failed to get user. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
 		context.Abort()
 		return
@@ -520,7 +520,7 @@ func UpdateUser(context *gin.Context) {
 
 	credentialError := user.CheckPassword(userUpdateRequest.PasswordOriginal)
 	if credentialError != nil {
-		log.Println("Invalid credentials.")
+		logger.Log.Error("Invalid credentials.")
 		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
 		context.Abort()
 		return
@@ -536,7 +536,7 @@ func UpdateUser(context *gin.Context) {
 	// Make password is strong enough
 	valid, requirements, err := utilities.ValidatePasswordFormat(userUpdateRequest.Password)
 	if err != nil {
-		log.Println("Failed to verify password quality. Error: " + err.Error())
+		logger.Log.Error("Failed to verify password quality. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify password quality."})
 		context.Abort()
 		return
@@ -549,7 +549,7 @@ func UpdateUser(context *gin.Context) {
 	// Get user object
 	userOriginal, err := database.GetAllUserInformation(userID)
 	if err != nil {
-		log.Println("Failed to get user details. Error: " + err.Error())
+		logger.Log.Error("Failed to get user details. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details."})
 		context.Abort()
 		return
@@ -560,7 +560,7 @@ func UpdateUser(context *gin.Context) {
 		// Verify e-mail is not in use
 		unique_email, err := database.VerifyUniqueUserEmail(userUpdateRequest.Email)
 		if err != nil {
-			log.Println("Failed to verify e-mail. Error: " + err.Error())
+			logger.Log.Error("Failed to verify e-mail. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify e-mail."})
 			context.Abort()
 			return
@@ -573,7 +573,7 @@ func UpdateUser(context *gin.Context) {
 		// Set account to not verified
 		err = database.SetUserVerification(userID, false)
 		if err != nil {
-			log.Println("Failed to change verification. Error: " + err.Error())
+			logger.Log.Error("Failed to change verification. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to change verification."})
 			context.Abort()
 			return
@@ -586,7 +586,7 @@ func UpdateUser(context *gin.Context) {
 	// Hash the selected password
 	if userUpdateRequest.Password != "" {
 		if err := userOriginal.HashPassword(userUpdateRequest.Password); err != nil {
-			log.Println("Failed to hash password. Error: " + err.Error())
+			logger.Log.Error("Failed to hash password. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password."})
 			context.Abort()
 			return
@@ -597,7 +597,7 @@ func UpdateUser(context *gin.Context) {
 	if userUpdateRequest.ProfileImage != "" {
 		err = UpdateUserProfileImage(userOriginal.ID, userUpdateRequest.ProfileImage)
 		if err != nil {
-			log.Println("Failed to update profile image. Error: " + err.Error())
+			logger.Log.Error("Failed to update profile image. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile image."})
 			context.Abort()
 			return
@@ -607,7 +607,7 @@ func UpdateUser(context *gin.Context) {
 	// Update user in database
 	userOriginal, err = database.UpdateUserInDB(userOriginal)
 	if err != nil {
-		log.Println("Failed to update user. Error: " + err.Error())
+		logger.Log.Error("Failed to update user. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user."})
 		context.Abort()
 		return
@@ -616,7 +616,7 @@ func UpdateUser(context *gin.Context) {
 	// Get updated user object
 	user, err = database.GetAllUserInformation(userID)
 	if err != nil {
-		log.Println("Failed to get user. Error: " + err.Error())
+		logger.Log.Error("Failed to get user. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
 		context.Abort()
 		return
@@ -625,7 +625,7 @@ func UpdateUser(context *gin.Context) {
 	// Generate new JWT token
 	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, *user.Email, user.ID, user.Admin, *user.Verified)
 	if err != nil {
-		log.Println("Failed to generate JWT token. Error: " + err.Error())
+		logger.Log.Error("Failed to generate JWT token. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT token."})
 		context.Abort()
 		return
@@ -634,7 +634,7 @@ func UpdateUser(context *gin.Context) {
 	// Get configuration
 	config, err := config.GetConfig()
 	if err != nil {
-		log.Println("Failed to get config. Error: " + err.Error())
+		logger.Log.Error("Failed to get config. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config."})
 		context.Abort()
 		return
@@ -645,7 +645,7 @@ func UpdateUser(context *gin.Context) {
 
 		verificationCode, err := database.GenerateRandomVerificationCodeForUser(userID)
 		if err != nil {
-			log.Println("Failed to generate verification code. Error: " + err.Error())
+			logger.Log.Error("Failed to generate verification code. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate verification code."})
 			context.Abort()
 			return
@@ -653,11 +653,11 @@ func UpdateUser(context *gin.Context) {
 
 		*user.VerificationCode = verificationCode
 
-		log.Println("Sending verification e-mail to new user: " + user.FirstName + " " + user.LastName + ".")
+		logger.Log.Debug("Sending verification e-mail to new user: " + user.FirstName + " " + user.LastName + ".")
 
 		err = utilities.SendSMTPVerificationEmail(user)
 		if err != nil {
-			log.Println("Failed to send e-mail. Error: " + err.Error())
+			logger.Log.Error("Failed to send e-mail. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send e-mail."})
 			context.Abort()
 			return
@@ -674,7 +674,7 @@ func APIResetPassword(context *gin.Context) {
 	// Get configuration
 	config, err := config.GetConfig()
 	if err != nil {
-		log.Println("Failed to get config. Error: " + err.Error())
+		logger.Log.Error("Failed to get config. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config."})
 		context.Abort()
 		return
@@ -700,7 +700,7 @@ func APIResetPassword(context *gin.Context) {
 
 	// Parse reset request
 	if err := context.ShouldBindJSON(&resetRequestVar); err != nil {
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -708,7 +708,7 @@ func APIResetPassword(context *gin.Context) {
 
 	user, err := database.GetUserInformationByEmail(resetRequestVar.Email)
 	if err != nil {
-		log.Println("Failed to find user using email during password reset. Replied with okay 200. Error: " + err.Error())
+		logger.Log.Error("Failed to find user using email during password reset. Replied with okay 200. Error: " + err.Error())
 		context.JSON(http.StatusOK, gin.H{"message": "If the user exists, an email with a password reset has been sent."})
 		context.Abort()
 		return
@@ -716,7 +716,7 @@ func APIResetPassword(context *gin.Context) {
 
 	user, err = database.GetAllUserInformation(user.ID)
 	if err != nil {
-		log.Println("Failed to get all user information. Replied with okay 200. Error: " + err.Error())
+		logger.Log.Error("Failed to get all user information. Replied with okay 200. Error: " + err.Error())
 		context.JSON(http.StatusOK, gin.H{"message": "If the user exists, an email with a password reset has been sent."})
 		context.Abort()
 		return
@@ -724,7 +724,7 @@ func APIResetPassword(context *gin.Context) {
 
 	_, err = database.GenerateRandomResetCodeForUser(user.ID)
 	if err != nil {
-		log.Println("Failed to generate reset code for user during password reset. Error: " + err.Error())
+		logger.Log.Error("Failed to generate reset code for user during password reset. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})
 		context.Abort()
 		return
@@ -732,7 +732,7 @@ func APIResetPassword(context *gin.Context) {
 
 	user, err = database.GetAllUserInformation(user.ID)
 	if err != nil {
-		log.Println("Failed to retrieve data for user during password reset. Error: " + err.Error())
+		logger.Log.Error("Failed to retrieve data for user during password reset. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})
 		context.Abort()
 		return
@@ -740,7 +740,7 @@ func APIResetPassword(context *gin.Context) {
 
 	err = utilities.SendSMTPResetEmail(user)
 	if err != nil {
-		log.Println("Failed to send email to user during password reset. Error: " + err.Error())
+		logger.Log.Error("Failed to send email to user during password reset. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error. Failed to send e-mail."})
 		context.Abort()
 		return
@@ -758,7 +758,7 @@ func APIChangePassword(context *gin.Context) {
 
 	// Parse creation request
 	if err := context.ShouldBindJSON(&userUpdatePasswordRequest); err != nil {
-		log.Println("Failed to parse request. Error: " + err.Error())
+		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -774,7 +774,7 @@ func APIChangePassword(context *gin.Context) {
 	// Make password is strong enough
 	valid, requirements, err := utilities.ValidatePasswordFormat(userUpdatePasswordRequest.Password)
 	if err != nil {
-		log.Println("Failed to verify password quality. Error: " + err.Error())
+		logger.Log.Error("Failed to verify password quality. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify password quality."})
 		context.Abort()
 		return
@@ -787,7 +787,7 @@ func APIChangePassword(context *gin.Context) {
 	// Get user object using reset code
 	user, err = database.GetAllUserInformationByResetCode(userUpdatePasswordRequest.ResetCode)
 	if err != nil {
-		log.Println("Failed to retrieve user using reset code. Error: " + err.Error())
+		logger.Log.Error("Failed to retrieve user using reset code. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Reset code has expired."})
 		context.Abort()
 		return
@@ -804,7 +804,7 @@ func APIChangePassword(context *gin.Context) {
 
 	// Hash the selected password
 	if err = user.HashPassword(userUpdatePasswordRequest.Password); err != nil {
-		log.Println("Failed to hash password. Error: " + err.Error())
+		logger.Log.Error("Failed to hash password. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process password."})
 		context.Abort()
 		return
@@ -813,7 +813,7 @@ func APIChangePassword(context *gin.Context) {
 	// Save new password
 	user, err = database.UpdateUserInDB(user)
 	if err != nil {
-		log.Println("Failed to update user. Error: " + err.Error())
+		logger.Log.Error("Failed to update user. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user."})
 		context.Abort()
 		return
@@ -822,7 +822,7 @@ func APIChangePassword(context *gin.Context) {
 	// Change the reset code
 	_, err = database.GenerateRandomResetCodeForUser(user.ID)
 	if err != nil {
-		log.Println("Failed to generate reset code for user during password reset. Error: " + err.Error())
+		logger.Log.Error("Failed to generate reset code for user during password reset. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})
 		context.Abort()
 		return
@@ -838,7 +838,7 @@ func APIDeleteUser(context *gin.Context) {
 	// Get user ID
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
-		log.Println("Failed to get user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
 		context.Abort()
 		return
@@ -847,7 +847,7 @@ func APIDeleteUser(context *gin.Context) {
 	// Parse group id
 	userToDeleteID, err := uuid.Parse(userIDString)
 	if err != nil {
-		log.Println("Failed to parse user ID. Error: " + err.Error())
+		logger.Log.Error("Failed to parse user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse user ID."})
 		context.Abort()
 		return
@@ -861,7 +861,7 @@ func APIDeleteUser(context *gin.Context) {
 
 	user, err := database.GetAllUserInformation(userToDeleteID)
 	if err != nil {
-		log.Println("Failed to get user object. Error: " + err.Error())
+		logger.Log.Error("Failed to get user object. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user object."})
 		context.Abort()
 		return
@@ -871,7 +871,7 @@ func APIDeleteUser(context *gin.Context) {
 
 	user, err = database.UpdateUserInDB(user)
 	if err != nil {
-		log.Println("Failed to update user object. Error: " + err.Error())
+		logger.Log.Error("Failed to update user object. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user object."})
 		context.Abort()
 		return

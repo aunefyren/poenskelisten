@@ -1,11 +1,11 @@
 package database
 
 import (
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 
@@ -23,7 +23,7 @@ var dbError error
 func Connect(dbType string, timezone string, dbUsername string, dbPassword string, dbIP string, dbPort int, dbName string, dbSSL bool, dbLocation string) error {
 
 	if strings.ToLower(dbType) == "postgres" {
-		log.Println("Attempting to connect to postgres database.")
+		logger.Log.Debug("Attempting to connect to postgres database.")
 
 		var sslString = "disable"
 		if dbSSL {
@@ -38,19 +38,19 @@ func Connect(dbType string, timezone string, dbUsername string, dbPassword strin
 			PrepareStmt: true,
 		})
 		if dbError != nil {
-			log.Println("Failed to connect to database. Error: " + dbError.Error())
+			logger.Log.Error("Failed to connect to database. Error: " + dbError.Error())
 			return errors.New("Failed to connect to database.")
 		}
 	} else if strings.ToLower(dbType) == "sqlite" {
-		log.Println("Attempting to connect to sqlite database.")
+		logger.Log.Debug("Attempting to connect to sqlite database.")
 
 		Instance, dbError = gorm.Open(sqlite.Open(dbLocation), &gorm.Config{})
 		if dbError != nil {
-			log.Println("Failed to connect to database. Error: " + dbError.Error())
+			logger.Log.Error("Failed to connect to database. Error: " + dbError.Error())
 			return errors.New("Failed to connect to database.")
 		}
 	} else if strings.ToLower(dbType) == "mysql" {
-		log.Println("Attempting to connect to mysql database.")
+		logger.Log.Debug("Attempting to connect to mysql database.")
 
 		connStrDb := dbUsername + ":" + dbPassword + "@tcp(" + dbIP + ":" + strconv.Itoa(dbPort) + ")/" + dbName + "?parseTime=True&loc=Local&charset=utf8mb4"
 
@@ -69,7 +69,7 @@ func Connect(dbType string, timezone string, dbUsername string, dbPassword strin
 					}
 				}
 			} else {
-				log.Println("Failed to connect to database. Error: " + dbError.Error())
+				logger.Log.Error("Failed to connect to database. Error: " + dbError.Error())
 				return errors.New("Failed to connect to database.")
 			}
 		}
@@ -107,7 +107,7 @@ func Migrate() {
 	Instance.AutoMigrate(&models.Wish{})
 	Instance.AutoMigrate(&models.WishClaim{})
 	Instance.AutoMigrate(&models.News{})
-	log.Println("Database Migration Completed!")
+	logger.Log.Debug("Database migration completed.")
 }
 
 // Generate a random invite code an return ut
@@ -177,7 +177,7 @@ func VerifyUserHasVerificationCode(userID uuid.UUID) (bool, error) {
 }
 
 // Verify if user has a verification code set
-func VerifyUserVerfificationCodeMatches(userID uuid.UUID, verificationCode string) (bool, error) {
+func VerifyUserVerificationCodeMatches(userID uuid.UUID, verificationCode string) (bool, error) {
 
 	var user models.User
 
