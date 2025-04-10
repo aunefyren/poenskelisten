@@ -57,8 +57,8 @@ function load_page(result) {
 
                     <div class="module">
 
-                        <div id="groups-title" class="title">
-                            Groups:
+                        <div id="groups-title" class="title-two">
+                            My Groups:
                         </div>
 
                         <div id="groups-box" class="groups">

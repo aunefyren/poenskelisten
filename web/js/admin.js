@@ -49,12 +49,12 @@ function load_page(result) {
             
             <div class="server-info" id="server-info">
                 <h3 id="server-info-title">Server info:</h3>
-                <p id="server-poenskelisten-version-title" style="">Version: <a id="server-poenskelisten-version">...</a></p>
-                <p id="server-poenskelisten-port-title" style="">Port: <a id="server-poenskelisten-port">...</a></p>
-                <p id="server-poenskelisten-database-title" style="">Database: <a id="server-poenskelisten-database">...</a></p>
-                <p id="server-poenskelisten-url-title" style="">External URL: <a id="server-poenskelisten-url">...</a></p>
-                <p id="server-timezone-title" style="">Timezone: <a id="server-timezone">...</a></p>
-                <p id="server-poenskelisten-loglevel-title" style="">Log level: <a id="server-poenskelisten-loglevel">...</a></p>
+                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-version-title">Version:</div><div class="server-info-value" id="server-poenskelisten-version">...</div></div>
+                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-port-title">Port:</div><div class="server-info-value" id="server-poenskelisten-port">...</div></div>
+                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-database-title">Database:</div><div class="server-info-value" id="server-poenskelisten-database">...</div></div>
+                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-url-title">External URL:</div><div class="server-info-value" id="server-poenskelisten-url">...</div></div>
+                <div class="server-info-line"><div class="server-info-title" id="server-timezone-title">Timezone:</div><div class="server-info-value" id="server-timezone">...</div></div>
+                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-loglevel-title">Log level:</div><div class="server-info-value" id="server-poenskelisten-loglevel">...</div></div>
             </div>
 
             <div class="invites" id="invites">
