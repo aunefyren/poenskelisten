@@ -105,8 +105,8 @@ func CheckIfWishImageExists(wishID uuid.UUID) (bool, error) {
 	var filePath = wish_image_path + "/" + wishID.String() + ".jpg"
 
 	_, err := LoadImageFile(filePath)
-
 	if err != nil {
+		logger.Log.Trace("Failed to load wish image. Assuming it is because it does not exist.")
 		return false, nil
 	}
 
@@ -410,6 +410,27 @@ func SaveWishImage(wishID uuid.UUID, base64String string) error {
 	if err != nil {
 		logger.Log.Error("Failed to save image to disk. Returning. Error: " + err.Error())
 		return errors.New("Failed to save image to disk.")
+	}
+
+	return nil
+}
+
+func DeleteWishImage(wishID uuid.UUID) error {
+	exists, err := CheckIfWishImageExists(wishID)
+	if err != nil {
+		logger.Log.Error("Failed to check if image exists. Returning. Error: " + err.Error())
+		return errors.New("Failed to check if image exists. Returning.")
+	} else if !exists {
+		logger.Log.Debug("Requested wish image deletion does not exist. Returning...")
+		return nil
+	}
+
+	var filePath = wish_image_path + "/" + wishID.String() + ".jpg"
+
+	err = os.Remove(filePath)
+	if err != nil {
+		logger.Log.Error("Failed to delete requested wish image. Error: " + err.Error())
+		return errors.New("Failed to delete requested wish image.")
 	}
 
 	return nil

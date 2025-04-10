@@ -81,6 +81,7 @@ function editWish(wishID, wishlistID, groupID, userID) {
 
 function editWishTwo(wishID, wishlistID, groupID, userID, wishObjectBase64) {
     var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
+    wishObject.image_delete = false;
     
     var html = '';
     
@@ -150,22 +151,103 @@ function editWishFour(wishID, wishlistID, groupID, userID, wishObjectBase64) {
     }
 
     wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
+
+    var imageHTML = '';
+    var deleteButtonHTML = 'clickable button-grouping-part';
+    var deleteButtonInputHTML = 'delete'
+    if(wishObject.image) {
+        imageHTML += `
+            <div class="wish-image-edit">
+                <img id="modal-img" class="wish-image-edit-img" src="/assets/loading.gif">
+            </div>
+        `
+    } else {
+        deleteButtonHTML = 'button-grouping-part-disabled unselectable'
+        deleteButtonInputHTML = ''
+    }
+
     var html = '';
-    
     html += `
         <div class="profile-icon clickable top-left-button" onclick="editWishThree('${wishID}', '${wishlistID}', '${groupID}', '${userID}', '${wishObjectBase64}');" title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
+        <div id="wishlists-title" class="title-two" style="margin-bottom: 0.25em;">
+            Image:
+        </div>
+
         <form action="" onsubmit="event.preventDefault(); editWishFive('${wishID}', '${userID}', '${wishlistID}', '${groupID}', '${wishObjectBase64}');">
-            <label id="form-input-icon" for="wish_image" style="">Replace optional image:</label>
-            <input type="file" name="wish_image" id="wish_image" placeholder="" value="" accept="image/png, image/jpeg" />
+            ${imageHTML}
+
+            <div class="button-grouping" id="image-button-grouping">
+                <div id="button-grouping-part-leave" class="clickable button-grouping-part button-grouping-part-border button-grouping-part-selected" onclick="toggleEditWishImage('leave')">Leave</div>
+                <div id="button-grouping-part-replace" class="clickable button-grouping-part button-grouping-part-border" onclick="toggleEditWishImage('replace')">Replace</div>
+                <div id="button-grouping-part-delete" class="${deleteButtonHTML}" onclick="toggleEditWishImage('${deleteButtonInputHTML}')">Delete</div>
+            </div>
+
+            <div class="form-input-wrapper" id="edit-wish-replace-image" style="display: none;">
+                <label id="form-input-icon" for="wish_image" style="">Replace optional image:</label>
+                <input type="file" name="wish_image" id="wish_image" placeholder="" value="" accept="image/png, image/jpeg" />
+            </div>
+
+            <input type="hidden" id="image_delete" value="false">
             
             <button id="register-button" type="submit" href="/">Save wish</button>
         </form>
     `;
 
     toggleModal(html);
+
+    if(wishObject.image) {
+        GetWishImage(wishID);
+    }
+}
+
+function toggleEditWishImage(buttonName) {
+    switch(buttonName) {
+        case 'replace':
+            formElement = document.getElementById('edit-wish-replace-image')
+            formDisplay = formElement.style.display
+
+            if(formDisplay == 'none') {
+                formElement.style.display = 'flex'
+            } else {
+                formElement.style.display = 'none'
+            }
+            document.getElementById('image_delete').value = 'false'
+            document.getElementById('wish_image').required = true
+
+            document.getElementById('button-grouping-part-leave').classList.remove('button-grouping-part-selected')
+            document.getElementById('button-grouping-part-replace').classList.add('button-grouping-part-selected')
+            document.getElementById('button-grouping-part-delete').classList.remove('button-grouping-part-selected')
+            break;
+        case 'delete':
+            document.getElementById('edit-wish-replace-image').style.display = 'none'
+            document.getElementById('image_delete').value = 'true'
+            document.getElementById('wish_image').value = ""
+            document.getElementById('wish_image').required = false
+
+            document.getElementById('button-grouping-part-leave').classList.remove('button-grouping-part-selected')
+            document.getElementById('button-grouping-part-replace').classList.remove('button-grouping-part-selected')
+            document.getElementById('button-grouping-part-delete').classList.add('button-grouping-part-selected')
+            break;
+        case 'leave':
+            document.getElementById('edit-wish-replace-image').style.display = 'none'
+            document.getElementById('image_delete').value = 'false'
+            document.getElementById('wish_image').value = ""
+            document.getElementById('wish_image').required = false
+
+            document.getElementById('button-grouping-part-leave').classList.add('button-grouping-part-selected')
+            document.getElementById('button-grouping-part-replace').classList.remove('button-grouping-part-selected')
+            document.getElementById('button-grouping-part-delete').classList.remove('button-grouping-part-selected')
+            break;
+        default:
+            console.log('No button case hit. Input: ' + buttonName)
+    }
+    
+
+    
+
 }
 
 function editWishFive(wishID, userID, wishlistID, groupID, wishObjectBase64) {
@@ -176,6 +258,12 @@ function editWishFive(wishID, userID, wishlistID, groupID, wishObjectBase64) {
     }
 
     var wish_image = document.getElementById('wish_image').files[0];
+    var imageDeleteString = document.getElementById('image_delete').value;
+    var imageDelete = false
+
+    if(imageDeleteString == 'true') {
+        imageDelete = true;
+    }
 
     if(wish_image) {
         if(wish_image.size > 10000000) {
@@ -194,7 +282,8 @@ function editWishFive(wishID, userID, wishlistID, groupID, wishObjectBase64) {
                 "note" : wishObject.note,
                 "url": wishObject.url,
                 "price": wishObject.price,
-                "image_data": result
+                "image_data": result,
+                "image_delete": imageDelete
             };
 
             var form_data = JSON.stringify(form_obj);
@@ -207,7 +296,8 @@ function editWishFive(wishID, userID, wishlistID, groupID, wishObjectBase64) {
             "note" : wishObject.note,
             "url": wishObject.url,
             "price": wishObject.price,
-            "image_data": ""
+            "image_data": "",
+            "image_delete": imageDelete
         };
 
         var form_data = JSON.stringify(form_obj);
@@ -335,7 +425,7 @@ function createWishThree(wishlistID, userID, wishObjectBase64) {
         </div>
 
         <form action="" onsubmit="event.preventDefault(); createWishFour('${wishlistID}', '${userID}', '${wishObjectBase64}');">
-            <label id="form-input-icon" for="wish_image" style="">Replace optional image:</label>
+            <label id="form-input-icon" for="wish_image" style="">Add optional image:</label>
             <input type="file" name="wish_image" id="wish_image" placeholder="" value="${wishObject.image}" accept="image/png, image/jpeg" />
             
             <button id="register-button" type="submit" href="/">Create wish</button>
@@ -416,4 +506,40 @@ function createWishFive(form_data, wishlistID, userID) {
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
     return false;
+}
+
+function GetWishImage(wishID) {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+
+                // Disable modal
+                document.getElementById("myModal").style.display = "none";
+
+                return;
+            }
+    
+            if(result.error) {
+                error(result.error);
+                document.getElementById("myModal").style.display = "none";
+            } else {
+                PlaceWishImageInModal(result.image)
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("get", api_url + "both/wishes/" + wishID + "/image");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return;
+}
+
+function PlaceWishImageInModal(imageBase64) {
+    document.getElementById("modal-img").src = imageBase64
 }

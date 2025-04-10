@@ -1179,10 +1179,11 @@ textarea {
   overflow: hidden;
   box-sizing: inherit;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   flex-wrap: wrap;
+  flex-direction: column;
   align-content: center;
-  justify-content: center;
+  justify-content: start;
   align-items: center;
 }
 
@@ -1298,3 +1299,74 @@ textarea {
   width: -webkit-fill-available;
   width: -moz-available;
 }
+
+.wish-image-edit{
+  margin-bottom: 0.5em;
+  width: 80%;
+  height: 10em;
+  overflow: hidden;
+  box-sizing: inherit;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  flex-direction: column;
+  align-content: center;
+  justify-content: start;
+  align-items: center;
+}
+
+.wish-image-edit-img {
+  height: 100% !important;
+}
+
+.button-grouping {
+  overflow: hidden;
+  box-sizing: inherit;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  flex-direction: row;
+  align-content: center;
+  justify-content: start;
+  align-items: center;
+  border: 0.15em solid var(--darkblue);
+  background-color: var(--darkblue);
+  border-radius: 1em;
+}
+
+.button-grouping-part {
+  padding: 0.25em 0.5em;
+  background-color: var(--lightblue);
+  color: var(--white)
+}
+
+.button-grouping-part-border {
+  border-right: 0.15em solid var(--darkblue);
+}
+
+.button-grouping-part-selected {
+  background-color: var(--mediumblue);
+}
+
+.button-grouping-part-disabled {
+  padding: 0.25em 0.5em;
+  background-color: var(--lightblue);
+  color: var(--white)
+}
+
+.form-input-wrapper {
+  overflow: hidden;
+  box-sizing: inherit;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  flex-direction: row;
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  margin-top: 1em;
+}
+

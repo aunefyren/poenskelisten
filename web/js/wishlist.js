@@ -636,55 +636,6 @@ function toggle_wish_modal(wishID) {
     GetWishImage(wishID);
 }
 
-function GetWishImage(wishID) {
-
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-
-                // Disable modal
-                document.getElementById("myModal").style.display = "none";
-
-                return;
-            }
-            
-            if(result.error) {
-
-                error(result.error);
-                document.getElementById("myModal").style.display = "none";
-
-            } else {
-
-                PlaceWishImageInModal(result.image)
-                
-            }
-
-        } else {
-            // info("Loading week...");
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "both/wishes/" + wishID + "/image");
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send();
-
-    return;
-
-}
-
-function PlaceWishImageInModal(imageBase64) {
-    
-    document.getElementById("modal-img").src = imageBase64
-
-}
-
 function GetWishImageThumbail(wishID) {
 
     var xhttp = new XMLHttpRequest();
