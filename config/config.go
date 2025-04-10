@@ -56,7 +56,7 @@ func GetConfig() (config models.ConfigStruct, err error) {
 		}
 		config.PrivateKey = newKey
 		anythingChanged = true
-		logger.Log.Info("New private key set.")
+		fmt.Println("New private key set.")
 	}
 
 	if config.PoenskelistenName == "" {
@@ -116,7 +116,7 @@ func GetConfig() (config models.ConfigStruct, err error) {
 	} else {
 		_, err := logrus.ParseLevel(config.PoenskelistenLogLevel)
 		if err != nil {
-			logger.Log.Error("Failed to load log level: %v", err)
+			fmt.Println("Failed to load log level: %v", err)
 			level := logrus.InfoLevel
 			config.PoenskelistenLogLevel = level.String()
 			anythingChanged = true
