@@ -532,21 +532,6 @@ button:disabled {
   filter: invert(100%);
 }
 
-.group-wrapper, .wishlist-wrapper {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  align-content: center;
-  margin: 1em 0.5em;
-  border: 0.15em solid var(--darkblue);
-  border-radius: 1em;
-  background-color: var(--white);
-  transition: 2s;
-  overflow: hidden;
-}
-
 .wish-wrapper, .group-wrapper, .wishlist-wrapper {
   display: flex;
   flex-direction: row;
@@ -554,7 +539,7 @@ button:disabled {
   justify-content: space-between;
   align-items: center;
   align-content: center;
-  margin: 2em 0;
+  margin: 0.5em 0 2em 0;
   border: 0.15em solid var(--darkblue);
   border-radius: 1em;
   background-color: var(--eggshell);
@@ -890,12 +875,12 @@ hr {
   flex-direction: column;
   flex-wrap: wrap;
   align-content: center;
-  justify-content: center;
+  justify-content: start;
   align-items: center;
   box-sizing: inherit;
   border-radius: 0.5em;
   background-color: var(--eggshell);
-  overflow: hidden;
+  overflow: auto;
 }
 
 /* Caption of Modal Image */
@@ -1150,7 +1135,7 @@ textarea {
   flex-direction: column;
   flex-wrap: wrap;
   align-content: flex-start;
-  justify-content: space-between;
+  justify-content: center;
   align-items: flex-start;
   box-sizing: content-box;
   margin: 0;
