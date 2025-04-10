@@ -514,10 +514,12 @@ button:disabled {
   align-items: center;
   align-content: center;
   padding: 0.12em;
+  box-sizing: border-box;
 }
 
 .icon-border {
   border: 0.15em solid var(--black);
+  box-sizing: border-box;
 }
 
 .icon-background {
@@ -1139,7 +1141,7 @@ textarea {
   align-items: flex-start;
   box-sizing: content-box;
   margin: 0;
-  padding: 0.5em;
+  padding: 0.5em 0.5em 0 0.5em;
 }
 
 .top-right-button {
@@ -1173,24 +1175,25 @@ textarea {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
-  height: 100%;
-  height: -webkit-fill-available;
-  height: -moz-available;
+  max-height: 100%;
+  max-width: 100%;
   overflow: hidden;
   box-sizing: inherit;
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
+  flex-direction: column;
+  flex-wrap: nowrap;
   flex-direction: column;
   align-content: center;
-  justify-content: start;
+  justify-content: center;
   align-items: center;
+  margin: auto;
 }
 
 #modal-img {
   border-radius: 0.5em;
   max-width: 100%;
   height: 100%;
+  width: auto;
   box-sizing: inherit;
 }
 
@@ -1301,7 +1304,7 @@ textarea {
 }
 
 .wish-image-edit{
-  margin-bottom: 0.5em;
+  margin-bottom: 1em;
   width: 80%;
   height: 10em;
   overflow: hidden;
@@ -1370,3 +1373,35 @@ textarea {
   margin-top: 1em;
 }
 
+.server-info-title {
+  margin-right: 0.25em;
+}
+
+.server-info-value {
+  margin: 0;
+  padding: 0.25em 1em;
+  background-color: var(--blue);
+  border-radius: 1em;
+  font-size: 0.75em;
+  color: var(--white);
+  text-align: center;
+  width: min-content;
+  font-weight: 200;
+  white-space: nowrap;
+}
+
+.server-info-line {
+  overflow: hidden;
+  box-sizing: inherit;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  flex-direction: row;
+  align-content: center;
+  justify-content: start;
+  align-items: center;
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  margin: 0.25em 0;
+}
