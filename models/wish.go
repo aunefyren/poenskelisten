@@ -24,11 +24,12 @@ type WishCreationRequest struct {
 }
 
 type WishUpdateRequest struct {
-	Name  string   `json:"name"`
-	Note  string   `json:"note"`
-	Price *float64 `json:"price"`
-	URL   string   `json:"url"`
-	Image string   `json:"image_data"`
+	Name        string   `json:"name"`
+	Note        string   `json:"note"`
+	Price       *float64 `json:"price"`
+	URL         string   `json:"url"`
+	Image       string   `json:"image_data"`
+	ImageDelete bool     `json:"image_delete"`
 }
 
 type WishObject struct {
