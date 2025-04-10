@@ -80,27 +80,18 @@ function load_page(result) {
 
                     <div class="module">
 
-                        <div id="wishlists-title" class="title">
+                        <div id="wishlists-title" class="title-two">
                             Wishlists:
+                        </div>
+
+                        <div class="profile-icon top-left-button" style="">
+                            <input class="clickable" onclick="toggleExpiredWishlists()" title="Toggle showing expired wishlists" style="" type="checkbox" id="toggle_expired_wishlists" name="toggle_expired_wishlists" value="confirm">
+                            <label for="toggle_expired_wishlists" style="" class="clickable">Show expired wishlists</label><br>
                         </div>
 
                         <div id="wishlists-box" class="wishlists">
                             <div class="loading-icon-wrapper" id="loading-icon-wrapper">
                                 <img class="loading-icon" src="/assets/loading.svg">
-                            </div>
-                        </div>
-
-                        <div id="wishlists-box-expired-wrapper" class="wishlist-wrapper wishlist-expired" style="display: none;">
-                            <div class="wishlist-title" style="margin: 0.5em 0 !important;">
-                                <div class="profile-icon">
-                                    <img class="icon-img " src="/assets/list.svg">
-                                </div>
-                                Expired wishlists
-                            </div>
-                            <div class="profile-icon clickable" onclick="toggle_expired_wishlists()" title="Expandable">
-                                <img id="wishlist_expired_arrow" class="icon-img " src="/assets/chevron-right.svg">
-                            </div>
-                            <div id="wishlists-box-expired" class="wishlists collapsed" style="display:none;">
                             </div>
                         </div>
 
@@ -210,7 +201,7 @@ function get_wishlists(group_id, user_id){
                 clearResponse();
                 wishlists = result.wishlists;
                 console.log(result);
-                placeWishlists(wishlists, user_id, group_id);
+                placeWishlists(wishlists, user_id, group_id, false);
 
             }
 
@@ -226,10 +217,9 @@ function get_wishlists(group_id, user_id){
     return false;
 }
 
-function placeWishlists(wishlists_array, user_id, group_id) {
+function placeWishlists(wishlists_array, user_id, group_id, showExpired) {
 
     var html_regular = ''
-    var html_expired = ''
     var html = ''
     var wishlists_array_length = wishlists_array.length
     var wishlists_expired_length = 0
@@ -237,28 +227,32 @@ function placeWishlists(wishlists_array, user_id, group_id) {
     for(var i = 0; i < wishlists_array.length; i++) {
 
         var expired = false;
+        var expiredHTMLClass = ''
+        var wishlistDisplayStyle = 'flex'
         html = ''
 
         try {
             var expiration = new Date(Date.parse(wishlists_array[i].date));
             var now = new Date
-            console.log("Times: " + expiration.toISOString() + " & " + now.toISOString())
             if(expiration.getTime() < now.getTime() && wishlists_array[i].expires) {
-                console.log("Expired wishlist.")
                 expired = true;
+                expiredHTMLClass = 'wishlist-expired'
+
                 wishlists_array_length -= 1
                 wishlists_expired_length += 1
-            } else {
-                console.log("Not skipping wishlist.")
             }
         } catch(err) {
             console.log("Failed to parse datetime. Error: " + err)
         }
 
+        if(expired && !showExpired) {
+            wishlistDisplayStyle = 'none';
+        }
+
         var wishUpdatedAt = new Date(Date.parse(wishlists_array[i].wish_updated_at));
         var wishUpdatedAtString = GetDateString(wishUpdatedAt)
 
-        html += `<div class="wishlist-wrapper" id="wishlistWrapper-${wishlists_array[i].id}">`
+        html += `<div class="wishlist-wrapper ${expiredHTMLClass}" style="display: ${wishlistDisplayStyle}" id="wishlistWrapper-${wishlists_array[i].id}">`
 
         html += '<div class="wishlist hoverable-light">'
 
@@ -326,12 +320,7 @@ function placeWishlists(wishlists_array, user_id, group_id) {
         html += '</div>'
         html += '</div>'
 
-        if(expired) {
-            html_expired += html;
-        } else {
-            html_regular += html;
-        }
-
+        html_regular += html;
     }
 
     if(wishlists_array_length < 1) {
@@ -344,37 +333,11 @@ function placeWishlists(wishlists_array, user_id, group_id) {
         }
     }
 
-    if(wishlists_expired_length > 0) {
-        document.getElementById("wishlists-box-expired-wrapper").style.display = "flex"
-    } else {
-        document.getElementById("wishlists-box-expired-wrapper").style.display = "none"
-    }
-
     wishlist_object = document.getElementById("wishlists-box")
     wishlist_object.innerHTML = html_regular
 
-    wishlist_object_expired = document.getElementById("wishlists-box-expired")
-    wishlist_object_expired.innerHTML = html_expired
-
     for(var i = 0; i < wishlists_array.length; i++) {
         GetProfileImage(wishlists_array[i].owner.id, `group_owner_image_${wishlists_array[i].owner.id}_${wishlists_array[i].id}`)
-    }
-}
-
-function toggle_expired_wishlists() {
-    wishlist_expired = document.getElementById("wishlists-box-expired");
-    wishlist_expired_arrow = document.getElementById("wishlist_expired_arrow");
-
-    if(wishlist_expired.classList.contains("collapsed")) {
-        wishlist_expired.classList.remove("collapsed")
-        wishlist_expired.classList.add("expanded")
-        wishlist_expired.style.display = "inline-block"
-        wishlist_expired_arrow.src = "/assets/chevron-down.svg"
-    } else {
-        wishlist_expired.classList.remove("expanded")
-        wishlist_expired.classList.add("collapsed")
-        wishlist_expired.style.display = "none"
-        wishlist_expired_arrow.src = "/assets/chevron-right.svg"
     }
 }
 
@@ -500,21 +463,8 @@ function placeWishlist(wishlistOject, publicURL) {
     var wishlistHTML = wishlist.outerHTML
     wishlist.remove()
     
-    if(wishlistOject.expires && wishlistOject.date) {
-        var expiration = new Date(Date.parse(wishlistOject.date));
-        var now = new Date
-
-        if(expiration.getTime() < now.getTime()) {
-            var wishlists = document.getElementById(`wishlists-box-expired`)
-            wishlists.innerHTML = wishlistHTML + wishlists.innerHTML
-        } else {
-            var wishlists = document.getElementById(`wishlists-box`)
-            wishlists.innerHTML = wishlistHTML + wishlists.innerHTML
-        }
-    } else {
-        var wishlists = document.getElementById(`wishlists-box`)
-        wishlists.innerHTML = wishlistHTML + wishlists.innerHTML
-    }
+    var wishlists = document.getElementById(`wishlists-box`)
+    wishlists.innerHTML = wishlistHTML + wishlists.innerHTML
 }
 
 function removeWishlist(wishlistID, userID) {
@@ -523,4 +473,19 @@ function removeWishlist(wishlistID, userID) {
 
 function removeGroup(groupID, userID) {
     window.location.href = "/groups"
+}
+
+function toggleExpiredWishlists() {
+    toggleButtonState = document.getElementById('toggle_expired_wishlists').checked
+    wishlistElements = document.getElementById('wishlists-box').children
+
+    for(var i = 0; i < wishlistElements.length; i++) {
+        if(wishlistElements[i].classList.contains('wishlist-expired')) {
+            if(toggleButtonState) {
+                wishlistElements[i].style.display = 'flex'
+            } else {
+                wishlistElements[i].style.display = 'none'
+            }
+        }
+    }
 }

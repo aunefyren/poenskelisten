@@ -62,13 +62,15 @@ function load_page(result) {
                                 <div class="blue-label clickable" onclick="location.href='/groups'">Groups</div>
                             </div>
 
-                            <div id="wishlists-title" class="title-two">
-                                Recently updated wishlists:
-                            </div>
+                            <div id="wishlists-front-page">
+                                <div id="wishlists-title" class="title-two">
+                                    Recently updated wishlists:
+                                </div>
 
-                            <div id="wishlists-box" class="wishlists-minimal">
-                                <div class="loading-icon-wrapper" id="loading-icon-wrapper">
-                                    <img class="loading-icon" src="/assets/loading.svg">
+                                <div id="wishlists-box" class="wishlists-minimal">
+                                    <div class="loading-icon-wrapper" id="loading-icon-wrapper">
+                                        <img class="loading-icon" src="/assets/loading.svg">
+                                    </div>
                                 </div>
                             </div>
 
@@ -315,7 +317,12 @@ function getWishlists(){
             } else {
                 clearResponse();
                 wishlists = result.wishlists;
-                placeWishlists(wishlists);
+
+                if(wishlists.length > 0) {
+                    placeWishlists(wishlists);
+                } else {
+                    document.getElementById('wishlists-front-page').style.display = 'none'
+                }
             }
         }
     };
