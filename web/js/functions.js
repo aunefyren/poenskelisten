@@ -237,11 +237,13 @@ function toggle_navbar() {
         x.classList.add("responsive");
         x.classList.remove("unresponsive");
         x.classList.remove("unresponsive");
+        freezerScrolling(true);
     } else {
         x.classList.add("unresponsive");
         x.classList.add("unresponsive");
         x.classList.remove("responsive");
         x.classList.remove("responsive");
+        freezerScrolling(false);
     }
 }
 
@@ -408,17 +410,25 @@ function toggleModal(modalHTML) {
             x.classList.add("open");
             x.classList.remove("closed");
             x.style.display = "block";
-            document.getElementsByTagName("BODY")[0].style.overflow = 'hidden';
+            freezerScrolling(true);
         } else if(!modalHTML){
             x.classList.add("closed");
             x.classList.remove("open");
             x.style.display = "none";
-            document.getElementsByTagName("BODY")[0].style.overflow = 'scroll';
+            freezerScrolling(false);
         }
         
         if(modalHTML) {
             document.getElementById("modalContent").innerHTML = modalHTML
         }
+    } else {
+        freezerScrolling(false);
+    }
+}
+
+function freezerScrolling(freeze) {
+    if(freeze) {
+        document.getElementsByTagName("BODY")[0].style.overflow = 'hidden';
     } else {
         document.getElementsByTagName("BODY")[0].style.overflow = 'scroll';
     }

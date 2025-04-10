@@ -911,7 +911,7 @@ func APIUpdateWish(context *gin.Context) {
 
 	// Create wish request
 	var wishIDString = context.Param("wish_id")
-	var wish models.WishCreationRequest
+	var wish models.WishUpdateRequest
 
 	// Bind the incoming request body to the model
 	if err := context.ShouldBindJSON(&wish); err != nil {
@@ -1065,11 +1065,19 @@ func APIUpdateWish(context *gin.Context) {
 	}
 
 	// Save image
-	if wish.Image != "" {
+	if wish.Image != "" && !wish.ImageDelete {
 		err = SaveWishImage(wishID, wish.Image)
 		if err != nil {
 			logger.Log.Error("Failed to save wish image. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save wish image."})
+			context.Abort()
+			return
+		}
+	} else if wish.ImageDelete {
+		err = DeleteWishImage(wishID)
+		if err != nil {
+			logger.Log.Error("Failed to delete wish image. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deletes wish image."})
 			context.Abort()
 			return
 		}
