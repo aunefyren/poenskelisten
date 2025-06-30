@@ -213,6 +213,7 @@ func GetOwnedWishlists(UserID uuid.UUID) (wishlists []models.Wishlist, err error
 	wishlists = []models.Wishlist{}
 
 	wishlistRecords := Instance.
+		Distinct().
 		Where(&models.Wishlist{Enabled: true, OwnerID: UserID}).
 		Joins("JOIN users ON users.id = wishlists.owner_id").
 		Where("users.enabled = ?", true).

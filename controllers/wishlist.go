@@ -452,6 +452,8 @@ func GetWishlists(context *gin.Context) {
 		}
 	}
 
+	logger.Log.Debug("Wishlists found: " + strconv.Itoa(len(wishlistObjects)))
+
 	ownedString, ownedOkay := context.GetQuery("owned")
 	if ownedOkay && ownedString == "true" {
 		newWishlistList := []models.WishlistUser{}
@@ -572,31 +574,58 @@ func GetAllWishlistObjects(UserID uuid.UUID) (wishlistObjects []models.WishlistU
 	err = nil
 	wishlistObjects = []models.WishlistUser{}
 	wishlists := []models.Wishlist{}
-	/*
-		wishlists, err := database.GetOwnedWishlists(UserID)
-		if err != nil {
-			logger.Log.Error("Failed to get owned wishlists for user '" + UserID.String() + "'. Returning. Error: " + err.Error())
-			return wishlistObjects, errors.New("Failed to get owned wishlists for user '" + UserID.String() + "'.")
-		}
 
-		wishlistsThroughCollaborations, err := database.GetWishlistsByUserIDThroughWishlistCollaborations(UserID)
-		if err != nil {
-			logger.Log.Error("Failed to get collaboration wishlists for user '" + UserID.String() + "'. Returning. Error: " + err.Error())
-			return wishlistObjects, errors.New("Failed to get collaboration wishlists for user '" + UserID.String() + "'.")
-		}
+	// Wishlists you are an owner of
+	wishlists, err = database.GetOwnedWishlists(UserID)
+	if err != nil {
+		logger.Log.Error("Failed to get owned wishlists for user '" + UserID.String() + "'. Returning. Error: " + err.Error())
+		return wishlistObjects, errors.New("Failed to get owned wishlists for user '" + UserID.String() + "'.")
+	}
 
-		for _, wishlistThroughCollaboration := range wishlistsThroughCollaborations {
+	logger.Log.Debug("Owned wishlists found: " + strconv.Itoa(len(wishlists)))
+
+	// Wishlists you are a collaborator on
+	wishlistsThroughCollaborations, err := database.GetWishlistsByUserIDThroughWishlistCollaborations(UserID)
+	if err != nil {
+		logger.Log.Error("Failed to get collaboration wishlists for user '" + UserID.String() + "'. Returning. Error: " + err.Error())
+		return wishlistObjects, errors.New("Failed to get collaboration wishlists for user '" + UserID.String() + "'.")
+	}
+
+	logger.Log.Debug("Wishlist collaborations found: " + strconv.Itoa(len(wishlistsThroughCollaborations)))
+
+	for _, wishlistThroughCollaboration := range wishlistsThroughCollaborations {
+		found := false
+		for _, wishlist := range wishlists {
+			if wishlist.ID == wishlistThroughCollaboration.ID {
+				found = true
+				break
+			}
+		}
+		if !found {
 			wishlists = append(wishlists, wishlistThroughCollaboration)
-		}*/
+		}
+	}
 
+	// Wishlists you can see through group memberships
 	wishlistsThroughMemberships, err := database.GetWishlistsByUserIDThroughWishlistMemberships(UserID)
 	if err != nil {
 		logger.Log.Error("Failed to get membership wishlists for user '" + UserID.String() + "'. Returning. Error: " + err.Error())
 		return wishlistObjects, errors.New("Failed to get membership wishlists for user '" + UserID.String() + "'.")
 	}
 
-	for _, wishlistThroughMembership := range wishlistsThroughMemberships {
-		wishlists = append(wishlists, wishlistThroughMembership)
+	logger.Log.Debug("Wishlist memberships found: " + strconv.Itoa(len(wishlistsThroughMemberships)))
+
+	for _, wishlistsThroughMembership := range wishlistsThroughMemberships {
+		found := false
+		for _, wishlist := range wishlists {
+			if wishlist.ID == wishlistsThroughMembership.ID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			wishlists = append(wishlists, wishlistsThroughMembership)
+		}
 	}
 
 	wishlistObjects, err = ConvertWishlistsToWishlistObjects(wishlists, &UserID)
