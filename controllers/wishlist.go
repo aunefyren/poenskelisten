@@ -716,10 +716,10 @@ func JoinWishlist(context *gin.Context) {
 		wishlistmembershipdb.ID = uuid.New()
 
 		// Add group membership to database
-		record := database.Instance.Create(&wishlistmembershipdb)
-		if record.Error != nil {
-			logger.Log.Error("Failed to create membership. Error: " + err.Error())
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create membership."})
+		_, err = database.CreateWishlistMembershipInDB(wishlistmembershipdb)
+		if err != nil {
+			logger.Log.Error("Failed to create wishlist membership. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create wishlist membership."})
 			context.Abort()
 			return
 		}

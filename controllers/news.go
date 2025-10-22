@@ -175,8 +175,8 @@ func RegisterNewsPost(context *gin.Context) {
 	news.ID = uuid.New()
 
 	// Create the news post in the database
-	newsRecord := database.Instance.Create(&news)
-	if newsRecord.Error != nil {
+	_, err = database.CreateNewsPostInDB(news)
+	if err != nil {
 		// If there is an error creating the news, return an Internal Server Error response
 		logger.Log.Error("Failed to create news post. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create news post."})

@@ -12,7 +12,9 @@ import (
 func GetAllEnabledInvites() ([]models.Invite, error) {
 	var inviteStruct []models.Invite
 
-	inviteRecords := Instance.Where(&models.Invite{Enabled: &utilities.DBTrue}).Find(&inviteStruct)
+	inviteRecords := Instance.
+		Where(&models.Invite{Enabled: &utilities.DBTrue}).
+		Find(&inviteStruct)
 
 	if inviteRecords.Error != nil {
 		return []models.Invite{}, inviteRecords.Error
@@ -27,7 +29,10 @@ func GetAllEnabledInvites() ([]models.Invite, error) {
 func GetInviteByID(inviteID uuid.UUID) (models.Invite, error) {
 	var inviteStruct models.Invite
 
-	inviteRecords := Instance.Where(&models.Invite{Enabled: &utilities.DBTrue}).Where(&models.GormModel{ID: inviteID}).Find(&inviteStruct)
+	inviteRecords := Instance.
+		Where(&models.Invite{Enabled: &utilities.DBTrue}).
+		Where(&models.GormModel{ID: inviteID}).
+		Find(&inviteStruct)
 
 	if inviteRecords.Error != nil {
 		return models.Invite{}, inviteRecords.Error
@@ -42,7 +47,10 @@ func GetInviteByID(inviteID uuid.UUID) (models.Invite, error) {
 func DeleteInviteByID(inviteID uuid.UUID) error {
 	var inviteStruct models.Invite
 
-	inviteRecords := Instance.Model(inviteStruct).Where(&models.GormModel{ID: inviteID}).Update("enabled", false)
+	inviteRecords := Instance.
+		Model(inviteStruct).
+		Where(&models.GormModel{ID: inviteID}).
+		Update("enabled", false)
 
 	if inviteRecords.Error != nil {
 		return inviteRecords.Error
