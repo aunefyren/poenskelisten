@@ -342,7 +342,7 @@ func APIEditNewsPost(context *gin.Context) {
 	news.Date = newsUpdateRequest.Date
 	news.ExpiryDate = newsUpdateRequest.ExpiryDate
 
-	// Create the news post in the database
+	// Update the news post in the database
 	news, err = database.UpdateNewsPostInDB(news)
 	if err != nil {
 		// If there is an error creating the news, return an Internal Server Error response
@@ -352,6 +352,6 @@ func APIEditNewsPost(context *gin.Context) {
 		return
 	}
 
-	// Return a response indicating that the group was created, along with the updated list of groups
-	context.JSON(http.StatusCreated, gin.H{"message": "News post created.", "news": news})
+	// Return a response indicating that the group was updated, along with the updated list of groups
+	context.JSON(http.StatusOK, gin.H{"message": "News post updated.", "news": news})
 }
