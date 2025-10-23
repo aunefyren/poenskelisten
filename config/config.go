@@ -142,6 +142,7 @@ func CreateConfigFile() error {
 	config.DBType = "mysql"
 	config.SMTPEnabled = true
 	config.PoenskelistenVersion = poenskelisten_version_parameter
+	config.PoenskelistenCurrencyLeft = true
 
 	privateKey, err := GenerateSecureKey(64)
 	if err != nil {

@@ -77,9 +77,7 @@ func UpdateNewsPostInDB(newsPostOriginal models.News) (newsPost models.News, err
 	return
 }
 
-func CreateNewsPostInDB(newsDB models.News) (news models.News, err error) {
-	news = models.News{}
-	err = nil
+func CreateNewsPostInDB(news models.News) (models.News, error) {
 	record := Instance.Create(&news)
 
 	if record.Error != nil {
@@ -90,5 +88,5 @@ func CreateNewsPostInDB(newsDB models.News) (news models.News, err error) {
 		return news, errors.New("News post not added to database.")
 	}
 
-	return news, err
+	return news, nil
 }
