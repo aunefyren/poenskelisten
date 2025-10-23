@@ -103,12 +103,12 @@ The exception is `generateinvite`, which will generate a new, random invitation 
 | name | string | The name of the application. Replaces 'Pønskelisten'. |
 | generateinvite | string (true/false) | If Pønskelisten should generate an invitation code on startup. |
 | dbport | integer | The port Pønskelisten can reach the database at. |
-| dbtype | string | The type of database running. 'mysql'. |
+| dbtype | string | The type of database running. 'mysql' or 'postgres'. |
 | dbusername | string | The username used to authenticate with the database. |
 | dbpassword | string | The password used to authenticate with the database. |
 | dbname | string | The name of the table within the database. |
 | dbip | string | The connection address Pønskelisten uses to reach the database. |
-| dbssl | string | If the database connection uses SSL. |
+| dbssl | string (true/false) | If the database connection uses SSL. |
 | dblocation | string | The database is a local file, what is the system file path. |
 | disablesmtp | string (true/false) | Disables SMTP, meaning user verification is disabled. SMTP is enabled by default. |
 | smtphost | string | The SMTP server host used. |

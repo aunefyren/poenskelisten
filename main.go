@@ -298,6 +298,16 @@ func initRouter() *gin.Engine {
 func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, error) {
 	generateInviteBool := false
 
+	// boolean values
+	SMTPBool := "true"
+	if !configFile.SMTPEnabled {
+		SMTPBool = "false"
+	}
+	dbSSLBool := "true"
+	if !configFile.DBSSL {
+		dbSSLBool = "false"
+	}
+
 	// Define flag variables with the configuration file as default values
 	var port = flag.Int("port", configFile.PoenskelistenPort, "The port Pønskelisten is listening on.")
 	var externalURL = flag.String("externalurl", configFile.PoenskelistenExternalURL, "The URL others would use to access Pønskelisten.")
@@ -314,11 +324,11 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 	var dbPassword = flag.String("dbpassword", configFile.DBPassword, "The password used to interact with the database.")
 	var dbName = flag.String("dbname", configFile.DBName, "The database table used within the database.")
 	var dbIP = flag.String("dbip", configFile.DBIP, "The IP address used to reach the database.")
-	var dbSSL = flag.String("dbssl", "false", "If the database connection uses SSL.")
-	var dbLocation = flag.String("dblocation", "", "The database is a local file, what is the system file path.")
+	var dbSSL = flag.String("dbssl", dbSSLBool, "If the database connection uses SSL.")
+	var dbLocation = flag.String("dblocation", configFile.DBLocation, "The database is a local file, what is the system file path.")
 
 	// SMTP values
-	var smtpDisabled = flag.String("disablesmtp", "false", "Disables user verification using e-mail.")
+	var smtpDisabled = flag.String("disablesmtp", SMTPBool, "Disables user verification using e-mail.")
 	var smtpHost = flag.String("smtphost", configFile.SMTPHost, "The SMTP server which sends e-mail.")
 	var smtpPort = flag.Int("smtpport", configFile.SMTPPort, "The SMTP server port.")
 	var smtpUsername = flag.String("smtpusername", configFile.SMTPUsername, "The username used to verify against the SMTP server.")
