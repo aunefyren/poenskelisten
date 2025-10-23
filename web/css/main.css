@@ -337,6 +337,7 @@ input[type=text], input[type=password], input[type=email], input[type=date], inp
   border: solid 0.2em var(--darkblue); 
   background: var(--white); 
   box-sizing: border-box;
+  font-size: 1em;
 }
 
 input:active {
@@ -1092,7 +1093,7 @@ textarea {
   background: var(--white); 
   box-sizing: border-box;
   font-family: 'Roboto', sans-serif;
-  font-size: 0.8rem;
+  font-size: 1em;
   resize: vertical;
 }
 
