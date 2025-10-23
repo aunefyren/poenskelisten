@@ -21,7 +21,6 @@ var config_path, _ = filepath.Abs("./files/config.json")
 func GetConfig() (config models.ConfigStruct, err error) {
 	// Create config.json if it doesn't exist
 	if _, err := os.Stat(config_path); errors.Is(err, os.ErrNotExist) {
-		logger.Log.Warn("Config file does not exist. Creating...")
 		fmt.Println("Config file does not exist. Creating...")
 
 		err := CreateConfigFile()
@@ -32,7 +31,6 @@ func GetConfig() (config models.ConfigStruct, err error) {
 
 	file, err := os.Open(config_path)
 	if err != nil {
-		logger.Log.Error("Get config file threw error trying to open the file.")
 		fmt.Println("Get config file threw error trying to open the file.")
 		return config, err
 	}
@@ -41,7 +39,6 @@ func GetConfig() (config models.ConfigStruct, err error) {
 	config = models.ConfigStruct{}
 	err = decoder.Decode(&config)
 	if err != nil {
-		logger.Log.Error("Get config file threw error trying to parse the file.")
 		fmt.Println("Get config file threw error trying to parse the file.")
 		return config, err
 	}
@@ -145,6 +142,7 @@ func CreateConfigFile() error {
 	config.DBType = "mysql"
 	config.SMTPEnabled = true
 	config.PoenskelistenVersion = poenskelisten_version_parameter
+	config.PoenskelistenCurrencyLeft = true
 
 	privateKey, err := GenerateSecureKey(64)
 	if err != nil {

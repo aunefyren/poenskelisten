@@ -101,8 +101,8 @@ func RegisterGroup(context *gin.Context) {
 	}
 
 	// Create the group in the database
-	record := database.Instance.Create(&group)
-	if record.Error != nil {
+	_, err = database.CreateGroupInDB(group)
+	if err != nil {
 		logger.Log.Error("Failed to create group in database. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group in database."})
 		context.Abort()
@@ -118,8 +118,8 @@ func RegisterGroup(context *gin.Context) {
 	groupMembership.ID = uuid.New()
 
 	// Create the group membership in the database
-	membershipRecord := database.Instance.Create(&groupMembership)
-	if membershipRecord.Error != nil {
+	_, err = database.CreateGroupMembershipInDB(groupMembership)
+	if err != nil {
 		// If there is an error creating the group membership, return an Internal Server Error response
 		logger.Log.Error("Failed to create membership. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create membership."})
@@ -298,10 +298,10 @@ func JoinGroup(context *gin.Context) {
 		groupMembershipDB.ID = uuid.New()
 
 		// Add the group membership to the database
-		record := database.Instance.Create(&groupMembershipDB)
-		if record.Error != nil {
+		_, err = database.CreateGroupMembershipInDB(groupMembershipDB)
+		if err != nil {
 			// If there is an error adding the group membership to the database, return an Internal Server Error response
-			logger.Log.Error("Failed to create group membership in database.")
+			logger.Log.Error("Failed to create group membership in database. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group membership in database."})
 			context.Abort()
 			return
@@ -999,7 +999,6 @@ func APIUpdateGroup(context *gin.Context) {
 }
 
 func ConvertGroupToGroupObject(group models.Group) (groupObject models.GroupUser, err error) {
-	err = nil
 	groupObject = models.GroupUser{}
 
 	// Add owner information to group
