@@ -144,7 +144,7 @@ Edit the configuration file so it can reach the MySQL database, and possibly an 
 
 Restart Pønskelisten for the changes to take effect.
 
-You should not be able to access Pønskelisten. By default, you can find the front end at `https://localhost:8080`.
+You should now be able to access Pønskelisten. By default, you can find the front end at `http://localhost:8080`.
 
 <br>
 <br>
