@@ -2,6 +2,7 @@ package database
 
 import (
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
 	"errors"
 
 	"github.com/google/uuid"
@@ -12,7 +13,7 @@ func GetAllEnabledInvites() ([]models.Invite, error) {
 	var inviteStruct []models.Invite
 
 	inviteRecords := Instance.
-		Where("`invites`.enabled = ?", 1).
+		Where(&models.Invite{Enabled: &utilities.DBTrue}).
 		Find(&inviteStruct)
 
 	if inviteRecords.Error != nil {
@@ -27,7 +28,11 @@ func GetAllEnabledInvites() ([]models.Invite, error) {
 // Get invite using ID
 func GetInviteByID(inviteID uuid.UUID) (models.Invite, error) {
 	var inviteStruct models.Invite
-	inviteRecords := Instance.Where("`invites`.enabled = ?", 1).Where("`invites`.id = ?", inviteID).Find(&inviteStruct)
+
+	inviteRecords := Instance.
+		Where(&models.Invite{Enabled: &utilities.DBTrue}).
+		Where(&models.GormModel{ID: inviteID}).
+		Find(&inviteStruct)
 
 	if inviteRecords.Error != nil {
 		return models.Invite{}, inviteRecords.Error
@@ -41,7 +46,12 @@ func GetInviteByID(inviteID uuid.UUID) (models.Invite, error) {
 // Set invite to disabled by ID
 func DeleteInviteByID(inviteID uuid.UUID) error {
 	var inviteStruct models.Invite
-	inviteRecords := Instance.Model(inviteStruct).Where("`invites`.id = ?", inviteID).Update("enabled", 0)
+
+	inviteRecords := Instance.
+		Model(inviteStruct).
+		Where(&models.GormModel{ID: inviteID}).
+		Update("enabled", false)
+
 	if inviteRecords.Error != nil {
 		return inviteRecords.Error
 	}

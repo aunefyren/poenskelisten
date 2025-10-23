@@ -405,10 +405,10 @@ func RegisterWish(context *gin.Context) {
 	db_wish.Price = wish.Price
 	db_wish.ID = uuid.New()
 
-	// Create wishlist in DB
-	record := database.Instance.Create(&db_wish)
-	if record.Error != nil {
-		logger.Log.Error("Failed to create wishlist. Error: " + record.Error.Error())
+	// Create wish in DB
+	_, err = database.CreateWishInDB(db_wish)
+	if err != nil {
+		logger.Log.Error("Failed to create wishlist. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create wishlist."})
 		context.Abort()
 		return
@@ -720,9 +720,9 @@ func RegisterWishClaim(context *gin.Context) {
 	db_wishclaim.ID = uuid.New()
 
 	// Create wish claim
-	record := database.Instance.Create(&db_wishclaim)
-	if record.Error != nil {
-		logger.Log.Error("Failed to create claim. Error: " + record.Error.Error())
+	_, err = database.CreateWishClaimInDB(db_wishclaim)
+	if err != nil {
+		logger.Log.Error("Failed to create claim. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create claim."})
 		context.Abort()
 		return

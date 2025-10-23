@@ -10,21 +10,29 @@ import (
 // Set news post to disabled
 func DeleteNewsPost(newsID uuid.UUID) error {
 	var news models.News
-	newsRecords := Instance.Model(news).Where("`news`.ID= ?", newsID).Update("enabled", 0)
+
+	newsRecords := Instance.
+		Model(news).
+		Where(&models.GormModel{ID: newsID}).
+		Update("enabled", 0)
+
 	if newsRecords.Error != nil {
 		return newsRecords.Error
 	}
+
 	if newsRecords.RowsAffected != 1 {
 		return errors.New("Failed to delete news post in database.")
 	}
+
 	return nil
 }
 
 func GetNewsPosts() ([]models.News, error) {
-
 	var newsPosts []models.News
 
-	newsPostsRecords := Instance.Order("date desc").Where("`news`.enabled = ?", 1).Find(&newsPosts)
+	newsPostsRecords := Instance.
+		Where(&models.News{Enabled: true}).
+		Order("date desc").Find(&newsPosts)
 
 	if newsPostsRecords.Error != nil {
 		return []models.News{}, newsPostsRecords.Error
@@ -37,14 +45,15 @@ func GetNewsPosts() ([]models.News, error) {
 	}
 
 	return newsPosts, nil
-
 }
 
 func GetNewsPostByNewsID(newsID uuid.UUID) (models.News, error) {
-
 	var newsPost models.News
 
-	newsPostRecords := Instance.Where("`news`.enabled = ?", 1).Where("`news`.id = ?", newsID).Find(&newsPost)
+	newsPostRecords := Instance.
+		Where(&models.GormModel{ID: newsID}).
+		Where(&models.News{Enabled: true}).
+		Find(&newsPost)
 
 	if newsPostRecords.Error != nil {
 		return models.News{}, newsPostRecords.Error
@@ -53,7 +62,6 @@ func GetNewsPostByNewsID(newsID uuid.UUID) (models.News, error) {
 	}
 
 	return newsPost, nil
-
 }
 
 func UpdateNewsPostInDB(newsPostOriginal models.News) (newsPost models.News, err error) {
@@ -67,4 +75,18 @@ func UpdateNewsPostInDB(newsPostOriginal models.News) (newsPost models.News, err
 	}
 
 	return
+}
+
+func CreateNewsPostInDB(news models.News) (models.News, error) {
+	record := Instance.Create(&news)
+
+	if record.Error != nil {
+		return news, record.Error
+	}
+
+	if record.RowsAffected != 1 {
+		return news, errors.New("News post not added to database.")
+	}
+
+	return news, nil
 }

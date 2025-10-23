@@ -57,6 +57,9 @@ func AuthFunction(context *gin.Context, admin bool) (success bool, errorString s
 
 		// Check if the user is verified
 		verified, err := database.VerifyUserIsVerified(userID)
+		if err != nil {
+			panic(err)
+		}
 		if !verified {
 
 			// Verify user has verification code

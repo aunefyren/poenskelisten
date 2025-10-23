@@ -11,7 +11,10 @@ import (
 func GetWishlistIDFromWish(WishID uuid.UUID) (*uuid.UUID, error) {
 	var wish models.Wish
 
-	wishRecord := Instance.Where("`wishes`.enabled = ?", 1).Where("`wishes`.id = ?", WishID).Find(&wish)
+	wishRecord := Instance.
+		Where(&models.Wish{Enabled: true}).
+		Where(&models.GormModel{ID: WishID}).
+		Find(&wish)
 
 	if wishRecord.Error != nil {
 		return nil, wishRecord.Error
@@ -26,7 +29,10 @@ func GetWishlistIDFromWish(WishID uuid.UUID) (*uuid.UUID, error) {
 func GetWishByWishID(wishID uuid.UUID) (*models.Wish, error) {
 	var wish models.Wish
 
-	wishRecord := Instance.Where("`wishes`.enabled = ?", 1).Where("`wishes`.id = ?", wishID).Find(&wish)
+	wishRecord := Instance.
+		Where(&models.Wish{Enabled: true}).
+		Where(&models.GormModel{ID: wishID}).
+		Find(&wish)
 
 	if wishRecord.Error != nil {
 		return nil, wishRecord.Error
@@ -42,6 +48,7 @@ func UpdateWishInDB(wishOriginal models.Wish) (wish models.Wish, err error) {
 	err = nil
 
 	wishRecord := Instance.Save(wish)
+
 	if wishRecord.Error != nil {
 		return wish, wishRecord.Error
 	}
@@ -51,13 +58,17 @@ func UpdateWishInDB(wishOriginal models.Wish) (wish models.Wish, err error) {
 
 // Get wishes from wishlist
 func GetWishesFromWishlist(WishlistID uuid.UUID) (bool, []models.Wish, error) {
-
 	var wishes []models.Wish
+	wishRecords := Instance.
+		Order("created_at ASC").
+		Where(&models.Wish{Enabled: true, WishlistID: WishlistID}).
+		Joins("JOIN users ON users.id = wishes.owner_id").
+		Where("users.enabled = ?", true).
+		Find(&wishes)
 
-	wishrecords := Instance.Order("created_at ASC").Where("`wishes`.enabled = ?", 1).Where("`wishes`.wishlist_id = ?", WishlistID).Joins("JOIN `users` on `users`.id = `wishes`.owner_id").Where("`users`.enabled = ?", 1).Find(&wishes)
-	if wishrecords.Error != nil {
-		return false, []models.Wish{}, wishrecords.Error
-	} else if wishrecords.RowsAffected < 1 {
+	if wishRecords.Error != nil {
+		return false, []models.Wish{}, wishRecords.Error
+	} else if wishRecords.RowsAffected < 1 {
 		return false, []models.Wish{}, nil
 	}
 
@@ -66,54 +77,59 @@ func GetWishesFromWishlist(WishlistID uuid.UUID) (bool, []models.Wish, error) {
 
 // get wish claims from wish, returns empty array without error if none are found.
 func GetWishClaimFromWish(WishID uuid.UUID) ([]models.WishClaimObject, error) {
-	var wish_claim models.WishClaim
-	var wish_with_user models.WishClaimObject
-	var wisharray_with_user []models.WishClaimObject
+	var wishClaim models.WishClaim
+	var wishWithUser models.WishClaimObject
+	var wishArrayWithUser []models.WishClaimObject
 
-	wishclaimrecords := Instance.
-		Where("`wish_claims`.enabled = ?", 1).
-		Where("`wish_claims`.wish_id = ?", WishID).
-		Joins("JOIN `users` on `users`.id = `wish_claims`.user_id").
-		Where("`users`.enabled = ?", 1).Find(&wish_claim)
+	wishClaimRecords := Instance.
+		Where(&models.WishClaim{Enabled: true, WishID: WishID}).
+		Joins("JOIN users ON users.id = wish_claims.user_id").
+		Where("users.enabled = ?", true).
+		Find(&wishClaim)
 
-	if wishclaimrecords.Error != nil {
-		return []models.WishClaimObject{}, wishclaimrecords.Error
-	} else if wishclaimrecords.RowsAffected < 1 {
+	if wishClaimRecords.Error != nil {
+		return []models.WishClaimObject{}, wishClaimRecords.Error
+	} else if wishClaimRecords.RowsAffected < 1 {
 		return []models.WishClaimObject{}, nil
 	}
 
-	user_object, err := GetUserInformation(wish_claim.UserID)
+	userObject, err := GetUserInformation(wishClaim.UserID)
 	if err != nil {
 		return []models.WishClaimObject{}, err
 	}
 
 	userObjectMinimal := models.UserMinimal{
-		GormModel: user_object.GormModel,
-		FirstName: user_object.FirstName,
-		LastName:  user_object.LastName,
-		Email:     user_object.Email,
+		GormModel: userObject.GormModel,
+		FirstName: userObject.FirstName,
+		LastName:  userObject.LastName,
+		Email:     userObject.Email,
 	}
 
-	wish_with_user.User = userObjectMinimal
-	wish_with_user.CreatedAt = wish_claim.CreatedAt
-	wish_with_user.DeletedAt = wish_claim.DeletedAt
-	wish_with_user.Enabled = wish_claim.Enabled
-	wish_with_user.ID = wish_claim.ID
-	wish_with_user.UpdatedAt = wish_claim.UpdatedAt
-	wish_with_user.Wish = wish_claim.WishID
+	wishWithUser.User = userObjectMinimal
+	wishWithUser.CreatedAt = wishClaim.CreatedAt
+	wishWithUser.DeletedAt = wishClaim.DeletedAt
+	wishWithUser.Enabled = wishClaim.Enabled
+	wishWithUser.ID = wishClaim.ID
+	wishWithUser.UpdatedAt = wishClaim.UpdatedAt
+	wishWithUser.Wish = wishClaim.WishID
 
-	wisharray_with_user = append(wisharray_with_user, wish_with_user)
+	wishArrayWithUser = append(wishArrayWithUser, wishWithUser)
 
-	return wisharray_with_user, err
+	return wishArrayWithUser, err
 }
 
 // Verify if a user ID is an owner of a wish
 func VerifyUserOwnershipToWish(UserID uuid.UUID, WishID uuid.UUID) (bool, error) {
 	var wish models.Wish
-	wishrecord := Instance.Where("`wishes`.enabled = ?", 1).Where("`wishes`.id = ?", WishID).Where("`wishes`.owner_id = ?", UserID).Find(&wish)
-	if wishrecord.Error != nil {
-		return false, wishrecord.Error
-	} else if wishrecord.RowsAffected != 1 {
+
+	wishRecord := Instance.
+		Where(&models.Wish{Enabled: true, OwnerID: UserID}).
+		Where(&models.GormModel{ID: WishID}).
+		Find(&wish)
+
+	if wishRecord.Error != nil {
+		return false, wishRecord.Error
+	} else if wishRecord.RowsAffected != 1 {
 		return false, nil
 	}
 	return true, nil
@@ -121,11 +137,15 @@ func VerifyUserOwnershipToWish(UserID uuid.UUID, WishID uuid.UUID) (bool, error)
 
 // Verify if a user ID is an owner of a wish
 func VerifyUserOwnershipToWishClaimByWish(UserID uuid.UUID, WishID uuid.UUID) (bool, error) {
-	var wishclaim models.WishClaim
-	wishclaimrecord := Instance.Where("`wish_claims`.enabled = ?", 1).Where("`wish_claims`.wish_id = ?", WishID).Where("`wish_claims`.user_id = ?", UserID).Find(&wishclaim)
-	if wishclaimrecord.Error != nil {
-		return false, wishclaimrecord.Error
-	} else if wishclaimrecord.RowsAffected != 1 {
+	var wishClaim models.WishClaim
+
+	wishClaimRecord := Instance.
+		Where(&models.WishClaim{Enabled: true, WishID: WishID, UserID: UserID}).
+		Find(&wishClaim)
+
+	if wishClaimRecord.Error != nil {
+		return false, wishClaimRecord.Error
+	} else if wishClaimRecord.RowsAffected != 1 {
 		return false, nil
 	}
 	return true, nil
@@ -133,11 +153,17 @@ func VerifyUserOwnershipToWishClaimByWish(UserID uuid.UUID, WishID uuid.UUID) (b
 
 // Verify if a user ID is an owner of a wish
 func VerifyWishIsClaimed(WishID uuid.UUID) (bool, error) {
-	var wishclaim models.WishClaim
-	wishclaimrecord := Instance.Where("`wish_claims`.enabled = ?", 1).Where("`wish_claims`.wish_id = ?", WishID).Joins("JOIN `users` on `users`.id = `wish_claims`.user_id").Where("`users`.enabled = ?", 1).Find(&wishclaim)
-	if wishclaimrecord.Error != nil {
-		return false, wishclaimrecord.Error
-	} else if wishclaimrecord.RowsAffected != 1 {
+	var wishClaim models.WishClaim
+
+	wishClaimRecord := Instance.
+		Where(&models.WishClaim{Enabled: true, WishID: WishID}).
+		Joins("JOIN users ON users.id = wish_claims.user_id").
+		Where("users.enabled = ?", true).
+		Find(&wishClaim)
+
+	if wishClaimRecord.Error != nil {
+		return false, wishClaimRecord.Error
+	} else if wishClaimRecord.RowsAffected != 1 {
 		return false, nil
 	}
 	return true, nil
@@ -145,12 +171,17 @@ func VerifyWishIsClaimed(WishID uuid.UUID) (bool, error) {
 
 // Set wish claim to disabled
 func DeleteWishClaimByUserAndWish(WishID uuid.UUID, UserID uuid.UUID) error {
-	var wishclaim models.WishClaim
-	wishclaimrecords := Instance.Model(wishclaim).Where("`wish_claims`.wish_id = ?", WishID).Where("`wish_claims`.user_id = ?", UserID).Update("enabled", 0)
-	if wishclaimrecords.Error != nil {
-		return wishclaimrecords.Error
+	var wishClaim models.WishClaim
+
+	wishClaimRecords := Instance.
+		Model(wishClaim).
+		Where(&models.WishClaim{WishID: WishID, UserID: UserID}).
+		Update("enabled", 0)
+
+	if wishClaimRecords.Error != nil {
+		return wishClaimRecords.Error
 	}
-	if wishclaimrecords.RowsAffected != 1 {
+	if wishClaimRecords.RowsAffected != 1 {
 		return errors.New("Failed to delete wish claim membership in database.")
 	}
 	return nil
@@ -161,10 +192,9 @@ func GetWishlistByWishID(wishID uuid.UUID) (bool, models.Wishlist, error) {
 	var wishlist models.Wishlist
 
 	wishlistRecords := Instance.
-		Where("`wishlists`.enabled = ?", 1).
-		Joins("JOIN `wishes` on `wishlists`.id = `wishes`.wishlist_id").
-		Where("`wishes`.enabled = ?", 1).
-		Where("`wishes`.id = ?", wishID).
+		Where(&models.Wishlist{Enabled: true}).
+		Joins("JOIN wishes ON wishlists.id = wishes.wishlist_id").
+		Where("wishes.enabled = ? AND wishes.id = ?", true, wishID).
 		Find(&wishlist)
 
 	if wishlistRecords.Error != nil {
@@ -174,4 +204,36 @@ func GetWishlistByWishID(wishID uuid.UUID) (bool, models.Wishlist, error) {
 	}
 
 	return true, wishlist, nil
+}
+
+func CreateWishInDB(wishDB models.Wish) (wish models.Wish, err error) {
+	wish = models.Wish{}
+	err = nil
+	record := Instance.Create(&wishDB)
+
+	if record.Error != nil {
+		return wish, record.Error
+	}
+
+	if record.RowsAffected != 1 {
+		return wish, errors.New("Wish not added to database.")
+	}
+
+	return wish, err
+}
+
+func CreateWishClaimInDB(wishClaimDB models.WishClaim) (wishClaim models.WishClaim, err error) {
+	wishClaim = models.WishClaim{}
+	err = nil
+	record := Instance.Create(&wishClaimDB)
+
+	if record.Error != nil {
+		return wishClaim, record.Error
+	}
+
+	if record.RowsAffected != 1 {
+		return wishClaim, errors.New("WishClaim not added to database.")
+	}
+
+	return wishClaim, err
 }
