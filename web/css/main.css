@@ -358,8 +358,9 @@ button {
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
+  max-width: 25em;
   padding: 0.75em 0;
-  margin: 1em;
+  margin: 1em auto;
   border-radius: 5px; 
   border: none;
   background: var(--white); 
@@ -666,7 +667,7 @@ button:disabled {
 .wishlist-info, .group-info {
   border-radius: 1em;
   padding: 1em;
-  margin: 0 0.5em 2em 0.5em;
+  margin: 0 0 2em 0;
   background-color: var(--eggshell);
   border: 0.15em solid var(--darkblue);
   width: 100%;
@@ -1321,6 +1322,7 @@ textarea {
 
 .wish-image-edit-img {
   height: 100% !important;
+  border: 0.15em solid var(--darkblue);
 }
 
 .button-grouping {
