@@ -14,7 +14,7 @@ func DeleteNewsPost(newsID uuid.UUID) error {
 	newsRecords := Instance.
 		Model(news).
 		Where(&models.GormModel{ID: newsID}).
-		Update("enabled", 0)
+		Update("enabled", false)
 
 	if newsRecords.Error != nil {
 		return newsRecords.Error
