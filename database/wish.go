@@ -176,7 +176,7 @@ func DeleteWishClaimByUserAndWish(WishID uuid.UUID, UserID uuid.UUID) error {
 	wishClaimRecords := Instance.
 		Model(wishClaim).
 		Where(&models.WishClaim{WishID: WishID, UserID: UserID}).
-		Update("enabled", 0)
+		Update("enabled", false)
 
 	if wishClaimRecords.Error != nil {
 		return wishClaimRecords.Error

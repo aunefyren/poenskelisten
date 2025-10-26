@@ -138,7 +138,7 @@ func DeleteWishlistCollaboratorByWishlistCollaboratorID(WishlistCollaboratorID u
 	wishlistMembershipRecords := Instance.
 		Model(wishlistCollaborator).
 		Where(&models.GormModel{ID: WishlistCollaboratorID}).
-		Update("enabled", 0)
+		Update("enabled", false)
 
 	if wishlistMembershipRecords.Error != nil {
 		return wishlistMembershipRecords.Error
