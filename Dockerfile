@@ -1,26 +1,29 @@
-FROM golang:1.24.0-bullseye as builder
-
-ARG TARGETARCH
+# ---------- Build ----------
+FROM golang:1.24.0-alpine AS builder
 ARG TARGETOS
-
+ARG TARGETARCH
 WORKDIR /app
+
+# faster caching
+COPY go.mod go.sum ./
+RUN go mod download
 
 COPY . .
 
-RUN GO111MODULE=on CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -o /app/poenskelisten .
 
-FROM debian:bullseye-slim as runtime
-ARG DEBIAN_FRONTEND=noninteractive
-LABEL org.opencontainers.image.source=https://github.com/aunefyren/poenskelisten
-
+# ---------- Runtime ----------
+FROM alpine:3.20
+ENV PUID=1000 PGID=1000 LANG=C.UTF-8 LC_ALL=C.UTF-8
 WORKDIR /app
-
-COPY --from=builder /app .
-
-RUN rm /var/lib/dpkg/info/libc-bin.*
-RUN apt clean
-RUN apt update
-RUN apt install -y ca-certificates curl
-RUN chmod +x /app/poenskelisten /app/entrypoint.sh
-
-ENTRYPOINT /app/entrypoint.sh
+RUN apk add --no-cache ffmpeg flac ca-certificates tzdata
+COPY --from=builder /app/poenskelisten /app/poenskelisten
+COPY --from=builder /app/entrypoint.sh /app/entrypoint.sh
+COPY --from=builder /app/web/ /app/web/
+RUN addgroup -g ${PGID} appgroup && \
+    adduser -D -u ${PUID} -G appgroup appuser && \
+    chmod +x /app/poenskelisten /app/entrypoint.sh && \
+    chown -R appuser:appgroup /app
+USER appuser
+ENTRYPOINT ["/app/entrypoint.sh"]
