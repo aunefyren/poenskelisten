@@ -126,11 +126,15 @@ func GetAllUserInformationByEmail(email string) (models.User, error) {
 }
 
 // Generate a random reset code and return it
-func GenerateRandomResetCodeForUser(userID uuid.UUID) (string, error) {
+// If valid bool, the reset time will be in the future
+func GenerateRandomResetCodeForUser(userID uuid.UUID, valid bool) (string, error) {
 	randomString := randstr.String(8)
 	resetCode := strings.ToUpper(randomString)
 
-	expirationDate := time.Now().AddDate(0, 0, 7)
+	expirationDate := time.Now()
+	if valid {
+		expirationDate = expirationDate.AddDate(0, 0, 1)
+	}
 
 	var user models.User
 	userRecord := Instance.

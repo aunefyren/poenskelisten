@@ -34,23 +34,18 @@ function load_page(result) {
         reset_code = ""
     }
 
-    if(result !== false) {
-        showLoggedInMenu();
-    } else {
-        showLoggedOutMenu();
+    showLoggedOutMenu();
 
-        if(reset_mode) {
-            clearResponse();
-            action_resetpassword(reset_code);
-        } else {
-            clearResponse();
-            action_login();
-        }
+    if(reset_mode) {
+        clearResponse();
+        checkResetCode(reset_code);
+    } else {
+        clearResponse();
+        action_login();
     }
 }
 
 function action_login() {
-
     try {
         var email = document.getElementById("email").value;
     } catch(e) {
@@ -90,7 +85,6 @@ function action_login() {
 
     document.getElementById("action").innerHTML = html;
     document.getElementById("change_action").innerHTML = html2;
-
 }
 
 function action_newpassword() {
@@ -351,5 +345,38 @@ function reset_password(){
     xhttp.open("post", api_url + "open/users/password");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.send(form_data);
+    return false;
+}
+
+function checkResetCode(resetCode){
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                clear_data();
+                return;
+            }
+            
+            if(result.error) {
+                error(result.error);
+                clear_data();
+            } else {
+                if(result.expired) {
+                    error("Reset link has expired.")
+                    action_login();
+                } else {
+                    action_resetpassword(resetCode);
+                }
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("get", api_url + "open/users/reset/" + resetCode);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.send();
     return false;
 }
