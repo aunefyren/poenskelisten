@@ -301,9 +301,11 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 
 	// boolean values
 	SMTPBool := "true"
-	if !configFile.SMTPEnabled {
+	if configFile.SMTPEnabled {
 		SMTPBool = "false"
 	}
+
+	// reverse the config bool
 	dbSSLBool := "true"
 	if !configFile.DBSSL {
 		dbSSLBool = "false"
@@ -431,7 +433,7 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 	// Respect the flag if string is true
 	if smtpDisabled != nil {
 		if strings.ToLower(*smtpDisabled) == "true" {
-			configFile.SMTPEnabled = true
+			configFile.SMTPEnabled = false
 		}
 	}
 
