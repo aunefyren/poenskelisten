@@ -13,7 +13,7 @@
 
   body{
     margin:0;
-    font-size:1rem;
+    font-size: 1em;
     line-height:1.5;
     color:var(--eggshell);
     text-align:left;
@@ -332,9 +332,9 @@ input[type=text], input[type=password], input[type=email], input[type=date], inp
   width: -moz-available;
   height: 3em;
   padding: 0.5em;
-  margin: 1em;
+  margin: 0.5em;
   border-radius: 0.5em;
-  border: solid 0.2em var(--darkblue); 
+  border: 0.15em solid var(--darkblue);
   background: var(--white); 
   box-sizing: border-box;
   font-size: 1em;
@@ -944,6 +944,7 @@ hr {
 
 label {
   margin: 0;
+  font-size: 1.1em;
 }
 
 .wishlist-date-wrapper {
@@ -1088,9 +1089,9 @@ textarea {
   width: -webkit-fill-available;
   width: -moz-available;
   padding: 0.5em;
-  margin: 1em;
+  margin: 0.5em;
   border-radius: 0.5em;
-  border: solid 0.2em var(--darkblue); 
+  border: 0.15em solid var(--darkblue);
   background: var(--white); 
   box-sizing: border-box;
   font-family: 'Roboto', sans-serif;
