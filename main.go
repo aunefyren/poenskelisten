@@ -430,7 +430,7 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 	// Respect the flag if string is true
 	if smtpDisabled != nil {
 		if strings.ToLower(*smtpDisabled) == "true" {
-			configFile.SMTPEnabled = false
+			configFile.SMTPEnabled = true
 		}
 	}
 
