@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var poenskelisten_version_parameter = "{{RELEASE_TAG}}"
+var poenskelisten_version_parameter = "v2.2.0"
 var config_path, _ = filepath.Abs("./files/config.json")
 
 func GetConfig() (config models.ConfigStruct, err error) {
