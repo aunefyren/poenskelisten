@@ -140,7 +140,7 @@ func CreateConfigFile() error {
 	config.PoenskelistenName = "Pønskelisten"
 	config.DBPort = 3306
 	config.DBType = "mysql"
-	config.SMTPEnabled = true
+	config.SMTPEnabled = false
 	config.PoenskelistenVersion = poenskelisten_version_parameter
 	config.PoenskelistenCurrencyLeft = true
 

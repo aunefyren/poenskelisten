@@ -55,6 +55,9 @@ function load_page(result) {
                 <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-url-title">External URL:</div><div class="server-info-value" id="server-poenskelisten-url">...</div></div>
                 <div class="server-info-line"><div class="server-info-title" id="server-timezone-title">Timezone:</div><div class="server-info-value" id="server-timezone">...</div></div>
                 <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-loglevel-title">Log level:</div><div class="server-info-value" id="server-poenskelisten-loglevel">...</div></div>
+                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-environment-title">Environment:</div><div class="server-info-value" id="server-poenskelisten-environment">...</div></div>
+                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-testemail-title">Test E-mail:</div><div class="server-info-value" id="server-poenskelisten-testemail">...</div></div>
+                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-smtp-title">SMTP:</div><div class="server-info-value" id="server-poenskelisten-smtp">...</div></div>
             </div>
 
             <div class="invites" id="invites">
@@ -148,6 +151,14 @@ function place_server_info(server_info) {
     document.getElementById('server-poenskelisten-database').innerHTML = server_info.database_type
     document.getElementById('server-poenskelisten-port').innerHTML = server_info.poenskelisten_port
     document.getElementById('server-poenskelisten-loglevel').innerHTML = server_info.poenskelisten_log_level
+    document.getElementById('server-poenskelisten-environment').innerHTML = server_info.poenskelisten_environment
+    document.getElementById('server-poenskelisten-testemail').innerHTML = server_info.poenskelisten_test_email
+
+    if(server_info.poenskelisten_smtp) {
+        document.getElementById('server-poenskelisten-smtp').innerHTML = 'true'
+    } else {
+        document.getElementById('server-poenskelisten-smtp').innerHTML = 'false'
+    }
 }
 
 function get_invites() {
