@@ -84,7 +84,7 @@ All configuration keys are identical across methods.
 | port | int | Port to run on (default: `8080`) |
 | externalurl | string | Public URL of the instance |
 | timezone | string | E.g. `Europe/Oslo` |
-| environment | string | `prod` or `test` |
+| environment | string | `production` or `test` |
 | name | string | Display name of the app |
 | generateinvite | bool | Generate an invite code on startup |
 | dbtype | string | `postgres` or `mysql` |
@@ -100,7 +100,8 @@ All configuration keys are identical across methods.
 | smtpusername | string | SMTP user |
 | smtppassword | string | SMTP password |
 | smtpfrom | string | Sender email address |
-
+| smtpfrom | string | Sender email address |
+| testemail | string | E-mail destination when in `test` |
 ---
 
 ## 🐳 Docker Setup
@@ -108,9 +109,9 @@ All configuration keys are identical across methods.
 ### **Minimal docker-compose.yml (recommended)**
 
 ```yaml
-version: "3.3"
 services:
   db:
+    container_name: poenskelisten-db
     image: postgres:16
     restart: unless-stopped
     environment:
@@ -118,14 +119,17 @@ services:
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: mypassword
     volumes:
-      - ./db:/var/lib/postgresql/data
+      - ./db/:/var/lib/postgresql/data/:rw
 
-  poenskelisten:
+  poenskelisten-app:
+    container_name: poenskelisten-app
     image: aunefyren/poenskelisten:latest
     restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
+      PUID: 1000
+      PGID: 1000
       dbtype: postgres
       dbip: db
       dbport: 5432
@@ -136,6 +140,9 @@ services:
       generateinvite: true
     depends_on:
       - db
+    volumes:
+      - ./files/:/app/files/:rw
+      - ./images/:/app/images/:rw
 ```
 Remove `generateinvite` after first run to stop generating codes on start up.
 
