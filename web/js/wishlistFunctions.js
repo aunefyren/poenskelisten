@@ -145,9 +145,9 @@ function createNewWishlistThree(groupContextID, userID, wishlistObjectBase64) {
             <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
 
             <input class="clickable" onclick="" style="display: ${checkedDisplay};" type="checkbox" id="wishlist_hide_claimers" name="wishlist_hide_claimers" value="confirm" ${checkedThreeHTML}>
-            <label for="wishlist_hide_claimers" id="wishlist_hide_claimers_label" style="margin-bottom: 1em; display: ${checkedDisplay};" class="clickable">Hide claimers from other users.</label><br>
+            <label for="wishlist_hide_claimers" id="wishlist_hide_claimers_label" style="margin-bottom: 1em; display: ${checkedDisplay};" class="clickable">Hide claimers from other claimers.</label><br>
 
-            <input class="clickable" onclick="" style="" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${checkedTwoHTML}>
+            <input class="clickable" onclick="publicWishlistCheck();" style="" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${checkedTwoHTML}>
             <label for="wishlist_public" style="margin-bottom: 1em;" class="clickable">Make this wishlist public and shareable.</label><br>
             
             <button id="register-button" type="submit" href="/">Next</button>
@@ -567,9 +567,9 @@ function editWishlistFour(wishlistID, userID, wishlistObjectBase64) {
             <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
 
             <input class="clickable" onclick="" style="display: ${checkedDisplay};" type="checkbox" id="wishlist_hide_claimers" name="wishlist_hide_claimers" value="confirm" ${hideClaimersHTML}>
-            <label for="wishlist_hide_claimers" id="wishlist_hide_claimers_label" style="margin-bottom: 1em; display: ${checkedDisplay};" class="clickable">Hide claimers from other users.</label><br>
+            <label for="wishlist_hide_claimers" id="wishlist_hide_claimers_label" style="margin-bottom: 1em; display: ${checkedDisplay};" class="clickable">Hide claimers from other claimers.</label><br>
 
-            <input class="clickable" onclick="" style="" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${publicHTML}>
+            <input class="clickable" onclick="publicWishlistCheck();" style="" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${publicHTML}>
             <label for="wishlist_public" style="margin-bottom: 1em;" class="clickable">Make this wishlist public and shareable.</label><br>
             
             <button id="register-button" type="submit" href="/">Update wishlist</button>
@@ -1156,11 +1156,24 @@ function ToggleHideClaimersOption() {
         if(allowClaiming) {
             hideClaimers.style.display = "flex"
             hideClaimersLabel.style.display = "flex"
+            document.getElementById("wishlist_public").checked = false;
         } else {
             hideClaimers.style.display = "none"
             hideClaimersLabel.style.display = "none"
         }
     } catch (error) {
         console.log("Failed to toggle hide claimers section. Error: " + error)
+    }
+}
+
+function publicWishlistCheck() {
+    try {
+        var public = document.getElementById("wishlist_public").checked;
+        if(public) {
+            document.getElementById("wishlist_claimable").checked = false;
+            ToggleHideClaimersOption();
+        }
+    } catch (error) {
+        console.log("Failed to validate public wishlist conditions.")
     }
 }

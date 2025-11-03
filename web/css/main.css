@@ -11,9 +11,13 @@
     --white: #ffffff;
   } 
 
+  html {
+    font-size: 16px; /* Base size = 1rem */
+  }
+
   body{
     margin:0;
-    font-size: 1em;
+    font-size: 1rem;
     line-height:1.5;
     color:var(--eggshell);
     text-align:left;
@@ -43,30 +47,30 @@
   
   p {
     margin: auto;
-    font-size: 1em;
+    font-size: 1rem;
   }
   h1 {
-    font-size: 2.5em;
+    font-size: 2.5rem;
     margin: auto;
   }
   
   h2 {
-    font-size: 2em;
+    font-size: 2rem;
     margin: auto;
   }
   
   h3 {
-    font-size: 1.75em;
+    font-size: 1.75rem;
     margin: auto;
   }
   
   h4 {
-    font-size: 1.5em;
+    font-size: 1.5rem;
     margin: auto;
   }
   
   h5 {
-    font-size: 1.25em;
+    font-size: 1.25rem;
     margin: auto;
   }
   
@@ -140,7 +144,7 @@
     border-top: 2px solid var(--grey);
     border-bottom: 2px solid var(--grey);
     text-align: center;
-    font-size: 0.8em;
+    font-size: 0.8rem;
     font-weight:200;
     border-radius: 1em 1em 0 0;
     color: var(--white)
@@ -216,7 +220,7 @@
     text-align: center;
     padding: 1em;
     text-decoration: none;
-    font-size: 1em;
+    font-size: 1rem;
     margin: auto;
     height: 2em;
     line-height: 2em;
@@ -237,7 +241,7 @@
     text-align: center;
     padding: 1em;
     text-decoration: none;
-    font-size: 1em;
+    font-size: 1rem;
     margin: auto;
     height: 2em;
     line-height: 2em;
@@ -337,7 +341,8 @@ input[type=text], input[type=password], input[type=email], input[type=date], inp
   border: 0.15em solid var(--darkblue);
   background: var(--white); 
   box-sizing: border-box;
-  font-size: 1em;
+  font-family: 'Roboto', sans-serif;
+  font-size: 1rem;
 }
 
 input:active {
@@ -366,7 +371,7 @@ button {
   background: var(--white); 
   color: var(--black);
   border: 0.15em solid var(--darkblue);
-  font-size: 1em;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   display: flex;
@@ -462,7 +467,7 @@ button:disabled {
   text-align: center;
   min-width: 5em;
   padding: 0;
-  font-size: 1em;
+  font-size: 1rem;
 }
 
 .wishlist-title {
@@ -477,7 +482,7 @@ button:disabled {
   text-align: center;
   min-width: 10em;
   padding: 0;
-  font-size: 1em;
+  font-size: 1rem;
 }
 
 .wish, .group, .wishlist {
@@ -498,7 +503,7 @@ button:disabled {
 }
  .profile-name {
   max-width: 66%;
-  font-size: 0.75em;
+  font-size: 0.75rem;
   text-align: center;
   margin: 0 0.25em 0 0;
   text-align: right;
@@ -604,13 +609,13 @@ button:disabled {
 
 .title{
   font-weight: 200;
-  font-size: 1.25em;
+  font-size: 1.25rem;
   text-align: center;
 }
 
 .title-two {
   font-weight: 200;
-  font-size: 1.1em;
+  font-size: 1.1rem;
   text-align: center;
 }
 
@@ -780,7 +785,7 @@ hr {
   text-align: center;
   margin: 0;
   text-align: end;
-  font-size: 0.75em;
+  font-size: 0.75rem;
 }
 
 .wishlist-expired {
@@ -808,7 +813,7 @@ hr {
   padding: 0.25em 0.5em;
   background-color: var(--blue);
   border-radius: 1em;
-  font-size: 0.75em;
+  font-size: 0.75rem;
   color: var(--white);
 }
 
@@ -944,7 +949,7 @@ hr {
 
 label {
   margin: 0;
-  font-size: 1.1em;
+  font-size: 1.1rem;
 }
 
 .wishlist-date-wrapper {
@@ -987,7 +992,7 @@ label {
   color: var(--white);
   margin: 0 1em;
   white-space: nowrap;
-  font-size: 1.1em;
+  font-size: 1.1rem;
   border: 0.15em solid var(--mediumblue);
 }
 
@@ -1043,7 +1048,7 @@ label {
   color: var(--black);
   border-radius: 0.5em;
   overflow: auto;
-  font-size: 0.8em;
+  font-size: 0.8rem;
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
@@ -1094,9 +1099,9 @@ textarea {
   border: 0.15em solid var(--darkblue);
   background: var(--white); 
   box-sizing: border-box;
-  font-family: 'Roboto', sans-serif;
-  font-size: 1em;
   resize: vertical;
+  font-family: 'Roboto', sans-serif;
+  font-size: 1rem;
 }
 
 .group-members {
@@ -1205,7 +1210,7 @@ textarea {
   padding: 0.25em 0.5em;
   background-color: var(--blue);
   border-radius: 1em;
-  font-size: 0.75em;
+  font-size: 0.75rem;
   color: var(--white);
   min-width: 5em;
   text-align: center;
@@ -1219,7 +1224,7 @@ textarea {
   justify-content: center;
   align-items: center;
   box-sizing: border-box;
-  font-size: 0.75em;
+  font-size: 0.75rem;
 }
 
 .wish-updatedat {
@@ -1383,15 +1388,16 @@ textarea {
 
 .server-info-value {
   margin: 0;
-  padding: 0.25em 1em;
+  padding: 0.12rem 0.5rem;
   background-color: var(--blue);
   border-radius: 1em;
-  font-size: 0.75em;
+  font-size: 0.75rem;
   color: var(--white);
   text-align: center;
   width: min-content;
   font-weight: 200;
   white-space: nowrap;
+  min-height: 1rem;
 }
 
 .server-info-line {
