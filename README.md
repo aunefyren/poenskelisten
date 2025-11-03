@@ -16,14 +16,14 @@ Like the project? Have too much money? Buy me a coffee or something! ☕️
 
 ## What is Pønskelisten? 🎁
 
-A self-hosted web app for creating, sharing and collaborating on wishlists — *without ruining the surprise*.  
+A self-hosted web app for creating, sharing and collaborating on wishlists - *without ruining the surprise*.  
 Share gift ideas, see which ones are already taken, and avoid the awkward “oh… you also bought that…” moment.
 
 ### Main Features
 - Create wishlists and add wishes
 - Collaborate with friends & family
 - Create groups to share wishlists with multiple people
-- Claim wishes anonymously (others see it's taken — owner does not)
+- Claim wishes anonymously (others see it's taken - owner does not)
 - First registered user becomes admin automatically
 
 ### Known Limitations
@@ -94,7 +94,7 @@ All configuration keys are identical across methods.
 | dbpassword | string | DB password |
 | dbname | string | Database name |
 | dbssl | bool | Use SSL for DB |
-| disablesmtp | bool | Disable email verification |
+| disablesmtp | bool | Disable email functions |
 | smtphost | string | SMTP host |
 | smtpport | int | SMTP port |
 | smtpusername | string | SMTP user |
@@ -137,22 +137,21 @@ services:
     depends_on:
       - db
 ```
-Remove generateinvite after first run to keep the same code.
+Remove `generateinvite` after first run to stop generating codes on start up.
 
-<br>
-Optional Add-ons
+### Optional Add-ons
 
-Reverse proxy (Caddy, Traefik, Nginx)
+- Reverse proxy (Caddy, Traefik, Nginx)
 
-Adminer or phpMyAdmin (if you like UI DB tools, but not required anymore)
+- Adminer or phpMyAdmin (if you like UI DB tools, but not required anymore)
 
 ## 🔑 Admin Access
 
-First registered user becomes admin
+- First registered user becomes admin
 
-Additional invite codes can be created in the admin panel
+- Additional invite codes can be created in the admin panel
 
-If you lose access: restart with generateinvite=true
+- If you lose access: restart with generateinvite=true
 
 ## 🔧 Building from Source
 
@@ -177,7 +176,7 @@ So… “The plotting list”.
 Not at the moment.
 
 ### Is mobile UI coming?
-Yes — improvements planned.
+Yes - improvements planned.
 
 ## 🙌 Contributing
 
