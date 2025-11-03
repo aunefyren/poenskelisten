@@ -21,13 +21,12 @@ Share gift ideas, see which ones are already taken, and avoid the awkward â€œohâ
 
 ### Main Features
 - Create wishlists and add wishes
-- Collaborate with friends & family
+- Collaborate with friends & family on the shared wishlists
 - Create groups to share wishlists with multiple people
 - Claim wishes anonymously (others see it's taken - owner does not)
-- First registered user becomes admin automatically
 
 ### Known Limitations
-- UI is not yet optimized for small screens
+- UI is not yet fully optimized for small screens
 
 <br>
 
@@ -123,7 +122,7 @@ services:
 
   poenskelisten-app:
     container_name: poenskelisten-app
-    image: aunefyren/poenskelisten:latest
+    image: ghcr.io/aunefyren/poenskelisten:latest
     restart: unless-stopped
     ports:
       - "8080:8080"
