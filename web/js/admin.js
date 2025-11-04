@@ -154,7 +154,7 @@ function place_server_info(server_info) {
     document.getElementById('server-poenskelisten-environment').innerHTML = server_info.poenskelisten_environment
     document.getElementById('server-poenskelisten-testemail').innerHTML = server_info.poenskelisten_test_email
 
-    if(server_info.poenskelisten_smtp) {
+    if(server_info.smtp_enabled) {
         document.getElementById('server-poenskelisten-smtp').innerHTML = 'true'
     } else {
         document.getElementById('server-poenskelisten-smtp').innerHTML = 'false'
