@@ -107,7 +107,7 @@ function createNewWishlistThree(groupContextID, userID, wishlistObjectBase64) {
             }
         } else {
             var now = new Date
-            var wishlistDate = now.toISOString().split('T')[0];
+            var wishlistDate = now.toISOString();
         }
 
         wishlistObject.expires = wishlistExpires
