@@ -99,9 +99,9 @@ func RegisterWishlist(context *gin.Context) {
 
 	wishlistdb.Expires = &wishlist.Expires
 
-	if wishlist.Date != nil {
+	if wishlist.Date != nil && wishlistdb.Expires != nil && *wishlistdb.Expires {
 		newDate, err := time.Parse("2006-01-02T15:04:05.000Z", *wishlist.Date)
-		if err != nil && *wishlistdb.Expires {
+		if err != nil {
 			logger.Log.Error("Failed to parse date time. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse date time."})
 			context.Abort()
@@ -114,6 +114,8 @@ func RegisterWishlist(context *gin.Context) {
 			context.Abort()
 			return
 		}
+	} else {
+		wishlistdb.Date = &now
 	}
 
 	unique_wish_name, err := database.VerifyUniqueWishlistNameForUser(wishlist.Name, userID)
