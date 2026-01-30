@@ -62,6 +62,12 @@ func GetConfig() (config models.ConfigStruct, err error) {
 		anythingChanged = true
 	}
 
+	if config.PoenskelistenDescription == "" {
+		// Set new value
+		config.PoenskelistenDescription = "Share wishlists in a meaningful way."
+		anythingChanged = true
+	}
+
 	if config.PoenskelistenEnvironment == "" {
 		// Set new value
 		config.PoenskelistenEnvironment = "production"
@@ -111,12 +117,14 @@ func GetConfig() (config models.ConfigStruct, err error) {
 		config.PoenskelistenLogLevel = level.String()
 		anythingChanged = true
 	} else {
-		_, err := logrus.ParseLevel(config.PoenskelistenLogLevel)
+		parsedLogLevel, err := logrus.ParseLevel(config.PoenskelistenLogLevel)
 		if err != nil {
 			fmt.Println("Failed to load log level: %v", err)
 			level := logrus.InfoLevel
 			config.PoenskelistenLogLevel = level.String()
 			anythingChanged = true
+		} else {
+			logrus.SetLevel(parsedLogLevel)
 		}
 	}
 

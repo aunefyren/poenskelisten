@@ -99,7 +99,7 @@ function load_page(result) {
                         </div>
 
                         <div id="wish-input" class="wish-input">
-                            <button id="register-button" onClick="createWish('${wishlist_id}', '${user_id}', '{{currency}}');" type="" href="/">Create new wish</button>
+                            <button id="register-button" onClick="createWish('${wishlist_id}', '${user_id}', '{{.currency}}');" type="" href="/">Create new wish</button>
                         </div>
 
                     </div>
@@ -169,7 +169,6 @@ function placeWishlist(wishlist_object, public_url) {
     }
 
     newWishButton = document.getElementById("register-button")
-    newWishButton.outerHTML = newWishButton.outerHTML.replace("{{currency}}", wishlist_object.currency)
 
     document.getElementById("wishlist-title").innerHTML = wishlist_object.name
     document.getElementById("wishlist-description").innerHTML = wishlist_object.description

@@ -8,13 +8,16 @@ import (
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
+	"bytes"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	textTemplate "text/template"
 
 	"strconv"
 	"time"
@@ -99,15 +102,13 @@ func main() {
 	}
 
 	// Initialize Router
-	router := initRouter()
+	router := initRouter(configFile)
 	logger.Log.Info("Router initialized. Starting Pønskelisten at http://*:" + strconv.Itoa(configFile.PoenskelistenPort))
 	log.Fatal(router.Run(":" + strconv.Itoa(configFile.PoenskelistenPort)))
 }
 
-func initRouter() *gin.Engine {
+func initRouter(configFile models.ConfigStruct) *gin.Engine {
 	router := gin.Default()
-
-	router.LoadHTMLGlob("web/*/*.html")
 
 	// API endpoint
 	api := router.Group("/api")
@@ -205,93 +206,43 @@ func initRouter() *gin.Engine {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	// load HTML blobs
+	router.LoadHTMLGlob("./web/*/*.html")
+
 	// Static endpoint for different directories
 	router.Static("/assets", "./web/assets")
 	router.Static("/css", "./web/css")
-	router.Static("/js", "./web/js")
-	router.Static("/json", "./web/json")
 
-	// Static endpoint for homepage
-	router.GET("/", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "frontpage.html", nil)
-	})
+	// Create template for HTML variables
+	templateData := gin.H{
+		"appName":        configFile.PoenskelistenName,
+		"currency":       configFile.PoenskelistenCurrency,
+		"appDescription": configFile.PoenskelistenDescription,
+	}
 
-	// Static endpoint for selecting your group
-	router.GET("/login", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "login.html", nil)
-	})
+	// endpoint handler building for JS
+	router, err := registerTemplatedStaticFilesForDirectory(router, "/js", true, "./web/js", templateData)
+	if err != nil {
+		logger.Log.Error("failed to build JS paths. error: " + err.Error())
+	}
 
-	// Static endpoint for selecting your group
-	router.GET("/register", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "register.html", nil)
-	})
+	// endpoint handler building for HTML
+	router, err = registerTemplatedStaticFilesForDirectory(router, "", false, "./web/html", templateData)
+	if err != nil {
+		logger.Log.Error("failed to build HTML paths. error: " + err.Error())
+	}
 
-	// Static endpoint for your own account
-	router.GET("/account", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "account.html", nil)
-	})
+	// endpoint handler building for JSON
+	router, err = registerTemplatedStaticFilesForDirectory(router, "/json", true, "./web/json", templateData)
+	if err != nil {
+		logger.Log.Error("failed to build JSON paths. error: " + err.Error())
+	}
 
-	// Static endpoint for selecting your group
-	router.GET("/groups", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "groups.html", nil)
-	})
-
-	// Static endpoint for details in your group
-	router.GET("/groups/:group_id", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "group.html", nil)
-	})
-
-	// Static endpoint for wishlist in your group
-	router.GET("/wishlists", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "wishlists.html", nil)
-	})
-
-	// Static endpoint for wishlist in your group
-	router.GET("/wishlists/:wishlist_id", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "wishlist.html", nil)
-	})
-
-	// Static endpoint for public wishlist
-	router.GET("/wishlists/public/:wishlist_hash", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "public.html", nil)
-	})
-
-	// Static endpoint for admin panel
-	router.GET("/admin", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "admin.html", nil)
-	})
-
-	// Static endpoint for verifying account
-	router.GET("/verify", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "verify.html", nil)
-	})
-
-	// Static endpoint for service-worker
-	router.GET("/service-worker.js", func(c *gin.Context) {
-		JSfile, err := os.ReadFile("./web/js/service-worker.js")
-		if err != nil {
-			logger.Log.Error("Reading service-worker threw error trying to open the file. Error: " + err.Error())
-		}
-		c.Data(http.StatusOK, "text/javascript", JSfile)
-	})
-
-	// Static endpoint for manifest
-	router.GET("/manifest.json", func(c *gin.Context) {
-		JSONfile, err := os.ReadFile("./web/json/manifest.json")
-		if err != nil {
-			logger.Log.Error("Reading manifest threw error trying to open the file. Error: " + err.Error())
-		}
-		c.Data(http.StatusOK, "text/json", JSONfile)
-	})
-
-	// Static endpoint for robots.txt
-	router.GET("/robots.txt", func(c *gin.Context) {
-		TXTfile, err := os.ReadFile("./web/txt/robots.txt")
-		if err != nil {
-			logger.Log.Error("Reading manifest threw error trying to open the file. Error: " + err.Error())
-		}
-		c.Data(http.StatusOK, "text/plain", TXTfile)
-	})
+	// endpoint handler building for TXT
+	router, err = registerTemplatedStaticFilesForDirectory(router, "/txt", true, "./web/txt", templateData)
+	if err != nil {
+		logger.Log.Error("failed to build TXT paths. error: " + err.Error())
+	}
 
 	return router
 }
@@ -318,6 +269,7 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 	var environment = flag.String("environment", configFile.PoenskelistenEnvironment, "The environment Pønskelisten is running in. It will behave differently in 'test'.")
 	var testemail = flag.String("testemail", configFile.PoenskelistenTestEmail, "The email all emails are sent to in test mode.")
 	var name = flag.String("name", configFile.PoenskelistenName, "The name of the application. Replaces 'Pønskelisten'.")
+	var description = flag.String("description", configFile.PoenskelistenName, "The description of the application.")
 	var logLevel = flag.String("loglevel", configFile.PoenskelistenLogLevel, "The log level of the application. Default 'info'.")
 
 	// DB values
@@ -367,6 +319,11 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 	// Respect the flag if provided
 	if testemail != nil {
 		configFile.PoenskelistenTestEmail = *testemail
+	}
+
+	// Respect the flag if provided
+	if description != nil {
+		configFile.PoenskelistenDescription = *description
 	}
 
 	// Respect the flag if provided
@@ -481,4 +438,119 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 	}
 
 	return configFile, generateInviteBool, nil
+}
+
+func registerTemplatedStaticFilesForDirectory(
+	r *gin.Engine,
+	urlPrefix string,
+	keepFileExtension bool,
+	fileDirectory string,
+	templateData any,
+) (
+	newRouter *gin.Engine,
+	err error,
+) {
+	type filePathTable struct {
+		urlPath string
+	}
+	filePathTableList := map[string]*filePathTable{}
+	filePathTableList["frontpage.html"] = &filePathTable{urlPath: "/"}
+	filePathTableList["group.html"] = &filePathTable{urlPath: "/groups/:group_id"}
+	filePathTableList["wishlist.html"] = &filePathTable{urlPath: "/wishlists/:wishlist_id"}
+	filePathTableList["public.html"] = &filePathTable{urlPath: "/wishlists/public/:wishlist_hash"}
+	filePathTableList["manifest.json"] = &filePathTable{urlPath: "/manifest.json"}
+	filePathTableList["service-worker.js"] = &filePathTable{urlPath: "/service-worker.js"}
+	filePathTableList["robots.txt"] = &filePathTable{urlPath: "/robots.txt"}
+
+	root := os.DirFS(fileDirectory)
+	jsTemplates := MustLoadTemplates("./web/js/*.js")
+	jsonTemplates := MustLoadTemplates("./web/json/*.json")
+	txtTemplates := MustLoadTemplates("./web/txt/*.txt")
+
+	foundFiles, err := fs.Glob(root, "*")
+
+	if err != nil {
+		logger.Log.Error("failed to load directory. error: " + err.Error())
+		return
+	}
+
+	logger.Log.Debug("found " + strconv.Itoa(len(foundFiles)) + " files for endpoint mapping using path: " + fileDirectory)
+
+	for _, file := range foundFiles {
+		fileWithoutExtension := file
+		extension := filepath.Ext(file)
+
+		if !keepFileExtension && strings.Contains(file, ".") {
+			fileWithoutExtension = strings.TrimSuffix(file, extension)
+		}
+
+		path := urlPrefix + "/" + fileWithoutExtension
+
+		if filePathTableList[file] != nil {
+			path = filePathTableList[file].urlPath
+		}
+
+		switch strings.ToLower(extension) {
+		case ".html":
+			r.GET(path, func(c *gin.Context) {
+				c.HTML(http.StatusOK, file, templateData)
+			})
+			logger.Log.Debug("registered HTML '" + file + "' to path '" + path + "'")
+		case ".js":
+			r.GET(path, RenderJSTemplate(jsTemplates, file, templateData))
+			logger.Log.Debug("registered JS '" + file + "' to path '" + path + "'")
+		case ".json":
+			r.GET(path, RenderJSONTemplate(jsonTemplates, file, templateData))
+			logger.Log.Debug("registered JSON '" + file + "' to path '" + path + "'")
+		case ".txt":
+			r.GET(path, RenderTextTemplate(txtTemplates, file, templateData))
+			logger.Log.Debug("registered TXT '" + file + "' to path '" + path + "'")
+		}
+	}
+
+	return r, err
+}
+
+func MustLoadTemplates(glob string) *textTemplate.Template {
+	t, err := textTemplate.ParseGlob(glob)
+	if err != nil {
+		logger.Log.Warn("failed to parse file: " + glob)
+	}
+	return t
+}
+
+func RenderJSTemplate(jsTemplates *textTemplate.Template, name string, data any) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var buf bytes.Buffer
+		if err := jsTemplates.ExecuteTemplate(&buf, name, data); err != nil {
+			c.String(http.StatusInternalServerError, "template error: %v", err)
+			return
+		}
+
+		c.Data(http.StatusOK, "application/javascript; charset=utf-8", buf.Bytes())
+	}
+}
+
+func RenderJSONTemplate(jsTemplates *textTemplate.Template, name string, data any) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var buf bytes.Buffer
+		if err := jsTemplates.ExecuteTemplate(&buf, name, data); err != nil {
+			c.String(http.StatusInternalServerError, "template error: %v", err)
+			return
+		}
+
+		c.Data(http.StatusOK, "application/json; charset=utf-8", buf.Bytes())
+	}
+}
+
+func RenderTextTemplate(jsTemplates *textTemplate.Template, name string, data any) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var buf bytes.Buffer
+		if err := jsTemplates.ExecuteTemplate(&buf, name, data); err != nil {
+			c.String(http.StatusInternalServerError, "template error: %v", err)
+			return
+		}
+
+		c.Data(http.StatusOK, "text/plain; charset=utf-8", buf.Bytes())
+	}
 }

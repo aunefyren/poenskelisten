@@ -1,9 +1,9 @@
 {
 	"lang": "en",
 	"dir": "ltr",
-	"name": "Pønskelisten",
-	"short_name": "Pønskelisten",
-	"description": "Share wishes in a meaningful way.",
+	"name": "{{.appName}}",
+	"short_name": "{{.appName}}",
+	"description": "{{.appDescription}}",
 	"theme_color": "#0d1b2a",
 	"background_color": "#e0e1dd",
 	"display": "standalone",
