@@ -40,15 +40,6 @@ func GetWishesFromWishlist(context *gin.Context) {
 		return
 	}
 
-	// Get configuration
-	config, err := config.GetConfig()
-	if err != nil {
-		logger.Log.Error("Failed to get config file. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
-		context.Abort()
-		return
-	}
-
 	// Parse wishlist id
 	wishlist_id_int, err := uuid.Parse(wishlist_id)
 	if err != nil {
@@ -126,9 +117,9 @@ func GetWishesFromWishlist(context *gin.Context) {
 		"owner_id":      owner_id,
 		"collaborators": wishlistCollabsIntArray,
 		"wishes":        wishObjects, "message": "Wishes retrieved.",
-		"currency":         config.PoenskelistenCurrency,
-		"currency_padding": config.PoenskelistenCurrencyPad,
-		"currency_left":    config.PoenskelistenCurrencyLeft,
+		"currency":         config.ConfigFile.PoenskelistenCurrency,
+		"currency_padding": config.ConfigFile.PoenskelistenCurrencyPad,
+		"currency_left":    config.ConfigFile.PoenskelistenCurrencyLeft,
 	})
 }
 
@@ -182,12 +173,6 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 		return models.WishObject{}, errors.New("Failed to convert wishlist collaborators to objects.")
 	}
 
-	configFile, err := config.GetConfig()
-	if err != nil {
-		logger.Log.Error("Failed to get config. Error: " + err.Error())
-		return models.WishObject{}, errors.New("Failed to get config.")
-	}
-
 	// Purge the reply if the requester is the owner
 	if requestUserID != nil {
 		if wish.OwnerID == *requestUserID {
@@ -234,9 +219,9 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 	wishObject.WishlistID = wish.WishlistID
 	wishObject.WishClaimable = *wishlist.Claimable
 	wishObject.Collaborators = wishlistCollabObjects
-	wishObject.Currency = configFile.PoenskelistenCurrency
-	wishObject.CurrencyPadding = configFile.PoenskelistenCurrencyPad
-	wishObject.CurrencyLeft = configFile.PoenskelistenCurrencyLeft
+	wishObject.Currency = config.ConfigFile.PoenskelistenCurrency
+	wishObject.CurrencyPadding = config.ConfigFile.PoenskelistenCurrencyPad
+	wishObject.CurrencyLeft = config.ConfigFile.PoenskelistenCurrencyLeft
 
 	return wishObject, nil
 

@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"aunefyren/poenskelisten/config"
-	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"net/http"
 
@@ -10,25 +9,16 @@ import (
 )
 
 func APIGetServerInfo(context *gin.Context) {
-
-	config, err := config.GetConfig()
-	if err != nil {
-		logger.Log.Error("Failed to get config. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config."})
-		context.Abort()
-		return
-	}
-
 	serverInfo := models.ServerInfoReply{
-		Timezone:                 config.Timezone,
-		PoenskelistenVersion:     config.PoenskelistenVersion,
-		PoenskelistenPort:        config.PoenskelistenPort,
-		PoenskelistenExternalURL: config.PoenskelistenExternalURL,
-		DatabaseType:             config.DBType,
-		SMTPEnabled:              config.SMTPEnabled,
-		PoenskelistenEnvironment: config.PoenskelistenEnvironment,
-		PoenskelistenTestEmail:   config.PoenskelistenTestEmail,
-		PoenskelistenLogLevel:    config.PoenskelistenLogLevel,
+		Timezone:                 config.ConfigFile.Timezone,
+		PoenskelistenVersion:     config.ConfigFile.PoenskelistenVersion,
+		PoenskelistenPort:        config.ConfigFile.PoenskelistenPort,
+		PoenskelistenExternalURL: config.ConfigFile.PoenskelistenExternalURL,
+		DatabaseType:             config.ConfigFile.DBType,
+		SMTPEnabled:              config.ConfigFile.SMTPEnabled,
+		PoenskelistenEnvironment: config.ConfigFile.PoenskelistenEnvironment,
+		PoenskelistenTestEmail:   config.ConfigFile.PoenskelistenTestEmail,
+		PoenskelistenLogLevel:    config.ConfigFile.PoenskelistenLogLevel,
 	}
 
 	// Reply
