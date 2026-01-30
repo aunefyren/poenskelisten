@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html lang="no">
+<html lang="en">
     <head>
 
         <!-- Required meta tags -->
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-        <meta name="description" content="Keep track of whishlists in a meaningful way.">
-        <meta name="pønskelisten" content="index, follow">
-        <title>Pønskelisten</title>
+        <meta name="description" content="Keep track of wishlists in a meaningful way.">
+        <meta name="{{.appName}}" content="index, follow">
+        <title>{{.appName}}</title>
 
         <!-- Custom CSS -->
         <link rel="stylesheet" type="text/css" href="/css/main.css">
@@ -45,7 +45,7 @@
         <meta name="msapplication-TileColor" content="#0d1b2a" />
 
         <!-- Application name for Microsoft Windows app tile -->
-        <meta name="Pønskelisten" content="Wishlists." />
+        <meta name="{{.appName}}" content="Wishlists." />
 
         <!-- Application icons for Microsoft Windows app tile -->
         <meta name="msapplication-TileImage" content="assets/favicons/ms-tile-144x144.png" />
@@ -70,7 +70,7 @@
                 </div>
 
                 <a class="nav-title" id="nav-title" href="./" id='home'>
-                    <b>Pønskelisten</b>
+                    <b>{{.appName}}</b>
                 </a>
 
                 <a class="nav-icon" href="javascript:void(0);" class="icon" onclick="toggle_navbar()" style="padding: 0;">

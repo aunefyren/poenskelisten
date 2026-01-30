@@ -44,7 +44,7 @@ function load_page(result) {
                                 <input type="text" name="invitation_code" id="invitation_code" placeholder="Invitation code" required/>
                                 
                                 <input class="clickable" style="margin-top: 2em;" type="checkbox" id="confirm" name="confirm" value="confirm" required>
-                                <label for="confirm" class="clickable"> I confirm that Pønskelisten can store relevant information about me and that I am atleast thirteen years of age.</label><br>
+                                <label for="confirm" class="clickable"> I confirm that {{.appName}} can store relevant information about me and that I am atleast thirteen years of age.</label><br>
 
                                 <button id="register-button" type="submit" href="/">Register</button>
 

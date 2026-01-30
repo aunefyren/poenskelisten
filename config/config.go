@@ -111,12 +111,14 @@ func GetConfig() (config models.ConfigStruct, err error) {
 		config.PoenskelistenLogLevel = level.String()
 		anythingChanged = true
 	} else {
-		_, err := logrus.ParseLevel(config.PoenskelistenLogLevel)
+		parsedLogLevel, err := logrus.ParseLevel(config.PoenskelistenLogLevel)
 		if err != nil {
 			fmt.Println("Failed to load log level: %v", err)
 			level := logrus.InfoLevel
 			config.PoenskelistenLogLevel = level.String()
 			anythingChanged = true
+		} else {
+			logrus.SetLevel(parsedLogLevel)
 		}
 	}
 
