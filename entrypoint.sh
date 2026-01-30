@@ -10,6 +10,7 @@ set -- /app/poenskelisten
 [ -n "$environment" ] && set -- "$@" --environment "$environment"
 [ -n "$testemail" ] && set -- "$@" --testemail "$testemail"
 [ -n "$name" ] && set -- "$@" --name "$name"
+[ -n "$description" ] && set -- "$@" --name "$description"
 [ -n "$loglevel" ] && set -- "$@" --loglevel "$loglevel"
 
 # Add database-related flags if the corresponding environment variables are set

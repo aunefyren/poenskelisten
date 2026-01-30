@@ -46,11 +46,11 @@ function load_page(result) {
                     <div class="module">
                     
                         <div class="title">
-                            Pønskelisten
+                            {{.appName}}
                         </div>
 
                         <div class="text-body" id="main-text" style="text-align: center;">
-                            Make a wish.
+                            {{.appDescription}}
 
                             <br>
                             <br>
