@@ -24,7 +24,7 @@ var dbError error
 func Connect(dbType string, timezone string, dbUsername string, dbPassword string, dbIP string, dbPort int, dbName string, dbSSL bool, dbLocation string) error {
 
 	if strings.ToLower(dbType) == "postgres" {
-		logger.Log.Debug("Attempting to connect to postgres database.")
+		logger.Log.Debug("attempting to connect to postgres database")
 
 		var sslString = "disable"
 		if dbSSL {
@@ -39,19 +39,19 @@ func Connect(dbType string, timezone string, dbUsername string, dbPassword strin
 			PrepareStmt: true,
 		})
 		if dbError != nil {
-			logger.Log.Error("Failed to connect to database. Error: " + dbError.Error())
-			return errors.New("Failed to connect to database.")
+			logger.Log.Error("failed to connect to database. error: " + dbError.Error())
+			return errors.New("failed to connect to database")
 		}
 	} else if strings.ToLower(dbType) == "sqlite" {
-		logger.Log.Debug("Attempting to connect to sqlite database.")
+		logger.Log.Debug("attempting to connect to sqlite database")
 
 		Instance, dbError = gorm.Open(sqlite.Open(dbLocation), &gorm.Config{})
 		if dbError != nil {
-			logger.Log.Error("Failed to connect to database. Error: " + dbError.Error())
-			return errors.New("Failed to connect to database.")
+			logger.Log.Error("failed to connect to database. error: " + dbError.Error())
+			return errors.New("failed to connect to database")
 		}
 	} else if strings.ToLower(dbType) == "mysql" {
-		logger.Log.Debug("Attempting to connect to mysql database.")
+		logger.Log.Debug("attempting to connect to mysql database")
 
 		connStrDb := dbUsername + ":" + dbPassword + "@tcp(" + dbIP + ":" + strconv.Itoa(dbPort) + ")/" + dbName + "?parseTime=True&loc=Local&charset=utf8mb4"
 
@@ -70,12 +70,12 @@ func Connect(dbType string, timezone string, dbUsername string, dbPassword strin
 					}
 				}
 			} else {
-				logger.Log.Error("Failed to connect to database. Error: " + dbError.Error())
-				return errors.New("Failed to connect to database.")
+				logger.Log.Error("failed to connect to database. error: " + dbError.Error())
+				return errors.New("failed to connect to database")
 			}
 		}
 	} else {
-		return errors.New("Database type not recognized.")
+		return errors.New("database type not recognized")
 	}
 
 	return nil
@@ -113,7 +113,7 @@ func Migrate() {
 	if err != nil {
 		panic(err)
 	}
-	logger.Log.Debug("Database migration completed.")
+	logger.Log.Debug("database migration completed")
 }
 
 // Generate a random invite code an return ut
@@ -149,7 +149,7 @@ func GenerateRandomVerificationCodeForUser(userID uuid.UUID) (string, error) {
 		return "", userRecord.Error
 	}
 	if userRecord.RowsAffected != 1 {
-		return "", errors.New("Verification code not changed in database.")
+		return "", errors.New("verification code not changed in database")
 	}
 
 	return verificationCode, nil
@@ -184,7 +184,7 @@ func VerifyUserHasVerificationCode(userID uuid.UUID) (bool, error) {
 		return false, userRecords.Error
 	}
 	if userRecords.RowsAffected != 1 {
-		return false, errors.New("Couldn't find the user.")
+		return false, errors.New("couldn't find the user")
 	}
 
 	if user.VerificationCode == nil || *user.VerificationCode == "" {
@@ -227,7 +227,7 @@ func VerifyUserIsVerified(userID uuid.UUID) (bool, error) {
 		return false, userRecords.Error
 	}
 	if userRecords.RowsAffected != 1 {
-		return false, errors.New("No user found.")
+		return false, errors.New("no user found")
 	}
 
 	return *user.Verified, nil
@@ -262,7 +262,7 @@ func SetUsedUserInviteCode(providedCode string, userIDClaimer uuid.UUID) error {
 		return inviteRecords.Error
 	}
 	if inviteRecords.RowsAffected != 1 {
-		return errors.New("Code not changed in database.")
+		return errors.New("code not changed in database")
 	}
 
 	inviteRecords = Instance.
@@ -274,7 +274,7 @@ func SetUsedUserInviteCode(providedCode string, userIDClaimer uuid.UUID) error {
 		return inviteRecords.Error
 	}
 	if inviteRecords.RowsAffected != 1 {
-		return errors.New("Recipient not changed in database.")
+		return errors.New("recipient not changed in database")
 	}
 
 	return nil
@@ -293,7 +293,7 @@ func SetUserVerification(userID uuid.UUID, verified bool) error {
 		return userRecords.Error
 	}
 	if userRecords.RowsAffected != 1 {
-		return errors.New("Verification not changed in database.")
+		return errors.New("verification not changed in database")
 	}
 
 	return nil
@@ -311,7 +311,7 @@ func DeleteGroup(GroupID uuid.UUID) error {
 		return groupRecords.Error
 	}
 	if groupRecords.RowsAffected != 1 {
-		return errors.New("Failed to delete group in database.")
+		return errors.New("failed to delete group in database")
 	}
 	return nil
 }
@@ -329,7 +329,7 @@ func DeleteGroupMembership(GroupMembershipID uuid.UUID) error {
 		return groupRecords.Error
 	}
 	if groupRecords.RowsAffected != 1 {
-		return errors.New("Failed to delete group membership in database.")
+		return errors.New("failed to delete group membership in database")
 	}
 	return nil
 }
@@ -347,7 +347,7 @@ func DeleteWishlist(WishlistID uuid.UUID) error {
 		return wishlistRecords.Error
 	}
 	if wishlistRecords.RowsAffected != 1 {
-		return errors.New("Failed to delete wishlist in database.")
+		return errors.New("failed to delete wishlist in database")
 	}
 	return nil
 }
@@ -365,7 +365,7 @@ func DeleteWishlistMembership(WishlistMembershipID uuid.UUID) error {
 		return wishlistMembershipRecords.Error
 	}
 	if wishlistMembershipRecords.RowsAffected != 1 {
-		return errors.New("Failed to delete wishlist membership in database.")
+		return errors.New("failed to delete wishlist membership in database")
 	}
 	return nil
 }
