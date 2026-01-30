@@ -40,37 +40,45 @@ func main() {
 		fmt.Println("Failed to create 'files' directory. Error: " + err.Error())
 		os.Exit(1)
 	}
-	fmt.Println("Directory 'files' valid.")
+	fmt.Println("directory 'files' valid")
 
 	// Load config file
-	configFile, err := config.GetConfig()
+	err = config.LoadConfig()
 	if err != nil {
-		fmt.Println("Failed to load configuration file. Error: " + err.Error())
+		fmt.Println("failed to load configuration file. error: " + err.Error())
 		os.Exit(1)
 	}
-	fmt.Println("Configuration file loaded.")
+	fmt.Println("configuration file loaded")
 
 	// Create and define file for logging
-	logger.InitLogger(configFile)
+	logger.InitLogger(config.ConfigFile)
 
-	logger.Log.Info("Running Pønskelisten version: " + configFile.PoenskelistenVersion)
+	logger.Log.Info("Running Pønskelisten version: " + config.ConfigFile.PoenskelistenVersion)
 
-	// Change the config to respect flags
-	configFile, generateInvite, err := parseFlags(configFile)
+	// change the config to respect flags
+	generateInvite := false
+	config.ConfigFile, generateInvite, err = parseFlags(config.ConfigFile)
 	if err != nil {
 		logger.Log.Error("Failed to parse input flags. Error: " + err.Error())
 		os.Exit(1)
 	}
-	logger.Log.Info("Flags parsed.")
+	logger.Log.Info("flags parsed")
 
-	// Set time zone from config if it is not empty
-	loc, err := time.LoadLocation(configFile.Timezone)
+	// save new version of config
+	err = config.SaveConfig()
+	if err != nil {
+		logger.Log.Error("Failed to set new time zone in the config. Error: " + err.Error())
+		os.Exit(1)
+	}
+
+	// set time zone from config if it is not empty
+	loc, err := time.LoadLocation(config.ConfigFile.Timezone)
 	if err != nil {
 		logger.Log.Error("Failed to set time zone from config. Error: " + err.Error())
 		logger.Log.Warn("Removing value...")
 
-		configFile.Timezone = "Europe/Paris"
-		err = config.SaveConfig(configFile)
+		config.ConfigFile.Timezone = "Europe/Paris"
+		err = config.SaveConfig()
 		if err != nil {
 			logger.Log.Error("Failed to set new time zone in the config. Error: " + err.Error())
 			os.Exit(1)
@@ -79,18 +87,18 @@ func main() {
 	} else {
 		time.Local = loc
 	}
-	logger.Log.Info("Timezone set.")
+	logger.Log.Info("timezone set")
 
 	// Initialize Database
-	logger.Log.Info("Connecting to database...")
+	logger.Log.Info("connecting to database...")
 
-	err = database.Connect(configFile.DBType, configFile.Timezone, configFile.DBUsername, configFile.DBPassword, configFile.DBIP, configFile.DBPort, configFile.DBName, configFile.DBSSL, configFile.DBLocation)
+	err = database.Connect(config.ConfigFile.DBType, config.ConfigFile.Timezone, config.ConfigFile.DBUsername, config.ConfigFile.DBPassword, config.ConfigFile.DBIP, config.ConfigFile.DBPort, config.ConfigFile.DBName, config.ConfigFile.DBSSL, config.ConfigFile.DBLocation)
 	if err != nil {
 		logger.Log.Error("Failed to connect to database. Error: " + err.Error())
 		os.Exit(1)
 	}
 	database.Migrate()
-	logger.Log.Info("Database connected.")
+	logger.Log.Info("database connected")
 
 	if generateInvite {
 		invite, err := database.GenerateRandomInvite()
@@ -102,9 +110,9 @@ func main() {
 	}
 
 	// Initialize Router
-	router := initRouter(configFile)
-	logger.Log.Info("Router initialized. Starting Pønskelisten at http://*:" + strconv.Itoa(configFile.PoenskelistenPort))
-	log.Fatal(router.Run(":" + strconv.Itoa(configFile.PoenskelistenPort)))
+	router := initRouter(config.ConfigFile)
+	logger.Log.Info("Router initialized. Starting Pønskelisten at http://*:" + strconv.Itoa(config.ConfigFile.PoenskelistenPort))
+	log.Fatal(router.Run(":" + strconv.Itoa(config.ConfigFile.PoenskelistenPort)))
 }
 
 func initRouter(configFile models.ConfigStruct) *gin.Engine {
@@ -429,12 +437,6 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 	// Failsafe, if port is 0, set to default 8080
 	if configFile.PoenskelistenPort == 0 {
 		configFile.PoenskelistenPort = 8080
-	}
-
-	// Save the new configFile
-	err := config.SaveConfig(configFile)
-	if err != nil {
-		return models.ConfigStruct{}, false, err
 	}
 
 	return configFile, generateInviteBool, nil

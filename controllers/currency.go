@@ -12,16 +12,7 @@ import (
 )
 
 func APIGetCurrency(context *gin.Context) {
-	// Get configuration
-	config, err := config.GetConfig()
-	if err != nil {
-		logger.Log.Error("Failed to get config file. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
-		context.Abort()
-		return
-	}
-
-	context.JSON(http.StatusOK, gin.H{"message": "Currency retrieved.", "currency": config.PoenskelistenCurrency, "padding": config.PoenskelistenCurrencyPad, "left": config.PoenskelistenCurrencyLeft})
+	context.JSON(http.StatusOK, gin.H{"message": "Currency retrieved.", "currency": config.ConfigFile.PoenskelistenCurrency, "padding": config.ConfigFile.PoenskelistenCurrencyPad, "left": config.ConfigFile.PoenskelistenCurrencyLeft})
 }
 
 func APIUpdateCurrency(context *gin.Context) {
@@ -48,20 +39,11 @@ func APIUpdateCurrency(context *gin.Context) {
 		return
 	}
 
-	// Get configuration
-	configFile, err := config.GetConfig()
-	if err != nil {
-		logger.Log.Error("Failed to get config file. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
-		context.Abort()
-		return
-	}
+	config.ConfigFile.PoenskelistenCurrency = strings.TrimSpace(currency.PoenskelistenCurrency)
+	config.ConfigFile.PoenskelistenCurrencyPad = currency.PoenskelistenCurrencyPad
+	config.ConfigFile.PoenskelistenCurrencyLeft = currency.PoenskelistenCurrencyLeft
 
-	configFile.PoenskelistenCurrency = strings.TrimSpace(currency.PoenskelistenCurrency)
-	configFile.PoenskelistenCurrencyPad = currency.PoenskelistenCurrencyPad
-	configFile.PoenskelistenCurrencyLeft = currency.PoenskelistenCurrencyLeft
-
-	err = config.SaveConfig(configFile)
+	err = config.SaveConfig()
 	if err != nil {
 		logger.Log.Error("Failed to save config file. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save config file."})
@@ -69,5 +51,5 @@ func APIUpdateCurrency(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"message": "Currency updated.", "currency": configFile.PoenskelistenCurrency, "padding": configFile.PoenskelistenCurrencyPad, "left": configFile.PoenskelistenCurrencyLeft})
+	context.JSON(http.StatusOK, gin.H{"message": "Currency updated.", "currency": config.ConfigFile.PoenskelistenCurrency, "padding": config.ConfigFile.PoenskelistenCurrencyPad, "left": config.ConfigFile.PoenskelistenCurrencyLeft})
 }

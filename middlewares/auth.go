@@ -38,15 +38,8 @@ func AuthFunction(context *gin.Context, admin bool) (success bool, errorString s
 		return false, "Failed to validate token.", http.StatusBadRequest
 	}
 
-	// Get configuration
-	config, err := config.GetConfig()
-	if err != nil {
-		logger.Log.Error("Failed to get config. Error: " + err.Error())
-		return false, "Failed to get config.", http.StatusInternalServerError
-	}
-
 	// If SMTP is enabled, verify if user is enabled
-	if config.SMTPEnabled {
+	if config.ConfigFile.SMTPEnabled {
 
 		// Get userID from header
 		userID, err := GetAuthUsername(context.GetHeader("Authorization"))

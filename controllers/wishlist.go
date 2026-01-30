@@ -323,15 +323,6 @@ func GetWishlist(context *gin.Context) {
 	// Create wishlist request
 	var wishlist_id = context.Param("wishlist_id")
 
-	// Get configuration
-	configFile, err := config.GetConfig()
-	if err != nil {
-		logger.Log.Error("Failed to get config file. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
-		context.Abort()
-		return
-	}
-
 	// Get user ID
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
@@ -380,7 +371,7 @@ func GetWishlist(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"wishlist": wishlist_with_user, "message": "Wishlist retrieved.", "public_url": configFile.PoenskelistenExternalURL})
+	context.JSON(http.StatusOK, gin.H{"wishlist": wishlist_with_user, "message": "Wishlist retrieved.", "public_url": config.ConfigFile.PoenskelistenExternalURL})
 
 }
 
@@ -877,15 +868,6 @@ func APIUpdateWishlist(context *gin.Context) {
 	var wishlist_id = context.Param("wishlist_id")
 	var wishlist models.WishlistUpdateRequest
 
-	// Get configuration
-	configFile, err := config.GetConfig()
-	if err != nil {
-		logger.Log.Error("Failed to get config file. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
-		context.Abort()
-		return
-	}
-
 	if err := context.ShouldBindJSON(&wishlist); err != nil {
 		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
@@ -1045,7 +1027,7 @@ func APIUpdateWishlist(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist updated.", "wishlist": wishlistObject, "public_url": configFile.PoenskelistenExternalURL})
+	context.JSON(http.StatusCreated, gin.H{"message": "Wishlist updated.", "wishlist": wishlistObject, "public_url": config.ConfigFile.PoenskelistenExternalURL})
 }
 
 func ConvertWishlistCollaboratorToWishlistCollaboratorObject(wishlistCollab models.WishlistCollaborator) (wishlistCollabObject models.WishlistCollaboratorObject, err error) {
@@ -1119,12 +1101,6 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *uu
 		return models.WishlistUser{}, err
 	}
 
-	configFile, err := config.GetConfig()
-	if err != nil {
-		logger.Log.Error("Failed to get config. Error: " + err.Error())
-		return models.WishlistUser{}, errors.New("Failed to get config.")
-	}
-
 	wishlistObject.CreatedAt = wishlist.CreatedAt
 	wishlistObject.Date = wishlist.Date
 	wishlistObject.DeletedAt = wishlist.DeletedAt
@@ -1141,7 +1117,7 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *uu
 	wishlistObject.Expires = wishlist.Expires
 	wishlistObject.Public = wishlist.Public
 	wishlistObject.PublicHash = wishlist.PublicHash
-	wishlistObject.Currency = configFile.PoenskelistenCurrency
+	wishlistObject.Currency = config.ConfigFile.PoenskelistenCurrency
 
 	// Get wishes
 	_, wishes, err := database.GetWishesFromWishlist(wishlist.ID)
@@ -1398,15 +1374,6 @@ func GetPublicWishlist(context *gin.Context) {
 	// Create wishlist request
 	var wishlistHash = context.Param("wishlist_hash")
 
-	// Get configuration
-	config, err := config.GetConfig()
-	if err != nil {
-		logger.Log.Error("Failed to get config file. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config file."})
-		context.Abort()
-		return
-	}
-
 	// parse wishlist id
 	wishlistHashUUID, err := uuid.Parse(wishlistHash)
 	if err != nil {
@@ -1441,5 +1408,5 @@ func GetPublicWishlist(context *gin.Context) {
 		return wishlistObject.Wishes[j].CreatedAt.Before(wishlistObject.Wishes[i].CreatedAt)
 	})
 
-	context.JSON(http.StatusOK, gin.H{"wishlist": wishlistObject, "message": "Wishlist retrieved.", "currency": config.PoenskelistenCurrency, "padding": config.PoenskelistenCurrencyPad})
+	context.JSON(http.StatusOK, gin.H{"wishlist": wishlistObject, "message": "Wishlist retrieved.", "currency": config.ConfigFile.PoenskelistenCurrency, "padding": config.ConfigFile.PoenskelistenCurrencyPad})
 }

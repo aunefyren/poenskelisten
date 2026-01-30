@@ -114,17 +114,8 @@ func RegisterUser(context *gin.Context) {
 		logger.Log.Info("No other users found. New user is set to admin.")
 	}
 
-	// Get configuration
-	config, err := config.GetConfig()
-	if err != nil {
-		logger.Log.Error("Failed to get config. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config."})
-		context.Abort()
-		return
-	}
-
 	// If SMTP is disabled, create the user as verified
-	if config.SMTPEnabled {
+	if config.ConfigFile.SMTPEnabled {
 		var verifiedBool bool = false
 		user.Verified = &verifiedBool
 	} else {
@@ -185,7 +176,7 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	// If user is not verified and SMTP is enabled, send verification e-mail
-	if !*user.Verified && config.SMTPEnabled {
+	if !*user.Verified && config.ConfigFile.SMTPEnabled {
 
 		logger.Log.Debug("Sending verification e-mail to new user: " + user.FirstName + " " + user.LastName + ".")
 
@@ -631,17 +622,8 @@ func UpdateUser(context *gin.Context) {
 		return
 	}
 
-	// Get configuration
-	config, err := config.GetConfig()
-	if err != nil {
-		logger.Log.Error("Failed to get config. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config."})
-		context.Abort()
-		return
-	}
-
 	// If user is not verified and SMTP is enabled, send verification e-mail
-	if config.SMTPEnabled && !*user.Verified {
+	if config.ConfigFile.SMTPEnabled && !*user.Verified {
 
 		verificationCode, err := database.GenerateRandomVerificationCodeForUser(userID)
 		if err != nil {
@@ -670,23 +652,13 @@ func UpdateUser(context *gin.Context) {
 }
 
 func APIResetPassword(context *gin.Context) {
-
-	// Get configuration
-	config, err := config.GetConfig()
-	if err != nil {
-		logger.Log.Error("Failed to get config. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get config."})
-		context.Abort()
-		return
-	}
-
-	if !config.SMTPEnabled {
+	if !config.ConfigFile.SMTPEnabled {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The website administrator has not enabled SMTP."})
 		context.Abort()
 		return
 	}
 
-	if config.PoenskelistenExternalURL == "" {
+	if config.ConfigFile.PoenskelistenExternalURL == "" {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The website administrator has not setup an external website URL."})
 		context.Abort()
 		return

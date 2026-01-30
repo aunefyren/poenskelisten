@@ -15,113 +15,115 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var poenskelisten_version_parameter = "{{RELEASE_TAG}}"
-var config_path, _ = filepath.Abs("./files/config.json")
+var (
+	poenskelistenVersionParameter = "{{RELEASE_TAG}}"
+	configFilePath, _             = filepath.Abs("./files/config.json")
+	ConfigFile                    = models.ConfigStruct{}
+)
 
-func GetConfig() (config models.ConfigStruct, err error) {
+func LoadConfig() (err error) {
 	// Create config.json if it doesn't exist
-	if _, err := os.Stat(config_path); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(configFilePath); errors.Is(err, os.ErrNotExist) {
 		fmt.Println("Config file does not exist. Creating...")
 
 		err := CreateConfigFile()
 		if err != nil {
-			return config, err
+			return err
 		}
 	}
 
-	file, err := os.Open(config_path)
+	file, err := os.Open(configFilePath)
 	if err != nil {
 		fmt.Println("Get config file threw error trying to open the file.")
-		return config, err
+		return err
 	}
 	defer file.Close()
 	decoder := json.NewDecoder(file)
-	config = models.ConfigStruct{}
-	err = decoder.Decode(&config)
+	err = decoder.Decode(&ConfigFile)
 	if err != nil {
 		fmt.Println("Get config file threw error trying to parse the file.")
-		return config, err
+		return err
 	}
 
 	anythingChanged := false
 
-	if config.PrivateKey == "" {
+	if ConfigFile.PrivateKey == "" {
 		// Set new value
 		newKey, err := GenerateSecureKey(64)
 		if err != nil {
-			return config, errors.New("Failed to generate secure key. Error: " + err.Error())
+			return errors.New("Failed to generate secure key. Error: " + err.Error())
 		}
-		config.PrivateKey = newKey
+		ConfigFile.PrivateKey = newKey
 		anythingChanged = true
 		fmt.Println("New private key set.")
 	}
 
-	if config.PoenskelistenName == "" {
+	if ConfigFile.PoenskelistenName == "" {
 		// Set new value
-		config.PoenskelistenName = "Pønskelisten"
+		ConfigFile.PoenskelistenName = "Pønskelisten"
 		anythingChanged = true
 	}
 
-	if config.PoenskelistenDescription == "" {
+	if ConfigFile.PoenskelistenDescription == "" {
 		// Set new value
-		config.PoenskelistenDescription = "Share wishlists in a meaningful way."
+		ConfigFile.PoenskelistenDescription = "Share wishlists in a meaningful way."
 		anythingChanged = true
 	}
 
-	if config.PoenskelistenEnvironment == "" {
+	if ConfigFile.PoenskelistenEnvironment == "" {
 		// Set new value
-		config.PoenskelistenEnvironment = "production"
+		ConfigFile.PoenskelistenEnvironment = "production"
 		anythingChanged = true
-	} else if config.PoenskelistenEnvironment == "test" && config.PoenskelistenTestEmail == "" {
-		return config, errors.New("Pønskelisten environment is set to 'test', but no test e-mail is configured.")
+	} else if ConfigFile.PoenskelistenEnvironment == "test" && ConfigFile.PoenskelistenTestEmail == "" {
+		return errors.New("Pønskelisten environment is set to 'test', but no test e-mail is configured.")
 	}
 
-	if config.Timezone == "" {
+	if ConfigFile.Timezone == "" {
 		// Set new value
-		config.Timezone = "Europe/Paris"
-		anythingChanged = true
-	}
-
-	if config.PoenskelistenPort == 0 {
-		// Set new value
-		config.PoenskelistenPort = 8080
+		ConfigFile.Timezone = "Europe/Paris"
 		anythingChanged = true
 	}
 
-	if config.DBPort == 0 {
+	if ConfigFile.PoenskelistenPort == 0 {
 		// Set new value
-		config.DBPort = 3306
+		ConfigFile.PoenskelistenPort = 8080
 		anythingChanged = true
 	}
 
-	if config.PoenskelistenVersion == "" || config.PoenskelistenVersion != poenskelisten_version_parameter {
+	if ConfigFile.DBPort == 0 {
 		// Set new value
-		config.PoenskelistenVersion = poenskelisten_version_parameter
+		ConfigFile.DBPort = 3306
 		anythingChanged = true
 	}
 
-	if config.PoenskelistenCurrency == "" {
+	if ConfigFile.PoenskelistenVersion == "" || ConfigFile.PoenskelistenVersion != poenskelistenVersionParameter {
 		// Set new value
-		config.PoenskelistenCurrency = "$"
+		ConfigFile.PoenskelistenVersion = poenskelistenVersionParameter
 		anythingChanged = true
 	}
 
-	if config.DBType == "" || (strings.ToLower(config.DBType) != "mysql" && strings.ToLower(config.DBType) != "postgres" && strings.ToLower(config.DBType) != "sqlite") {
+	if ConfigFile.PoenskelistenCurrency == "" {
 		// Set new value
-		config.DBType = "mysql"
+		ConfigFile.PoenskelistenCurrency = "$"
 		anythingChanged = true
 	}
 
-	if config.PoenskelistenLogLevel == "" {
+	if ConfigFile.DBType == "" || (strings.ToLower(ConfigFile.DBType) != "mysql" && strings.ToLower(ConfigFile.DBType) != "postgres" && strings.ToLower(ConfigFile.DBType) != "sqlite") {
+		// Set new value
+		ConfigFile.DBType = "mysql"
+		anythingChanged = true
+	}
+
+	if ConfigFile.PoenskelistenLogLevel == "" {
 		level := logrus.InfoLevel
-		config.PoenskelistenLogLevel = level.String()
+		ConfigFile.PoenskelistenLogLevel = level.String()
 		anythingChanged = true
 	} else {
-		parsedLogLevel, err := logrus.ParseLevel(config.PoenskelistenLogLevel)
+		parsedLogLevel, err := logrus.ParseLevel(ConfigFile.PoenskelistenLogLevel)
 		if err != nil {
 			fmt.Println("Failed to load log level: %v", err)
 			level := logrus.InfoLevel
-			config.PoenskelistenLogLevel = level.String()
+			ConfigFile.PoenskelistenLogLevel = level.String()
 			anythingChanged = true
 		} else {
 			logrus.SetLevel(parsedLogLevel)
@@ -130,27 +132,26 @@ func GetConfig() (config models.ConfigStruct, err error) {
 
 	if anythingChanged {
 		// Save new version of config json
-		err = SaveConfig(config)
+		err = SaveConfig()
 		if err != nil {
-			return config, err
+			return err
 		}
 	}
 
-	// Return config object
-	return config, nil
+	// Return nil
+	return nil
 }
 
 // Creates empty config.json
 func CreateConfigFile() error {
-	var config models.ConfigStruct
-
-	config.PoenskelistenPort = 8080
-	config.PoenskelistenName = "Pønskelisten"
-	config.DBPort = 3306
-	config.DBType = "mysql"
-	config.SMTPEnabled = false
-	config.PoenskelistenVersion = poenskelisten_version_parameter
-	config.PoenskelistenCurrencyLeft = true
+	ConfigFile = models.ConfigStruct{}
+	ConfigFile.PoenskelistenPort = 8080
+	ConfigFile.PoenskelistenName = "Pønskelisten"
+	ConfigFile.DBPort = 3306
+	ConfigFile.DBType = "mysql"
+	ConfigFile.SMTPEnabled = false
+	ConfigFile.PoenskelistenVersion = poenskelistenVersionParameter
+	ConfigFile.PoenskelistenCurrencyLeft = true
 
 	privateKey, err := GenerateSecureKey(64)
 	if err != nil {
@@ -158,9 +159,9 @@ func CreateConfigFile() error {
 		fmt.Println("Failed to generate private key. Error: " + err.Error())
 		return err
 	}
-	config.PrivateKey = privateKey
+	ConfigFile.PrivateKey = privateKey
 
-	err = SaveConfig(config)
+	err = SaveConfig()
 	if err != nil {
 		logger.Log.Error("Create config file threw error trying to save the file.")
 		fmt.Println("Create config file threw error trying to save the file.")
@@ -171,13 +172,13 @@ func CreateConfigFile() error {
 }
 
 // Saves the given config struct as config.json
-func SaveConfig(config models.ConfigStruct) error {
-	file, err := json.MarshalIndent(config, "", "	")
+func SaveConfig() error {
+	file, err := json.MarshalIndent(ConfigFile, "", "	")
 	if err != nil {
 		return err
 	}
 
-	err = os.WriteFile(config_path, file, 0644)
+	err = os.WriteFile(configFilePath, file, 0644)
 	if err != nil {
 		return err
 	}
@@ -187,17 +188,11 @@ func SaveConfig(config models.ConfigStruct) error {
 
 func GetPrivateKey(epoch int) []byte {
 	if epoch > 5 {
-		logger.Log.Error("Failed to load private key. Exiting...")
+		fmt.Println("Failed to load private key. Exiting...")
 		os.Exit(1)
 	}
 
-	configFile, err := GetConfig()
-	if err != nil {
-		logger.Log.Error("Failed to load config for private key. Exiting...")
-		os.Exit(1)
-	}
-
-	secretKey, err := base64.StdEncoding.DecodeString(configFile.PrivateKey)
+	secretKey, err := base64.StdEncoding.DecodeString(ConfigFile.PrivateKey)
 	if err != nil {
 		ResetSecureKey()
 		return GetPrivateKey(epoch + 1)
@@ -218,19 +213,15 @@ func GenerateSecureKey(length int) (string, error) {
 }
 
 func ResetSecureKey() {
-	configFile, err := GetConfig()
+	privateKey, err := GenerateSecureKey(64)
 	if err != nil {
-		logger.Log.Error("Failed to load config for private key. Exiting...")
+		fmt.Println("Failed to generate new secret key. Exiting...")
 		os.Exit(1)
 	}
-	configFile.PrivateKey, err = GenerateSecureKey(64)
+	ConfigFile.PrivateKey = privateKey
+	err = SaveConfig()
 	if err != nil {
-		logger.Log.Error("Failed to generate new secret key. Exiting...")
-		os.Exit(1)
-	}
-	SaveConfig(configFile)
-	if err != nil {
-		logger.Log.Error("Failed to save new config. Exiting...")
+		fmt.Println("Failed to save new config. Exiting...")
 		os.Exit(1)
 	}
 	logger.Log.Info("New private key set.")
