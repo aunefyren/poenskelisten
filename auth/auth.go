@@ -32,7 +32,7 @@ func GenerateJWT(firstname string, lastname string, email string, userid uuid.UU
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "Pønskelisten",
+			Issuer:    config.ConfigFile.PoenskelistenName,
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -62,23 +62,23 @@ func ValidateToken(signedToken string, admin bool) (err error) {
 	}
 	claims, ok := token.Claims.(*JWTClaim)
 	if !ok {
-		err = errors.New("Couldn't parse claims.")
+		err = errors.New("couldn't parse claims")
 		return
 	} else if claims.ExpiresAt == nil || claims.NotBefore == nil {
-		err = errors.New("Claims not present.")
+		err = errors.New("claims not present")
 		return
 	}
 	now := time.Now()
 	if claims.ExpiresAt.Time.Before(now) {
-		err = errors.New("Token has expired.")
+		err = errors.New("token has expired")
 		return
 	}
 	if claims.NotBefore.Time.After(now) {
-		err = errors.New("Token has not begun.")
+		err = errors.New("token has not begun")
 		return
 	}
 	if admin && !claims.Admin {
-		err = errors.New("Token not an admin session.")
+		err = errors.New("token not an admin session")
 		return
 	}
 	return

@@ -37,7 +37,7 @@ func main() {
 	newPath := filepath.Join(".", "files")
 	err := os.MkdirAll(newPath, os.ModePerm)
 	if err != nil {
-		fmt.Println("Failed to create 'files' directory. Error: " + err.Error())
+		fmt.Println("failed to create 'files' directory. error: " + err.Error())
 		os.Exit(1)
 	}
 	fmt.Println("directory 'files' valid")
@@ -53,13 +53,13 @@ func main() {
 	// Create and define file for logging
 	logger.InitLogger(config.ConfigFile)
 
-	logger.Log.Info("Running Pønskelisten version: " + config.ConfigFile.PoenskelistenVersion)
+	logger.Log.Info("running Pønskelisten version: " + config.ConfigFile.PoenskelistenVersion)
 
 	// change the config to respect flags
 	generateInvite := false
 	config.ConfigFile, generateInvite, err = parseFlags(config.ConfigFile)
 	if err != nil {
-		logger.Log.Error("Failed to parse input flags. Error: " + err.Error())
+		logger.Log.Error("failed to parse input flags. error: " + err.Error())
 		os.Exit(1)
 	}
 	logger.Log.Info("flags parsed")
@@ -67,7 +67,7 @@ func main() {
 	// save new version of config
 	err = config.SaveConfig()
 	if err != nil {
-		logger.Log.Error("Failed to set new time zone in the config. Error: " + err.Error())
+		logger.Log.Error("failed to set new time zone in the config. error: " + err.Error())
 		os.Exit(1)
 	}
 
@@ -75,12 +75,12 @@ func main() {
 	loc, err := time.LoadLocation(config.ConfigFile.Timezone)
 	if err != nil {
 		logger.Log.Error("Failed to set time zone from config. Error: " + err.Error())
-		logger.Log.Warn("Removing value...")
+		logger.Log.Warn("removing value...")
 
 		config.ConfigFile.Timezone = "Europe/Paris"
 		err = config.SaveConfig()
 		if err != nil {
-			logger.Log.Error("Failed to set new time zone in the config. Error: " + err.Error())
+			logger.Log.Error("failed to set new time zone in the config. error: " + err.Error())
 			os.Exit(1)
 		}
 
@@ -94,7 +94,7 @@ func main() {
 
 	err = database.Connect(config.ConfigFile.DBType, config.ConfigFile.Timezone, config.ConfigFile.DBUsername, config.ConfigFile.DBPassword, config.ConfigFile.DBIP, config.ConfigFile.DBPort, config.ConfigFile.DBName, config.ConfigFile.DBSSL, config.ConfigFile.DBLocation)
 	if err != nil {
-		logger.Log.Error("Failed to connect to database. Error: " + err.Error())
+		logger.Log.Error("failed to connect to database. error: " + err.Error())
 		os.Exit(1)
 	}
 	database.Migrate()
@@ -103,15 +103,15 @@ func main() {
 	if generateInvite {
 		invite, err := database.GenerateRandomInvite()
 		if err != nil {
-			logger.Log.Error("Failed to generate random invitation code. Error: " + err.Error())
+			logger.Log.Error("failed to generate random invitation code. error: " + err.Error())
 			os.Exit(1)
 		}
-		logger.Log.Info("Generated new invite code. Code: " + invite)
+		logger.Log.Info("generated new invite code. code: " + invite)
 	}
 
 	// Initialize Router
 	router := initRouter(config.ConfigFile)
-	logger.Log.Info("Router initialized. Starting Pønskelisten at http://*:" + strconv.Itoa(config.ConfigFile.PoenskelistenPort))
+	logger.Log.Info("router initialized. starting Pønskelisten at http://*:" + strconv.Itoa(config.ConfigFile.PoenskelistenPort))
 	log.Fatal(router.Run(":" + strconv.Itoa(config.ConfigFile.PoenskelistenPort)))
 }
 

@@ -18,9 +18,10 @@ func APIGetCurrency(context *gin.Context) {
 func APIUpdateCurrency(context *gin.Context) {
 	var currency models.UpdateCurrencyRequest
 
-	if err := context.ShouldBindJSON(&currency); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
+	err := context.ShouldBindJSON(&currency)
+	if err != nil {
+		logger.Log.Error("failed to parse request. error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "failed to parse request"})
 		context.Abort()
 		return
 	}
@@ -28,12 +29,12 @@ func APIUpdateCurrency(context *gin.Context) {
 	// Validate currency format
 	stringMatch, requirements, err := utilities.ValidateTextCharacters(currency.PoenskelistenCurrency)
 	if err != nil {
-		logger.Log.Error("Failed to validate currency text string. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
+		logger.Log.Error("failed to validate currency text string. error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate text string"})
 		context.Abort()
 		return
 	} else if !stringMatch {
-		logger.Log.Error("Currency string failed validation.")
+		logger.Log.Error("currency string failed validation")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
@@ -45,11 +46,11 @@ func APIUpdateCurrency(context *gin.Context) {
 
 	err = config.SaveConfig()
 	if err != nil {
-		logger.Log.Error("Failed to save config file. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save config file."})
+		logger.Log.Error("failed to save config file. error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config file"})
 		context.Abort()
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"message": "Currency updated.", "currency": config.ConfigFile.PoenskelistenCurrency, "padding": config.ConfigFile.PoenskelistenCurrencyPad, "left": config.ConfigFile.PoenskelistenCurrencyLeft})
+	context.JSON(http.StatusOK, gin.H{"message": "currency updated", "currency": config.ConfigFile.PoenskelistenCurrency, "padding": config.ConfigFile.PoenskelistenCurrencyPad, "left": config.ConfigFile.PoenskelistenCurrencyLeft})
 }

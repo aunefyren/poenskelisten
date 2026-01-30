@@ -14,7 +14,7 @@ func SendSMTPVerificationEmail(user models.User) error {
 		user.Email = &config.ConfigFile.PoenskelistenTestEmail
 	}
 
-	logger.Log.Debug("Sending e-mail to: " + *user.Email + ".")
+	logger.Log.Debug("sending e-mail to: " + *user.Email + ".")
 
 	m := mail.NewMessage()
 	m.SetAddressHeader("From", config.ConfigFile.SMTPFrom, config.ConfigFile.PoenskelistenName)
@@ -38,7 +38,7 @@ func SendSMTPResetEmail(user models.User) error {
 		user.Email = &config.ConfigFile.PoenskelistenTestEmail
 	}
 
-	logger.Log.Debug("Sending e-mail to: " + *user.Email + ".")
+	logger.Log.Debug("sending e-mail to: " + *user.Email + ".")
 
 	link := config.ConfigFile.PoenskelistenExternalURL + "/login?reset_code=" + *user.ResetCode
 
@@ -64,7 +64,7 @@ func SendSMTPDeletedClaimedWish(user models.User, wish models.WishObject, wishli
 		user.Email = &config.ConfigFile.PoenskelistenTestEmail
 	}
 
-	logger.Log.Debug("Sending e-mail to: " + *user.Email + ".")
+	logger.Log.Debug("sending e-mail to: " + *user.Email + ".")
 
 	link := config.ConfigFile.PoenskelistenExternalURL + "/wishlists/" + wishlist.ID.String()
 
