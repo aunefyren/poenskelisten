@@ -60,7 +60,7 @@ func UpdateWishInDB(wishOriginal models.Wish) (wish models.Wish, err error) {
 func GetWishesFromWishlist(WishlistID uuid.UUID) (bool, []models.Wish, error) {
 	var wishes []models.Wish
 	wishRecords := Instance.
-		Order("created_at ASC").
+		Order("wishes.created_at ASC").
 		Where(&models.Wish{Enabled: true, WishlistID: WishlistID}).
 		Joins("JOIN users ON users.id = wishes.owner_id").
 		Where("users.enabled = ?", true).
