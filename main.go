@@ -215,8 +215,9 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 
 	// Create template for HTML variables
 	templateData := gin.H{
-		"appName":  configFile.PoenskelistenName,
-		"currency": configFile.PoenskelistenCurrency,
+		"appName":        configFile.PoenskelistenName,
+		"currency":       configFile.PoenskelistenCurrency,
+		"appDescription": configFile.PoenskelistenDescription,
 	}
 
 	// endpoint handler building for JS
@@ -268,6 +269,7 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 	var environment = flag.String("environment", configFile.PoenskelistenEnvironment, "The environment Pønskelisten is running in. It will behave differently in 'test'.")
 	var testemail = flag.String("testemail", configFile.PoenskelistenTestEmail, "The email all emails are sent to in test mode.")
 	var name = flag.String("name", configFile.PoenskelistenName, "The name of the application. Replaces 'Pønskelisten'.")
+	var description = flag.String("description", configFile.PoenskelistenName, "The description of the application.")
 	var logLevel = flag.String("loglevel", configFile.PoenskelistenLogLevel, "The log level of the application. Default 'info'.")
 
 	// DB values
@@ -317,6 +319,11 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 	// Respect the flag if provided
 	if testemail != nil {
 		configFile.PoenskelistenTestEmail = *testemail
+	}
+
+	// Respect the flag if provided
+	if description != nil {
+		configFile.PoenskelistenDescription = *description
 	}
 
 	// Respect the flag if provided

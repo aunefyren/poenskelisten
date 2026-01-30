@@ -3,7 +3,7 @@
 	"dir": "ltr",
 	"name": "{{.appName}}",
 	"short_name": "{{.appName}}",
-	"description": "Share wishlists in a meaningful way.",
+	"description": "{{.appDescription}}",
 	"theme_color": "#0d1b2a",
 	"background_color": "#e0e1dd",
 	"display": "standalone",

@@ -50,7 +50,7 @@ function load_page(result) {
                         </div>
 
                         <div class="text-body" id="main-text" style="text-align: center;">
-                            Make a wish.
+                            {{.appDescription}}
 
                             <br>
                             <br>

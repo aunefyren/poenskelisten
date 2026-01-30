@@ -13,6 +13,7 @@ type ConfigStruct struct {
 	DBLocation                string `json:"db_location"`
 	PoenskelistenPort         int    `json:"poenskelisten_port"`
 	PoenskelistenName         string `json:"poenskelisten_name"`
+	PoenskelistenDescription  string `json:"poenskelisten_description"`
 	PoenskelistenExternalURL  string `json:"poenskelisten_external_url"`
 	PoenskelistenVersion      string `json:"poenskelisten_version"`
 	PoenskelistenCurrency     string `json:"poenskelisten_currency"`

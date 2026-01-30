@@ -62,6 +62,12 @@ func GetConfig() (config models.ConfigStruct, err error) {
 		anythingChanged = true
 	}
 
+	if config.PoenskelistenDescription == "" {
+		// Set new value
+		config.PoenskelistenDescription = "Share wishlists in a meaningful way."
+		anythingChanged = true
+	}
+
 	if config.PoenskelistenEnvironment == "" {
 		// Set new value
 		config.PoenskelistenEnvironment = "production"
