@@ -29,13 +29,13 @@ func Auth(admin bool) gin.HandlerFunc {
 func AuthFunction(context *gin.Context, admin bool) (success bool, errorString string, httpStatus int) {
 	tokenString := context.GetHeader("Authorization")
 	if tokenString == "" {
-		return false, "Request does not contain an access token", http.StatusBadRequest
+		return false, "request does not contain an access token", http.StatusBadRequest
 	}
 
 	err := auth.ValidateToken(tokenString, admin)
 	if err != nil {
 		logger.Log.Error("Failed to validate token. Error: " + err.Error())
-		return false, "Failed to validate token.", http.StatusBadRequest
+		return false, "failed to validate token.", http.StatusBadRequest
 	}
 
 	// If SMTP is enabled, verify if user is enabled
@@ -44,8 +44,8 @@ func AuthFunction(context *gin.Context, admin bool) (success bool, errorString s
 		// Get userID from header
 		userID, err := GetAuthUsername(context.GetHeader("Authorization"))
 		if err != nil {
-			logger.Log.Error("Failed to get user ID from token. Error: " + err.Error())
-			return false, "Failed to get user ID from token.", http.StatusInternalServerError
+			logger.Log.Error("failed to get user ID from token. error: " + err.Error())
+			return false, "failed to get user ID from token", http.StatusInternalServerError
 		}
 
 		// Check if the user is verified
@@ -58,21 +58,21 @@ func AuthFunction(context *gin.Context, admin bool) (success bool, errorString s
 			// Verify user has verification code
 			hasVerificationCode, err := database.VerifyUserHasVerificationCode(userID)
 			if err != nil {
-				logger.Log.Error("Failed to get verification code. Error: " + err.Error())
-				return false, "Failed to get verification code.", http.StatusInternalServerError
+				logger.Log.Error("failed to get verification code. error: " + err.Error())
+				return false, "failed to get verification code", http.StatusInternalServerError
 			}
 
 			// If the user doesn't have a code, set one
 			if !hasVerificationCode {
 				_, err := database.GenerateRandomVerificationCodeForUser(userID)
 				if err != nil {
-					logger.Log.Error("Failed to generate verification code. Error: " + err.Error())
-					return false, "Failed to generate verification code.", http.StatusInternalServerError
+					logger.Log.Error("failed to generate verification code. error: " + err.Error())
+					return false, "failed to generate verification code", http.StatusInternalServerError
 				}
 			}
 
 			// Return error
-			return false, "You must verify your account.", http.StatusForbidden
+			return false, "you must verify your account", http.StatusForbidden
 		}
 	}
 
@@ -82,7 +82,7 @@ func AuthFunction(context *gin.Context, admin bool) (success bool, errorString s
 func GetAuthUsername(tokenString string) (uuid.UUID, error) {
 
 	if tokenString == "" {
-		return uuid.UUID{}, errors.New("No Authorization header given.")
+		return uuid.UUID{}, errors.New("no Authorization header given")
 	}
 	claims, err := auth.ParseToken(tokenString)
 	if err != nil {
@@ -94,7 +94,7 @@ func GetAuthUsername(tokenString string) (uuid.UUID, error) {
 func GetTokenClaims(tokenString string) (*auth.JWTClaim, error) {
 
 	if tokenString == "" {
-		return &auth.JWTClaim{}, errors.New("No Authorization header given.")
+		return &auth.JWTClaim{}, errors.New("no Authorization header given")
 	}
 	claims, err := auth.ParseToken(tokenString)
 	if err != nil {

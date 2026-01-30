@@ -17,7 +17,7 @@ func InitLogger(configFile models.ConfigStruct) {
 	// Define log file
 	logFile, err := os.OpenFile("files/poenskelisten.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
-		logrus.Fatalf("Failed to load log file: %v", err)
+		logrus.Fatalf("failed to load log file: %v", err)
 	}
 
 	Log.Formatter = &easy.Formatter{
@@ -32,11 +32,11 @@ func InitLogger(configFile models.ConfigStruct) {
 	// Set log level
 	level, err := logrus.ParseLevel(configFile.PoenskelistenLogLevel)
 	if err != nil {
-		logrus.Error("Failed to load log file: %v", err)
+		logrus.Error("failed to load log file: %v", err)
 		level = logrus.InfoLevel
 	}
 
 	Log.SetLevel(level)
 
-	Log.Info("Log level set to: " + level.String())
+	Log.Info("log level set to: " + level.String())
 }
