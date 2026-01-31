@@ -114,6 +114,12 @@ func LoadConfig() (err error) {
 		anythingChanged = true
 	}
 
+	if (strings.ToLower(ConfigFile.DBType) == "sqlite") && ConfigFile.DBLocation == "" {
+		// Set new value
+		ConfigFile.DBLocation = "files/data.db"
+		anythingChanged = true
+	}
+
 	if ConfigFile.PoenskelistenLogLevel == "" {
 		level := logrus.InfoLevel
 		ConfigFile.PoenskelistenLogLevel = level.String()
@@ -148,7 +154,8 @@ func CreateConfigFile() error {
 	ConfigFile.PoenskelistenPort = 8080
 	ConfigFile.PoenskelistenName = "Pønskelisten"
 	ConfigFile.DBPort = 3306
-	ConfigFile.DBType = "mysql"
+	ConfigFile.DBType = "sqlite"
+	ConfigFile.DBLocation = "files/data.db"
 	ConfigFile.SMTPEnabled = false
 	ConfigFile.PoenskelistenVersion = poenskelistenVersionParameter
 	ConfigFile.PoenskelistenCurrencyLeft = true

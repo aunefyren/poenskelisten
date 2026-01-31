@@ -87,12 +87,14 @@ function get_login(cookie) {
             if(result.error === "You must verify your account." && window.location.pathname !== "/verify") {
                 verifyPageRedirect();
                 return;
-            } else if(result.error === "Failed to validate token.") {
+            } else if(result.error === "Failed to validate token." || result.error === "Failed to validate session. Please log in again.") {
                 jwt = "";
                 if(window.location.pathname !== "/login") {
+                    console.log("login page redirect")
                     logInPageRedirect();
                     return;
                 } else {
+                    console.log("loading page")
                     load_page(false);
                 }
             } else if (result.error && result.error !== "You must verify your account.") {
