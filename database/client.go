@@ -1,12 +1,15 @@
 package database
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"strconv"
 	"strings"
 
@@ -16,6 +19,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	_ "modernc.org/sqlite"
 )
 
 var Instance *gorm.DB
@@ -45,7 +49,23 @@ func Connect(dbType string, timezone string, dbUsername string, dbPassword strin
 	} else if strings.ToLower(dbType) == "sqlite" {
 		logger.Log.Debug("attempting to connect to sqlite database")
 
-		Instance, dbError = gorm.Open(sqlite.Open(dbLocation), &gorm.Config{})
+		_, err := os.Stat(config.ConfigFile.DBLocation)
+		if errors.Is(err, fs.ErrNotExist) {
+			err = InitializeSQLiteDB()
+			if err != nil {
+				return errors.New("failed to initialize SQLite file")
+			}
+		} else if err != nil {
+			return errors.New("failed to verify SQLite file")
+		}
+
+		dbSQL, err := sql.Open("sqlite", "file:"+config.ConfigFile.DBLocation+"?_pragma=busy_timeout(5000)")
+		if err != nil {
+			logger.Log.Error("failed to open database. error: " + err.Error())
+			return errors.New("failed to open database")
+		}
+
+		Instance, dbError = gorm.Open(sqlite.Dialector{Conn: dbSQL}, &gorm.Config{})
 		if dbError != nil {
 			logger.Log.Error("failed to connect to database. error: " + dbError.Error())
 			return errors.New("failed to connect to database")
@@ -401,4 +421,14 @@ func GetUserMembersFromGroup(GroupID uuid.UUID) ([]models.User, error) {
 	}
 
 	return users, nil
+}
+
+func InitializeSQLiteDB() error {
+	logger.Log.Info("initializing new SQLite file at: " + config.ConfigFile.DBLocation)
+	_, err := os.Create(config.ConfigFile.DBLocation)
+	if err != nil {
+		logger.Log.Error("failed to create DB file. error: " + err.Error())
+		return errors.New("failed to create DB file")
+	}
+	return nil
 }

@@ -42,23 +42,22 @@ Pønskelisten is flexible to host. Choose your path:
 
 ### **Step 1: Choose how to run it**
 
-| Method | Difficulty | Recommended for |
+| Method | Difficulty | Notes |
 |--------|-------------|------------------|
-| **Docker** | ⭐ Easiest | Most users |
-| Download executable | Easy | Desktop/server users |
-| Build from source | Medium | Developers |
+| **⭐Docker** | Easiest | You need to run your instance in a Docker container |
+| Download executable | Easy | Choose the correct executable for your system |
+| Build from source | Medium | You need to have Go installed |
 
 ### **Step 2: Choose your Database**
 
 Pønskelisten currently supports:
 
-| Database | Status |
-|----------|--------|
-| PostgreSQL | ✅ Fully supported |
-| MySQL | ✅ Fully supported |
+| Database | Status | Notes |
+|----------|--------|--------|
+| **⭐SQLite** | ✅ Fully supported | DB file is handled by Pønskelisten |
+| PostgreSQL | ✅ Fully supported | Requires a running PostgreSQL instance |
+| MySQL | ✅ Fully supported | Requires a running MySQL instance |
 
-> **No direct DB management required anymore 🎉**  
-Pønskelisten handles setup on first run.
 
 ---
 
@@ -68,44 +67,65 @@ You can configure Pønskelisten in **three different ways**:
 
 | Method | Ideal for | Notes |
 |--------|------------|--------|
-| **Environment variables** ✅ | Docker, production | Recommended |
-| Startup flags | Local runs, executables | Overrides config.json |
-| config.json | Manual configs | Pønskelisten generates one at first run |
-
-All configuration keys are identical across methods.
+| **⭐Environment variables** | Docker | Add the environment variables to your Dockerfile or docker-compose.yaml |
+| Startup flags | Executables | Adding a flags to the startup command alters something in the configuration file |
+| config.json | Access to file system | Pønskelisten generates the file on the first run. Can be altered in a text editor afterward |
 
 ---
 
 ### 📍 Available Configuration Options
 
-| Key | Type | Description |
-|-----|-------|--------------|
-| port | int | Port to run on (default: `8080`) |
-| externalurl | string | Public URL of the instance |
-| timezone | string | E.g. `Europe/Oslo` |
-| environment | string | `production` or `test` |
-| name | string | Display name of the app |
-| generateinvite | bool | Generate an invite code on startup |
-| dbtype | string | `postgres` or `mysql` |
-| dbip | string | DB host |
-| dbport | int | DB port |
-| dbusername | string | DB username |
-| dbpassword | string | DB password |
-| dbname | string | Database name |
-| dbssl | bool | Use SSL for DB |
-| disablesmtp | bool | Disable email functions |
-| smtphost | string | SMTP host |
-| smtpport | int | SMTP port |
-| smtpusername | string | SMTP user |
-| smtppassword | string | SMTP password |
-| smtpfrom | string | Sender email address |
-| smtpfrom | string | Sender email address |
-| testemail | string | E-mail destination when in `test` |
+| Config file entry | Startup flag | Environment variable |Type | Description |
+|-----|-----|-----|-------|--------------|
+| poenskelisten_port | port | port | int | Port to run on (default: `8080`) |
+| poenskelisten_external_url | externalurl | externalurl | string | Public URL of the instance |
+| poenskelisten_environment | environment | environment | string | `production` or `test` |
+| poenskelisten_test_email | testemail | testemail | string | E-mail destination when in `test` |
+| poenskelisten_name | name | name | string | Display name of the app |
+| poenskelisten_description | description | description | string | Description of the app |
+| poenskelisten_log_level | loglevel | loglevel | string | How detailed the logs are. `info`, `debug` or `trace`
+| timezone | timezone | timezone | string | E.g. `Europe/Oslo` |
+| `N/A` | generateinvite | generateinvite | bool | Generate an invite code on startup. Do `generateinvite true` |
+| db_type | dbtype | dbtype | string | `sqlite`, `postgres` or `mysql` |
+| db_ip | dbip | dbip | string | DB host |
+| db_port | dbport | dbport | int | DB port |
+| db_username | dbusername | dbusername | string | DB username |
+| db_password | dbpassword | dbpassword | string | DB password |
+| db_name | dbname | dbname | string | Database name |
+| db_ssl | dbssl | dbssl | bool | Use SSL for DB |
+| smtp_enabled | disablesmtp | disablesmtp | bool | Disable/enable email functions |
+| smtp_host | smtphost | smtphost | string | SMTP host |
+| smtp_port | smtpport | smtpport | int | SMTP port |
+| smtp_username | smtpusername | smtpusername | string | SMTP user |
+| smtp_password | smtppassword | smtppassword | string | SMTP password |
+| smtp_from | smtpfrom | smtpfrom | string | Sender email address |
 ---
 
 ## 🐳 Docker Setup
 
-### **Minimal docker-compose.yml (recommended)**
+### **Minimal docker-compose.yml for SQLite (recommended)**
+
+```yaml
+services:
+  poenskelisten-app:
+    container_name: poenskelisten-app
+    image: ghcr.io/aunefyren/poenskelisten:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PUID: 1000
+      PGID: 1000
+      dbtype: sqlite
+      timezone: Europe/Oslo
+      generateinvite: true
+    volumes:
+      - ./files/:/app/files/:rw
+      - ./images/:/app/images/:rw
+```
+Remove `generateinvite` after first run to stop generating codes on start up.
+
+### **Minimal docker-compose.yml for postgres**
 
 ```yaml
 services:
@@ -147,7 +167,7 @@ Remove `generateinvite` after first run to stop generating codes on start up.
 
 ### Optional Add-ons
 
-- Reverse proxy (Caddy, Traefik, Nginx)
+- Reverse proxy for access outside of home network (Caddy, Traefik, Nginx)
 
 - Adminer or phpMyAdmin (if you like UI DB tools, but not required anymore)
 

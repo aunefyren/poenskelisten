@@ -32,7 +32,7 @@ func GetNewsPosts() ([]models.News, error) {
 
 	newsPostsRecords := Instance.
 		Where(&models.News{Enabled: true}).
-		Order("date desc").Find(&newsPosts)
+		Order("news.date desc").Find(&newsPosts)
 
 	if newsPostsRecords.Error != nil {
 		return []models.News{}, newsPostsRecords.Error
