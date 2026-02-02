@@ -67,7 +67,7 @@ func main() {
 	// save new version of config
 	err = config.SaveConfig()
 	if err != nil {
-		logger.Log.Error("failed to set new time zone in the config. error: " + err.Error())
+		logger.Log.Error("failed to save new config. error: " + err.Error())
 		os.Exit(1)
 	}
 

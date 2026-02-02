@@ -6,7 +6,7 @@ function load_page(result) {
 
             var login_data = JSON.parse(result);
 
-            if(login_data.error === "You must verify your account.") {
+            if(login_data.error && login_data.error.toLowerCase().includes("you must verify your account")) {
                 load_verify_account();
                 return;
             } else {
