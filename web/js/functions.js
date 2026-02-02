@@ -87,21 +87,20 @@ function get_login(cookie) {
             if(result.error && result.error.toLowerCase().includes("you must verify your account") && window.location.pathname !== "/verify") {
                 verifyPageRedirect();
                 return;
-            } else if(result.error && (result.error.toLowerCase().includes("failed to validate token") || result.error.toLowerCase().includes("please log in again"))) {
+            } else if(result.error && result.error.toLowerCase().includes("you must verify your account") && window.location.pathname == "/verify") {
+                load_page(false);
+                return;
+            }else if(result.error) {
                 set_cookie("poenskelisten", "", 7);
                 jwt = "";
                 if(window.location.pathname !== "/login") {
                     console.log("login page redirect")
-                    logInPageRedirect();
+                    logInPageRedirect(result.error);
                     return;
                 } else {
                     console.log("loading page")
                     load_page(false);
                 }
-            } else if (result.error && !result.error.toLowerCase().includes("you must verify your account")) {
-                error(result.error)
-                showLoggedOutMenu();
-                return;
             } else {
                 // If new token, save it
                 if(result.token != null && result.token != "") {
@@ -669,9 +668,14 @@ function removeUserFromSelection(userID) {
     }
 }
 
-function logInPageRedirect() {
+function logInPageRedirect(errorMessage) {
     if(window.location.pathname !== "/login") {
-        window.location = '/login';
+        url = '/login'
+        if(errorMessage) {
+            url += '?error=' + encodeURI(errorMessage)
+        }
+
+        window.location = url;
         return true
     }
     return false

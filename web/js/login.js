@@ -20,15 +20,19 @@ function load_page(result) {
     clearResponse();
 
     var reset_mode = false;
-    var reset_code = ""
+    var reset_code = "";
+    var errorMessage = "";
     try {
         // Get parameters from URL string
         var url_string = window.location.href
         var url = new URL(url_string);
+
         var reset_code = url.searchParams.get("reset_code");
         if(reset_code !== null) {
             reset_mode = true;
         }
+
+        var errorMessage = url.searchParams.get("error");
     } catch(e) {
         reset_mode = false;
         reset_code = ""
@@ -42,6 +46,9 @@ function load_page(result) {
     } else {
         clearResponse();
         action_login();
+        if(errorMessage) {
+            error(errorMessage);
+        }
     }
 }
 
