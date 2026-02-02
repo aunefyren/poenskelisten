@@ -84,10 +84,11 @@ function get_login(cookie) {
             }
 
             // If the error is to verify, allow loading page anyways
-            if(result.error === "You must verify your account." && window.location.pathname !== "/verify") {
+            if(result.error && result.error.toLowerCase().includes("you must verify your account") && window.location.pathname !== "/verify") {
                 verifyPageRedirect();
                 return;
-            } else if(result.error === "Failed to validate token." || result.error === "Failed to validate session. Please log in again.") {
+            } else if(result.error && (result.error.toLowerCase().includes("failed to validate token") || result.error.toLowerCase().includes("please log in again"))) {
+                set_cookie("poenskelisten", "", 7);
                 jwt = "";
                 if(window.location.pathname !== "/login") {
                     console.log("login page redirect")
@@ -97,7 +98,7 @@ function get_login(cookie) {
                     console.log("loading page")
                     load_page(false);
                 }
-            } else if (result.error && result.error !== "You must verify your account.") {
+            } else if (result.error && !result.error.toLowerCase().includes("you must verify your account")) {
                 error(result.error)
                 showLoggedOutMenu();
                 return;
