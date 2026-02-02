@@ -3,14 +3,16 @@ function load_page(result) {
     if(result !== false) {
 
         try {
-
             var login_data = JSON.parse(result);
 
             if(login_data.error && login_data.error.toLowerCase().includes("you must verify your account")) {
+                console.log("validate flow")
                 load_verify_account();
                 return;
             } else {
-                frontPageRedirect();
+                console.log("front page redirect")
+                console.log(result)
+                // frontPageRedirect();
             }
 
             var email = login_data.data.email
@@ -22,6 +24,8 @@ function load_page(result) {
             var first_name = ""
             var last_name = ""
             admin = false;
+
+            console.log("failed to parse response from validation API")
         }
 
         showAdminMenu(admin)
@@ -32,14 +36,15 @@ function load_page(result) {
         var first_name = ""
         var last_name = ""
         admin = false;
+        console.log("no response from validation API")
     }
 
     var html = `
-                <div class="" id="front-page">
-                    
-                    ...
+        <div class="" id="front-page">
+            
+            ...
 
-                </div>
+        </div>
     `;
 
     document.getElementById('content').innerHTML = html;
