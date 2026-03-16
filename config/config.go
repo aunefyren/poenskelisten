@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	poenskelistenVersionParameter = "{{RELEASE_TAG}}"
+	poenskelistenVersionParameter = "v2.3.0"
 	configFilePath, _             = filepath.Abs("./files/config.json")
 	ConfigFile                    = models.ConfigStruct{}
 )
