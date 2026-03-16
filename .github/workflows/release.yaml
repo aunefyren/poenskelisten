@@ -14,7 +14,9 @@ jobs:
         goos: [linux, windows]
         goarch: ["386", amd64, arm64, arm]
         exclude:
-          - goarch: arm64, arm
+          - goarch: arm64
+            goos: windows
+          - goarch: arm
             goos: windows
     steps:
     - uses: actions/checkout@v3
@@ -29,5 +31,5 @@ jobs:
         extra_files: README.md auth config controllers database middlewares models utilities web Dockerfile
         retry: 10
         overwrite: true
-        release_name: ${{ github.ref_name }}
+        release_name: ${{ github.event.release.tag_name }}
         pre_command: sed -i 's/{{RELEASE_TAG}}/${{ github.event.release.tag_name }}/g' config/config.go # Replace release variable with the name of this release
