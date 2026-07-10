@@ -57,18 +57,22 @@ func main() {
 
 	// change the config to respect flags
 	generateInvite := false
-	config.ConfigFile, generateInvite, err = parseFlags(config.ConfigFile)
+	flagsProvided := false
+	config.ConfigFile, generateInvite, flagsProvided, err = parseFlags(config.ConfigFile)
 	if err != nil {
 		logger.Log.Error("failed to parse input flags. error: " + err.Error())
 		os.Exit(1)
 	}
 	logger.Log.Info("flags parsed")
 
-	// save new version of config
-	err = config.SaveConfig()
-	if err != nil {
-		logger.Log.Error("failed to save new config. error: " + err.Error())
-		os.Exit(1)
+	// Persist the config only when flags/ENV actually overrode something, to
+	// avoid rewriting config.json on every startup.
+	if flagsProvided {
+		err = config.SaveConfig()
+		if err != nil {
+			logger.Log.Error("failed to save new config. error: " + err.Error())
+			os.Exit(1)
+		}
 	}
 
 	// set time zone from config if it is not empty
@@ -255,7 +259,7 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 	return router
 }
 
-func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, error) {
+func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool, error) {
 	generateInviteBool := false
 
 	// boolean values
@@ -277,7 +281,7 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 	var environment = flag.String("environment", configFile.PoenskelistenEnvironment, "The environment Pønskelisten is running in. It will behave differently in 'test'.")
 	var testemail = flag.String("testemail", configFile.PoenskelistenTestEmail, "The email all emails are sent to in test mode.")
 	var name = flag.String("name", configFile.PoenskelistenName, "The name of the application. Replaces 'Pønskelisten'.")
-	var description = flag.String("description", configFile.PoenskelistenName, "The description of the application.")
+	var description = flag.String("description", configFile.PoenskelistenDescription, "The description of the application.")
 	var logLevel = flag.String("loglevel", configFile.PoenskelistenLogLevel, "The log level of the application. Default 'info'.")
 
 	// DB values
@@ -304,45 +308,45 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 	// Parse flags
 	flag.Parse()
 
-	// Respect the flag if provided
-	if port != nil {
+	// flag pointers are never nil after Parse(), so the only reliable way to
+	// tell a deliberately-set flag from one left at its config default is to
+	// record which flags were actually provided on the command line. Only
+	// provided flags override the loaded configuration.
+	provided := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) { provided[f.Name] = true })
+	flagsProvided := len(provided) > 0
+
+	if provided["port"] {
 		configFile.PoenskelistenPort = *port
 	}
 
-	// Respect the flag if provided
-	if externalURL != nil {
+	if provided["externalurl"] {
 		configFile.PoenskelistenExternalURL = *externalURL
 	}
 
-	// Respect the flag if provided
-	if timezone != nil {
+	if provided["timezone"] {
 		configFile.Timezone = *timezone
 	}
 
-	// Respect the flag if provided
-	if environment != nil {
+	if provided["environment"] {
 		configFile.PoenskelistenEnvironment = *environment
 	}
 
-	// Respect the flag if provided
-	if testemail != nil {
+	if provided["testemail"] {
 		configFile.PoenskelistenTestEmail = *testemail
 	}
 
-	// Respect the flag if provided
-	if description != nil {
+	if provided["description"] {
 		configFile.PoenskelistenDescription = *description
 	}
 
-	// Respect the flag if provided
-	if name != nil {
+	if provided["name"] {
 		configFile.PoenskelistenName = *name
 	}
 
-	// Respect the flag if provided
-	if logLevel != nil && *logLevel != configFile.PoenskelistenLogLevel {
-		parsedLogLevel, err := logrus.ParseLevel(*logLevel)
-		if err == nil {
+	if provided["loglevel"] {
+		parsedLogLevel, parseErr := logrus.ParseLevel(*logLevel)
+		if parseErr == nil {
 			configFile.PoenskelistenLogLevel = parsedLogLevel.String()
 			logger.Log.SetLevel(parsedLogLevel)
 			logger.Log.Info("Log level changed to: " + parsedLogLevel.String())
@@ -351,87 +355,68 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 		}
 	}
 
-	// Respect the flag if provided
-	if dbPort != nil {
+	if provided["dbport"] {
 		configFile.DBPort = *dbPort
 	}
 
-	// Respect the flag if provided
-	if dbType != nil {
+	if provided["dbtype"] {
 		configFile.DBType = *dbType
 	}
 
-	// Respect the flag if provided
-	if dbUsername != nil {
+	if provided["dbusername"] {
 		configFile.DBUsername = *dbUsername
 	}
 
-	// Respect the flag if provided
-	if dbPassword != nil {
+	if provided["dbpassword"] {
 		configFile.DBPassword = *dbPassword
 	}
 
-	// Respect the flag if provided
-	if dbName != nil {
+	if provided["dbname"] {
 		configFile.DBName = *dbName
 	}
 
-	// Respect the flag if provided
-	if dbIP != nil {
+	if provided["dbip"] {
 		configFile.DBIP = *dbIP
 	}
 
-	// Respect the flag if string is true
-	if dbSSL != nil {
-		dbSSLBool := false
-		if strings.ToLower(*dbSSL) == "true" {
-			dbSSLBool = true
-		}
-		configFile.DBSSL = dbSSLBool
+	// Parsed as a string so the "--dbssl true/false" calling convention keeps working.
+	if provided["dbssl"] {
+		configFile.DBSSL = strings.ToLower(*dbSSL) == "true"
 	}
 
-	// Respect the flag if provided
-	if dbLocation != nil {
+	if provided["dblocation"] {
 		configFile.DBLocation = *dbLocation
 	}
 
-	// Respect the flag if string is true
-	if smtpDisabled != nil {
-		if strings.ToLower(*smtpDisabled) == "true" {
-			configFile.SMTPEnabled = false
-		}
+	// disablesmtp=true disables e-mail; disablesmtp=false enables it. Parsed as
+	// a string so the "--disablesmtp true/false" calling convention keeps working.
+	if provided["disablesmtp"] {
+		configFile.SMTPEnabled = strings.ToLower(*smtpDisabled) != "true"
 	}
 
-	// Respect the flag if provided
-	if smtpHost != nil {
+	if provided["smtphost"] {
 		configFile.SMTPHost = *smtpHost
 	}
 
-	// Respect the flag if provided
-	if smtpPort != nil {
+	if provided["smtpport"] {
 		configFile.SMTPPort = *smtpPort
 	}
 
-	// Respect the flag if provided
-	if smtpUsername != nil {
+	if provided["smtpusername"] {
 		configFile.SMTPUsername = *smtpUsername
 	}
 
-	// Respect the flag if provided
-	if smtpPassword != nil {
+	if provided["smtppassword"] {
 		configFile.SMTPPassword = *smtpPassword
 	}
 
-	// Respect the flag if provided
-	if smtpFrom != nil {
+	if provided["smtpfrom"] {
 		configFile.SMTPFrom = *smtpFrom
 	}
 
-	// Respect the flag if string is true
-	if generateInvite != nil {
-		if strings.ToLower(*generateInvite) == "true" {
-			generateInviteBool = true
-		}
+	// Runtime-only action, never persisted to config.
+	if provided["generateinvite"] {
+		generateInviteBool = strings.ToLower(*generateInvite) == "true"
 	}
 
 	// Failsafe, if port is 0, set to default 8080
@@ -439,7 +424,7 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, erro
 		configFile.PoenskelistenPort = 8080
 	}
 
-	return configFile, generateInviteBool, nil
+	return configFile, generateInviteBool, flagsProvided, nil
 }
 
 func registerTemplatedStaticFilesForDirectory(

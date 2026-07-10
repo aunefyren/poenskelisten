@@ -65,7 +65,7 @@ jobs:
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && env.GIST_TOKEN != '' }}
         uses: schneegans/dynamic-badges-action@v1.7.0
         with:
-          auth: ${{ secrets.GIST_TOKEN }}
+          auth: ${{ secrets.GIT_HUB_TOKEN }}
           gistID: c6b71770c9d068fecac9a809568ae9e6
           filename: poenskelisten-coverage.json
           label: coverage
