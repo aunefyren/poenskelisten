@@ -1,5 +1,7 @@
 # Pønskelisten
 
+[![CI](https://img.shields.io/github/actions/workflow/status/aunefyren/poenskelisten/go.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/aunefyren/poenskelisten/actions/workflows/go.yml)
+[![Backend coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/aunefyren/c6b71770c9d068fecac9a809568ae9e6/raw/poenskelisten-coverage.json&style=for-the-badge)](https://github.com/aunefyren/poenskelisten/actions/workflows/go.yml)
 [![Github Stars](https://img.shields.io/github/stars/aunefyren/poenskelisten?style=for-the-badge)](https://github.com/aunefyren/poenskelisten)
 [![Github Forks](https://img.shields.io/github/forks/aunefyren/poenskelisten?style=for-the-badge)](https://github.com/aunefyren/poenskelisten)
 [![Docker Pulls](https://img.shields.io/docker/pulls/aunefyren/poenskelisten?style=for-the-badge)](https://hub.docker.com/r/aunefyren/poenskelisten)

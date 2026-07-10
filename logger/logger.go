@@ -32,7 +32,7 @@ func InitLogger(configFile models.ConfigStruct) {
 	// Set log level
 	level, err := logrus.ParseLevel(configFile.PoenskelistenLogLevel)
 	if err != nil {
-		logrus.Error("failed to load log file: %v", err)
+		logrus.Errorf("failed to load log file: %v", err)
 		level = logrus.InfoLevel
 	}
 
