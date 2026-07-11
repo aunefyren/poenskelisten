@@ -125,11 +125,12 @@ func Migrate() {
 	errWishlist := Instance.AutoMigrate(&models.Wishlist{})
 	errWishlistMembership := Instance.AutoMigrate(&models.WishlistMembership{})
 	errWishlistCollaborator := Instance.AutoMigrate(&models.WishlistCollaborator{})
+	errWishCategory := Instance.AutoMigrate(&models.WishCategory{})
 	errWish := Instance.AutoMigrate(&models.Wish{})
 	errWishClaim := Instance.AutoMigrate(&models.WishClaim{})
 	errNews := Instance.AutoMigrate(&models.News{})
 
-	err := errors.Join(errUser, errInvite, errGroup, errGroupMembership, errWishlist, errWishlistMembership, errWishlistCollaborator, errWish, errWishClaim, errNews)
+	err := errors.Join(errUser, errInvite, errGroup, errGroupMembership, errWishlist, errWishlistMembership, errWishlistCollaborator, errWishCategory, errWish, errWishClaim, errNews)
 	if err != nil {
 		panic(err)
 	}

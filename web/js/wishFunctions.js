@@ -41,6 +41,7 @@ function deleteWish(wishID, wishlistID, groupID, userID) {
                 error(result.error);
             } else {
                 placeWishes(result.wishes, wishlistID, userID);
+                refreshCategories(wishlistID);
             }
         }
     };
@@ -113,8 +114,11 @@ function editWishThree(wishID, wishlistID, groupID, userID, wishObjectBase64) {
     }
 
     wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
+
+    var selectedCategoryID = wishObject.category_id ? wishObject.category_id : (wishObject.category ? wishObject.category.id : "");
+
     var html = '';
-    
+
     html += `
         <div class="profile-icon clickable top-left-button" onclick="editWishTwo('${wishID}', '${wishlistID}', '${groupID}', '${userID}', '${wishObjectBase64}');" title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
@@ -128,6 +132,8 @@ function editWishThree(wishID, wishlistID, groupID, userID, wishObjectBase64) {
             <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" value="${wishObject.url}" autocomplete="off" />
 
             <input type="number" name="wish_price" id="wish_price" step="0.01" min="0" placeholder="Wish price in ${wishObject.currency}" value="${wishObject.price}" autocomplete="off" />
+
+            ${categoryPickerHTML(selectedCategoryID)}
 
             <button id="register-button" type="submit" href="/">Next</button>
         </form>
@@ -146,6 +152,7 @@ function editWishFour(wishID, wishlistID, groupID, userID, wishObjectBase64) {
         wishObject.note = wishNote
         wishObject.url = wishURL
         wishObject.price = wishPrice
+        readCategorySelection(wishObject)
     } catch (error) {
         console.log("Failed to get values. Error: " + error)
     }
@@ -277,13 +284,15 @@ function editWishFive(wishID, userID, wishlistID, groupID, wishObjectBase64) {
         wish_image = get_base64(wish_image);
         
         wish_image.then(function(result) {
-            var form_obj = { 
+            var form_obj = {
                 "name" : wishObject.name,
                 "note" : wishObject.note,
                 "url": wishObject.url,
                 "price": wishObject.price,
                 "image_data": result,
-                "image_delete": imageDelete
+                "image_delete": imageDelete,
+                "category_id": wishObject.category_id ? wishObject.category_id : null,
+                "category_name": wishObject.category_name ? wishObject.category_name : ""
             };
 
             var form_data = JSON.stringify(form_obj);
@@ -291,13 +300,15 @@ function editWishFive(wishID, userID, wishlistID, groupID, wishObjectBase64) {
             editWishSix(form_data, wishID, userID, wishlistID, groupID);
         });
     } else {
-        var form_obj = { 
+        var form_obj = {
             "name" : wishObject.name,
             "note" : wishObject.note,
             "url": wishObject.url,
             "price": wishObject.price,
             "image_data": "",
-            "image_delete": imageDelete
+            "image_delete": imageDelete,
+            "category_id": wishObject.category_id ? wishObject.category_id : null,
+            "category_name": wishObject.category_name ? wishObject.category_name : ""
         };
 
         var form_data = JSON.stringify(form_obj);
@@ -321,7 +332,10 @@ function editWishSix(form_data, wishID, userID, wishlistID, groupID) {
             if(result.error) {
                 error(result.error);
             } else {
-                placeWish(result.wish, wishlistID, groupID, userID)
+                // Re-render the full list so the wish lands under its (possibly
+                // changed) category, and refresh the picker's category cache.
+                placeWishes(result.wishes, wishlistID, userID);
+                refreshCategories(wishlistID);
                 toggleModal(false);
             }
         }
@@ -343,7 +357,9 @@ function createWish(wishlistID, userID, currency, wishObjectBase64) {
             "note" : "",
             "image": "",
             "url": "",
-            "price": null
+            "price": null,
+            "category_id": null,
+            "category_name": ""
         }
         wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
         console.log("Remade object. Error: " + error)
@@ -379,8 +395,11 @@ function createWishTwo(wishlistID, userID, currency, wishObjectBase64) {
     }
 
     wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
+
+    var selectedCategoryID = wishObject.category_id ? wishObject.category_id : "";
+
     var html = '';
-    
+
     html += `
         <div class="profile-icon clickable top-left-button" onclick="createWish('${wishlistID}', '${userID}', '${currency}', '${wishObjectBase64}');" title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
@@ -394,6 +413,8 @@ function createWishTwo(wishlistID, userID, currency, wishObjectBase64) {
             <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" autocomplete="off" value="${wishObject.url}" />
 
             <input type="number" name="wish_price" id="wish_price" step="0.01" min="0" placeholder="Wish price in ${currency}" value="${wishObject.price}" autocomplete="off" />
+
+            ${categoryPickerHTML(selectedCategoryID)}
 
             <button id="register-button" type="submit" href="/">Next</button>
         </form>
@@ -412,13 +433,14 @@ function createWishThree(wishlistID, userID, wishObjectBase64) {
         wishObject.note = wishNote
         wishObject.url = wishURL
         wishObject.price = wishPrice
+        readCategorySelection(wishObject)
     } catch (error) {
         console.log("Failed to get values. Error: " + error)
     }
 
     wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
     var html = '';
-    
+
     html += `
         <div class="profile-icon clickable top-left-button" onclick="createWishTwo('${wishlistID}', '${userID}', '${currency}', '${wishObjectBase64}');" title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
@@ -451,12 +473,14 @@ function createWishFour(wishlistID, userID, wishObjectBase64){
         wish_image = get_base64(wish_image);
         
         wish_image.then(function(result) {
-            var form_obj = { 
+            var form_obj = {
                 "name" : wishObject.name,
                 "note" : wishObject.note,
                 "url": wishObject.url,
                 "price": wishObject.price,
-                "image_data": result
+                "image_data": result,
+                "category_id": wishObject.category_id ? wishObject.category_id : null,
+                "category_name": wishObject.category_name ? wishObject.category_name : ""
             };
 
             var form_data = JSON.stringify(form_obj);
@@ -465,12 +489,14 @@ function createWishFour(wishlistID, userID, wishObjectBase64){
         });
 
     } else {
-        var form_obj = { 
+        var form_obj = {
                 "name" : wishObject.name,
                 "note" : wishObject.note,
                 "url": wishObject.url,
                 "price": wishObject.price,
-                "image_data": ""
+                "image_data": "",
+                "category_id": wishObject.category_id ? wishObject.category_id : null,
+                "category_name": wishObject.category_name ? wishObject.category_name : ""
             };
 
         var form_data = JSON.stringify(form_obj);
@@ -495,6 +521,7 @@ function createWishFive(form_data, wishlistID, userID) {
                 error(result.error);
             } else {
                 placeWishes(result.wishes, wishlistID, userID);
+                refreshCategories(wishlistID);
                 toggleModal(false);
             }
 
