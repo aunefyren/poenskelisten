@@ -118,6 +118,7 @@ function load_page(result) {
         console.log(group_id);
 
         get_wishlist(wishlist_id)
+        get_categories(wishlist_id);
         get_wishes(wishlist_id, group_id, user_id);
     } else {
         showLoggedOutMenu();
@@ -281,22 +282,23 @@ function get_wishes(wishlist_id, group_id, user_id){
 
 function placeWishes(wishes_array, wishlist_id, user_id) {
 
-    var html = ''
     var wish_id_array = []
 
-    for(var i = 0; i < wishes_array.length; i++) {
-
-        var function_result = generate_wish_html(wishes_array[i], wishlist_id, user_id);
-        var new_html = function_result[0]
-        var wish_image = function_result[1]
-
-        if(wish_image) {
-            wish_id_array.push(wishes_array[i].id)
+    // Category grouping helpers live in categoryFunctions.js. Each page supplies
+    // its own renderer so it can keep its generate_wish_html call signature.
+    function renderWishList(list) {
+        var listHTML = '';
+        for(var j = 0; j < list.length; j++) {
+            var function_result = generate_wish_html(list[j], wishlist_id, user_id);
+            listHTML += function_result[0];
+            if(function_result[1]) {
+                wish_id_array.push(list[j].id);
+            }
         }
-
-        html += new_html
-        
+        return listHTML;
     }
+
+    var html = placeWishesGrouped(wishes_array, renderWishList);
 
     if(wishes_array.length == 0) {
         info("Looks like this wishlist is empty...");

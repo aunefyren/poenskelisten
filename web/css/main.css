@@ -318,7 +318,10 @@ form {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  flex-wrap: wrap;
+  /* nowrap so a height-constrained form (e.g. inside a modal) scrolls rather
+     than wrapping its fields into a second column. */
+  flex-wrap: nowrap;
+  flex-shrink: 0;
   justify-content: center;
   align-items: center;
   align-content: center;
@@ -350,8 +353,7 @@ input:active {
 }
 
 select {
-  height: 10em;
-  overflow-y: scroll;
+  cursor: pointer;
 }
 
 .btn-block {
@@ -570,6 +572,43 @@ button:disabled {
   border-radius: 0 0 1em 1em;
   transition: 2s;
   background-color: var(--eggshell);
+}
+
+.wish-category {
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+  margin: 0.5em 0 1.5em 0;
+}
+
+.wish-category-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.4em 0.6em;
+  margin-bottom: 0.25em;
+  border-bottom: 0.1em solid var(--mediumblue);
+  font-weight: 400;
+  font-size: 1.05rem;
+}
+
+.wish-category-arrow {
+  width: 1em;
+  height: 1em;
+}
+
+.wish-category-name {
+  flex-grow: 1;
+}
+
+.wish-category-count {
+  color: var(--mediumblue);
+  font-size: 0.9rem;
+}
+
+.wish-category-wishes.collapsed {
+  display: none;
 }
 
 .group-member {
@@ -882,7 +921,9 @@ hr {
   max-height: 80%;
   display: flex;
   flex-direction: column;
-  flex-wrap: wrap;
+  /* nowrap: tall content scrolls vertically instead of wrapping into a second
+     column (which pushed modal content off to the right). */
+  flex-wrap: nowrap;
   align-content: center;
   justify-content: start;
   align-items: center;

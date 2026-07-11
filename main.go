@@ -171,6 +171,8 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 			auth.POST("/wishlists/:wishlist_id/un-collaborate", controllers.APIUnCollaborateWishlist)
 			auth.POST("/wishlists/:wishlist_id", controllers.APIUpdateWishlist)
 
+			auth.GET("/wishlists/:wishlist_id/categories", controllers.APIGetWishlistCategories)
+
 			auth.GET("/wishes", controllers.GetWishesFromWishlist)
 			auth.POST("/wishes", controllers.RegisterWish)
 			auth.DELETE("/wishes/:wish_id", controllers.DeleteWish)
