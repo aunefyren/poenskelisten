@@ -456,7 +456,7 @@ button:disabled {
 }
 
 .wish-title {
-  max-width: 50%;
+  min-width: 0;
   margin: 0.5em 0;
   display: flex;
   flex-direction: row;
@@ -465,9 +465,11 @@ button:disabled {
   align-items: center;
   align-content: center;
   text-align: center;
-  min-width: 5em;
   padding: 0;
   font-size: 1rem;
+  grid-column: 2;
+  justify-self: center;
+  overflow-wrap: anywhere;
 }
 
 .wishlist-title {
@@ -490,16 +492,33 @@ button:disabled {
   border: none;
 }
 
+/* The wish top row is a fixed 3-track grid so the title stays anchored to the
+   card's true centre regardless of the widths of the meta pill (left) or the
+   variable action-icon cluster (right). Flex space-between let the centre drift.
+   Children are pinned to explicit columns so the layout holds whether or not the
+   left meta column is present (the public page omits the "updated at" pill). */
+.wish {
+  display: grid;
+  grid-template-columns: minmax(6em, auto) 1fr minmax(6em, auto);
+  gap: 0.25em;
+  align-items: center;
+}
+
+.wish-updatedat {
+  grid-column: 1;
+}
+
 .profile {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  justify-content: center;;
+  justify-content: flex-end;
   align-items: center;
   align-content: center;
   padding: 0;
   width: auto;
-  max-width: 50%;
+  grid-column: 3;
+  justify-self: end;
 }
  .profile-name {
   max-width: 66%;
@@ -556,13 +575,14 @@ button:disabled {
   overflow: hidden;
 }
 
+/* Two-track note area: image column sized to its content, text takes the rest.
+   Toggled between "grid" and "none" from JS (see toggle_wish / generate_wish_html). */
 .wish-note {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: space-around;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75em;
   align-items: center;
-  align-content: center;
+  justify-items: start;
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
@@ -570,6 +590,13 @@ button:disabled {
   border-radius: 0 0 1em 1em;
   transition: 2s;
   background-color: var(--eggshell);
+}
+
+/* Image-only wishes have no note text, so centre the (larger) image rather than
+   leaving it marooned to the left of an empty band. */
+.wish-note.image-only {
+  grid-template-columns: 1fr;
+  justify-items: center;
 }
 
 .group-member {
@@ -839,18 +866,28 @@ hr {
   border-radius: 1em;
   overflow: hidden;
   margin: 0.25em;
-  width: 6em;
-  height: 6em;
+  width: clamp(6em, 18vw, 11em);
+  aspect-ratio: 1;
+  height: auto;
   max-width: 100%;
-  max-height: 100%;
   border: solid 0.15em var(--mediumblue);
   background-color: var(--white);
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+/* Signal that the thumbnail opens the full-size image in a modal. */
+.wish-image-thumbnail:hover {
+  transform: scale(1.03);
+  border-color: var(--darkblue);
+  opacity: 1;
 }
 
 .wish-note-text {
   margin: 0.5em;
-  flex-basis: auto;
-  min-width: 6em;
+  min-width: 0;
+  text-align: left;
+  align-self: center;
+  overflow-wrap: anywhere;
 }
 
 /* The Modal (background) */

@@ -260,7 +260,7 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     html += '<img class="icon-img " src="/assets/gift.svg">'
     html += '</div>'
 
-    html += wish_object.name
+    html += '<span class="wish-title-text">' + wish_object.name + '</span>'
 
     if(wish_object.price != 0) {
 
@@ -332,7 +332,8 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     html += '</div>'
 
     if(wish_object.image) {
-        html += '<div class="wish-note expanded" style="display: flex !important;" id="wish_' + wish_object.id + '_note" title="Note">'
+        var imageOnlyClass = wish_object.note === "" ? " image-only" : "";
+        html += '<div class="wish-note expanded' + imageOnlyClass + '" style="display: grid !important;" id="wish_' + wish_object.id + '_note" title="Note">'
     } else {
         html += '<div class="wish-note collapsed" id="wish_' + wish_object.id + '_note" title="Note">'
     }
@@ -364,7 +365,7 @@ function toggle_wish(wishid) {
     if(wishnote.classList.contains("collapsed")) {
         wishnote.classList.remove("collapsed")
         wishnote.classList.add("expanded")
-        wishnote.style.display = "flex"
+        wishnote.style.display = "grid"
         wishnotearrow.src = "/assets/chevron-down.svg"
     } else {
         wishnote.classList.remove("expanded")

@@ -286,7 +286,7 @@ function placeWishes(wishes_array, wishlist_id, user_id) {
 
     for(var i = 0; i < wishes_array.length; i++) {
 
-        var function_result = generate_wish_html(wishes_array[i], wishlist_id, user_id);
+        var function_result = generateWishHtml(wishes_array[i], wishlist_id, user_id);
         var new_html = function_result[0]
         var wish_image = function_result[1]
 
@@ -319,7 +319,7 @@ function placeWishes(wishes_array, wishlist_id, user_id) {
 
 }
 
-function generate_wish_html(wish_object, wishlist_id, user_id) {
+function generateWishHtml(wish_object, wishlist_id, user_id) {
 
     var html = '';
     var wish_with_image = false;
@@ -350,7 +350,6 @@ function generate_wish_html(wish_object, wishlist_id, user_id) {
 
     html += `
         <div class="unselectable wish-updatedat" title="Updated at">
-            <div class="wish-updatedat-text">Updated at:</div>
             <div class="wish-updatedat-date">
                 ${wishUpdatedAtString}
             </div>
@@ -362,7 +361,7 @@ function generate_wish_html(wish_object, wishlist_id, user_id) {
     html += '<img class="icon-img " src="/assets/gift.svg">'
     html += '</div>'
 
-    html += wish_object.name
+    html += '<span class="wish-title-text">' + wish_object.name + '</span>'
 
     if(wish_object.price && wish_object.price != 0) {
 
@@ -438,7 +437,8 @@ function generate_wish_html(wish_object, wishlist_id, user_id) {
     html += '</div>'
 
     if(wish_object.image) {
-        html += '<div class="wish-note expanded" style="display: flex !important;" id="wish_' + wish_object.id + '_note" title="Note">'
+        var imageOnlyClass = wish_object.note === "" ? " image-only" : "";
+        html += '<div class="wish-note expanded' + imageOnlyClass + '" style="display: grid !important;" id="wish_' + wish_object.id + '_note" title="Note">'
     } else {
         html += '<div class="wish-note collapsed" style="display: none !important;" id="wish_' + wish_object.id + '_note" title="Note">'
     }
@@ -470,7 +470,7 @@ function toggle_wish(wishid) {
     if(wishnote.classList.contains("collapsed")) {
         wishnote.classList.remove("collapsed")
         wishnote.classList.add("expanded")
-        wishnote.style.display = "flex"
+        wishnote.style.display = "grid"
         wishnotearrow.src = "/assets/chevron-down.svg"
     } else {
         wishnote.classList.remove("expanded")
@@ -692,7 +692,7 @@ function copyPublicLink() {
 }
 
 function placeWish(wishObject, wishlistID, groupID, userID) {
-    var wish_array = generate_wish_html(wishObject, wishlistID, groupID, userID);
+    var wish_array = generateWishHtml(wishObject, wishlistID, groupID, userID);
     var wish_html = wish_array[0];
     var wish_image = wish_array[1];
 
