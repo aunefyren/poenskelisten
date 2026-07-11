@@ -223,6 +223,21 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 	wishObject.CurrencyPadding = config.ConfigFile.PoenskelistenCurrencyPad
 	wishObject.CurrencyLeft = config.ConfigFile.PoenskelistenCurrencyLeft
 
+	// Attach the wish category, if the wish belongs to one
+	if wish.CategoryID != nil {
+		category, err := database.GetWishCategoryByID(*wish.CategoryID)
+		if err != nil {
+			logger.Log.Warn("Failed to get category for wish '" + wish.ID.String() + "'. Skipping category. Error: " + err.Error())
+		} else if category != nil {
+			wishObject.Category = &models.WishCategoryObject{
+				GormModel:  category.GormModel,
+				Name:       category.Name,
+				WishlistID: category.WishlistID,
+				SortOrder:  category.SortOrder,
+			}
+		}
+	}
+
 	return wishObject, nil
 
 }
@@ -382,12 +397,26 @@ func RegisterWish(context *gin.Context) {
 		return
 	}
 
+	// Resolve the requested category (existing, inline-new, or none)
+	categoryID, categoryUserError, err := ResolveWishCategoryForWish(wishlist_id_int, UserID, wish.CategoryID, wish.CategoryName)
+	if err != nil {
+		logger.Log.Error("Failed to resolve wish category. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve wish category."})
+		context.Abort()
+		return
+	} else if categoryUserError != "" {
+		context.JSON(http.StatusBadRequest, gin.H{"error": categoryUserError})
+		context.Abort()
+		return
+	}
+
 	db_wish.OwnerID = UserID
 	db_wish.WishlistID = wishlist_id_int
 	db_wish.Name = wish.Name
 	db_wish.Note = wish.Note
 	db_wish.URL = wish.URL
 	db_wish.Price = wish.Price
+	db_wish.CategoryID = categoryID
 	db_wish.ID = uuid.New()
 
 	// Create wish in DB
@@ -501,6 +530,7 @@ func DeleteWish(context *gin.Context) {
 	}
 
 	wish.Enabled = false
+	deletedCategoryID := wish.CategoryID
 
 	// delete wish
 	*wish, err = database.UpdateWishInDB(*wish)
@@ -509,6 +539,11 @@ func DeleteWish(context *gin.Context) {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete wish."})
 		context.Abort()
 		return
+	}
+
+	// Clean up the wish's category if it is now empty
+	if deletedCategoryID != nil {
+		CleanupWishCategoryIfEmpty(*deletedCategoryID)
 	}
 
 	_, wishes, err := database.GetWishesFromWishlist(wish.WishlistID)
@@ -1049,6 +1084,22 @@ func APIUpdateWish(context *gin.Context) {
 		wishOriginal.Price = wish.Price
 	}
 
+	// Resolve the requested category (existing, inline-new, or none) and remember
+	// the previous one so it can be cleaned up if it ends up empty.
+	previousCategoryID := wishOriginal.CategoryID
+	categoryID, categoryUserError, err := ResolveWishCategoryForWish(wishOriginal.WishlistID, userID, wish.CategoryID, wish.CategoryName)
+	if err != nil {
+		logger.Log.Error("Failed to resolve wish category. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve wish category."})
+		context.Abort()
+		return
+	} else if categoryUserError != "" {
+		context.JSON(http.StatusBadRequest, gin.H{"error": categoryUserError})
+		context.Abort()
+		return
+	}
+	wishOriginal.CategoryID = categoryID
+
 	// Save image
 	if wish.Image != "" && !wish.ImageDelete {
 		err = SaveWishImage(wishID, wish.Image)
@@ -1076,6 +1127,11 @@ func APIUpdateWish(context *gin.Context) {
 		return
 	}
 
+	// If the wish moved out of its previous category, clean it up when empty.
+	if previousCategoryID != nil && (wishOriginal.CategoryID == nil || *previousCategoryID != *wishOriginal.CategoryID) {
+		CleanupWishCategoryIfEmpty(*previousCategoryID)
+	}
+
 	wishObject, err := ConvertWishToWishObject(*wishOriginal, &userID)
 	if err != nil {
 		logger.Log.Error("Failed to convert wish to wish object. Error: " + err.Error())
@@ -1084,8 +1140,31 @@ func APIUpdateWish(context *gin.Context) {
 		return
 	}
 
+	// Return the whole wish list too, so the frontend can re-render with the
+	// updated category grouping rather than splicing a single wish in place.
+	_, wishes, err := database.GetWishesFromWishlist(wishOriginal.WishlistID)
+	if err != nil {
+		logger.Log.Error("Failed to get wishes from database. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishes from database."})
+		context.Abort()
+		return
+	}
+
+	wishObjects, err := ConvertWishesToWishObjects(wishes, &userID)
+	if err != nil {
+		logger.Log.Error("Failed to convert wishes to wish objects. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert wishes to wish objects."})
+		context.Abort()
+		return
+	}
+
+	// Sort wishes by creation date
+	sort.Slice(wishObjects, func(i, j int) bool {
+		return wishObjects[j].CreatedAt.Before(wishObjects[i].CreatedAt)
+	})
+
 	// Return response
-	context.JSON(http.StatusCreated, gin.H{"message": "Wish updated.", "wish": wishObject})
+	context.JSON(http.StatusCreated, gin.H{"message": "Wish updated.", "wish": wishObject, "wishes": wishObjects})
 }
 
 func APIGetWish(context *gin.Context) {
