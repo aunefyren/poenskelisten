@@ -27,6 +27,7 @@ func allModels() []interface{} {
 		&models.Wish{},
 		&models.WishClaim{},
 		&models.News{},
+		&models.MFARecoveryCode{},
 	}
 }
 

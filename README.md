@@ -101,6 +101,8 @@ You can configure Pønskelisten in **three different ways**:
 | smtp_username | smtpusername | smtpusername | string | SMTP user |
 | smtp_password | smtppassword | smtppassword | string | SMTP password |
 | smtp_from | smtpfrom | smtpfrom | string | Sender email address |
+| mfa_enforced | mfaenforced | mfaenforced | bool | Require all local users to enroll in MFA (TOTP) |
+| mfa_recovery_codes_enabled | mfarecoverycodes | mfarecoverycodes | bool | Issue single-use recovery codes on MFA enrollment (default off; when off, an admin must remove MFA for locked-out users) |
 ---
 
 ## 🐳 Docker Setup

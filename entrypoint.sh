@@ -23,6 +23,10 @@ set -- /app/poenskelisten
 [ -n "$dbssl" ] && set -- "$@" --dbssl "$dbssl"
 [ -n "$dblocation" ] && set -- "$@" --dblocation "$dblocation"
 
+# Add security-related flags if those environment variables are set
+[ -n "$mfaenforced" ] && set -- "$@" --mfaenforced "$mfaenforced"
+[ -n "$mfarecoverycodes" ] && set -- "$@" --mfarecoverycodes "$mfarecoverycodes"
+
 # Add flags for invite generation if those environment variables are set
 [ -n "$generateinvite" ] && set -- "$@" --generateinvite "$generateinvite"
 

@@ -136,8 +136,9 @@ func Migrate() {
 	errWish := Instance.AutoMigrate(&models.Wish{})
 	errWishClaim := Instance.AutoMigrate(&models.WishClaim{})
 	errNews := Instance.AutoMigrate(&models.News{})
+	errMFARecoveryCode := Instance.AutoMigrate(&models.MFARecoveryCode{})
 
-	err := errors.Join(errUser, errInvite, errGroup, errGroupMembership, errWishlist, errWishlistMembership, errWishlistCollaborator, errWishCategory, errWish, errWishClaim, errNews)
+	err := errors.Join(errUser, errInvite, errGroup, errGroupMembership, errWishlist, errWishlistMembership, errWishlistCollaborator, errWishCategory, errWish, errWishClaim, errNews, errMFARecoveryCode)
 	if err != nil {
 		panic(err)
 	}

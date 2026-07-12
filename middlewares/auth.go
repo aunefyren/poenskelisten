@@ -76,7 +76,34 @@ func AuthFunction(context *gin.Context, admin bool) (success bool, errorString s
 		}
 	}
 
+	// If MFA enrollment is enforced, block local users who haven't enrolled from
+	// every route except the enrollment endpoints themselves (and session
+	// validation, which the frontend uses to detect this state).
+	if config.ConfigFile.MFAEnforced && !isMFAEnrollmentExemptPath(context.FullPath()) {
+		enabled, isLocal, err := database.GetUserMFAEnrollmentState(claims.UserID)
+		if err != nil {
+			logger.Log.Error("failed to check MFA enrollment state. error: " + err.Error())
+			return false, "failed to check MFA enrollment status", http.StatusInternalServerError
+		}
+		if isLocal && !enabled {
+			return false, "mfa_enrollment_required", http.StatusForbidden
+		}
+	}
+
 	return true, "", http.StatusOK
+}
+
+// isMFAEnrollmentExemptPath reports whether a route must stay reachable while MFA
+// enrollment is being enforced, so users aren't locked out of enrolling.
+func isMFAEnrollmentExemptPath(fullPath string) bool {
+	switch fullPath {
+	case "/api/auth/users/mfa/enroll",
+		"/api/auth/users/mfa/activate",
+		"/api/auth/tokens/validate":
+		return true
+	default:
+		return false
+	}
 }
 
 func GetAuthUsername(tokenString string) (uuid.UUID, error) {

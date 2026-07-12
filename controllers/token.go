@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"aunefyren/poenskelisten/auth"
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/middlewares"
@@ -43,6 +44,22 @@ func GenerateToken(context *gin.Context) {
 		logger.Log.Error("Failed to verify password. Error: " + err.Error())
 		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
 		context.Abort()
+		return
+	}
+
+	// If MFA is enabled, the password alone is not enough: issue a short-lived
+	// challenge token and require the second factor via /open/tokens/mfa instead
+	// of handing out a session token here.
+	if user.IsMFAEnabled() {
+		challengeToken, err := auth.GenerateMFAChallengeToken(user.ID)
+		if err != nil {
+			logger.Log.Error("Failed to generate MFA challenge token. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid credentials."})
+			context.Abort()
+			return
+		}
+
+		context.JSON(http.StatusOK, gin.H{"mfa_required": true, "mfa_token": challengeToken, "message": "Multi-factor authentication required."})
 		return
 	}
 
@@ -110,6 +127,18 @@ func ValidateToken(context *gin.Context) {
 
 	}
 
-	context.JSON(http.StatusOK, gin.H{"message": "Valid session!", "data": claims, "token": token})
+	// Signal the frontend to route the user to MFA enrollment when enforcement is
+	// on and this local account hasn't enrolled yet.
+	mfaEnrollmentRequired := false
+	if config.ConfigFile.MFAEnforced {
+		enabled, isLocal, err := database.GetUserMFAEnrollmentState(claims.UserID)
+		if err != nil {
+			logger.Log.Error("Failed to check MFA enrollment state. Error: " + err.Error())
+		} else if isLocal && !enabled {
+			mfaEnrollmentRequired = true
+		}
+	}
+
+	context.JSON(http.StatusOK, gin.H{"message": "Valid session!", "data": claims, "token": token, "mfa_enrollment_required": mfaEnrollmentRequired})
 
 }

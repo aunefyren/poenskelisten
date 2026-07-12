@@ -109,6 +109,13 @@ function get_login(cookie) {
                     set_cookie("poenskelisten", result.token, 7);
                 }
 
+                // If the admin enforces MFA and this account hasn't enrolled,
+                // route the user to the account page where enrollment lives.
+                if(result.mfa_enrollment_required && window.location.pathname !== "/account") {
+                    accountPageRedirect();
+                    return;
+                }
+
                 // Load page
                 load_page(this.responseText)
             }
@@ -684,6 +691,14 @@ function logInPageRedirect(errorMessage) {
 function verifyPageRedirect() {
     if(window.location.pathname !== "/verify") {
         window.location = '/verify';
+        return true
+    }
+    return false
+}
+
+function accountPageRedirect() {
+    if(window.location.pathname !== "/account") {
+        window.location = '/account';
         return true
     }
     return false

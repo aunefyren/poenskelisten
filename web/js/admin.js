@@ -81,9 +81,23 @@ function load_page(result) {
                 <label for="currency-left" class="clickable">Currency on the left side</label><br>
 
                 <button type="submit" onclick="update_currency();" id="update_currency_button" style=""><img src="assets/check.svg" class="btn_logo"><p2>Update</p2></button>
-            
+
             </div>
-    
+
+            <div class="security-module" id="security-module">
+
+                <h3 id="security-module-title">Security:</h3>
+
+                <input class="clickable" style="margin-top: 0.5em;" type="checkbox" id="mfa-enforced" name="mfa-enforced" value="confirm" >
+                <label for="mfa-enforced" class="clickable">Require all local users to set up two-factor authentication</label><br>
+
+                <input class="clickable" style="margin-top: 1em;" type="checkbox" id="mfa-recovery-codes" name="mfa-recovery-codes" value="confirm" >
+                <label for="mfa-recovery-codes" class="clickable">Issue recovery codes when users enrol</label><br>
+
+                <button type="submit" onclick="update_server_settings();" id="update_security_button" style=""><img src="assets/check.svg" class="btn_logo"><p2>Update</p2></button>
+
+            </div>
+
         </div>
     `;
 
@@ -159,6 +173,46 @@ function place_server_info(server_info) {
     } else {
         document.getElementById('server-poenskelisten-smtp').innerHTML = 'false'
     }
+
+    document.getElementById('mfa-enforced').checked = server_info.mfa_enforced === true
+    document.getElementById('mfa-recovery-codes').checked = server_info.mfa_recovery_codes_enabled === true
+}
+
+function update_server_settings() {
+
+    var mfaEnforced = document.getElementById('mfa-enforced').checked;
+    var mfaRecoveryCodes = document.getElementById('mfa-recovery-codes').checked;
+
+    var form_data = JSON.stringify({ "mfa_enforced" : mfaEnforced, "mfa_recovery_codes_enabled" : mfaRecoveryCodes });
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+                error(result.error);
+            } else {
+                success(result.message)
+                document.getElementById('mfa-enforced').checked = result.mfa_enforced === true
+                document.getElementById('mfa-recovery-codes').checked = result.mfa_recovery_codes_enabled === true
+            }
+
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "admin/server/settings");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
 }
 
 function get_invites() {
@@ -445,6 +499,17 @@ function PlaceUserDataInModal(user_object) {
 
     adminString = "Administrator: " + admin_string
 
+    if(user_object.mfa_enabled) {
+        var mfa_string = "Two-factor: Enabled"
+    } else {
+        var mfa_string = "Two-factor: Disabled"
+    }
+
+    var mfaButton = ""
+    if(user_object.mfa_enabled) {
+        mfaButton = `<button id="delete-mfa-button" onClick="adminDeleteUserMFA('${user_object.id}');" type="button" style="margin-top: 0.5em; padding: 0.75em 1em;">Delete two-factor authentication</button>`
+    }
+
     html = `
         <div class="user-wrapper">
             <div class="profile-icon icon-border icon-background" id="wishlist_owner_image_${user_object.id}" style="width: 5em; height: 5em;">
@@ -455,11 +520,13 @@ function PlaceUserDataInModal(user_object) {
                 ${email}<br>
                 ${joinedDate}<br>
                 ${adminString}<br>
+                ${mfa_string}<br>
             </div>
         </div>
 
         <div id="user-input" class="user-input" style="width: 100%;">
             <button id="register-button" onClick="deleteUser('${user_object.id}');" type="" href="/">Delete user</button>
+            ${mfaButton}
         </div>
     `;
 
@@ -502,6 +569,38 @@ function PlaceProfileImage(imageBase64, divID) {
     image.innerHTML = ""
     image.style.backgroundImage = `url('${imageBase64}')`
     image.style.backgroundPosition = "center center"
+}
+
+function adminDeleteUserMFA(userID) {
+    if(!confirm("Remove two-factor authentication for this user? They will be able to log in with just their password.")) {
+        return;
+    }
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+                error(result.error);
+            } else {
+                toggleModal(false);
+                success(result.message);
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("delete", api_url + "admin/users/" + userID + "/mfa");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return;
 }
 
 function deleteUser(userID) {

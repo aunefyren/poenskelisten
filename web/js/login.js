@@ -207,6 +207,13 @@ function send_log_in(){
                 error(result.error);
                 clear_data();
 
+            } else if(result.mfa_required) {
+
+                // Password accepted, but a second factor is required. Show the
+                // code entry step carrying the short-lived challenge token.
+                clear_data();
+                action_mfa(result.mfa_token);
+
             } else {
 
                 // store jwt to cookie
@@ -228,6 +235,101 @@ function send_log_in(){
     };
     xhttp.withCredentials = true;
     xhttp.open("post", api_url + "open/tokens/register");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.send(form_data);
+    return false;
+}
+
+function action_mfa(mfaToken) {
+
+    clearResponse();
+
+    var html = `
+    <div class="title">
+        Two-factor authentication
+    </div>
+
+    <div class="text-body">
+        Enter the code from your authenticator app. You can also use one of your recovery codes.
+    </div>
+
+    <br>
+    <br>
+
+    <div class="action-block">
+        <form action="" class="icon-border" onsubmit="event.preventDefault(); send_mfa_code();">
+
+            <label id="form-input-icon" for="mfa_code"></label>
+            <input type="text" name="mfa_code" id="mfa_code" placeholder="Authenticator or recovery code" autocomplete="one-time-code" inputmode="text" required autofocus/>
+
+            <input type="hidden" name="mfa_token" id="mfa_token" value="` + mfaToken + `" />
+
+            <button id="log-in-button" type="submit" href="/">Verify</button>
+
+        </form>
+    </div>
+    `;
+
+    var html2 = `
+    <a style="font-size:0.75em;cursor:pointer;" onclick="action_login();">Back to log in</i>
+    `;
+
+    document.getElementById("action").innerHTML = html;
+    document.getElementById("change_action").innerHTML = html2;
+}
+
+function send_mfa_code() {
+
+    var mfa_token = document.getElementById("mfa_token").value;
+    var mfa_code = document.getElementById("mfa_code").value;
+
+    var form_obj = {
+        "mfa_token" : mfa_token,
+        "code" : mfa_code
+    };
+
+    var form_data = JSON.stringify(form_obj);
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+
+                error(result.error);
+                try {
+                    document.getElementById("mfa_code").value = "";
+                } catch(e) {
+                    console.log(e)
+                }
+
+            } else {
+
+                // store jwt to cookie
+                set_cookie("poenskelisten", result.token, 7);
+
+                showLoggedInMenu();
+                success(result.message);
+                disable_login_button();
+
+                window.location.href = '/';
+
+            }
+
+        } else {
+            info("Verifying code...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "open/tokens/mfa");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.send(form_data);
     return false;

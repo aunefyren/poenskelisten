@@ -37,6 +37,9 @@ func setupMiddlewareConfig(t *testing.T) {
 	config.ConfigFile.PrivateKey = key
 	config.ConfigFile.PoenskelistenName = "TestIssuer"
 	config.ConfigFile.SMTPEnabled = false
+	// Reset MFA enforcement so it doesn't leak between tests (and so tests without
+	// a DB don't reach the enrollment lookup).
+	config.ConfigFile.MFAEnforced = false
 
 	// AuthFunction logs validation failures; set a discard logger so those calls
 	// don't dereference a nil pointer or touch the filesystem.
@@ -211,6 +214,88 @@ func TestAuthFunctionSMTPUnverifiedUser(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(errStr), "verify") {
 		t.Errorf("error = %q, want it to mention verification", errStr)
+	}
+}
+
+func TestAuthFunctionMFAEnforcedNotEnrolledBlocks(t *testing.T) {
+	setupMiddlewareConfig(t)
+	setupMiddlewareDB(t)
+	config.ConfigFile.MFAEnforced = true
+
+	userID := createUser(t, true)
+	token := tokenForUser(t, userID, false)
+
+	success, errStr, status := AuthFunction(newContext(token), false)
+	if success {
+		t.Error("AuthFunction succeeded for enforced-but-unenrolled user, want failure")
+	}
+	if status != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", status, http.StatusForbidden)
+	}
+	if !strings.Contains(errStr, "mfa_enrollment_required") {
+		t.Errorf("error = %q, want it to signal mfa_enrollment_required", errStr)
+	}
+}
+
+func TestAuthFunctionMFAEnforcedEnrolledPasses(t *testing.T) {
+	setupMiddlewareConfig(t)
+	setupMiddlewareDB(t)
+	config.ConfigFile.MFAEnforced = true
+
+	userID := createUser(t, true)
+	if err := database.ActivateUserMFA(userID); err != nil {
+		t.Fatalf("failed to activate MFA: %v", err)
+	}
+	token := tokenForUser(t, userID, false)
+
+	success, errStr, status := AuthFunction(newContext(token), false)
+	if !success {
+		t.Errorf("AuthFunction failed for enrolled user under enforcement: %q (status %d)", errStr, status)
+	}
+	if status != http.StatusOK {
+		t.Errorf("status = %d, want %d", status, http.StatusOK)
+	}
+}
+
+func TestAuthFunctionMFANotEnforcedIgnoresEnrollment(t *testing.T) {
+	setupMiddlewareConfig(t)
+	setupMiddlewareDB(t)
+	// MFAEnforced stays false: an unenrolled user must not be blocked.
+
+	userID := createUser(t, true)
+	token := tokenForUser(t, userID, false)
+
+	success, _, status := AuthFunction(newContext(token), false)
+	if !success {
+		t.Error("AuthFunction blocked an unenrolled user while enforcement was off")
+	}
+	if status != http.StatusOK {
+		t.Errorf("status = %d, want %d", status, http.StatusOK)
+	}
+}
+
+func TestIsMFAEnrollmentExemptPath(t *testing.T) {
+	exempt := []string{
+		"/api/auth/users/mfa/enroll",
+		"/api/auth/users/mfa/activate",
+		"/api/auth/tokens/validate",
+	}
+	for _, p := range exempt {
+		if !isMFAEnrollmentExemptPath(p) {
+			t.Errorf("isMFAEnrollmentExemptPath(%q) = false, want true", p)
+		}
+	}
+
+	notExempt := []string{
+		"/api/auth/wishlists",
+		"/api/auth/users/mfa/disable",
+		"/api/admin/users",
+		"",
+	}
+	for _, p := range notExempt {
+		if isMFAEnrollmentExemptPath(p) {
+			t.Errorf("isMFAEnrollmentExemptPath(%q) = true, want false", p)
+		}
 	}
 }
 

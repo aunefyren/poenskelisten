@@ -815,7 +815,7 @@ hr {
   width: auto;
 }
 
-.invites, .currency-module {
+.invites, .currency-module, .security-module {
   width: auto;
   max-width: 100%;
   margin: 1em;

@@ -201,6 +201,10 @@ func RedactUserObject(user models.User) (userObject models.User) {
 	userObject.Verified = nil
 	userObject.ResetCode = nil
 	userObject.ResetExpiration = nil
+	// The TOTP secret and OIDC linkage must never leave the server.
+	userObject.MFASecret = nil
+	userObject.OIDCSubject = nil
+	userObject.OIDCIssuer = nil
 	return
 }
 

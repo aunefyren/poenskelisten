@@ -1,16 +1,19 @@
 function load_page(result) {
 
+    var mfa_enrollment_required = false;
+
     if(result !== false) {
-        
+
         try {
 
             var login_data = JSON.parse(result);
-            
+
             var email = login_data.data.email
             var first_name = login_data.data.first_name
             var last_name = login_data.data.last_name
             var user_id = login_data.data.id
             admin = login_data.data.admin;
+            mfa_enrollment_required = login_data.mfa_enrollment_required === true;
         } catch {
             var email = ""
             var first_name = ""
@@ -86,6 +89,19 @@ function load_page(result) {
 
                     </div>
 
+                    <div class="module" id="mfa-module">
+
+                        <div class="module color-invert" id="" style="">
+                            <hr>
+                        </div>
+
+                        <b><p style="font-size: 1.25em;">Two-factor authentication</p></b>
+                        <p id="mfa-status" style="margin: 0 1em;">...</p>
+
+                        <div id="mfa-action" style="margin: 1em;"></div>
+
+                    </div>
+
                 </div>
     `;
 
@@ -95,12 +111,231 @@ function load_page(result) {
 
     if(result !== false) {
         showLoggedInMenu();
-        GetUserData(user_id);
-        GetProfileImage(user_id);
+
+        if(mfa_enrollment_required) {
+            // Under enforcement the rest of the API is blocked until the user
+            // enrolls, so skip the profile calls (they would 403) and take the
+            // user straight to enrollment.
+            error("Your administrator requires two-factor authentication. Please set it up to continue.");
+            document.getElementById("mfa-status").innerHTML = "Required by your administrator, but not yet set up.";
+            mfaEnroll();
+        } else {
+            GetUserData(user_id);
+            GetProfileImage(user_id);
+        }
     } else {
         showLoggedOutMenu();
         invalid_session();
     }
+}
+
+// Render the two-factor section based on whether MFA is currently enabled.
+function renderMFASection(enabled) {
+    var statusEl = document.getElementById("mfa-status");
+    var actionEl = document.getElementById("mfa-action");
+    if(!statusEl || !actionEl) {
+        return;
+    }
+
+    if(enabled) {
+        statusEl.innerHTML = "Enabled. Your account is protected by an authenticator app.";
+        actionEl.innerHTML = `
+            <button id="mfa-disable-button" onclick="renderMFADisable();" type="button" style="padding: 0.75em 1em;">Disable two-factor authentication</button>
+        `;
+    } else {
+        statusEl.innerHTML = "Disabled. Add an authenticator app for extra protection.";
+        actionEl.innerHTML = `
+            <button id="mfa-enable-button" onclick="mfaEnroll();" type="button" style="padding: 0.75em 1em;">Enable two-factor authentication</button>
+        `;
+    }
+}
+
+// Begin enrollment: request a secret and show the activation form.
+function mfaEnroll() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+                error(result.error);
+            } else {
+                renderMFAActivate(result.secret, result.otpauth_url, result.qr_code);
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/users/mfa/enroll");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+}
+
+// Show the QR code, manual secret, and a form to confirm the first code.
+function renderMFAActivate(secret, otpauthURL, qrCode) {
+    var actionEl = document.getElementById("mfa-action");
+    if(!actionEl) {
+        return;
+    }
+
+    var qrHTML = "";
+    if(qrCode) {
+        qrHTML = `<img src="${qrCode}" alt="Scan this QR code with your authenticator app" style="width: 12em; height: 12em; max-width: 100%; margin: 0.5em auto; display: block; image-rendering: pixelated;">`;
+    }
+
+    actionEl.innerHTML = `
+        <p style="margin-bottom: 0.5em;">1. Scan this QR code with your authenticator app:</p>
+        ${qrHTML}
+        <p style="margin: 0.5em 0; font-size: 0.85em;">Can't scan it? Enter this key manually:</p>
+        <p style="font-family: monospace; word-break: break-all; font-size: 1.1em;" id="mfa-secret">${secret}</p>
+        <p style="word-break: break-all; font-size: 0.8em;"><a href="${otpauthURL}">Open in authenticator app</a></p>
+
+        <form action="" class="icon-border" style="margin-top: 1em;" onsubmit="event.preventDefault(); mfaActivate();">
+            <p style="margin-bottom: 0.5em;">2. Enter the 6-digit code to confirm:</p>
+            <label id="form-input-icon" for="mfa_activate_code"></label>
+            <input type="text" name="mfa_activate_code" id="mfa_activate_code" placeholder="6-digit code" autocomplete="one-time-code" inputmode="numeric" required/>
+            <button id="mfa-activate-button" type="submit" style="padding: 0.75em 1em;">Confirm and enable</button>
+        </form>
+
+        <p style="margin-top: 0.5em; font-size: 0.8em; cursor: pointer;"><a onclick="renderMFASection(false);">Cancel</a></p>
+    `;
+}
+
+// Confirm the code, enabling MFA and revealing recovery codes.
+function mfaActivate() {
+    var code = document.getElementById("mfa_activate_code").value;
+
+    var form_data = JSON.stringify({ "code" : code });
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+                error(result.error);
+                try {
+                    document.getElementById("mfa_activate_code").value = "";
+                } catch(e) {
+                    console.log(e)
+                }
+            } else {
+                success(result.message);
+                if(result.recovery_codes && result.recovery_codes.length) {
+                    document.getElementById("mfa-status").innerHTML = "Enabled. Save your recovery codes below.";
+                    showRecoveryCodes(result.recovery_codes);
+                } else {
+                    // Recovery codes are disabled by the administrator.
+                    renderMFASection(true);
+                }
+            }
+        } else {
+            info("Enabling two-factor authentication...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/users/mfa/activate");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
+}
+
+// Display the one-time recovery codes. These are only shown once.
+function showRecoveryCodes(codes) {
+    var actionEl = document.getElementById("mfa-action");
+    if(!actionEl) {
+        return;
+    }
+
+    var codesHTML = "";
+    if(codes && codes.length) {
+        for(var i = 0; i < codes.length; i++) {
+            codesHTML += `<div style="font-family: monospace; font-size: 1.05em;">${codes[i]}</div>`;
+        }
+    }
+
+    actionEl.innerHTML = `
+        <p style="margin-bottom: 0.5em;"><b>Save these recovery codes.</b> Each can be used once if you lose access to your authenticator. They won't be shown again.</p>
+        <div id="mfa-recovery-codes" style="margin: 0.5em auto; padding: 0.5em; border: 1px solid; max-width: 14em; text-align: center;">
+            ${codesHTML}
+        </div>
+        <br>
+        <button type="button" onclick="renderMFASection(true);" style="padding: 0.75em 1em;">I've saved my codes</button>
+    `;
+}
+
+// Show the form required to turn MFA off.
+function renderMFADisable() {
+    var actionEl = document.getElementById("mfa-action");
+    if(!actionEl) {
+        return;
+    }
+
+    actionEl.innerHTML = `
+        <form action="" class="icon-border" onsubmit="event.preventDefault(); mfaDisable();">
+            <p style="margin-bottom: 0.5em;">Confirm your password and a current code to disable two-factor authentication.</p>
+
+            <label id="form-input-icon" for="mfa_disable_password"></label>
+            <input type="password" name="mfa_disable_password" id="mfa_disable_password" placeholder="Your current password" required/>
+
+            <label id="form-input-icon" for="mfa_disable_code"></label>
+            <input type="text" name="mfa_disable_code" id="mfa_disable_code" placeholder="Authenticator or recovery code" autocomplete="one-time-code" required/>
+
+            <button id="mfa-disable-confirm-button" type="submit" style="padding: 0.75em 1em;">Disable</button>
+        </form>
+
+        <p style="margin-top: 0.5em; font-size: 0.8em; cursor: pointer;"><a onclick="renderMFASection(true);">Cancel</a></p>
+    `;
+}
+
+// Send the disable request.
+function mfaDisable() {
+    var password = document.getElementById("mfa_disable_password").value;
+    var code = document.getElementById("mfa_disable_code").value;
+
+    var form_data = JSON.stringify({ "password" : password, "code" : code });
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+                error(result.error);
+            } else {
+                success(result.message);
+                renderMFASection(false);
+            }
+        } else {
+            info("Disabling two-factor authentication...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/users/mfa/disable");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
 }
 
 function change_password_toggle() {
@@ -318,4 +553,7 @@ function PlaceUserData(user_object) {
     }
 
     document.getElementById("user_admin").innerHTML = "Administrator: " + admin_string
+
+    // Reflect the current two-factor state.
+    renderMFASection(user_object.mfa_enabled === true)
 }

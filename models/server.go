@@ -10,4 +10,6 @@ type ServerInfoReply struct {
 	PoenskelistenLogLevel    string `json:"poenskelisten_log_level"`
 	DatabaseType             string `json:"database_type"`
 	SMTPEnabled              bool   `json:"smtp_enabled"`
+	MFAEnforced              bool   `json:"mfa_enforced"`
+	MFARecoveryCodesEnabled  bool   `json:"mfa_recovery_codes_enabled"`
 }

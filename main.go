@@ -136,6 +136,8 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 			open.POST("/users/verify/:code", controllers.VerifyUser)
 			open.POST("/users/verification", controllers.SendUserVerificationCode)
 
+			open.POST("/tokens/mfa", controllers.APIValidateMFA)
+
 			open.GET("/wishlists/public/:wishlist_hash", controllers.GetPublicWishlist)
 		}
 
@@ -188,13 +190,19 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 			auth.GET("/users/:user_id/image", controllers.APIGetUserProfileImage)
 			auth.GET("/users", controllers.GetUsers)
 			auth.POST("/users/update", controllers.UpdateUser)
+
+			auth.POST("/users/mfa/enroll", controllers.APIEnrollMFA)
+			auth.POST("/users/mfa/activate", controllers.APIActivateMFA)
+			auth.POST("/users/mfa/disable", controllers.APIDisableMFA)
 		}
 
 		admin := api.Group("/admin").Use(middlewares.Auth(true))
 		{
 			admin.POST("/currency/update", controllers.APIUpdateCurrency)
+			admin.POST("/server/settings", controllers.APIUpdateServerSettings)
 
 			admin.DELETE("/users/:user_id", controllers.APIDeleteUser)
+			admin.DELETE("/users/:user_id/mfa", controllers.APIAdminDeleteUserMFA)
 
 			admin.POST("/invites", controllers.RegisterInvite)
 			admin.GET("/invites", controllers.APIGetAllInvites)
@@ -303,6 +311,10 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool
 	var smtpUsername = flag.String("smtpusername", configFile.SMTPUsername, "The username used to verify against the SMTP server.")
 	var smtpPassword = flag.String("smtppassword", configFile.SMTPPassword, "The password used to verify against the SMTP server.")
 	var smtpFrom = flag.String("smtpfrom", configFile.SMTPFrom, "The sender address when sending e-mail from Pønskelisten.")
+
+	// Security values
+	var mfaEnforced = flag.String("mfaenforced", strconv.FormatBool(configFile.MFAEnforced), "If all local users must enroll in multi-factor authentication.")
+	var mfaRecoveryCodes = flag.String("mfarecoverycodes", strconv.FormatBool(configFile.MFARecoveryCodesEnabled), "If users are issued single-use recovery codes when enrolling in MFA.")
 
 	// Generate invite
 	var generateInvite = flag.String("generateinvite", "false", "If an invite code should be automatically generate on startup.")
@@ -414,6 +426,16 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool
 
 	if provided["smtpfrom"] {
 		configFile.SMTPFrom = *smtpFrom
+	}
+
+	// Parsed as a string so the "--mfaenforced true/false" calling convention
+	// matches the other boolean flags.
+	if provided["mfaenforced"] {
+		configFile.MFAEnforced = strings.ToLower(*mfaEnforced) == "true"
+	}
+
+	if provided["mfarecoverycodes"] {
+		configFile.MFARecoveryCodesEnabled = strings.ToLower(*mfaRecoveryCodes) == "true"
 	}
 
 	// Runtime-only action, never persisted to config.

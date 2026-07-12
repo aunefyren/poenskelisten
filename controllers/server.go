@@ -16,6 +16,8 @@ func APIGetServerInfo(context *gin.Context) {
 		PoenskelistenExternalURL: config.ConfigFile.PoenskelistenExternalURL,
 		DatabaseType:             config.ConfigFile.DBType,
 		SMTPEnabled:              config.ConfigFile.SMTPEnabled,
+		MFAEnforced:              config.ConfigFile.MFAEnforced,
+		MFARecoveryCodesEnabled:  config.ConfigFile.MFARecoveryCodesEnabled,
 		PoenskelistenEnvironment: config.ConfigFile.PoenskelistenEnvironment,
 		PoenskelistenTestEmail:   config.ConfigFile.PoenskelistenTestEmail,
 		PoenskelistenLogLevel:    config.ConfigFile.PoenskelistenLogLevel,

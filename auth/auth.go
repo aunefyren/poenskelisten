@@ -15,6 +15,17 @@ import (
 // remains valid.
 const TokenValidDuration = 7 * 24 * time.Hour
 
+// MFAChallengeValidDuration is how long the short-lived token issued between a
+// correct password and TOTP entry remains valid.
+const MFAChallengeValidDuration = 5 * time.Minute
+
+// Token purposes. An empty Purpose denotes a normal session token (the historical
+// default), so existing tokens keep working. Single-purpose tokens carry a
+// non-empty Purpose and are rejected by the normal session-validation path.
+const (
+	PurposeMFAChallenge = "mfa_challenge"
+)
+
 // ErrNotAdmin is returned by ValidateToken when an admin session is required but
 // the token does not carry the admin claim. Callers use errors.Is to map this to
 // an authorization (403) rather than an authentication (401) failure.
@@ -27,6 +38,9 @@ type JWTClaim struct {
 	Admin     bool      `json:"admin"`
 	Verified  bool      `json:"verified"`
 	UserID    uuid.UUID `json:"id"`
+	// Purpose distinguishes single-purpose tokens (e.g. an MFA challenge) from a
+	// normal session token. Empty means a normal session token.
+	Purpose string `json:"purpose,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -81,10 +95,57 @@ func ValidateTokenGetClaims(signedToken string, admin bool) (*JWTClaim, error) {
 	if claims.NotBefore.Time.After(now) {
 		return nil, errors.New("token has not begun")
 	}
+	// A single-purpose token (e.g. an MFA challenge) must never be accepted as a
+	// session token.
+	if claims.Purpose != "" {
+		return nil, errors.New("token is not a session token")
+	}
 	if admin && !claims.Admin {
 		return nil, ErrNotAdmin
 	}
 	return claims, nil
+}
+
+// GenerateMFAChallengeToken mints a short-lived token that stands in for a
+// successful password check while the user completes the TOTP step. It carries
+// only the user ID and a purpose marker; it cannot be used as a session token.
+func GenerateMFAChallengeToken(userID uuid.UUID) (string, error) {
+	now := time.Now()
+	claims := &JWTClaim{
+		UserID:  userID,
+		Purpose: PurposeMFAChallenge,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(MFAChallengeValidDuration)),
+			NotBefore: jwt.NewNumericDate(now),
+			IssuedAt:  jwt.NewNumericDate(now),
+			Issuer:    config.ConfigFile.PoenskelistenName,
+		},
+	}
+	return GenerateJWTFromClaims(claims)
+}
+
+// ValidateMFAChallengeToken parses and validates an MFA challenge token, returning
+// the user ID it was issued for. It rejects expired, not-yet-valid, and
+// wrong-purpose tokens.
+func ValidateMFAChallengeToken(signedToken string) (uuid.UUID, error) {
+	claims, err := ParseToken(signedToken)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	if claims.ExpiresAt == nil || claims.NotBefore == nil {
+		return uuid.UUID{}, errors.New("claims not present")
+	}
+	now := time.Now()
+	if claims.ExpiresAt.Time.Before(now) {
+		return uuid.UUID{}, errors.New("challenge token has expired")
+	}
+	if claims.NotBefore.Time.After(now) {
+		return uuid.UUID{}, errors.New("challenge token has not begun")
+	}
+	if claims.Purpose != PurposeMFAChallenge {
+		return uuid.UUID{}, errors.New("token is not an MFA challenge token")
+	}
+	return claims.UserID, nil
 }
 
 func ParseToken(signedToken string) (*JWTClaim, error) {

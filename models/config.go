@@ -22,6 +22,8 @@ type ConfigStruct struct {
 	PoenskelistenEnvironment  string `json:"poenskelisten_environment"`
 	PoenskelistenTestEmail    string `json:"poenskelisten_test_email"`
 	PoenskelistenLogLevel     string `json:"poenskelisten_log_level"`
+	MFAEnforced               bool   `json:"mfa_enforced"`
+	MFARecoveryCodesEnabled   bool   `json:"mfa_recovery_codes_enabled"`
 	SMTPEnabled               bool   `json:"smtp_enabled"`
 	SMTPHost                  string `json:"smtp_host"`
 	SMTPPort                  int    `json:"smtp_port"`
