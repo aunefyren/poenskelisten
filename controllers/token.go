@@ -74,16 +74,18 @@ func ValidateToken(context *gin.Context) {
 
 	token := ""
 
-	// Refresh login if it is over 24 hours old
+	// Refresh login if it was issued over 24 hours ago (and is still valid), so
+	// active sessions keep sliding forward instead of expiring abruptly.
 	if claims.IssuedAt != nil {
 
 		// Get time difference between now and token issue time
 		difference := now.Sub(claims.IssuedAt.Time)
 
-		if float64(difference.Hours()/24/365) < 1.0 && claims.ExpiresAt.After(now) {
+		if difference > 24*time.Hour && claims.ExpiresAt.After(now) {
 
-			// Change expiration to now + seve ndays
-			claims.ExpiresAt.Time = now.Add(time.Hour * 24 * 7)
+			// Slide the issue/expiry window forward by the standard token lifetime
+			claims.IssuedAt.Time = now
+			claims.ExpiresAt.Time = now.Add(auth.TokenValidDuration)
 
 			// Get user object by ID and check and update admin status
 			userObject, err := database.GetUserInformation(claims.UserID)

@@ -29,29 +29,29 @@ func Auth(admin bool) gin.HandlerFunc {
 func AuthFunction(context *gin.Context, admin bool) (success bool, errorString string, httpStatus int) {
 	tokenString := context.GetHeader("Authorization")
 	if tokenString == "" {
-		return false, "request does not contain an access token", http.StatusBadRequest
+		return false, "request does not contain an access token", http.StatusUnauthorized
 	}
 
-	err := auth.ValidateToken(tokenString, admin)
+	claims, err := auth.ValidateTokenGetClaims(tokenString, admin)
 	if err != nil {
 		logger.Log.Error("Failed to validate token. Error: " + err.Error())
-		return false, "failed to validate token.", http.StatusBadRequest
+		if errors.Is(err, auth.ErrNotAdmin) {
+			return false, "insufficient permissions.", http.StatusForbidden
+		}
+		return false, "failed to validate token.", http.StatusUnauthorized
 	}
 
 	// If SMTP is enabled, verify if user is enabled
 	if config.ConfigFile.SMTPEnabled {
 
-		// Get userID from header
-		userID, err := GetAuthUsername(context.GetHeader("Authorization"))
-		if err != nil {
-			logger.Log.Error("failed to get user ID from token. error: " + err.Error())
-			return false, "failed to get user ID from token", http.StatusInternalServerError
-		}
+		// Reuse the claims already parsed above rather than parsing again
+		userID := claims.UserID
 
 		// Check if the user is verified
 		verified, err := database.VerifyUserIsVerified(userID)
 		if err != nil {
-			panic(err)
+			logger.Log.Error("failed to check user verification status. error: " + err.Error())
+			return false, "failed to check verification status", http.StatusInternalServerError
 		}
 		if !verified {
 
