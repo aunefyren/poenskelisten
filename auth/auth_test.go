@@ -154,13 +154,22 @@ func TestValidateTokenTamperedSignature(t *testing.T) {
 		t.Fatalf("GenerateJWT returned error: %v", err)
 	}
 
-	// Flip the last character of the signature segment.
-	last := tokenString[len(tokenString)-1]
-	replacement := byte('A')
-	if last == 'A' {
-		replacement = 'B'
+	// Tamper with the signature segment. Flip its *first* character rather than
+	// its last: the final base64url char of a 32-byte HMAC signature carries
+	// unused low bits, so flipping it can decode to the same signature bytes and
+	// still verify. The first char always maps to distinct bytes.
+	parts := strings.Split(tokenString, ".")
+	if len(parts) != 3 {
+		t.Fatalf("expected 3 token segments, got %d", len(parts))
 	}
-	tampered := tokenString[:len(tokenString)-1] + string(replacement)
+	sig := []byte(parts[2])
+	if sig[0] == 'A' {
+		sig[0] = 'B'
+	} else {
+		sig[0] = 'A'
+	}
+	parts[2] = string(sig)
+	tampered := strings.Join(parts, ".")
 
 	if err := ValidateToken(tampered, false); err == nil {
 		t.Error("ValidateToken accepted a token with a tampered signature, want error")
