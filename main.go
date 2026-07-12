@@ -138,6 +138,10 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 
 			open.POST("/tokens/mfa", controllers.APIValidateMFA)
 
+			open.GET("/oidc/config", controllers.APIGetOIDCConfig)
+			open.GET("/oidc/login", controllers.OIDCLogin)
+			open.GET("/oidc/callback", controllers.OIDCCallback)
+
 			open.GET("/wishlists/public/:wishlist_hash", controllers.GetPublicWishlist)
 		}
 
@@ -316,6 +320,15 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool
 	var mfaEnforced = flag.String("mfaenforced", strconv.FormatBool(configFile.MFAEnforced), "If all local users must enroll in multi-factor authentication.")
 	var mfaRecoveryCodes = flag.String("mfarecoverycodes", strconv.FormatBool(configFile.MFARecoveryCodesEnabled), "If users are issued single-use recovery codes when enrolling in MFA.")
 
+	// OIDC values
+	var oidcEnabled = flag.String("oidcenabled", strconv.FormatBool(configFile.OIDCEnabled), "If OpenID Connect single sign-on is enabled.")
+	var oidcProviderName = flag.String("oidcprovidername", configFile.OIDCProviderName, "The display name of the OIDC provider, shown on the login button.")
+	var oidcIssuerURL = flag.String("oidcissuerurl", configFile.OIDCIssuerURL, "The OIDC issuer URL (used for discovery).")
+	var oidcClientID = flag.String("oidcclientid", configFile.OIDCClientID, "The OIDC client ID.")
+	var oidcClientSecret = flag.String("oidcclientsecret", configFile.OIDCClientSecret, "The OIDC client secret.")
+	var oidcRedirectURL = flag.String("oidcredirecturl", configFile.OIDCRedirectURL, "The OIDC redirect/callback URL registered with the provider.")
+	var oidcAutoCreate = flag.String("oidcautocreateusers", strconv.FormatBool(configFile.OIDCAutoCreateUsers), "If unknown OIDC users are automatically provisioned an account.")
+
 	// Generate invite
 	var generateInvite = flag.String("generateinvite", "false", "If an invite code should be automatically generate on startup.")
 
@@ -436,6 +449,34 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool
 
 	if provided["mfarecoverycodes"] {
 		configFile.MFARecoveryCodesEnabled = strings.ToLower(*mfaRecoveryCodes) == "true"
+	}
+
+	if provided["oidcenabled"] {
+		configFile.OIDCEnabled = strings.ToLower(*oidcEnabled) == "true"
+	}
+
+	if provided["oidcprovidername"] {
+		configFile.OIDCProviderName = *oidcProviderName
+	}
+
+	if provided["oidcissuerurl"] {
+		configFile.OIDCIssuerURL = *oidcIssuerURL
+	}
+
+	if provided["oidcclientid"] {
+		configFile.OIDCClientID = *oidcClientID
+	}
+
+	if provided["oidcclientsecret"] {
+		configFile.OIDCClientSecret = *oidcClientSecret
+	}
+
+	if provided["oidcredirecturl"] {
+		configFile.OIDCRedirectURL = *oidcRedirectURL
+	}
+
+	if provided["oidcautocreateusers"] {
+		configFile.OIDCAutoCreateUsers = strings.ToLower(*oidcAutoCreate) == "true"
 	}
 
 	// Runtime-only action, never persisted to config.

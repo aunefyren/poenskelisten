@@ -83,6 +83,8 @@ function action_login() {
             <button id="log-in-button" type="submit" href="/">Log in</button>
 
         </form>
+
+        <div id="oidc-login" style="margin-top: 1em;"></div>
     </div>
     `;
 
@@ -92,6 +94,41 @@ function action_login() {
 
     document.getElementById("action").innerHTML = html;
     document.getElementById("change_action").innerHTML = html2;
+
+    renderOIDCLoginOption();
+}
+
+// Fetch the public OIDC config and, if single sign-on is enabled, show a button
+// that starts the flow. Runs quietly: any failure just leaves password login.
+function renderOIDCLoginOption() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            var result;
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log("Failed to parse OIDC config. Error: " + e);
+                return;
+            }
+
+            var container = document.getElementById("oidc-login");
+            if(!container || !result.enabled) {
+                return;
+            }
+
+            var providerName = result.provider_name || "single sign-on";
+            container.innerHTML = `
+                <div class="text-body" style="font-size: 0.8em; margin-bottom: 0.5em;">or</div>
+                <button type="button" style="padding: 0.75em 1em;" onclick="window.location.href='${result.login_url}';">Log in with ${providerName}</button>
+            `;
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("get", api_url + "open/oidc/config");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.send();
+    return;
 }
 
 function action_newpassword() {

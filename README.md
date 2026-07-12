@@ -103,7 +103,61 @@ You can configure Pønskelisten in **three different ways**:
 | smtp_from | smtpfrom | smtpfrom | string | Sender email address |
 | mfa_enforced | mfaenforced | mfaenforced | bool | Require all local users to enroll in MFA (TOTP) |
 | mfa_recovery_codes_enabled | mfarecoverycodes | mfarecoverycodes | bool | Issue single-use recovery codes on MFA enrollment (default off; when off, an admin must remove MFA for locked-out users) |
+| oidc_enabled | oidcenabled | oidcenabled | bool | Enable OpenID Connect single sign-on |
+| oidc_provider_name | oidcprovidername | oidcprovidername | string | Display name on the SSO login button (e.g. "Authelia") |
+| oidc_issuer_url | oidcissuerurl | oidcissuerurl | string | OIDC issuer URL used for discovery (e.g. https://auth.example.com) |
+| oidc_client_id | oidcclientid | oidcclientid | string | OIDC client ID |
+| oidc_client_secret | oidcclientsecret | oidcclientsecret | string | OIDC client secret |
+| oidc_redirect_url | oidcredirecturl | oidcredirecturl | string | OIDC callback URL; defaults to `<external_url>/api/open/oidc/callback` |
+| oidc_auto_create_users | oidcautocreateusers | oidcautocreateusers | bool | Auto-provision unknown OIDC users (default off) |
 ---
+
+## 🔐 Single sign-on (OpenID Connect)
+
+Pønskelisten can act as an OpenID Connect **relying party**, letting users log in
+through an external identity provider (Authelia, Keycloak, Authentik, Google, …).
+A successful SSO login mints a normal Pønskelisten session, so everything else
+works the same afterwards.
+
+**How accounts are resolved on SSO login:**
+
+1. If the IdP subject (`sub`) is already linked to a user, that user logs in.
+2. Otherwise, if the IdP asserts a **verified** email that matches an existing
+   local account, the OIDC identity is linked to it. An **unverified** email is
+   refused.
+3. Otherwise a new account is created **only if** `oidc_auto_create_users` is on
+   (default off); the account is created pre-verified with no local password.
+
+**Example with Authelia**: register Pønskelisten as an OIDC client in your
+Authelia configuration:
+
+```yaml
+identity_providers:
+  oidc:
+    clients:
+      - client_id: poenskelisten
+        client_secret: '<hashed-or-plaintext-per-your-authelia-version>'
+        redirect_uris:
+          - https://wishlist.example.com/api/open/oidc/callback
+        scopes: [openid, profile, email]
+```
+
+Then configure Pønskelisten (env vars shown; flags/config.json equivalents exist):
+
+```yaml
+    environment:
+      externalurl: https://wishlist.example.com
+      oidcenabled: true
+      oidcprovidername: Authelia
+      oidcissuerurl: https://auth.example.com
+      oidcclientid: poenskelisten
+      oidcclientsecret: <the-client-secret>
+      # oidcredirecturl defaults to <externalurl>/api/open/oidc/callback
+      oidcautocreateusers: false
+```
+
+The redirect URL registered with the IdP must match
+`<external_url>/api/open/oidc/callback`.
 
 ## 🐳 Docker Setup
 

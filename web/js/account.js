@@ -64,24 +64,30 @@ function load_page(result) {
                             <label id="form-input-icon" for="email"></label>
                             <input type="email" name="email" id="email" placeholder="Email" value="" required/>
 
-                            <input class="clickable" onclick="change_password_toggle();" style="margin-top: 2em;" type="checkbox" id="password-toggle" name="password-toggle" value="confirm" >
-                            <label for="password-toggle" class="clickable">Change my password.</label><br>
+                            <div id="oidc-account-note" style="display:none; margin-top: 1em; font-size: 0.9em;"></div>
 
-                            <div id="change-password-box" style="display:none;">
+                            <div id="credential-section">
+                                <input class="clickable" onclick="change_password_toggle();" style="margin-top: 2em;" type="checkbox" id="password-toggle" name="password-toggle" value="confirm" >
+                                <label for="password-toggle" class="clickable">Change my password.</label><br>
 
-                                <label id="form-input-icon" for="password"></label>
-                                <input type="password" name="password" id="password" placeholder="New password" />
+                                <div id="change-password-box" style="display:none;">
 
-                                <label id="form-input-icon" for="password_repeat"></label>
-                                <input type="password" name="password_repeat" id="password_repeat" placeholder="Repeat the password" />
+                                    <label id="form-input-icon" for="password"></label>
+                                    <input type="password" name="password" id="password" placeholder="New password" />
 
+                                    <label id="form-input-icon" for="password_repeat"></label>
+                                    <input type="password" name="password_repeat" id="password_repeat" placeholder="Repeat the password" />
+
+                                </div>
                             </div>
 
                             <label id="form-input-icon" for="new_profile_image" style="margin-top: 2em;">Replace profile image:</label>
                             <input type="file" name="new_profile_image" id="new_profile_image" placeholder="" value="" accept="image/png, image/jpeg" />
 
-                            <label id="form-input-icon" for="password_original"></label>
-                            <input type="password" name="password_original" id="password_original" placeholder="Your current password" required />
+                            <div id="password-original-section">
+                                <label id="form-input-icon" for="password_original"></label>
+                                <input type="password" name="password_original" id="password_original" placeholder="Your current password" required />
+                            </div>
 
                             <button id="update-button" style="margin-top: 2em;" type="submit" href="/">Update account</button>
 
@@ -554,6 +560,52 @@ function PlaceUserData(user_object) {
 
     document.getElementById("user_admin").innerHTML = "Administrator: " + admin_string
 
-    // Reflect the current two-factor state.
-    renderMFASection(user_object.mfa_enabled === true)
+    if(user_object.auth_source === 'oidc') {
+        // OIDC accounts have no local password and no local MFA; those are managed
+        // by the identity provider. Hide the credential controls so the form only
+        // updates the profile image.
+        applyOIDCAccountUI();
+    } else {
+        // Reflect the current two-factor state for local accounts.
+        renderMFASection(user_object.mfa_enabled === true)
+    }
+}
+
+// Adjust the account page for an OIDC-only user: hide password/email editing and
+// the local MFA section, and drop the "required" flags so the profile form can
+// still be submitted (for the profile image).
+function applyOIDCAccountUI() {
+    var note = document.getElementById("oidc-account-note");
+    if(note) {
+        note.style.display = "block";
+        note.innerHTML = "Your sign-in and email are managed by your identity provider.";
+    }
+
+    var credentialSection = document.getElementById("credential-section");
+    if(credentialSection) {
+        credentialSection.style.display = "none";
+    }
+
+    var passwordOriginalSection = document.getElementById("password-original-section");
+    if(passwordOriginalSection) {
+        passwordOriginalSection.style.display = "none";
+    }
+
+    // Hidden required fields would otherwise block form submission.
+    try { document.getElementById("password_original").required = false; } catch(e) { console.log(e); }
+    try {
+        var emailField = document.getElementById("email");
+        emailField.required = false;
+        emailField.readOnly = true;
+    } catch(e) { console.log(e); }
+
+    // Local MFA is not applicable to OIDC accounts.
+    var mfaStatus = document.getElementById("mfa-status");
+    var mfaAction = document.getElementById("mfa-action");
+    if(mfaStatus) {
+        mfaStatus.innerHTML = "Managed by your identity provider.";
+    }
+    if(mfaAction) {
+        mfaAction.innerHTML = "";
+    }
 }

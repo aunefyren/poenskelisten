@@ -27,6 +27,15 @@ set -- /app/poenskelisten
 [ -n "$mfaenforced" ] && set -- "$@" --mfaenforced "$mfaenforced"
 [ -n "$mfarecoverycodes" ] && set -- "$@" --mfarecoverycodes "$mfarecoverycodes"
 
+# Add OIDC single sign-on flags if those environment variables are set
+[ -n "$oidcenabled" ] && set -- "$@" --oidcenabled "$oidcenabled"
+[ -n "$oidcprovidername" ] && set -- "$@" --oidcprovidername "$oidcprovidername"
+[ -n "$oidcissuerurl" ] && set -- "$@" --oidcissuerurl "$oidcissuerurl"
+[ -n "$oidcclientid" ] && set -- "$@" --oidcclientid "$oidcclientid"
+[ -n "$oidcclientsecret" ] && set -- "$@" --oidcclientsecret "$oidcclientsecret"
+[ -n "$oidcredirecturl" ] && set -- "$@" --oidcredirecturl "$oidcredirecturl"
+[ -n "$oidcautocreateusers" ] && set -- "$@" --oidcautocreateusers "$oidcautocreateusers"
+
 # Add flags for invite generation if those environment variables are set
 [ -n "$generateinvite" ] && set -- "$@" --generateinvite "$generateinvite"
 

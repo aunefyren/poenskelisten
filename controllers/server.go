@@ -10,17 +10,41 @@ import (
 
 func APIGetServerInfo(context *gin.Context) {
 	serverInfo := models.ServerInfoReply{
-		Timezone:                 config.ConfigFile.Timezone,
+		// Application
+		AppName:                  config.ConfigFile.PoenskelistenName,
 		PoenskelistenVersion:     config.ConfigFile.PoenskelistenVersion,
-		PoenskelistenPort:        config.ConfigFile.PoenskelistenPort,
-		PoenskelistenExternalURL: config.ConfigFile.PoenskelistenExternalURL,
-		DatabaseType:             config.ConfigFile.DBType,
-		SMTPEnabled:              config.ConfigFile.SMTPEnabled,
-		MFAEnforced:              config.ConfigFile.MFAEnforced,
-		MFARecoveryCodesEnabled:  config.ConfigFile.MFARecoveryCodesEnabled,
 		PoenskelistenEnvironment: config.ConfigFile.PoenskelistenEnvironment,
-		PoenskelistenTestEmail:   config.ConfigFile.PoenskelistenTestEmail,
+		PoenskelistenExternalURL: config.ConfigFile.PoenskelistenExternalURL,
+		PoenskelistenPort:        config.ConfigFile.PoenskelistenPort,
+		Timezone:                 config.ConfigFile.Timezone,
 		PoenskelistenLogLevel:    config.ConfigFile.PoenskelistenLogLevel,
+		PoenskelistenTestEmail:   config.ConfigFile.PoenskelistenTestEmail,
+
+		// Database (credentials intentionally omitted)
+		DatabaseType:     config.ConfigFile.DBType,
+		DatabaseName:     config.ConfigFile.DBName,
+		DatabaseHost:     config.ConfigFile.DBIP,
+		DatabasePort:     config.ConfigFile.DBPort,
+		DatabaseSSL:      config.ConfigFile.DBSSL,
+		DatabaseLocation: config.ConfigFile.DBLocation,
+
+		// Email (password intentionally omitted)
+		SMTPEnabled: config.ConfigFile.SMTPEnabled,
+		SMTPHost:    config.ConfigFile.SMTPHost,
+		SMTPPort:    config.ConfigFile.SMTPPort,
+		SMTPFrom:    config.ConfigFile.SMTPFrom,
+
+		// Single sign-on (client secret intentionally omitted)
+		OIDCEnabled:         config.ConfigFile.OIDCEnabled,
+		OIDCProviderName:    config.ConfigFile.OIDCProviderName,
+		OIDCIssuerURL:       config.ConfigFile.OIDCIssuerURL,
+		OIDCClientID:        config.ConfigFile.OIDCClientID,
+		OIDCRedirectURL:     config.ConfigFile.OIDCRedirectURL,
+		OIDCAutoCreateUsers: config.ConfigFile.OIDCAutoCreateUsers,
+
+		// Security
+		MFAEnforced:             config.ConfigFile.MFAEnforced,
+		MFARecoveryCodesEnabled: config.ConfigFile.MFARecoveryCodesEnabled,
 	}
 
 	// Reply

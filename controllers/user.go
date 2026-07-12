@@ -509,12 +509,16 @@ func UpdateUser(context *gin.Context) {
 		return
 	}
 
-	credentialError := user.CheckPassword(userUpdateRequest.PasswordOriginal)
-	if credentialError != nil {
-		logger.Log.Error("Invalid credentials.")
-		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
-		context.Abort()
-		return
+	// Local accounts must confirm their current password. OIDC-only accounts have
+	// no local password; they are already authenticated via their session token.
+	if user.HasPassword() {
+		credentialError := user.CheckPassword(userUpdateRequest.PasswordOriginal)
+		if credentialError != nil {
+			logger.Log.Error("Invalid credentials.")
+			context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
+			context.Abort()
+			return
+		}
 	}
 
 	// Make sure password match
@@ -546,7 +550,9 @@ func UpdateUser(context *gin.Context) {
 		return
 	}
 
-	if *userOriginal.Email != userUpdateRequest.Email {
+	// Email changes are only allowed for local accounts; an OIDC account's email
+	// is owned by the identity provider and used for linking, so it is left as-is.
+	if userOriginal.HasPassword() && *userOriginal.Email != userUpdateRequest.Email {
 
 		// Verify e-mail is not in use
 		unique_email, err := database.VerifyUniqueUserEmail(userUpdateRequest.Email)
@@ -574,8 +580,8 @@ func UpdateUser(context *gin.Context) {
 
 	}
 
-	// Hash the selected password
-	if userUpdateRequest.Password != "" {
+	// Hash the selected password (local accounts only; OIDC accounts have none).
+	if userUpdateRequest.Password != "" && userOriginal.HasPassword() {
 		if err := userOriginal.HashPassword(userUpdateRequest.Password); err != nil {
 			logger.Log.Error("Failed to hash password. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password."})

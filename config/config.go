@@ -119,6 +119,20 @@ func LoadConfig() (err error) {
 		anythingChanged = true
 	}
 
+	// OIDC defaults: only relevant when OIDC is enabled. Give the login button a
+	// sensible label and derive the redirect URL from the external URL when the
+	// admin hasn't set one explicitly.
+	if ConfigFile.OIDCEnabled {
+		if ConfigFile.OIDCProviderName == "" {
+			ConfigFile.OIDCProviderName = "Single sign-on"
+			anythingChanged = true
+		}
+		if ConfigFile.OIDCRedirectURL == "" && ConfigFile.PoenskelistenExternalURL != "" {
+			ConfigFile.OIDCRedirectURL = strings.TrimRight(ConfigFile.PoenskelistenExternalURL, "/") + "/api/open/oidc/callback"
+			anythingChanged = true
+		}
+	}
+
 	if ConfigFile.PoenskelistenLogLevel == "" {
 		level := logrus.InfoLevel
 		ConfigFile.PoenskelistenLogLevel = level.String()
