@@ -272,6 +272,23 @@ func VerifyUniqueWishNameInWishlist(WishName string, WishlistID uuid.UUID) (bool
 	return true, nil
 }
 
+// Verify if a wish name in wishlist is unique, ignoring the wish being updated
+func VerifyUniqueWishNameInWishlistExcludingWish(WishName string, WishlistID uuid.UUID, WishID uuid.UUID) (bool, error) {
+	var wish models.Wish
+
+	wishesRecord := Instance.
+		Where(&models.Wish{Enabled: true, WishlistID: WishlistID, Name: WishName}).
+		Not(&models.Wish{GormModel: models.GormModel{ID: WishID}}).
+		Find(&wish)
+
+	if wishesRecord.Error != nil {
+		return false, wishesRecord.Error
+	} else if wishesRecord.RowsAffected != 0 {
+		return false, nil
+	}
+	return true, nil
+}
+
 // Verify if a wishlist name in group is unique
 func VerifyUniqueWishlistNameForUser(WishlistName string, UserID uuid.UUID) (bool, error) {
 	var wishlist models.Wishlist
