@@ -87,7 +87,7 @@ function editWishTwo(wishID, wishlistID, groupID, userID, wishObjectBase64) {
     var html = '';
     
     html += `
-        <form action="" onsubmit="event.preventDefault(); editWishThree('${wishID}', '${userID}', '${groupID}', '${userID}', '${wishObjectBase64}');">        
+        <form action="" onsubmit="event.preventDefault(); editWishThree('${wishID}', '${wishlistID}', '${groupID}', '${userID}', '${wishObjectBase64}');">
             <label for="wish_name">Edit wish:</label><br>
             <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" value="${wishObject.name}" autocomplete="off" required />
             <button id="register-button" type="submit" href="/">Next</button>
@@ -124,7 +124,7 @@ function editWishThree(wishID, wishlistID, groupID, userID, wishObjectBase64) {
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
-        <form action="" onsubmit="event.preventDefault(); editWishFour('${wishID}', '${userID}', '${wishlistID}', '${groupID}', '${wishObjectBase64}');">
+        <form action="" onsubmit="event.preventDefault(); editWishFour('${wishID}', '${wishlistID}', '${groupID}', '${userID}', '${wishObjectBase64}');">
             <label for="wish_note" style="">Optional details:</label><br>
 
             <textarea name="wish_note" id="wish_note" placeholder="Wish note" value="" autocomplete="off" rows="3" />${wishObject.note}</textarea>
