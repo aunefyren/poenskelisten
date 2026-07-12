@@ -638,6 +638,30 @@ button:disabled {
   display: none;
 }
 
+.wish-sort-controls {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25em;
+  width: 100%;
+  width: -webkit-fill-available;
+  width: -moz-available;
+}
+
+.wish-sort-controls:empty {
+  display: none;
+}
+
+/* Compact, auto-width selects that override the full-width form select rule. */
+.wish-sort-controls .wish-sort-select {
+  width: auto;
+  height: 2.4em;
+  margin: 0;
+  padding: 0.25em 0.5em;
+  font-size: 0.9rem;
+}
+
 .group-member {
   display: flex;
   flex-direction: row;

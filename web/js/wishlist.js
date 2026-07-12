@@ -92,6 +92,8 @@ function load_page(result) {
                             Wishes:
                         </div>
 
+                        <div id="wish-sort-controls" class="wish-sort-controls"></div>
+
                         <div id="wishes-box" class="wishes">
                             <div class="loading-icon-wrapper" id="loading-icon-wrapper">
                                 <img class="loading-icon" src="/assets/loading.svg">
@@ -280,7 +282,23 @@ function get_wishes(wishlist_id, group_id, user_id){
     return false;
 }
 
+// Cache of the last rendered wishes and their render arguments, so the sort
+// controls can re-render without re-fetching from the API.
+var lastWishes = [];
+var lastWishlistId = null;
+var lastUserId = null;
+
+// Called by the shared sort controls (categoryFunctions.js) after a change.
+function rerenderWishes() {
+    placeWishes(lastWishes, lastWishlistId, lastUserId);
+}
+
 function placeWishes(wishes_array, wishlist_id, user_id) {
+
+    lastWishes = wishes_array;
+    lastWishlistId = wishlist_id;
+    lastUserId = user_id;
+    renderSortControls(wishes_array);
 
     var wish_id_array = []
 
