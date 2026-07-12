@@ -1,7 +1,6 @@
 package config
 
 import (
-	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"crypto/rand"
 	"encoding/base64"
@@ -193,19 +192,25 @@ func SaveConfig() error {
 	return nil
 }
 
-func GetPrivateKey(epoch int) []byte {
-	if epoch > 5 {
-		fmt.Println("failed to load private key. exiting...")
-		os.Exit(1)
+// GetPrivateKey returns the decoded JWT signing secret. It fails loudly rather
+// than silently regenerating the key on error: rotating the secret would
+// invalidate every live session, and an empty secret would sign tokens
+// insecurely without anyone noticing.
+func GetPrivateKey() ([]byte, error) {
+	if ConfigFile.PrivateKey == "" {
+		return nil, errors.New("private key is not configured")
 	}
 
 	secretKey, err := base64.StdEncoding.DecodeString(ConfigFile.PrivateKey)
 	if err != nil {
-		ResetSecureKey()
-		return GetPrivateKey(epoch + 1)
+		return nil, fmt.Errorf("failed to decode private key: %w", err)
 	}
 
-	return secretKey
+	if len(secretKey) == 0 {
+		return nil, errors.New("private key decoded to an empty value")
+	}
+
+	return secretKey, nil
 }
 
 // GenerateSecureKey creates a cryptographically secure random key of the given length (in bytes).
@@ -217,19 +222,4 @@ func GenerateSecureKey(length int) (string, error) {
 	}
 	// Encode to Base64 to make it easy to store
 	return base64.StdEncoding.EncodeToString(key), nil
-}
-
-func ResetSecureKey() {
-	privateKey, err := GenerateSecureKey(64)
-	if err != nil {
-		fmt.Println("failed to generate new secret key. exiting...")
-		os.Exit(1)
-	}
-	ConfigFile.PrivateKey = privateKey
-	err = SaveConfig()
-	if err != nil {
-		fmt.Println("failed to save new config. exiting...")
-		os.Exit(1)
-	}
-	logger.Log.Info("new private key set")
 }

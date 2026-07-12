@@ -3,11 +3,22 @@ package auth
 import (
 	"aunefyren/poenskelisten/config"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
+
+// TokenValidDuration is how long a freshly issued (or refreshed) session token
+// remains valid.
+const TokenValidDuration = 7 * 24 * time.Hour
+
+// ErrNotAdmin is returned by ValidateToken when an admin session is required but
+// the token does not carry the admin claim. Callers use errors.Is to map this to
+// an authorization (403) rather than an authentication (401) failure.
+var ErrNotAdmin = errors.New("token not an admin session")
 
 type JWTClaim struct {
 	Firstname string    `json:"first_name"`
@@ -20,7 +31,7 @@ type JWTClaim struct {
 }
 
 func GenerateJWT(firstname string, lastname string, email string, userid uuid.UUID, admin bool, verified bool) (tokenString string, err error) {
-	expirationTime := time.Now().Add(1 * time.Hour * 24 * 7)
+	now := time.Now()
 	claims := &JWTClaim{
 		Firstname: firstname,
 		Lastname:  lastname,
@@ -29,68 +40,75 @@ func GenerateJWT(firstname string, lastname string, email string, userid uuid.UU
 		UserID:    userid,
 		Verified:  verified,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
-			NotBefore: jwt.NewNumericDate(time.Now()),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(now.Add(TokenValidDuration)),
+			NotBefore: jwt.NewNumericDate(now),
+			IssuedAt:  jwt.NewNumericDate(now),
 			Issuer:    config.ConfigFile.PoenskelistenName,
 		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	jwtKey := config.GetPrivateKey(1)
-	tokenString, err = token.SignedString(jwtKey)
-	return
+	return GenerateJWTFromClaims(claims)
 }
 
 func GenerateJWTFromClaims(claims *JWTClaim) (tokenString string, err error) {
+	jwtKey, err := config.GetPrivateKey()
+	if err != nil {
+		return "", err
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	jwtKey := config.GetPrivateKey(1)
 	tokenString, err = token.SignedString(jwtKey)
 	return
 }
 
 func ValidateToken(signedToken string, admin bool) (err error) {
-	jwtKey := config.GetPrivateKey(1)
-	token, err := jwt.ParseWithClaims(
-		signedToken,
-		&JWTClaim{},
-		func(token *jwt.Token) (interface{}, error) {
-			return []byte(jwtKey), nil
-		},
-	)
+	_, err = ValidateTokenGetClaims(signedToken, admin)
+	return err
+}
+
+// ValidateTokenGetClaims validates the token and returns its claims, so callers
+// that also need the claims don't have to parse the token a second time.
+func ValidateTokenGetClaims(signedToken string, admin bool) (*JWTClaim, error) {
+	claims, err := ParseToken(signedToken)
 	if err != nil {
-		return
+		return nil, err
 	}
-	claims, ok := token.Claims.(*JWTClaim)
-	if !ok {
-		err = errors.New("couldn't parse claims")
-		return
-	} else if claims.ExpiresAt == nil || claims.NotBefore == nil {
-		err = errors.New("claims not present")
-		return
+	if claims.ExpiresAt == nil || claims.NotBefore == nil {
+		return nil, errors.New("claims not present")
 	}
 	now := time.Now()
 	if claims.ExpiresAt.Time.Before(now) {
-		err = errors.New("token has expired")
-		return
+		return nil, errors.New("token has expired")
 	}
 	if claims.NotBefore.Time.After(now) {
-		err = errors.New("token has not begun")
-		return
+		return nil, errors.New("token has not begun")
 	}
 	if admin && !claims.Admin {
-		err = errors.New("token not an admin session")
-		return
+		return nil, ErrNotAdmin
 	}
-	return
+	return claims, nil
 }
 
 func ParseToken(signedToken string) (*JWTClaim, error) {
-	jwtKey := config.GetPrivateKey(1)
+	jwtKey, err := config.GetPrivateKey()
+	if err != nil {
+		return nil, err
+	}
+
+	// Tolerate an optional "Bearer " scheme prefix so callers can use either the
+	// raw token or the standard Authorization header form.
+	if len(signedToken) >= 7 && strings.EqualFold(signedToken[:7], "bearer ") {
+		signedToken = signedToken[7:]
+	}
+
 	token, err := jwt.ParseWithClaims(
 		signedToken,
 		&JWTClaim{},
 		func(token *jwt.Token) (interface{}, error) {
-			return []byte(jwtKey), nil
+			// Only HMAC signing is expected; reject any other algorithm to
+			// guard against algorithm-confusion attacks.
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			return jwtKey, nil
 		},
 	)
 	if err != nil {
@@ -98,8 +116,7 @@ func ParseToken(signedToken string) (*JWTClaim, error) {
 	}
 	claims, ok := token.Claims.(*JWTClaim)
 	if !ok {
-		err = errors.New("couldn't parse claims")
-		return nil, err
+		return nil, errors.New("couldn't parse claims")
 	}
 	return claims, nil
 }
