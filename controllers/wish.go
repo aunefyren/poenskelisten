@@ -1022,7 +1022,7 @@ func APIUpdateWish(context *gin.Context) {
 			return
 		}
 
-		unique_wish_name, err := database.VerifyUniqueWishNameInWishlist(wish.Name, wishOriginal.WishlistID)
+		unique_wish_name, err := database.VerifyUniqueWishNameInWishlistExcludingWish(wish.Name, wishOriginal.WishlistID, wishOriginal.ID)
 		if err != nil {
 			logger.Log.Error("Failed to verify wish name. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wish name."})
