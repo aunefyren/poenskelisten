@@ -344,43 +344,6 @@ func VerifyUserOwnershipToWishlist(UserID uuid.UUID, WishlistID uuid.UUID) (bool
 	return true, nil
 }
 
-// Get user information from wishlist
-func GetUserMembersFromWishlist(WishlistID uuid.UUID) ([]models.User, error) {
-	var users []models.User
-	var groupMemberships []models.GroupMembership
-
-	membershipRecords := Instance.
-		Where(&models.GroupMembership{Enabled: true}).
-		Joins("JOIN groups ON group_memberships.group_id = groups.id").
-		Where("groups.enabled = ?", true).
-		Joins("JOIN wishlist_memberships ON wishlist_memberships.group_id = groups.id").
-		Where("group_memberships.enabled = ?", true).
-		Joins("JOIN wishlists ON wishlists.id = wishlist_memberships.wishlist_id").
-		Where("wishlists.enabled = ? AND wishlists.id = ?", true, WishlistID).
-		Joins("JOIN users ON group_memberships.group_id = users.id").
-		Where("users.enabled = ?", true).
-		Where("group_memberships.group_id != wishlists.owner_id").
-		Find(&groupMemberships)
-
-	if membershipRecords.Error != nil {
-		return []models.User{}, membershipRecords.Error
-	}
-
-	for _, membership := range groupMemberships {
-		userObject, err := GetUserInformation(membership.MemberID)
-		if err != nil {
-			return []models.User{}, err
-		}
-		users = append(users, userObject)
-	}
-
-	if len(users) == 0 {
-		users = []models.User{}
-	}
-
-	return users, nil
-}
-
 func GetMembershipIDForGroupToWishlist(WishlistID uuid.UUID, GroupID uuid.UUID) (membershipFound bool, wishlistMembership models.WishlistMembership, err error) {
 	wishlistMembership = models.WishlistMembership{}
 
