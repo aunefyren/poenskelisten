@@ -207,33 +207,29 @@ func GetWishlistByWishID(wishID uuid.UUID) (bool, models.Wishlist, error) {
 }
 
 func CreateWishInDB(wishDB models.Wish) (wish models.Wish, err error) {
-	wish = models.Wish{}
-	err = nil
 	record := Instance.Create(&wishDB)
 
 	if record.Error != nil {
-		return wish, record.Error
+		return models.Wish{}, record.Error
 	}
 
 	if record.RowsAffected != 1 {
-		return wish, errors.New("Wish not added to database.")
+		return models.Wish{}, errors.New("Wish not added to database.")
 	}
 
-	return wish, err
+	return wishDB, nil
 }
 
 func CreateWishClaimInDB(wishClaimDB models.WishClaim) (wishClaim models.WishClaim, err error) {
-	wishClaim = models.WishClaim{}
-	err = nil
 	record := Instance.Create(&wishClaimDB)
 
 	if record.Error != nil {
-		return wishClaim, record.Error
+		return models.WishClaim{}, record.Error
 	}
 
 	if record.RowsAffected != 1 {
-		return wishClaim, errors.New("WishClaim not added to database.")
+		return models.WishClaim{}, errors.New("WishClaim not added to database.")
 	}
 
-	return wishClaim, err
+	return wishClaimDB, nil
 }

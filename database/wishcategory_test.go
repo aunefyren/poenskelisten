@@ -2,43 +2,10 @@ package database
 
 import (
 	"aunefyren/poenskelisten/models"
-	"database/sql"
 	"testing"
 
 	"github.com/google/uuid"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-	_ "modernc.org/sqlite"
 )
-
-// setupTestDB spins up an isolated in-memory SQLite database (CGO-free modernc
-// driver) and points the package-global Instance at it. Each call gets a fresh
-// schema so tests don't leak state into one another.
-func setupTestDB(t *testing.T) {
-	t.Helper()
-
-	dbSQL, err := sql.Open("sqlite", "file:"+uuid.NewString()+"?mode=memory&cache=shared")
-	if err != nil {
-		t.Fatalf("failed to open in-memory sqlite: %v", err)
-	}
-	t.Cleanup(func() { dbSQL.Close() })
-
-	// A shared-cache in-memory DB lives only while a connection is held open, so
-	// pin the pool to a single connection for the duration of the test.
-	dbSQL.SetMaxOpenConns(1)
-
-	instance, err := gorm.Open(sqlite.Dialector{Conn: dbSQL}, &gorm.Config{})
-	if err != nil {
-		t.Fatalf("failed to open gorm: %v", err)
-	}
-
-	err = instance.AutoMigrate(&models.User{}, &models.Wishlist{}, &models.WishCategory{}, &models.Wish{})
-	if err != nil {
-		t.Fatalf("failed to migrate: %v", err)
-	}
-
-	Instance = instance
-}
 
 func createTestCategory(t *testing.T, wishlistID uuid.UUID, name string, sortOrder int) models.WishCategory {
 	t.Helper()

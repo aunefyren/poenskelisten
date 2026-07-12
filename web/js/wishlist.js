@@ -284,20 +284,12 @@ function placeWishes(wishes_array, wishlist_id, user_id) {
 
     var wish_id_array = []
 
-    for(var i = 0; i < wishes_array.length; i++) {
-
-        var function_result = generateWishHtml(wishes_array[i], wishlist_id, user_id);
-        var new_html = function_result[0]
-        var wish_image = function_result[1]
-
-        if(wish_image) {
-            wish_id_array.push(wishes_array[i].id)
     // Category grouping helpers live in categoryFunctions.js. Each page supplies
-    // its own renderer so it can keep its generate_wish_html call signature.
+    // its own renderer so it can keep its generateWishHtml call signature.
     function renderWishList(list) {
         var listHTML = '';
         for(var j = 0; j < list.length; j++) {
-            var function_result = generate_wish_html(list[j], wishlist_id, user_id);
+            var function_result = generateWishHtml(list[j], wishlist_id, user_id);
             listHTML += function_result[0];
             if(function_result[1]) {
                 wish_id_array.push(list[j].id);
@@ -701,18 +693,6 @@ function copyPublicLink() {
 
 }
 
-function placeWish(wishObject, wishlistID, groupID, userID) {
-    var wish_array = generateWishHtml(wishObject, wishlistID, groupID, userID);
-    var wish_html = wish_array[0];
-    var wish_image = wish_array[1];
-
-    document.getElementById("wish_wrapper_" + wishObject.id).remove();
-    document.getElementById("wishes-box").innerHTML = wish_html + document.getElementById("wishes-box").innerHTML
-
-    if(wish_image) {
-        GetWishImageThumbail(result.wish.id)
-    }
-}
 
 function removeWishlist(wishlistID, userID) {
     window.location.href = "/wishlists";

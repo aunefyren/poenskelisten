@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -32,7 +33,7 @@ func Connect(dbType string, timezone string, dbUsername string, dbPassword strin
 
 		var sslString = "disable"
 		if dbSSL {
-			sslString = "enabled"
+			sslString = "require"
 		}
 
 		connStrDb := "host=" + dbIP + " user=" + dbUsername + " password=" + dbPassword + " dbname=" + dbName + " port=" + strconv.Itoa(dbPort) + " sslmode=" + sslString + " TimeZone=" + timezone
@@ -73,7 +74,7 @@ func Connect(dbType string, timezone string, dbUsername string, dbPassword strin
 	} else if strings.ToLower(dbType) == "mysql" {
 		logger.Log.Debug("attempting to connect to mysql database")
 
-		connStrDb := dbUsername + ":" + dbPassword + "@tcp(" + dbIP + ":" + strconv.Itoa(dbPort) + ")/" + dbName + "?parseTime=True&loc=Local&charset=utf8mb4"
+		connStrDb := dbUsername + ":" + dbPassword + "@tcp(" + dbIP + ":" + strconv.Itoa(dbPort) + ")/" + dbName + "?parseTime=True&loc=" + url.QueryEscape(timezone) + "&charset=utf8mb4"
 
 		// Connect to DB without DB Name
 		Instance, dbError = gorm.Open(mysql.Open(connStrDb), &gorm.Config{})
@@ -101,17 +102,23 @@ func Connect(dbType string, timezone string, dbUsername string, dbPassword strin
 	return nil
 }
 
+// CreateTable creates the MySQL database when it does not yet exist. It connects
+// to the server without selecting a database, so it can issue CREATE DATABASE.
 func CreateTable(dbUsername string, dbPassword string, dbIP string, dbPort int, dbName string) error {
-	url := fmt.Sprintf("host=%s port=%s user=%s password=%s sslmode=disable TimeZone=%s", dbIP, strconv.Itoa(dbPort), dbUsername, dbUsername, "local")
-	db, err := sql.Open("mysql", url)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?parseTime=True", dbUsername, dbPassword, dbIP, dbPort)
+	db, err := sql.Open("mysql", dsn)
 	if err != nil {
-		panic(err)
+		logger.Log.Error("failed to open mysql connection to create database. error: " + err.Error())
+		return errors.New("failed to open mysql connection to create database")
 	}
 	defer db.Close()
 
-	_, err = db.Exec(fmt.Sprintf("CREATE DATABASE %s;", dbName))
+	// dbName originates from trusted config; wrap in backticks to allow names
+	// that would otherwise need quoting.
+	_, err = db.Exec("CREATE DATABASE IF NOT EXISTS `" + dbName + "`;")
 	if err != nil {
-		panic(err)
+		logger.Log.Error("failed to create mysql database. error: " + err.Error())
+		return errors.New("failed to create mysql database")
 	}
 
 	return nil
@@ -258,8 +265,12 @@ func VerifyUserIsVerified(userID uuid.UUID) (bool, error) {
 func VerifyUnusedUserInviteCode(providedCode string) (bool, error) {
 	var inviteStruct models.Invite
 
+	// Used is a bool, so it must be matched with an explicit clause: GORM drops
+	// zero-value (false) fields from struct-based Where conditions, which would
+	// otherwise let an already-used invite pass this check.
 	inviteRecords := Instance.
-		Where(&models.Invite{Used: false, Code: providedCode, Enabled: &utilities.DBTrue}).
+		Where(&models.Invite{Code: providedCode, Enabled: &utilities.DBTrue}).
+		Where("used = ?", false).
 		Find(&inviteStruct)
 
 	if inviteRecords.Error != nil {
@@ -389,39 +400,6 @@ func DeleteWishlistMembership(WishlistMembershipID uuid.UUID) error {
 		return errors.New("failed to delete wishlist membership in database")
 	}
 	return nil
-}
-
-// Get user information from group
-func GetUserMembersFromGroup(GroupID uuid.UUID) ([]models.User, error) {
-	var users []models.User
-	var groupMemberships []models.GroupMembership
-
-	membershipRecords := Instance.
-		Where(&models.GroupMembership{Enabled: true}).
-		Joins("JOIN groups ON group_memberships.group = groups.id").
-		Where("groups.enabled = ?", true).
-		Where("groups.id = ?", GroupID).
-		Joins("JOIN users ON group_memberships.group_id = users.id").
-		Where("users.enabled = ?", true).
-		Find(&groupMemberships)
-
-	if membershipRecords.Error != nil {
-		return []models.User{}, membershipRecords.Error
-	}
-
-	for _, membership := range groupMemberships {
-		userObject, err := GetUserInformation(membership.MemberID)
-		if err != nil {
-			return []models.User{}, err
-		}
-		users = append(users, userObject)
-	}
-
-	if len(users) == 0 {
-		users = []models.User{}
-	}
-
-	return users, nil
 }
 
 func InitializeSQLiteDB() error {

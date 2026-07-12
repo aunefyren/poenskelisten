@@ -1,0 +1,16 @@
+# Normalize line endings to LF for all text files on checkout and commit,
+# regardless of the contributor's platform or core.autocrlf setting.
+* text=auto eol=lf
+
+# Explicitly treat known binary assets as binary so they are never converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary

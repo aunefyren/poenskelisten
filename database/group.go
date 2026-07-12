@@ -259,33 +259,29 @@ func GetGroupMembershipByGroupIDAndMemberID(GroupID uuid.UUID, MemberID uuid.UUI
 }
 
 func CreateGroupInDB(groupDB models.Group) (group models.Group, err error) {
-	group = models.Group{}
-	err = nil
 	record := Instance.Create(&groupDB)
 
 	if record.Error != nil {
-		return group, record.Error
+		return models.Group{}, record.Error
 	}
 
 	if record.RowsAffected != 1 {
-		return group, errors.New("Group not added to database.")
+		return models.Group{}, errors.New("Group not added to database.")
 	}
 
-	return group, err
+	return groupDB, nil
 }
 
 func CreateGroupMembershipInDB(groupMembershipDB models.GroupMembership) (groupMembership models.GroupMembership, err error) {
-	groupMembership = models.GroupMembership{}
-	err = nil
 	record := Instance.Create(&groupMembershipDB)
 
 	if record.Error != nil {
-		return groupMembership, record.Error
+		return models.GroupMembership{}, record.Error
 	}
 
 	if record.RowsAffected != 1 {
-		return groupMembership, errors.New("Group membership not added to database.")
+		return models.GroupMembership{}, errors.New("Group membership not added to database.")
 	}
 
-	return groupMembership, err
+	return groupMembershipDB, nil
 }

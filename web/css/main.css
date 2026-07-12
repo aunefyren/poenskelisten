@@ -599,6 +599,8 @@ button:disabled {
 .wish-note.image-only {
   grid-template-columns: 1fr;
   justify-items: center;
+}
+
 .wish-category {
   width: 100%;
   width: -webkit-fill-available;
