@@ -3,12 +3,14 @@ console.log("Service-worker loaded.");
 // Incrementing OFFLINE_VERSION will kick off the install event and force
 // previously cached resources to be updated from the network.
 const OFFLINE_VERSION = 1;
-const CACHE_NAME = 'poenskelisten-cache';
+const CACHE_NAME = 'poenskelisten-cache-v' + OFFLINE_VERSION;
+// Page returned from the cache when a navigation fails while offline.
+const OFFLINE_URL = '/';
 // Customize this with a different URL if needed.
 const urlsToCache = [
-    '/',
+    OFFLINE_URL,
     '/manifest.json',
-    'assets/favicons/favicon.ico'
+    '/assets/favicons/favicon.ico'
 ];
 
 self.addEventListener('install', (event) => {
@@ -29,6 +31,15 @@ self.addEventListener('activate', (event) => {
         if ('navigationPreload' in self.registration) {
             await self.registration.navigationPreload.enable();
         }
+
+        // Purge caches from previous versions so bumping OFFLINE_VERSION
+        // actually takes effect.
+        const cacheKeys = await caches.keys();
+        await Promise.all(
+            cacheKeys
+                .filter((key) => key.startsWith('poenskelisten-cache') && key !== CACHE_NAME)
+                .map((key) => caches.delete(key))
+        );
     })());
 
     // Tell the active service worker to take control of the page immediately.
