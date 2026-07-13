@@ -83,6 +83,8 @@ function action_login() {
             <button id="log-in-button" type="submit" href="/">Log in</button>
 
         </form>
+
+        <div id="oidc-login" style="margin-top: 1em;"></div>
     </div>
     `;
 
@@ -92,6 +94,41 @@ function action_login() {
 
     document.getElementById("action").innerHTML = html;
     document.getElementById("change_action").innerHTML = html2;
+
+    renderOIDCLoginOption();
+}
+
+// Fetch the public OIDC config and, if single sign-on is enabled, show a button
+// that starts the flow. Runs quietly: any failure just leaves password login.
+function renderOIDCLoginOption() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            var result;
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log("Failed to parse OIDC config. Error: " + e);
+                return;
+            }
+
+            var container = document.getElementById("oidc-login");
+            if(!container || !result.enabled) {
+                return;
+            }
+
+            var providerName = result.provider_name || "single sign-on";
+            container.innerHTML = `
+                <div class="text-body" style="font-size: 0.8em; margin-bottom: 0.5em;">or</div>
+                <button type="button" style="padding: 0.75em 1em;" onclick="window.location.href='${result.login_url}';">Log in with ${providerName}</button>
+            `;
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("get", api_url + "open/oidc/config");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.send();
+    return;
 }
 
 function action_newpassword() {
@@ -207,18 +244,20 @@ function send_log_in(){
                 error(result.error);
                 clear_data();
 
+            } else if(result.mfa_required) {
+
+                // Password accepted, but a second factor is required. Show the
+                // code entry step carrying the short-lived challenge token.
+                clear_data();
+                action_mfa(result.mfa_token);
+
             } else {
 
-                // store jwt to cookie
-                set_cookie("poenskelisten", result.token, 7);
-
-                // show home page &amp; tell the user it was a successful login
-                showLoggedInMenu();
-                success(result.message);
+                // The browser is now logged in at the authorization server; resume
+                // the OAuth flow (or go home) to obtain tokens.
                 clear_data();
                 disable_login_button();
-
-                window.location.href = '/';
+                redirectAfterLogin();
 
             }
 
@@ -231,6 +270,113 @@ function send_log_in(){
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.send(form_data);
     return false;
+}
+
+function action_mfa(mfaToken) {
+
+    clearResponse();
+
+    var html = `
+    <div class="title">
+        Two-factor authentication
+    </div>
+
+    <div class="text-body">
+        Enter the code from your authenticator app. You can also use one of your recovery codes.
+    </div>
+
+    <br>
+    <br>
+
+    <div class="action-block">
+        <form action="" class="icon-border" onsubmit="event.preventDefault(); send_mfa_code();">
+
+            <label id="form-input-icon" for="mfa_code"></label>
+            <input type="text" name="totp" id="mfa_code" placeholder="Authenticator or recovery code" autocomplete="one-time-code" inputmode="text" aria-label="Authentication code" required autofocus/>
+
+            <input type="hidden" name="mfa_token" id="mfa_token" value="` + mfaToken + `" />
+
+            <button id="log-in-button" type="submit" href="/">Verify</button>
+
+        </form>
+    </div>
+    `;
+
+    var html2 = `
+    <a style="font-size:0.75em;cursor:pointer;" onclick="action_login();">Back to log in</i>
+    `;
+
+    document.getElementById("action").innerHTML = html;
+    document.getElementById("change_action").innerHTML = html2;
+}
+
+function send_mfa_code() {
+
+    var mfa_token = document.getElementById("mfa_token").value;
+    var mfa_code = document.getElementById("mfa_code").value;
+
+    var form_obj = {
+        "mfa_token" : mfa_token,
+        "code" : mfa_code
+    };
+
+    var form_data = JSON.stringify(form_obj);
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+
+                error(result.error);
+                try {
+                    document.getElementById("mfa_code").value = "";
+                } catch(e) {
+                    console.log(e)
+                }
+
+            } else {
+
+                // Second factor accepted; the SSO session is set. Resume the OAuth
+                // flow (or go home) to obtain tokens.
+                disable_login_button();
+                redirectAfterLogin();
+
+            }
+
+        } else {
+            info("Verifying code...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "open/tokens/mfa");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.send(form_data);
+    return false;
+}
+
+// After a successful login, return to the OAuth flow (the `next` URL set by
+// /oauth/authorize) or the home page.
+function redirectAfterLogin() {
+    var next = "/";
+    try {
+        var url = new URL(window.location.href);
+        var n = url.searchParams.get("next");
+        if(n) {
+            next = n;
+        }
+    } catch(e) {
+        console.log(e);
+    }
+    window.location.href = next;
 }
 
 function clear_data() {

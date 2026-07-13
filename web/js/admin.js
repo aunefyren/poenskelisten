@@ -49,15 +49,9 @@ function load_page(result) {
             
             <div class="server-info" id="server-info">
                 <h3 id="server-info-title">Server info:</h3>
-                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-version-title">Version:</div><div class="server-info-value" id="server-poenskelisten-version">...</div></div>
-                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-port-title">Port:</div><div class="server-info-value" id="server-poenskelisten-port">...</div></div>
-                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-database-title">Database:</div><div class="server-info-value" id="server-poenskelisten-database">...</div></div>
-                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-url-title">External URL:</div><div class="server-info-value" id="server-poenskelisten-url">...</div></div>
-                <div class="server-info-line"><div class="server-info-title" id="server-timezone-title">Timezone:</div><div class="server-info-value" id="server-timezone">...</div></div>
-                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-loglevel-title">Log level:</div><div class="server-info-value" id="server-poenskelisten-loglevel">...</div></div>
-                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-environment-title">Environment:</div><div class="server-info-value" id="server-poenskelisten-environment">...</div></div>
-                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-testemail-title">Test E-mail:</div><div class="server-info-value" id="server-poenskelisten-testemail">...</div></div>
-                <div class="server-info-line"><div class="server-info-title" id="server-poenskelisten-smtp-title">SMTP:</div><div class="server-info-value" id="server-poenskelisten-smtp">...</div></div>
+                <div id="server-info-body">
+                    <div class="server-info-line"><div class="server-info-title">Loading</div><div class="server-info-value is-muted">…</div></div>
+                </div>
             </div>
 
             <div class="invites" id="invites">
@@ -81,9 +75,31 @@ function load_page(result) {
                 <label for="currency-left" class="clickable">Currency on the left side</label><br>
 
                 <button type="submit" onclick="update_currency();" id="update_currency_button" style=""><img src="assets/check.svg" class="btn_logo"><p2>Update</p2></button>
-            
+
             </div>
-    
+
+            <div class="security-module" id="security-module">
+
+                <h3 id="security-module-title">Security:</h3>
+
+                <input class="clickable" style="margin-top: 0.5em;" type="checkbox" id="mfa-enforced" name="mfa-enforced" value="confirm" >
+                <label for="mfa-enforced" class="clickable">Require all local users to set up two-factor authentication</label><br>
+
+                <input class="clickable" style="margin-top: 1em;" type="checkbox" id="mfa-recovery-codes" name="mfa-recovery-codes" value="confirm" >
+                <label for="mfa-recovery-codes" class="clickable">Issue recovery codes when users enroll</label><br>
+
+                <button type="submit" onclick="update_server_settings();" id="update_security_button" style=""><img src="assets/check.svg" class="btn_logo"><p2>Update</p2></button>
+
+            </div>
+
+            <div class="oauth-clients-module" id="oauth-clients-module">
+
+                <h3 id="oauth-clients-title">Connected apps:</h3>
+
+                <div class="oauth-client-list" id="oauth-client-list"></div>
+
+            </div>
+
         </div>
     `;
 
@@ -101,6 +117,7 @@ function load_page(result) {
             get_server_info();
             get_invites();
             get_currency();
+            get_oauth_clients();
         }
 
     } else {
@@ -144,21 +161,140 @@ function get_server_info() {
 
 }
 
-function place_server_info(server_info) {
-    document.getElementById('server-poenskelisten-version').innerHTML = server_info.poenskelisten_version
-    document.getElementById('server-timezone').innerHTML = server_info.timezone
-    document.getElementById('server-poenskelisten-url').innerHTML = server_info.poenskelisten_external_url
-    document.getElementById('server-poenskelisten-database').innerHTML = server_info.database_type
-    document.getElementById('server-poenskelisten-port').innerHTML = server_info.poenskelisten_port
-    document.getElementById('server-poenskelisten-loglevel').innerHTML = server_info.poenskelisten_log_level
-    document.getElementById('server-poenskelisten-environment').innerHTML = server_info.poenskelisten_environment
-    document.getElementById('server-poenskelisten-testemail').innerHTML = server_info.poenskelisten_test_email
+// Escape untrusted config strings before injecting them into the panel.
+function escapeServerInfo(value) {
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
 
-    if(server_info.smtp_enabled) {
-        document.getElementById('server-poenskelisten-smtp').innerHTML = 'true'
+// Build one label + value chip. kind: "text" | "mono" | "bool".
+function serverInfoRow(label, value, kind) {
+    var chip;
+
+    if(kind === "bool") {
+        chip = value
+            ? '<div class="server-info-value is-on">Enabled</div>'
+            : '<div class="server-info-value is-off">Disabled</div>';
     } else {
-        document.getElementById('server-poenskelisten-smtp').innerHTML = 'false'
+        var text = (value === null || value === undefined) ? "" : String(value);
+        if(text.trim() === "") {
+            chip = '<div class="server-info-value is-muted">Not set</div>';
+        } else if(kind === "mono") {
+            chip = '<div class="server-info-value is-mono">' + escapeServerInfo(text) + '</div>';
+        } else {
+            chip = '<div class="server-info-value">' + escapeServerInfo(text) + '</div>';
+        }
     }
+
+    return '<div class="server-info-line"><div class="server-info-title">' + escapeServerInfo(label) + '</div>' + chip + '</div>';
+}
+
+// Wrap a set of rows under a small section heading.
+function serverInfoGroup(title, rows) {
+    return '<div class="server-info-group"><div class="server-info-group-title">' + escapeServerInfo(title) + '</div>' + rows.join("") + '</div>';
+}
+
+function place_server_info(server_info) {
+    var groups = [];
+
+    // Application
+    var application = [
+        serverInfoRow("Name", server_info.app_name, "text"),
+        serverInfoRow("Version", server_info.poenskelisten_version, "text"),
+        serverInfoRow("Environment", server_info.poenskelisten_environment, "text"),
+        serverInfoRow("External URL", server_info.poenskelisten_external_url, "mono"),
+        serverInfoRow("Port", server_info.poenskelisten_port, "text"),
+        serverInfoRow("Timezone", server_info.timezone, "text"),
+        serverInfoRow("Log level", server_info.poenskelisten_log_level, "text")
+    ];
+    if((server_info.poenskelisten_environment || "").toLowerCase() === "test") {
+        application.push(serverInfoRow("Test email", server_info.poenskelisten_test_email, "mono"));
+    }
+    groups.push(serverInfoGroup("Application", application));
+
+    // Database
+    var database = [ serverInfoRow("Type", server_info.database_type, "text") ];
+    if((server_info.database_type || "").toLowerCase() === "sqlite") {
+        database.push(serverInfoRow("File", server_info.database_location, "mono"));
+    } else {
+        database.push(serverInfoRow("Name", server_info.database_name, "text"));
+        database.push(serverInfoRow("Host", server_info.database_host, "mono"));
+        database.push(serverInfoRow("Port", server_info.database_port, "text"));
+        database.push(serverInfoRow("SSL", server_info.database_ssl, "bool"));
+    }
+    groups.push(serverInfoGroup("Database", database));
+
+    // Email
+    var email = [ serverInfoRow("Status", server_info.smtp_enabled, "bool") ];
+    if(server_info.smtp_enabled) {
+        email.push(serverInfoRow("Host", server_info.smtp_host, "mono"));
+        email.push(serverInfoRow("Port", server_info.smtp_port, "text"));
+        email.push(serverInfoRow("From", server_info.smtp_from, "mono"));
+    }
+    groups.push(serverInfoGroup("Email", email));
+
+    // Single sign-on
+    var sso = [ serverInfoRow("Status", server_info.oidc_enabled, "bool") ];
+    if(server_info.oidc_enabled) {
+        sso.push(serverInfoRow("Provider", server_info.oidc_provider_name, "text"));
+        sso.push(serverInfoRow("Issuer", server_info.oidc_issuer_url, "mono"));
+        sso.push(serverInfoRow("Client ID", server_info.oidc_client_id, "mono"));
+        sso.push(serverInfoRow("Redirect URL", server_info.oidc_redirect_url, "mono"));
+        sso.push(serverInfoRow("Auto-create users", server_info.oidc_auto_create_users, "bool"));
+    }
+    groups.push(serverInfoGroup("Single sign-on", sso));
+
+    // Security
+    groups.push(serverInfoGroup("Security", [
+        serverInfoRow("Require MFA", server_info.mfa_enforced, "bool"),
+        serverInfoRow("Recovery codes", server_info.mfa_recovery_codes_enabled, "bool")
+    ]));
+
+    document.getElementById("server-info-body").innerHTML = groups.join("");
+
+    // Keep the editable security toggles in sync with the reported state.
+    document.getElementById('mfa-enforced').checked = server_info.mfa_enforced === true
+    document.getElementById('mfa-recovery-codes').checked = server_info.mfa_recovery_codes_enabled === true
+}
+
+function update_server_settings() {
+
+    var mfaEnforced = document.getElementById('mfa-enforced').checked;
+    var mfaRecoveryCodes = document.getElementById('mfa-recovery-codes').checked;
+
+    var form_data = JSON.stringify({ "mfa_enforced" : mfaEnforced, "mfa_recovery_codes_enabled" : mfaRecoveryCodes });
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+                error(result.error);
+            } else {
+                success(result.message)
+                document.getElementById('mfa-enforced').checked = result.mfa_enforced === true
+                document.getElementById('mfa-recovery-codes').checked = result.mfa_recovery_codes_enabled === true
+            }
+
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "admin/server/settings");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
 }
 
 function get_invites() {
@@ -394,6 +530,90 @@ function update_currency() {
 
 }
 
+function get_oauth_clients() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            if(result.error) {
+                error(result.error);
+            } else {
+                place_oauth_clients(result.clients);
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("get", api_url + "admin/oauth/clients");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+}
+
+function place_oauth_clients(clients) {
+    var html = "";
+    if(!clients || clients.length === 0) {
+        html = `<div class="invitation-object"><p style="margin: 0.5em; text-align: center;">...</p></div>`;
+    } else {
+        for(var i = 0; i < clients.length; i++) {
+            var c = clients[i];
+            var name = (c.client_name && c.client_name.trim() !== "") ? c.client_name : c.client_id;
+            var suffix = c.enabled ? "" : " (revoked)";
+
+            html += `<div class="invitation-object">`;
+            html += `<div class="leaderboard-object-code">${escapeServerInfo(name)}${suffix}</div>`;
+
+            if(c.is_first_party) {
+                html += `<div class="leaderboard-object-user">Built-in</div>`;
+            } else if(c.enabled) {
+                html += `<img class="icon-img clickable" onclick="revoke_oauth_client('${escapeServerInfo(c.client_id)}')" src="/assets/trash-2.svg" title="Revoke"></img>`;
+            } else {
+                html += `<div class="leaderboard-object-user">Revoked</div>`;
+            }
+
+            html += `</div>`;
+        }
+    }
+    document.getElementById("oauth-client-list").innerHTML = html;
+}
+
+function revoke_oauth_client(clientID) {
+    if(!confirm("Revoke this app's access? It will need to be authorized again.")) {
+        return;
+    }
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            if(result.error) {
+                error(result.error);
+            } else {
+                success(result.message);
+                get_oauth_clients();
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("delete", api_url + "admin/oauth/clients/" + clientID);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+}
+
 function GetUserData(userID) {
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -445,6 +665,17 @@ function PlaceUserDataInModal(user_object) {
 
     adminString = "Administrator: " + admin_string
 
+    if(user_object.mfa_enabled) {
+        var mfa_string = "Two-factor: Enabled"
+    } else {
+        var mfa_string = "Two-factor: Disabled"
+    }
+
+    var mfaButton = ""
+    if(user_object.mfa_enabled) {
+        mfaButton = `<button id="delete-mfa-button" onClick="adminDeleteUserMFA('${user_object.id}');" type="button" style="margin-top: 0.5em; padding: 0.75em 1em;">Delete two-factor authentication</button>`
+    }
+
     html = `
         <div class="user-wrapper">
             <div class="profile-icon icon-border icon-background" id="wishlist_owner_image_${user_object.id}" style="width: 5em; height: 5em;">
@@ -455,11 +686,14 @@ function PlaceUserDataInModal(user_object) {
                 ${email}<br>
                 ${joinedDate}<br>
                 ${adminString}<br>
+                ${mfa_string}<br>
             </div>
         </div>
 
         <div id="user-input" class="user-input" style="width: 100%;">
             <button id="register-button" onClick="deleteUser('${user_object.id}');" type="" href="/">Delete user</button>
+            ${mfaButton}
+            <button id="revoke-sessions-button" onClick="adminRevokeUserSessions('${user_object.id}');" type="button" style="margin-top: 0.5em; padding: 0.75em 1em;">Sign out everywhere</button>
         </div>
     `;
 
@@ -502,6 +736,70 @@ function PlaceProfileImage(imageBase64, divID) {
     image.innerHTML = ""
     image.style.backgroundImage = `url('${imageBase64}')`
     image.style.backgroundPosition = "center center"
+}
+
+function adminDeleteUserMFA(userID) {
+    if(!confirm("Remove two-factor authentication for this user? They will be able to log in with just their password.")) {
+        return;
+    }
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+                error(result.error);
+            } else {
+                toggleModal(false);
+                success(result.message);
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("delete", api_url + "admin/users/" + userID + "/mfa");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return;
+}
+
+function adminRevokeUserSessions(userID) {
+    if(!confirm("Sign this user out of all their sessions? They will need to log in again everywhere.")) {
+        return;
+    }
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+                error(result.error);
+            } else {
+                toggleModal(false);
+                success(result.message);
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("delete", api_url + "admin/users/" + userID + "/sessions");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return;
 }
 
 function deleteUser(userID) {

@@ -127,8 +127,7 @@ function verify_account(){
 
             } else {
 
-                // store jwt to cookie
-                set_cookie("poenskelisten", result.token, 7);
+                // Verified. Return to the app; the OAuth flow now succeeds.
                 frontPageRedirect();
 
             }
@@ -140,10 +139,9 @@ function verify_account(){
     xhttp.withCredentials = true;
     xhttp.open("post", api_url + "open/users/verify/" + email_code);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
     return false;
-    
+
 }
 
 function new_code(){
@@ -177,10 +175,9 @@ function new_code(){
     xhttp.withCredentials = true;
     xhttp.open("post", api_url + "open/users/verification");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
     return false;
-    
+
 }
 
 function frontPageRedirect() {

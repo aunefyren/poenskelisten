@@ -119,6 +119,35 @@ func LoadConfig() (err error) {
 		anythingChanged = true
 	}
 
+	// OIDC defaults: only relevant when OIDC is enabled. Give the login button a
+	// sensible label and derive the redirect URL from the external URL when the
+	// admin hasn't set one explicitly.
+	if ConfigFile.OIDCEnabled {
+		if ConfigFile.OIDCProviderName == "" {
+			ConfigFile.OIDCProviderName = "Single sign-on"
+			anythingChanged = true
+		}
+		if ConfigFile.OIDCRedirectURL == "" && ConfigFile.PoenskelistenExternalURL != "" {
+			ConfigFile.OIDCRedirectURL = strings.TrimRight(ConfigFile.PoenskelistenExternalURL, "/") + "/api/open/oidc/callback"
+			anythingChanged = true
+		}
+	}
+
+	// The OAuth signing key is generated once and persisted: it must survive
+	// restarts, otherwise all issued tokens and the published JWKS would break. The
+	// issuer, algorithm, and resource identifiers are not persisted — they are
+	// computed from config at runtime (see OAuthIssuer / APIResource / MCPResource).
+	if ConfigFile.OAuthSigningKey == "" {
+		keyPEM, keyID, err := GenerateOAuthSigningKey(OAuthSigningAlgorithm)
+		if err != nil {
+			return errors.New("failed to generate OAuth signing key. error: " + err.Error())
+		}
+		ConfigFile.OAuthSigningKey = keyPEM
+		ConfigFile.OAuthSigningKeyID = keyID
+		anythingChanged = true
+		fmt.Println("new OAuth signing key generated.")
+	}
+
 	if ConfigFile.PoenskelistenLogLevel == "" {
 		level := logrus.InfoLevel
 		ConfigFile.PoenskelistenLogLevel = level.String()

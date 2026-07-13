@@ -325,6 +325,110 @@ func TestValidateTokenGetClaims(t *testing.T) {
 	}
 }
 
+func TestAccessTokenValidatesAsSession(t *testing.T) {
+	setupAuthTestConfig(t)
+
+	tokenString, err := GenerateAccessJWT("Ada", "Lovelace", "ada@example.com", uuid.New(), false, true)
+	if err != nil {
+		t.Fatalf("GenerateAccessJWT returned error: %v", err)
+	}
+
+	claims, err := ValidateTokenGetClaims(tokenString, false)
+	if err != nil {
+		t.Fatalf("ValidateTokenGetClaims rejected an access token: %v", err)
+	}
+	if claims.Purpose != PurposeAccess {
+		t.Errorf("Purpose = %q, want %q", claims.Purpose, PurposeAccess)
+	}
+
+	// Access tokens are short-lived.
+	if claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time) != AccessTokenValidDuration {
+		t.Errorf("access token lifetime = %v, want %v", claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time), AccessTokenValidDuration)
+	}
+}
+
+func TestLegacyEmptyPurposeStillValidates(t *testing.T) {
+	setupAuthTestConfig(t)
+
+	// A pre-upgrade token (empty Purpose) must still authenticate.
+	tokenString, err := GenerateJWT("Ada", "Lovelace", "ada@example.com", uuid.New(), false, true)
+	if err != nil {
+		t.Fatalf("GenerateJWT returned error: %v", err)
+	}
+	if err := ValidateToken(tokenString, false); err != nil {
+		t.Errorf("ValidateToken rejected a legacy empty-purpose token: %v", err)
+	}
+}
+
+func TestMFAChallengeTokenRoundTrip(t *testing.T) {
+	setupAuthTestConfig(t)
+
+	userID := uuid.New()
+	tokenString, err := GenerateMFAChallengeToken(userID)
+	if err != nil {
+		t.Fatalf("GenerateMFAChallengeToken returned error: %v", err)
+	}
+
+	gotID, err := ValidateMFAChallengeToken(tokenString)
+	if err != nil {
+		t.Fatalf("ValidateMFAChallengeToken returned error: %v", err)
+	}
+	if gotID != userID {
+		t.Errorf("UserID = %v, want %v", gotID, userID)
+	}
+}
+
+func TestMFAChallengeTokenRejectedAsSession(t *testing.T) {
+	setupAuthTestConfig(t)
+
+	tokenString, err := GenerateMFAChallengeToken(uuid.New())
+	if err != nil {
+		t.Fatalf("GenerateMFAChallengeToken returned error: %v", err)
+	}
+
+	// A challenge token must not validate as a normal session token.
+	if err := ValidateToken(tokenString, false); err == nil {
+		t.Error("ValidateToken accepted an MFA challenge token as a session, want error")
+	}
+}
+
+func TestSessionTokenRejectedAsMFAChallenge(t *testing.T) {
+	setupAuthTestConfig(t)
+
+	// A normal session token must not validate as an MFA challenge token.
+	sessionToken, err := GenerateJWT("Ada", "Lovelace", "ada@example.com", uuid.New(), false, true)
+	if err != nil {
+		t.Fatalf("GenerateJWT returned error: %v", err)
+	}
+
+	if _, err := ValidateMFAChallengeToken(sessionToken); err == nil {
+		t.Error("ValidateMFAChallengeToken accepted a session token, want error")
+	}
+}
+
+func TestMFAChallengeTokenExpired(t *testing.T) {
+	setupAuthTestConfig(t)
+
+	now := time.Now()
+	claims := &JWTClaim{
+		UserID:  uuid.New(),
+		Purpose: PurposeMFAChallenge,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(-1 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(now.Add(-2 * time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(now.Add(-2 * time.Minute)),
+		},
+	}
+	tokenString, err := GenerateJWTFromClaims(claims)
+	if err != nil {
+		t.Fatalf("GenerateJWTFromClaims returned error: %v", err)
+	}
+
+	if _, err := ValidateMFAChallengeToken(tokenString); err == nil {
+		t.Error("ValidateMFAChallengeToken accepted an expired token, want error")
+	}
+}
+
 func TestGenerateJWTFromClaimsRoundTrip(t *testing.T) {
 	setupAuthTestConfig(t)
 

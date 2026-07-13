@@ -5,6 +5,7 @@ import (
 	"aunefyren/poenskelisten/controllers"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
+	"aunefyren/poenskelisten/mcpserver"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
@@ -136,6 +137,17 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 			open.POST("/users/verify/:code", controllers.VerifyUser)
 			open.POST("/users/verification", controllers.SendUserVerificationCode)
 
+			// MFA enrollment is reachable during the login gate (SSO-authed), so it
+			// lives under /open: a user forced to enroll has no access token yet.
+			open.POST("/users/mfa/enroll", controllers.APIEnrollMFA)
+			open.POST("/users/mfa/activate", controllers.APIActivateMFA)
+
+			open.POST("/tokens/mfa", controllers.APIValidateMFA)
+
+			open.GET("/oidc/config", controllers.APIGetOIDCConfig)
+			open.GET("/oidc/login", controllers.OIDCLogin)
+			open.GET("/oidc/callback", controllers.OIDCCallback)
+
 			open.GET("/wishlists/public/:wishlist_hash", controllers.GetPublicWishlist)
 		}
 
@@ -146,7 +158,11 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 
 		auth := api.Group("/auth").Use(middlewares.Auth(false))
 		{
-			auth.POST("/tokens/validate", controllers.ValidateToken)
+			auth.GET("/me", controllers.APICurrentUser)
+			auth.POST("/tokens/logout-all", controllers.APILogoutAll)
+
+			auth.GET("/connected-apps", controllers.APIListConnectedApps)
+			auth.DELETE("/connected-apps/:client_id", controllers.APIRevokeConnectedApp)
 
 			auth.GET("/currency", controllers.APIGetCurrency)
 
@@ -188,13 +204,21 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 			auth.GET("/users/:user_id/image", controllers.APIGetUserProfileImage)
 			auth.GET("/users", controllers.GetUsers)
 			auth.POST("/users/update", controllers.UpdateUser)
+
+			auth.POST("/users/mfa/disable", controllers.APIDisableMFA)
 		}
 
 		admin := api.Group("/admin").Use(middlewares.Auth(true))
 		{
 			admin.POST("/currency/update", controllers.APIUpdateCurrency)
+			admin.POST("/server/settings", controllers.APIUpdateServerSettings)
 
 			admin.DELETE("/users/:user_id", controllers.APIDeleteUser)
+			admin.DELETE("/users/:user_id/mfa", controllers.APIAdminDeleteUserMFA)
+			admin.DELETE("/users/:user_id/sessions", controllers.APIAdminRevokeUserSessions)
+
+			admin.GET("/oauth/clients", controllers.APIAdminListOAuthClients)
+			admin.DELETE("/oauth/clients/:client_id", controllers.APIAdminRevokeOAuthClient)
 
 			admin.POST("/invites", controllers.RegisterInvite)
 			admin.GET("/invites", controllers.APIGetAllInvites)
@@ -258,6 +282,22 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 		logger.Log.Error("failed to build TXT paths. error: " + err.Error())
 	}
 
+	// OAuth 2.1 / MCP discovery documents live at the domain root, outside /api.
+	router.GET("/.well-known/oauth-authorization-server", controllers.APIOAuthAuthorizationServerMetadata)
+	router.GET("/.well-known/oauth-protected-resource", controllers.APIOAuthProtectedResourceMetadata)
+	router.GET("/.well-known/jwks.json", controllers.APIOAuthJWKS)
+
+	// OAuth 2.1 authorization server endpoints (also outside /api).
+	router.GET("/oauth/authorize", controllers.APIOAuthAuthorize)
+	router.POST("/oauth/consent", controllers.APIOAuthConsent)
+	router.POST("/oauth/token", controllers.APIOAuthToken)
+	router.POST("/oauth/revoke", controllers.APIOAuthRevoke)
+	// Open dynamic client registration (RFC 7591), rate-limited per IP.
+	router.POST("/oauth/register", middlewares.RateLimit(10, time.Hour), controllers.APIOAuthRegister)
+
+	// MCP resource server (self-gates on MCPEnabled; OAuth-protected).
+	router.Any("/mcp", mcpserver.Handler())
+
 	return router
 }
 
@@ -303,6 +343,24 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool
 	var smtpUsername = flag.String("smtpusername", configFile.SMTPUsername, "The username used to verify against the SMTP server.")
 	var smtpPassword = flag.String("smtppassword", configFile.SMTPPassword, "The password used to verify against the SMTP server.")
 	var smtpFrom = flag.String("smtpfrom", configFile.SMTPFrom, "The sender address when sending e-mail from Pønskelisten.")
+
+	// Security values
+	var mfaEnforced = flag.String("mfaenforced", strconv.FormatBool(configFile.MFAEnforced), "If all local users must enroll in multi-factor authentication.")
+	var mfaRecoveryCodes = flag.String("mfarecoverycodes", strconv.FormatBool(configFile.MFARecoveryCodesEnabled), "If users are issued single-use recovery codes when enrolling in MFA.")
+
+	// OIDC values
+	var oidcEnabled = flag.String("oidcenabled", strconv.FormatBool(configFile.OIDCEnabled), "If OpenID Connect single sign-on is enabled.")
+	var oidcProviderName = flag.String("oidcprovidername", configFile.OIDCProviderName, "The display name of the OIDC provider, shown on the login button.")
+	var oidcIssuerURL = flag.String("oidcissuerurl", configFile.OIDCIssuerURL, "The OIDC issuer URL (used for discovery).")
+	var oidcClientID = flag.String("oidcclientid", configFile.OIDCClientID, "The OIDC client ID.")
+	var oidcClientSecret = flag.String("oidcclientsecret", configFile.OIDCClientSecret, "The OIDC client secret.")
+	var oidcRedirectURL = flag.String("oidcredirecturl", configFile.OIDCRedirectURL, "The OIDC redirect/callback URL registered with the provider.")
+	var oidcAutoCreate = flag.String("oidcautocreateusers", strconv.FormatBool(configFile.OIDCAutoCreateUsers), "If unknown OIDC users are automatically provisioned an account.")
+
+	// MCP toggle. The OAuth issuer/algorithm and the API/MCP resource identifiers
+	// auto-derive from the external URL and can be hand-edited in config.json if a
+	// deployment ever needs to override them.
+	var mcpEnabled = flag.String("mcpenabled", strconv.FormatBool(configFile.MCPEnabled), "If the MCP resource server is enabled.")
 
 	// Generate invite
 	var generateInvite = flag.String("generateinvite", "false", "If an invite code should be automatically generate on startup.")
@@ -416,6 +474,48 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool
 		configFile.SMTPFrom = *smtpFrom
 	}
 
+	// Parsed as a string so the "--mfaenforced true/false" calling convention
+	// matches the other boolean flags.
+	if provided["mfaenforced"] {
+		configFile.MFAEnforced = strings.ToLower(*mfaEnforced) == "true"
+	}
+
+	if provided["mfarecoverycodes"] {
+		configFile.MFARecoveryCodesEnabled = strings.ToLower(*mfaRecoveryCodes) == "true"
+	}
+
+	if provided["oidcenabled"] {
+		configFile.OIDCEnabled = strings.ToLower(*oidcEnabled) == "true"
+	}
+
+	if provided["oidcprovidername"] {
+		configFile.OIDCProviderName = *oidcProviderName
+	}
+
+	if provided["oidcissuerurl"] {
+		configFile.OIDCIssuerURL = *oidcIssuerURL
+	}
+
+	if provided["oidcclientid"] {
+		configFile.OIDCClientID = *oidcClientID
+	}
+
+	if provided["oidcclientsecret"] {
+		configFile.OIDCClientSecret = *oidcClientSecret
+	}
+
+	if provided["oidcredirecturl"] {
+		configFile.OIDCRedirectURL = *oidcRedirectURL
+	}
+
+	if provided["oidcautocreateusers"] {
+		configFile.OIDCAutoCreateUsers = strings.ToLower(*oidcAutoCreate) == "true"
+	}
+
+	if provided["mcpenabled"] {
+		configFile.MCPEnabled = strings.ToLower(*mcpEnabled) == "true"
+	}
+
 	// Runtime-only action, never persisted to config.
 	if provided["generateinvite"] {
 		generateInviteBool = strings.ToLower(*generateInvite) == "true"
@@ -447,6 +547,8 @@ func registerTemplatedStaticFilesForDirectory(
 	filePathTableList["group.html"] = &filePathTable{urlPath: "/groups/:group_id"}
 	filePathTableList["wishlist.html"] = &filePathTable{urlPath: "/wishlists/:wishlist_id"}
 	filePathTableList["public.html"] = &filePathTable{urlPath: "/wishlists/public/:wishlist_hash"}
+	filePathTableList["callback.html"] = &filePathTable{urlPath: "/oauth/callback"}
+	filePathTableList["enroll.html"] = &filePathTable{urlPath: "/enroll"}
 	filePathTableList["manifest.json"] = &filePathTable{urlPath: "/manifest.json"}
 	filePathTableList["service-worker.js"] = &filePathTable{urlPath: "/service-worker.js"}
 	filePathTableList["robots.txt"] = &filePathTable{urlPath: "/robots.txt"}

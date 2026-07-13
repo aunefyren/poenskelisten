@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
@@ -193,6 +192,34 @@ func RegisterUser(context *gin.Context) {
 	context.JSON(http.StatusCreated, gin.H{"message": "User created!"})
 }
 
+// APICurrentUser returns the authenticated user's basic profile, in the shape the
+// frontend's page bootstrap expects (it replaces the old token-validate call).
+func APICurrentUser(context *gin.Context) {
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
+	if err != nil {
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session."})
+		context.Abort()
+		return
+	}
+
+	user, err := database.GetAllUserInformation(userID)
+	if err != nil {
+		logger.Log.Error("Failed to get current user. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
+		context.Abort()
+		return
+	}
+
+	context.JSON(http.StatusOK, gin.H{"data": gin.H{
+		"id":         user.ID,
+		"first_name": user.FirstName,
+		"last_name":  user.LastName,
+		"email":      derefString(user.Email),
+		"admin":      user.Admin,
+		"verified":   user.Verified,
+	}})
+}
+
 func GetUser(context *gin.Context) {
 
 	// Create user request
@@ -375,14 +402,15 @@ func VerifyUser(context *gin.Context) {
 		return
 	}
 
-	// Get user ID
-	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
-	if err != nil {
-		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
+	// Identify the user via their login (SSO) session — an unverified user has no
+	// OAuth access token yet.
+	gateUser, ok := resolveGateUser(context)
+	if !ok {
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "Please log in first."})
 		context.Abort()
 		return
 	}
+	userID := gateUser.ID
 
 	// Verify if code matches
 	match, err := database.VerifyUserVerificationCodeMatches(userID, code)
@@ -418,33 +446,33 @@ func VerifyUser(context *gin.Context) {
 		return
 	}
 
-	// Generate new JWT token
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, *user.Email, user.ID, user.Admin, *user.Verified)
-	if err != nil {
-		logger.Log.Error("Failed to generate JWT token. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT token."})
+	// Verifying the account logs the user in at the AS; the frontend continues the
+	// OAuth flow to obtain tokens.
+	if err := issueSSOSession(context, user); err != nil {
+		logger.Log.Error("Failed to issue session. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to log in."})
 		context.Abort()
 		return
 	}
 
 	// Reply
-	context.JSON(http.StatusOK, gin.H{"message": "User verified.", "token": tokenString})
+	context.JSON(http.StatusOK, gin.H{"message": "User verified."})
 
 }
 
 func SendUserVerificationCode(context *gin.Context) {
 
-	// Get user ID
-	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
-	if err != nil {
-		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
+	// Identify the user via their login (SSO) session.
+	gateUser, ok := resolveGateUser(context)
+	if !ok {
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "Please log in first."})
 		context.Abort()
 		return
 	}
+	userID := gateUser.ID
 
 	// Create a new code
-	_, err = database.GenerateRandomVerificationCodeForUser(userID)
+	_, err := database.GenerateRandomVerificationCodeForUser(userID)
 	if err != nil {
 		logger.Log.Error("Failed to generate verification code. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate verification code."})
@@ -509,12 +537,16 @@ func UpdateUser(context *gin.Context) {
 		return
 	}
 
-	credentialError := user.CheckPassword(userUpdateRequest.PasswordOriginal)
-	if credentialError != nil {
-		logger.Log.Error("Invalid credentials.")
-		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
-		context.Abort()
-		return
+	// Local accounts must confirm their current password. OIDC-only accounts have
+	// no local password; they are already authenticated via their session token.
+	if user.HasPassword() {
+		credentialError := user.CheckPassword(userUpdateRequest.PasswordOriginal)
+		if credentialError != nil {
+			logger.Log.Error("Invalid credentials.")
+			context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
+			context.Abort()
+			return
+		}
 	}
 
 	// Make sure password match
@@ -546,7 +578,9 @@ func UpdateUser(context *gin.Context) {
 		return
 	}
 
-	if *userOriginal.Email != userUpdateRequest.Email {
+	// Email changes are only allowed for local accounts; an OIDC account's email
+	// is owned by the identity provider and used for linking, so it is left as-is.
+	if userOriginal.HasPassword() && *userOriginal.Email != userUpdateRequest.Email {
 
 		// Verify e-mail is not in use
 		unique_email, err := database.VerifyUniqueUserEmail(userUpdateRequest.Email)
@@ -574,8 +608,8 @@ func UpdateUser(context *gin.Context) {
 
 	}
 
-	// Hash the selected password
-	if userUpdateRequest.Password != "" {
+	// Hash the selected password (local accounts only; OIDC accounts have none).
+	if userUpdateRequest.Password != "" && userOriginal.HasPassword() {
 		if err := userOriginal.HashPassword(userUpdateRequest.Password); err != nil {
 			logger.Log.Error("Failed to hash password. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password."})
@@ -613,15 +647,6 @@ func UpdateUser(context *gin.Context) {
 		return
 	}
 
-	// Generate new JWT token
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, *user.Email, user.ID, user.Admin, *user.Verified)
-	if err != nil {
-		logger.Log.Error("Failed to generate JWT token. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT token."})
-		context.Abort()
-		return
-	}
-
 	// If user is not verified and SMTP is enabled, send verification e-mail
 	if config.ConfigFile.SMTPEnabled && !*user.Verified {
 
@@ -647,7 +672,7 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// Reply
-	context.JSON(http.StatusOK, gin.H{"message": "Account updated.", "token": tokenString, "verified": user.Verified})
+	context.JSON(http.StatusOK, gin.H{"message": "Account updated.", "verified": user.Verified})
 
 }
 
