@@ -9,19 +9,31 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
+
+	"golang.org/x/crypto/hkdf"
 )
 
-// deriveEncryptionKey turns the configured JWT private key into a fixed 32-byte
-// AES-256 key. We hash rather than use the raw bytes so the key length is always
-// correct regardless of how the private key was generated, and so the encryption
-// key isn't byte-identical to the signing secret.
+// deriveEncryptionKey derives a fixed 32-byte AES-256 key from the configured
+// server private key.
+//
+// The input is NOT a user password: config.PrivateKey is a 512-bit
+// cryptographically-random key (config.GenerateSecureKey). Deriving a key from
+// such a high-entropy secret is exactly what HKDF (RFC 5869) is for — a slow
+// password hash (bcrypt/scrypt/argon2) is unnecessary and inappropriate for
+// random key material. HKDF also gives us domain separation (the info label), so
+// this encryption key is distinct from the JWT signing key.
 func deriveEncryptionKey() ([]byte, error) {
-	privateKey, err := config.GetPrivateKey()
+	masterKey, err := config.GetPrivateKey()
 	if err != nil {
 		return nil, err
 	}
-	sum := sha256.Sum256(privateKey)
-	return sum[:], nil
+
+	key := make([]byte, 32)
+	reader := hkdf.New(sha256.New, masterKey, nil, []byte("poenskelisten/totp-secret-encryption"))
+	if _, err := io.ReadFull(reader, key); err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
 // EncryptString encrypts plaintext with AES-256-GCM using a key derived from the
