@@ -3,98 +3,43 @@ package middlewares
 import (
 	"aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/config"
-	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
-	"aunefyren/poenskelisten/models"
-	"database/sql"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-	_ "modernc.org/sqlite"
 )
 
 func init() {
 	gin.SetMode(gin.TestMode)
 }
 
-// setupMiddlewareConfig points the global config at a valid signing key and, by
-// default, disables SMTP (so the verification branch is skipped).
+const testAPIResource = "https://wishlist.example.com/api"
+const testMCPResource = "https://wishlist.example.com/mcp"
+
+// setupMiddlewareConfig installs an OAuth signing key + issuer + API resource so
+// the resource-server validation works.
 func setupMiddlewareConfig(t *testing.T) {
 	t.Helper()
 
-	key, err := config.GenerateSecureKey(64)
+	keyPEM, kid, err := config.GenerateOAuthSigningKey(config.OAuthAlgES256)
 	if err != nil {
-		t.Fatalf("failed to generate test key: %v", err)
+		t.Fatalf("failed to generate OAuth key: %v", err)
 	}
-	config.ConfigFile.PrivateKey = key
-	config.ConfigFile.PoenskelistenName = "TestIssuer"
-	config.ConfigFile.SMTPEnabled = false
+	config.ConfigFile.OAuthSigningKey = keyPEM
+	config.ConfigFile.OAuthSigningKeyID = kid
+	config.ConfigFile.PoenskelistenExternalURL = "https://wishlist.example.com"
 
-	// AuthFunction logs validation failures; set a discard logger so those calls
-	// don't dereference a nil pointer or touch the filesystem.
 	if logger.Log == nil {
 		logger.Log = logrus.New()
 		logger.Log.SetOutput(io.Discard)
 	}
 }
 
-// setupMiddlewareDB spins up an isolated in-memory SQLite database and points
-// database.Instance at it, mirroring the pattern used by the database package
-// tests.
-func setupMiddlewareDB(t *testing.T) {
-	t.Helper()
-
-	dbSQL, err := sql.Open("sqlite", "file:"+uuid.NewString()+"?mode=memory&cache=shared")
-	if err != nil {
-		t.Fatalf("failed to open in-memory sqlite: %v", err)
-	}
-	t.Cleanup(func() { dbSQL.Close() })
-	dbSQL.SetMaxOpenConns(1)
-
-	instance, err := gorm.Open(sqlite.Dialector{Conn: dbSQL}, &gorm.Config{})
-	if err != nil {
-		t.Fatalf("failed to open gorm: %v", err)
-	}
-	if err := instance.AutoMigrate(&models.User{}); err != nil {
-		t.Fatalf("failed to migrate: %v", err)
-	}
-	database.Instance = instance
-}
-
-// createUser inserts a user with the given verified state and returns its ID.
-func createUser(t *testing.T, verified bool) uuid.UUID {
-	t.Helper()
-
-	email := uuid.NewString() + "@example.com"
-	password := "hashed-password"
-	enabled := true
-	user := models.User{
-		FirstName: "Test",
-		LastName:  "User",
-		Email:     &email,
-		Password:  &password,
-		Enabled:   &enabled,
-		Verified:  &verified,
-	}
-	user.ID = uuid.New()
-
-	created, err := database.CreateUserInDB(user)
-	if err != nil {
-		t.Fatalf("failed to create user: %v", err)
-	}
-	return created.ID
-}
-
-// newContext builds a gin context whose request carries the given Authorization
-// header value (omitted when empty).
 func newContext(authHeader string) *gin.Context {
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
@@ -105,11 +50,11 @@ func newContext(authHeader string) *gin.Context {
 	return ctx
 }
 
-func tokenForUser(t *testing.T, userID uuid.UUID, admin bool) string {
+func apiTokenForUser(t *testing.T, userID uuid.UUID, admin bool) string {
 	t.Helper()
-	token, err := auth.GenerateJWT("Test", "User", "test@example.com", userID, admin, true)
+	token, err := auth.GenerateOAuthAccessToken(userID, testAPIResource, "openid", admin, true)
 	if err != nil {
-		t.Fatalf("failed to generate token: %v", err)
+		t.Fatalf("failed to generate access token: %v", err)
 	}
 	return token
 }
@@ -118,11 +63,8 @@ func TestAuthFunctionNoToken(t *testing.T) {
 	setupMiddlewareConfig(t)
 
 	success, _, status := AuthFunction(newContext(""), false)
-	if success {
-		t.Error("AuthFunction succeeded without a token, want failure")
-	}
-	if status != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", status, http.StatusUnauthorized)
+	if success || status != http.StatusUnauthorized {
+		t.Errorf("no-token: success=%v status=%d, want false/401", success, status)
 	}
 }
 
@@ -130,87 +72,52 @@ func TestAuthFunctionInvalidToken(t *testing.T) {
 	setupMiddlewareConfig(t)
 
 	success, _, status := AuthFunction(newContext("not-a-real-token"), false)
-	if success {
-		t.Error("AuthFunction succeeded with an invalid token, want failure")
-	}
-	if status != http.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", status, http.StatusUnauthorized)
+	if success || status != http.StatusUnauthorized {
+		t.Errorf("invalid: success=%v status=%d, want false/401", success, status)
 	}
 }
 
 func TestAuthFunctionValidNonAdmin(t *testing.T) {
 	setupMiddlewareConfig(t)
 
-	token := tokenForUser(t, uuid.New(), false)
+	token := apiTokenForUser(t, uuid.New(), false)
 	success, errStr, status := AuthFunction(newContext(token), false)
-	if !success {
-		t.Errorf("AuthFunction failed for a valid token: %q (status %d)", errStr, status)
-	}
-	if status != http.StatusOK {
-		t.Errorf("status = %d, want %d", status, http.StatusOK)
+	if !success || status != http.StatusOK {
+		t.Errorf("valid token rejected: %q (status %d)", errStr, status)
 	}
 }
 
 func TestAuthFunctionAdminRequiredButNotAdmin(t *testing.T) {
 	setupMiddlewareConfig(t)
 
-	token := tokenForUser(t, uuid.New(), false)
+	token := apiTokenForUser(t, uuid.New(), false)
 	success, _, status := AuthFunction(newContext(token), true)
-	if success {
-		t.Error("AuthFunction succeeded for non-admin on admin route, want failure")
-	}
-	if status != http.StatusForbidden {
-		t.Errorf("status = %d, want %d", status, http.StatusForbidden)
+	if success || status != http.StatusForbidden {
+		t.Errorf("non-admin on admin route: success=%v status=%d, want false/403", success, status)
 	}
 }
 
 func TestAuthFunctionAdminSuccess(t *testing.T) {
 	setupMiddlewareConfig(t)
 
-	token := tokenForUser(t, uuid.New(), true)
+	token := apiTokenForUser(t, uuid.New(), true)
 	success, _, status := AuthFunction(newContext(token), true)
-	if !success {
-		t.Error("AuthFunction failed for a valid admin token, want success")
-	}
-	if status != http.StatusOK {
-		t.Errorf("status = %d, want %d", status, http.StatusOK)
+	if !success || status != http.StatusOK {
+		t.Errorf("admin token rejected on admin route (status %d)", status)
 	}
 }
 
-func TestAuthFunctionSMTPVerifiedUser(t *testing.T) {
+func TestAuthFunctionWrongAudience(t *testing.T) {
 	setupMiddlewareConfig(t)
-	setupMiddlewareDB(t)
-	config.ConfigFile.SMTPEnabled = true
 
-	userID := createUser(t, true)
-	token := tokenForUser(t, userID, false)
-
-	success, errStr, status := AuthFunction(newContext(token), false)
-	if !success {
-		t.Errorf("AuthFunction failed for verified user with SMTP on: %q (status %d)", errStr, status)
+	// A token minted for the MCP resource must not authenticate the API.
+	token, err := auth.GenerateOAuthAccessToken(uuid.New(), testMCPResource, "mcp:wishlists.read", false, true)
+	if err != nil {
+		t.Fatalf("failed to generate token: %v", err)
 	}
-	if status != http.StatusOK {
-		t.Errorf("status = %d, want %d", status, http.StatusOK)
-	}
-}
-
-func TestAuthFunctionSMTPUnverifiedUser(t *testing.T) {
-	setupMiddlewareConfig(t)
-	setupMiddlewareDB(t)
-	config.ConfigFile.SMTPEnabled = true
-
-	userID := createUser(t, false)
-	token := tokenForUser(t, userID, false)
-
-	success, errStr, status := AuthFunction(newContext(token), false)
-	if success {
-		t.Error("AuthFunction succeeded for unverified user with SMTP on, want failure")
-	}
-	if status != http.StatusForbidden {
-		t.Errorf("status = %d, want %d", status, http.StatusForbidden)
-	}
-	if !strings.Contains(strings.ToLower(errStr), "verify") {
-		t.Errorf("error = %q, want it to mention verification", errStr)
+	success, _, status := AuthFunction(newContext(token), false)
+	if success || status != http.StatusUnauthorized {
+		t.Errorf("wrong-audience token accepted: success=%v status=%d", success, status)
 	}
 }
 
@@ -222,10 +129,10 @@ func TestGetAuthUsername(t *testing.T) {
 	}
 
 	userID := uuid.New()
-	token := tokenForUser(t, userID, false)
+	token := apiTokenForUser(t, userID, false)
 	got, err := GetAuthUsername(token)
 	if err != nil {
-		t.Fatalf("GetAuthUsername returned error: %v", err)
+		t.Fatalf("GetAuthUsername error: %v", err)
 	}
 	if got != userID {
 		t.Errorf("GetAuthUsername = %v, want %v", got, userID)
@@ -239,20 +146,13 @@ func TestGetAuthUsername(t *testing.T) {
 func TestGetTokenClaims(t *testing.T) {
 	setupMiddlewareConfig(t)
 
-	if _, err := GetTokenClaims(""); err == nil {
-		t.Error("GetTokenClaims(\"\") returned no error, want error")
-	}
-
 	userID := uuid.New()
-	token := tokenForUser(t, userID, true)
+	token := apiTokenForUser(t, userID, true)
 	claims, err := GetTokenClaims(token)
 	if err != nil {
-		t.Fatalf("GetTokenClaims returned error: %v", err)
+		t.Fatalf("GetTokenClaims error: %v", err)
 	}
-	if claims.UserID != userID {
-		t.Errorf("claims.UserID = %v, want %v", claims.UserID, userID)
-	}
-	if !claims.Admin {
-		t.Error("claims.Admin = false, want true")
+	if claims.Subject != userID.String() || !claims.Admin {
+		t.Errorf("claims mismatch: %+v", claims)
 	}
 }

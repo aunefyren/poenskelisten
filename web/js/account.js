@@ -1,16 +1,19 @@
 function load_page(result) {
 
+    var mfa_enrollment_required = false;
+
     if(result !== false) {
-        
+
         try {
 
             var login_data = JSON.parse(result);
-            
+
             var email = login_data.data.email
             var first_name = login_data.data.first_name
             var last_name = login_data.data.last_name
             var user_id = login_data.data.id
             admin = login_data.data.admin;
+            mfa_enrollment_required = login_data.mfa_enrollment_required === true;
         } catch {
             var email = ""
             var first_name = ""
@@ -61,28 +64,75 @@ function load_page(result) {
                             <label id="form-input-icon" for="email"></label>
                             <input type="email" name="email" id="email" placeholder="Email" value="" required/>
 
-                            <input class="clickable" onclick="change_password_toggle();" style="margin-top: 2em;" type="checkbox" id="password-toggle" name="password-toggle" value="confirm" >
-                            <label for="password-toggle" class="clickable">Change my password.</label><br>
+                            <div id="oidc-account-note" style="display:none; margin-top: 1em; font-size: 0.9em;"></div>
 
-                            <div id="change-password-box" style="display:none;">
+                            <div id="credential-section">
+                                <input class="clickable" onclick="change_password_toggle();" style="margin-top: 2em;" type="checkbox" id="password-toggle" name="password-toggle" value="confirm" >
+                                <label for="password-toggle" class="clickable">Change my password.</label><br>
 
-                                <label id="form-input-icon" for="password"></label>
-                                <input type="password" name="password" id="password" placeholder="New password" />
+                                <div id="change-password-box" style="display:none;">
 
-                                <label id="form-input-icon" for="password_repeat"></label>
-                                <input type="password" name="password_repeat" id="password_repeat" placeholder="Repeat the password" />
+                                    <label id="form-input-icon" for="password"></label>
+                                    <input type="password" name="password" id="password" placeholder="New password" />
 
+                                    <label id="form-input-icon" for="password_repeat"></label>
+                                    <input type="password" name="password_repeat" id="password_repeat" placeholder="Repeat the password" />
+
+                                </div>
                             </div>
 
                             <label id="form-input-icon" for="new_profile_image" style="margin-top: 2em;">Replace profile image:</label>
                             <input type="file" name="new_profile_image" id="new_profile_image" placeholder="" value="" accept="image/png, image/jpeg" />
 
-                            <label id="form-input-icon" for="password_original"></label>
-                            <input type="password" name="password_original" id="password_original" placeholder="Your current password" required />
+                            <div id="password-original-section">
+                                <label id="form-input-icon" for="password_original"></label>
+                                <input type="password" name="password_original" id="password_original" placeholder="Your current password" required />
+                            </div>
 
                             <button id="update-button" style="margin-top: 2em;" type="submit" href="/">Update account</button>
 
                         </form>
+
+                    </div>
+
+                    <div class="module" id="mfa-module">
+
+                        <div class="module color-invert" id="" style="">
+                            <hr>
+                        </div>
+
+                        <b><p style="font-size: 1.25em;">Two-factor authentication</p></b>
+                        <p id="mfa-status" style="margin: 0 1em;">...</p>
+
+                        <div id="mfa-action" style="margin: 1em;"></div>
+
+                    </div>
+
+                    <div class="module" id="sessions-module">
+
+                        <div class="module color-invert" id="" style="">
+                            <hr>
+                        </div>
+
+                        <b><p style="font-size: 1.25em;">Sessions</p></b>
+                        <p style="margin: 0 1em;">Signed in on another device you no longer use? Sign out everywhere.</p>
+
+                        <div style="margin: 1em;">
+                            <button type="button" style="padding: 0.75em 1em;" onclick="logoutAllDevices();">Sign out of all devices</button>
+                        </div>
+
+                    </div>
+
+                    <div class="module" id="connected-apps-module">
+
+                        <div class="module color-invert" id="" style="">
+                            <hr>
+                        </div>
+
+                        <b><p style="font-size: 1.25em;">Connected apps</p></b>
+                        <p style="margin: 0 1em;">Apps you've allowed to access your account.</p>
+
+                        <div id="connected-apps-list" style="margin: 1em;"></div>
 
                     </div>
 
@@ -95,12 +145,344 @@ function load_page(result) {
 
     if(result !== false) {
         showLoggedInMenu();
-        GetUserData(user_id);
-        GetProfileImage(user_id);
+
+        if(mfa_enrollment_required) {
+            // Under enforcement the rest of the API is blocked until the user
+            // enrolls, so skip the profile calls (they would 403) and take the
+            // user straight to enrollment.
+            error("Your administrator requires two-factor authentication. Please set it up to continue.");
+            document.getElementById("mfa-status").innerHTML = "Required by your administrator, but not yet set up.";
+            mfaEnroll();
+        } else {
+            GetUserData(user_id);
+            GetProfileImage(user_id);
+            getConnectedApps();
+        }
     } else {
         showLoggedOutMenu();
         invalid_session();
     }
+}
+
+// Escape untrusted strings (e.g. an app's registered name) before injecting.
+function escapeAccount(value) {
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+// Load the third-party apps the user has authorized.
+function getConnectedApps() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e + ' - Response: ' + this.responseText);
+                return;
+            }
+            if(result.error) {
+                return;
+            }
+            placeConnectedApps(result.apps);
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("get", api_url + "auth/connected-apps");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+}
+
+function placeConnectedApps(apps) {
+    var container = document.getElementById("connected-apps-list");
+    if(!container) {
+        return;
+    }
+    if(!apps || apps.length === 0) {
+        container.innerHTML = `<p style="font-size: 0.9em;">No apps connected.</p>`;
+        return;
+    }
+
+    var html = "";
+    for(var i = 0; i < apps.length; i++) {
+        var app = apps[i];
+        var scopeItems = "";
+        for(var j = 0; j < app.scopes.length; j++) {
+            scopeItems += `<li>${escapeAccount(app.scopes[j].description)}</li>`;
+        }
+        html += `
+            <div style="border: 1px solid; border-radius: 0.5em; padding: 0.75em; margin-bottom: 0.5em; text-align: left;">
+                <b>${escapeAccount(app.client_name)}</b>
+                <ul style="margin: 0.4em 0; padding-left: 1.2em; font-size: 0.85em;">${scopeItems}</ul>
+                <button type="button" style="padding: 0.5em 1em;" onclick="revokeConnectedApp('${escapeAccount(app.client_id)}')">Disconnect</button>
+            </div>
+        `;
+    }
+    container.innerHTML = html;
+}
+
+function revokeConnectedApp(clientID) {
+    if(!confirm("Disconnect this app? It will lose access to your account.")) {
+        return;
+    }
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e + ' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            if(result.error) {
+                error(result.error);
+            } else {
+                success(result.message);
+                getConnectedApps();
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("delete", api_url + "auth/connected-apps/" + clientID);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+}
+
+// Render the two-factor section based on whether MFA is currently enabled.
+function renderMFASection(enabled) {
+    var statusEl = document.getElementById("mfa-status");
+    var actionEl = document.getElementById("mfa-action");
+    if(!statusEl || !actionEl) {
+        return;
+    }
+
+    if(enabled) {
+        statusEl.innerHTML = "Enabled. Your account is protected by an authenticator app.";
+        actionEl.innerHTML = `
+            <button id="mfa-disable-button" onclick="renderMFADisable();" type="button" style="padding: 0.75em 1em;">Disable two-factor authentication</button>
+        `;
+    } else {
+        statusEl.innerHTML = "Disabled. Add an authenticator app for extra protection.";
+        actionEl.innerHTML = `
+            <button id="mfa-enable-button" onclick="mfaEnroll();" type="button" style="padding: 0.75em 1em;">Enable two-factor authentication</button>
+        `;
+    }
+}
+
+// Begin enrollment: request a secret and show the activation form.
+function mfaEnroll() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+                error(result.error);
+            } else {
+                renderMFAActivate(result.secret, result.otpauth_url, result.qr_code);
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "open/users/mfa/enroll");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+}
+
+// Show the QR code, manual secret, and a form to confirm the first code.
+function renderMFAActivate(secret, otpauthURL, qrCode) {
+    var actionEl = document.getElementById("mfa-action");
+    if(!actionEl) {
+        return;
+    }
+
+    var qrHTML = "";
+    if(qrCode) {
+        qrHTML = `<img src="${qrCode}" alt="Scan this QR code with your authenticator app" style="width: 12em; height: 12em; max-width: 100%; margin: 0.5em auto; display: block; image-rendering: pixelated;">`;
+    }
+
+    actionEl.innerHTML = `
+        <p style="margin-bottom: 0.5em;">1. Scan this QR code with your authenticator app:</p>
+        ${qrHTML}
+        <p style="margin: 0.5em 0; font-size: 0.85em;">Can't scan it? Enter this key manually:</p>
+        <p style="font-family: monospace; word-break: break-all; font-size: 1.1em;" id="mfa-secret">${secret}</p>
+        <p style="word-break: break-all; font-size: 0.8em;"><a href="${otpauthURL}">Open in authenticator app</a></p>
+
+        <form action="" class="icon-border" style="margin-top: 1em;" onsubmit="event.preventDefault(); mfaActivate();">
+            <p style="margin-bottom: 0.5em;">2. Enter the 6-digit code to confirm:</p>
+            <label id="form-input-icon" for="mfa_activate_code"></label>
+            <input type="text" name="mfa_activate_code" id="mfa_activate_code" placeholder="6-digit code" autocomplete="one-time-code" inputmode="numeric" required/>
+            <button id="mfa-activate-button" type="submit" style="padding: 0.75em 1em;">Confirm and enable</button>
+        </form>
+
+        <p style="margin-top: 0.5em; font-size: 0.8em; cursor: pointer;"><a onclick="renderMFASection(false);">Cancel</a></p>
+    `;
+}
+
+// Confirm the code, enabling MFA and revealing recovery codes.
+function mfaActivate() {
+    var code = document.getElementById("mfa_activate_code").value;
+
+    var form_data = JSON.stringify({ "code" : code });
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+                error(result.error);
+                try {
+                    document.getElementById("mfa_activate_code").value = "";
+                } catch(e) {
+                    console.log(e)
+                }
+            } else {
+                success(result.message);
+                if(result.recovery_codes && result.recovery_codes.length) {
+                    document.getElementById("mfa-status").innerHTML = "Enabled. Save your recovery codes below.";
+                    showRecoveryCodes(result.recovery_codes);
+                } else {
+                    // Recovery codes are disabled by the administrator.
+                    renderMFASection(true);
+                }
+            }
+        } else {
+            info("Enabling two-factor authentication...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "open/users/mfa/activate");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
+}
+
+// Display the one-time recovery codes. These are only shown once.
+function showRecoveryCodes(codes) {
+    var actionEl = document.getElementById("mfa-action");
+    if(!actionEl) {
+        return;
+    }
+
+    var codesHTML = "";
+    if(codes && codes.length) {
+        for(var i = 0; i < codes.length; i++) {
+            codesHTML += `<div style="font-family: monospace; font-size: 1.05em;">${codes[i]}</div>`;
+        }
+    }
+
+    actionEl.innerHTML = `
+        <p style="margin-bottom: 0.5em;"><b>Save these recovery codes.</b> Each can be used once if you lose access to your authenticator. They won't be shown again.</p>
+        <div id="mfa-recovery-codes" style="margin: 0.5em auto; padding: 0.5em; border: 1px solid; max-width: 14em; text-align: center;">
+            ${codesHTML}
+        </div>
+        <br>
+        <button type="button" onclick="renderMFASection(true);" style="padding: 0.75em 1em;">I've saved my codes</button>
+    `;
+}
+
+// Show the form required to turn MFA off.
+function renderMFADisable() {
+    var actionEl = document.getElementById("mfa-action");
+    if(!actionEl) {
+        return;
+    }
+
+    actionEl.innerHTML = `
+        <form action="" class="icon-border" onsubmit="event.preventDefault(); mfaDisable();">
+            <p style="margin-bottom: 0.5em;">Confirm your password and a current code to disable two-factor authentication.</p>
+
+            <label id="form-input-icon" for="mfa_disable_password"></label>
+            <input type="password" name="mfa_disable_password" id="mfa_disable_password" placeholder="Your current password" required/>
+
+            <label id="form-input-icon" for="mfa_disable_code"></label>
+            <input type="text" name="mfa_disable_code" id="mfa_disable_code" placeholder="Authenticator or recovery code" autocomplete="one-time-code" required/>
+
+            <button id="mfa-disable-confirm-button" type="submit" style="padding: 0.75em 1em;">Disable</button>
+        </form>
+
+        <p style="margin-top: 0.5em; font-size: 0.8em; cursor: pointer;"><a onclick="renderMFASection(true);">Cancel</a></p>
+    `;
+}
+
+// Send the disable request.
+function mfaDisable() {
+    var password = document.getElementById("mfa_disable_password").value;
+    var code = document.getElementById("mfa_disable_code").value;
+
+    var form_data = JSON.stringify({ "password" : password, "code" : code });
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+                error(result.error);
+            } else {
+                success(result.message);
+                renderMFASection(false);
+            }
+        } else {
+            info("Disabling two-factor authentication...");
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/users/mfa/disable");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send(form_data);
+    return false;
+}
+
+// Revoke every session for the current user and return to login.
+function logoutAllDevices() {
+    if(!confirm("Sign out of all devices? You'll need to log in again everywhere.")) {
+        return;
+    }
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            set_cookie("poenskelisten", "", 1);
+            window.location.href = '/login';
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/tokens/logout-all");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
 }
 
 function change_password_toggle() {
@@ -191,9 +573,6 @@ function send_update_two(form_data) {
             } else {
 
                 success(result.message);
-
-                // store jwt to cookie
-                set_cookie("poenskelisten", result.token, 7);
 
                 if(result.verified) {
                     location.reload();
@@ -318,4 +697,53 @@ function PlaceUserData(user_object) {
     }
 
     document.getElementById("user_admin").innerHTML = "Administrator: " + admin_string
+
+    if(user_object.auth_source === 'oidc') {
+        // OIDC accounts have no local password and no local MFA; those are managed
+        // by the identity provider. Hide the credential controls so the form only
+        // updates the profile image.
+        applyOIDCAccountUI();
+    } else {
+        // Reflect the current two-factor state for local accounts.
+        renderMFASection(user_object.mfa_enabled === true)
+    }
+}
+
+// Adjust the account page for an OIDC-only user: hide password/email editing and
+// the local MFA section, and drop the "required" flags so the profile form can
+// still be submitted (for the profile image).
+function applyOIDCAccountUI() {
+    var note = document.getElementById("oidc-account-note");
+    if(note) {
+        note.style.display = "block";
+        note.innerHTML = "Your sign-in and email are managed by your identity provider.";
+    }
+
+    var credentialSection = document.getElementById("credential-section");
+    if(credentialSection) {
+        credentialSection.style.display = "none";
+    }
+
+    var passwordOriginalSection = document.getElementById("password-original-section");
+    if(passwordOriginalSection) {
+        passwordOriginalSection.style.display = "none";
+    }
+
+    // Hidden required fields would otherwise block form submission.
+    try { document.getElementById("password_original").required = false; } catch(e) { console.log(e); }
+    try {
+        var emailField = document.getElementById("email");
+        emailField.required = false;
+        emailField.readOnly = true;
+    } catch(e) { console.log(e); }
+
+    // Local MFA is not applicable to OIDC accounts.
+    var mfaStatus = document.getElementById("mfa-status");
+    var mfaAction = document.getElementById("mfa-action");
+    if(mfaStatus) {
+        mfaStatus.innerHTML = "Managed by your identity provider.";
+    }
+    if(mfaAction) {
+        mfaAction.innerHTML = "";
+    }
 }

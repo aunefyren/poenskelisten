@@ -815,7 +815,7 @@ hr {
   width: auto;
 }
 
-.invites, .currency-module {
+.invites, .currency-module, .security-module, .oauth-clients-module {
   width: auto;
   max-width: 100%;
   margin: 1em;
@@ -1486,6 +1486,10 @@ textarea {
 
 .server-info-title {
   margin-right: 0.25em;
+  color: var(--darkblue);
+  font-size: 0.8rem;
+  font-weight: 500;
+  flex-shrink: 0;
 }
 
 .server-info-value {
@@ -1500,20 +1504,80 @@ textarea {
   font-weight: 200;
   white-space: nowrap;
   min-height: 1rem;
+  flex-shrink: 0;
+}
+
+/* Semantic status chips: green when on/active, muted when off. */
+.server-info-value.is-on {
+  background-color: var(--green);
+}
+
+.server-info-value.is-off {
+  background-color: var(--mediumblue);
+}
+
+/* Absent values read as quiet text, not a filled chip. */
+.server-info-value.is-muted {
+  background-color: transparent;
+  color: var(--mediumblue);
+  font-style: italic;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Technical values (URLs, paths, IDs) wrap as monospace instead of clipping. */
+.server-info-value.is-mono {
+  background-color: transparent;
+  color: var(--darkblue);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 400;
+  border-radius: 0;
+  padding: 0;
+  text-align: right;
+  white-space: normal;
+  word-break: break-all;
+  width: auto;
+  max-width: 62%;
+}
+
+/* Flow the config sections across the panel width, collapsing to one column on
+   narrow screens. Each group stays intact in its own cell. */
+#server-info-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15em, 1fr));
+  gap: 0.5em 2.5em;
+  align-items: start;
+  margin-top: 0.35em;
+}
+
+.server-info-group {
+  min-width: 0;
+}
+
+.server-info-group-title {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  color: var(--mediumblue);
+  margin: 0 0 0.5em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid rgba(13, 27, 42, 0.15);
 }
 
 .server-info-line {
-  overflow: hidden;
+  overflow: visible;
   box-sizing: inherit;
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
-  flex-direction: row;
+  gap: 0.75em;
   align-content: center;
-  justify-content: start;
-  align-items: center;
+  justify-content: space-between;
+  align-items: baseline;
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
-  margin: 0.25em 0;
+  margin: 0.3em 0;
 }

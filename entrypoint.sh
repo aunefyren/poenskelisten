@@ -23,6 +23,24 @@ set -- /app/poenskelisten
 [ -n "$dbssl" ] && set -- "$@" --dbssl "$dbssl"
 [ -n "$dblocation" ] && set -- "$@" --dblocation "$dblocation"
 
+# Add security-related flags if those environment variables are set
+[ -n "$mfaenforced" ] && set -- "$@" --mfaenforced "$mfaenforced"
+[ -n "$mfarecoverycodes" ] && set -- "$@" --mfarecoverycodes "$mfarecoverycodes"
+
+# Add OIDC single sign-on flags if those environment variables are set
+[ -n "$oidcenabled" ] && set -- "$@" --oidcenabled "$oidcenabled"
+[ -n "$oidcprovidername" ] && set -- "$@" --oidcprovidername "$oidcprovidername"
+[ -n "$oidcissuerurl" ] && set -- "$@" --oidcissuerurl "$oidcissuerurl"
+[ -n "$oidcclientid" ] && set -- "$@" --oidcclientid "$oidcclientid"
+[ -n "$oidcclientsecret" ] && set -- "$@" --oidcclientsecret "$oidcclientsecret"
+[ -n "$oidcredirecturl" ] && set -- "$@" --oidcredirecturl "$oidcredirecturl"
+[ -n "$oidcautocreateusers" ] && set -- "$@" --oidcautocreateusers "$oidcautocreateusers"
+
+# Enable the MCP resource server if the environment variable is set. The OAuth
+# issuer/algorithm and API/MCP resource identifiers auto-derive from the external
+# URL, so they need no environment variables.
+[ -n "$mcpenabled" ] && set -- "$@" --mcpenabled "$mcpenabled"
+
 # Add flags for invite generation if those environment variables are set
 [ -n "$generateinvite" ] && set -- "$@" --generateinvite "$generateinvite"
 

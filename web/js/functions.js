@@ -64,60 +64,199 @@ function get_cookie(cname) {
     return "";
 }
 
-// Validate login token and get login details
-function get_login(cookie) {
-    if(jwt == "") {
-        load_page(false);
-        return
+// OAuth 2.1 first-party client config. The web app is a public PKCE client of
+// Pønskelisten's own authorization server.
+var OAUTH_CLIENT_ID = "poenskelisten-web";
+var oauth_base = window.location.origin + "/oauth/";
+var sessionRefreshTimer = null;
+
+// base64url without padding (for PKCE + state).
+function base64UrlEncode(bytes) {
+    var str = btoa(String.fromCharCode.apply(null, bytes));
+    return str.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function randomString(length) {
+    var arr = new Uint8Array(length);
+    crypto.getRandomValues(arr);
+    return base64UrlEncode(arr).slice(0, length);
+}
+
+// Generate a PKCE verifier + S256 challenge.
+function generatePKCE() {
+    var verifier = randomString(64);
+    return crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)).then(function(digest) {
+        return { verifier: verifier, challenge: base64UrlEncode(new Uint8Array(digest)) };
+    });
+}
+
+// Pages where an unauthenticated visit should NOT auto-start the OAuth flow
+// (they render on their own, or are part of the flow itself).
+function isPublicAuthPage() {
+    var p = window.location.pathname;
+    return p === "/login" || p === "/register" || p === "/verify" || p === "/enroll" ||
+        p === "/oauth/callback" || p.indexOf("/wishlists/public") === 0;
+}
+
+// Begin the authorization-code + PKCE flow: stash verifier/state and where to
+// return, then redirect to /oauth/authorize.
+function startAuthorizeFlow() {
+    generatePKCE().then(function(pkce) {
+        var state = randomString(32);
+        sessionStorage.setItem("pkce_verifier", pkce.verifier);
+        sessionStorage.setItem("oauth_state", state);
+        sessionStorage.setItem("post_login_redirect", window.location.pathname + window.location.search);
+
+        var params = new URLSearchParams({
+            client_id: OAUTH_CLIENT_ID,
+            response_type: "code",
+            redirect_uri: window.location.origin + "/oauth/callback",
+            scope: "openid profile email",
+            state: state,
+            code_challenge: pkce.challenge,
+            code_challenge_method: "S256"
+        });
+        window.location.href = oauth_base + "authorize?" + params.toString();
+    }).catch(function(e) {
+        console.log("Failed to start authorization flow: " + e);
+        if(window.location.pathname !== "/login") {
+            window.location.href = "/login";
+        }
+    });
+}
+
+// Handle the /oauth/callback: exchange the code for tokens, then return the user
+// to where they started.
+function handleOAuthCallback() {
+    var params = new URLSearchParams(window.location.search);
+    var code = params.get("code");
+    var state = params.get("state");
+    var oauthError = params.get("error");
+
+    if(oauthError) {
+        window.location.href = "/login?error=" + encodeURIComponent(oauthError);
+        return;
+    }
+    if(!code || !state || state !== sessionStorage.getItem("oauth_state")) {
+        window.location.href = "/login";
+        return;
+    }
+
+    var body = new URLSearchParams({
+        grant_type: "authorization_code",
+        code: code,
+        redirect_uri: window.location.origin + "/oauth/callback",
+        client_id: OAUTH_CLIENT_ID,
+        code_verifier: sessionStorage.getItem("pkce_verifier") || ""
+    });
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            var result;
+            if(this.status >= 200 && this.status < 300) {
+                try { result = JSON.parse(this.responseText); } catch(e) { result = null; }
+            }
+            if(result && result.access_token) {
+                set_cookie("poenskelisten", result.access_token, 7);
+                var dest = sessionStorage.getItem("post_login_redirect") || "/";
+                sessionStorage.removeItem("pkce_verifier");
+                sessionStorage.removeItem("oauth_state");
+                sessionStorage.removeItem("post_login_redirect");
+                if(dest === "/oauth/callback" || dest.indexOf("/login") === 0) {
+                    dest = "/";
+                }
+                window.location.href = dest;
+                return;
+            }
+            window.location.href = "/login";
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", oauth_base + "token");
+    xhttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    xhttp.send(body.toString());
+}
+
+// Roll the access token using the refresh cookie via the OAuth token endpoint.
+function refreshAccessToken(onSuccess, onFailure) {
+    var body = new URLSearchParams({ grant_type: "refresh_token", client_id: OAUTH_CLIENT_ID });
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            if(this.status >= 200 && this.status < 300) {
+                var result;
+                try { result = JSON.parse(this.responseText); } catch(e) { result = null; }
+                if(result && result.access_token) {
+                    set_cookie("poenskelisten", result.access_token, 7);
+                    jwt = result.access_token;
+                    if(onSuccess) onSuccess();
+                    return;
+                }
+            }
+            if(onFailure) onFailure();
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", oauth_base + "token");
+    xhttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    xhttp.send(body.toString());
+}
+
+// Access tokens are short-lived (~15 min), so roll them on a timer while a tab is
+// open to keep an active session alive between reloads.
+function startSessionRefreshTimer() {
+    if(isPublicAuthPage()) {
+        return;
+    }
+    if(sessionRefreshTimer !== null) {
+        return;
+    }
+    sessionRefreshTimer = setInterval(function() {
+        refreshAccessToken(null, null);
+    }, 10 * 60 * 1000);
+}
+
+// Bootstrap the page: ensure a valid access token (refresh, or start the OAuth
+// flow), then load the current user. triedRefresh guards against a refresh loop.
+function get_login(cookie, triedRefresh) {
+    triedRefresh = triedRefresh === true;
+    jwt = cookie ? cookie : "";
+
+    var recover = function() {
+        if(isPublicAuthPage()) {
+            load_page(false);
+        } else if(!triedRefresh) {
+            refreshAccessToken(function() { get_login(jwt, true); }, function() { startAuthorizeFlow(); });
+        } else {
+            startAuthorizeFlow();
+        }
+    };
+
+    if(jwt === "") {
+        recover();
+        return;
     }
 
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
-
-            var result;
-            try {
-                result = JSON.parse(this.responseText)
-            } catch(e) {
-                console.log("Failed to parse JSON. Error: " + e)
-                load_page(false);
-            }
-
-            // If the error is to verify, allow loading page anyways
-            if(result.error && result.error.toLowerCase().includes("you must verify your account") && window.location.pathname !== "/verify") {
-                verifyPageRedirect();
-                return;
-            } else if(result.error && result.error.toLowerCase().includes("you must verify your account") && window.location.pathname == "/verify") {
+            if(this.status >= 200 && this.status < 300) {
                 load_page(this.responseText);
+                startSessionRefreshTimer();
                 return;
-            }else if(result.error) {
-                set_cookie("poenskelisten", "", 7);
-                jwt = "";
-                if(window.location.pathname !== "/login") {
-                    console.log("login page redirect")
-                    logInPageRedirect(result.error);
-                    return;
-                } else {
-                    console.log("loading page")
-                    load_page(false);
-                }
-            } else {
-                // If new token, save it
-                if(result.token != null && result.token != "") {
-                    // store jwt to cookie
-                    console.log("Refreshed login token.")
-                    set_cookie("poenskelisten", result.token, 7);
-                }
-
-                // Load page
-                load_page(this.responseText)
             }
+            // Token missing/expired/invalid — try to recover.
+            set_cookie("poenskelisten", "", 7);
+            jwt = "";
+            recover();
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/tokens/validate");
+    xhttp.open("get", api_url + "auth/me");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", cookie);
+    xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
     return;
 }
@@ -257,10 +396,14 @@ document.addEventListener('click', function(event) {
         return;
     }
 
-    var isClickInsideElement = ignoreNav.contains(event.target);
+    // Some pages (OAuth callback, enrollment gate) have no navbar; guard against it.
+    var navbar = document.getElementById('navbar');
+    if (!navbar) {
+        return;
+    }
+    var isClickInsideElement = ignoreNav && ignoreNav.contains(event.target);
     if (!isClickInsideElement) {
-        var nav_classlist = document.getElementById('navbar').classList;
-        if (nav_classlist.contains('responsive')) {
+        if (navbar.classList.contains('responsive')) {
             toggle_navbar();
         }
         return;
@@ -297,10 +440,20 @@ function error(message) {
     toggleModal(false);
 }
 
-// When log out button is pressed, remove cookie and redirect to home page
+// When log out button is pressed, revoke the refresh session + SSO cookie (best
+// effort), clear the local access token, and return to the login page.
 function logout() {
-    set_cookie("poenskelisten", "", 1);
-    window.location.href = '../../';
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            set_cookie("poenskelisten", "", 1);
+            window.location.href = '/login';
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", oauth_base + "revoke");
+    xhttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    xhttp.send();
 }
 
 // Return GET parameters in a given URL
@@ -684,6 +837,14 @@ function logInPageRedirect(errorMessage) {
 function verifyPageRedirect() {
     if(window.location.pathname !== "/verify") {
         window.location = '/verify';
+        return true
+    }
+    return false
+}
+
+function accountPageRedirect() {
+    if(window.location.pathname !== "/account") {
+        window.location = '/account';
         return true
     }
     return false
