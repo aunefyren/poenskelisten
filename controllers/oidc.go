@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
@@ -157,14 +156,14 @@ func OIDCCallback(ctx *gin.Context) {
 		return
 	}
 
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, *user.Email, user.ID, user.Admin, *user.Verified)
-	if err != nil {
-		logger.Log.Error("Failed to generate session token after OIDC login. Error: " + err.Error())
+	// OIDC login establishes the SSO session; the frontend then continues the OAuth
+	// authorization flow (on load) to obtain tokens.
+	if err := issueSSOSession(ctx, user); err != nil {
+		logger.Log.Error("Failed to issue session after OIDC login. Error: " + err.Error())
 		redirectLoginError(ctx, "Single sign-on failed.")
 		return
 	}
 
-	setSessionCookie(ctx, tokenString)
 	ctx.Redirect(http.StatusFound, "/")
 }
 
@@ -229,13 +228,6 @@ func setFlowCookie(ctx *gin.Context, name string, value string) {
 func clearFlowCookie(ctx *gin.Context, name string) {
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.SetCookie(name, "", -1, "/", "", oidcCookieSecure(), true)
-}
-
-func setSessionCookie(ctx *gin.Context, token string) {
-	// Not HttpOnly: the frontend reads this cookie and sends it as the
-	// Authorization header, matching the existing password login.
-	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie("poenskelisten", token, sessionCookieMaxAge, "/", "", oidcCookieSecure(), false)
 }
 
 func redirectLoginError(ctx *gin.Context, message string) {

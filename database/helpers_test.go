@@ -28,6 +28,10 @@ func allModels() []interface{} {
 		&models.WishClaim{},
 		&models.News{},
 		&models.MFARecoveryCode{},
+		&models.Session{},
+		&models.OAuthClient{},
+		&models.AuthorizationCode{},
+		&models.OAuthConsent{},
 	}
 }
 

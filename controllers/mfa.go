@@ -61,21 +61,15 @@ func verifySecondFactor(user models.User, code string) (bool, error) {
 // as pending, and returns the secret plus otpauth URL for the client to render as
 // a QR code. Enrollment is confirmed by APIActivateMFA.
 func APIEnrollMFA(context *gin.Context) {
-	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
-	if err != nil {
-		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
+	// Identify via the login (SSO) session or an access token: forced enrollment
+	// happens before the user holds a token.
+	user, ok := resolveGateUser(context)
+	if !ok {
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "Please log in first."})
 		context.Abort()
 		return
 	}
-
-	user, err := database.GetAllUserInformation(userID)
-	if err != nil {
-		logger.Log.Error("Failed to get user. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
-		context.Abort()
-		return
-	}
+	userID := user.ID
 
 	if !user.IsLocalAuth() {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Multi-factor authentication is managed by your identity provider."})
@@ -132,21 +126,13 @@ func APIActivateMFA(context *gin.Context) {
 		return
 	}
 
-	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
-	if err != nil {
-		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
+	user, ok := resolveGateUser(context)
+	if !ok {
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "Please log in first."})
 		context.Abort()
 		return
 	}
-
-	user, err := database.GetAllUserInformation(userID)
-	if err != nil {
-		logger.Log.Error("Failed to get user. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
-		context.Abort()
-		return
-	}
+	userID := user.ID
 
 	if user.IsMFAEnabled() {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Multi-factor authentication is already enabled."})
@@ -336,15 +322,14 @@ func APIValidateMFA(context *gin.Context) {
 		return
 	}
 
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, *user.Email, user.ID, user.Admin, *user.Verified)
-	if err != nil {
-		logger.Log.Error("Failed to generate token after MFA. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid credentials."})
+	if err := issueSSOSession(context, user); err != nil {
+		logger.Log.Error("Failed to issue session after MFA. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to log in."})
 		context.Abort()
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"token": tokenString, "message": "Logged in!"})
+	context.JSON(http.StatusOK, gin.H{"message": "Logged in!"})
 }
 
 // APIAdminDeleteUserMFA lets an administrator strip MFA from a user, e.g. when the

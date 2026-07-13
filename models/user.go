@@ -35,6 +35,11 @@ type User struct {
 	OIDCSubject *string `json:"-" gorm:"index"`
 	OIDCIssuer  *string `json:"-"`
 	AuthSource  *string `json:"auth_source"`
+
+	// SessionsInvalidatedAt is a global logout marker: SSO login-state tokens and
+	// access tokens issued before this instant are rejected. Set by "sign out
+	// everywhere" and admin session revocation.
+	SessionsInvalidatedAt *time.Time `json:"-"`
 }
 
 // MFARecoveryCode is a single-use backup code that lets a user complete MFA when

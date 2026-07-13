@@ -97,12 +97,12 @@
         <script>
 
             var ignoreNav = document.getElementById('nav');
-            var jwt;
+            var jwt = "";
             var admin = false;
-            info('Loading...');
             showLoggedOutMenu();
-            jwt = get_cookie('poenskelisten');
-            get_login(jwt);
+            // Reached only when the login (SSO) session needs email verification;
+            // the form submits with the SSO cookie.
+            load_verify_account();
             
         </script>
 

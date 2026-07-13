@@ -108,6 +108,34 @@ function load_page(result) {
 
                     </div>
 
+                    <div class="module" id="sessions-module">
+
+                        <div class="module color-invert" id="" style="">
+                            <hr>
+                        </div>
+
+                        <b><p style="font-size: 1.25em;">Sessions</p></b>
+                        <p style="margin: 0 1em;">Signed in on another device you no longer use? Sign out everywhere.</p>
+
+                        <div style="margin: 1em;">
+                            <button type="button" style="padding: 0.75em 1em;" onclick="logoutAllDevices();">Sign out of all devices</button>
+                        </div>
+
+                    </div>
+
+                    <div class="module" id="connected-apps-module">
+
+                        <div class="module color-invert" id="" style="">
+                            <hr>
+                        </div>
+
+                        <b><p style="font-size: 1.25em;">Connected apps</p></b>
+                        <p style="margin: 0 1em;">Apps you've allowed to access your account.</p>
+
+                        <div id="connected-apps-list" style="margin: 1em;"></div>
+
+                    </div>
+
                 </div>
     `;
 
@@ -128,11 +156,104 @@ function load_page(result) {
         } else {
             GetUserData(user_id);
             GetProfileImage(user_id);
+            getConnectedApps();
         }
     } else {
         showLoggedOutMenu();
         invalid_session();
     }
+}
+
+// Escape untrusted strings (e.g. an app's registered name) before injecting.
+function escapeAccount(value) {
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+// Load the third-party apps the user has authorized.
+function getConnectedApps() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e + ' - Response: ' + this.responseText);
+                return;
+            }
+            if(result.error) {
+                return;
+            }
+            placeConnectedApps(result.apps);
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("get", api_url + "auth/connected-apps");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+}
+
+function placeConnectedApps(apps) {
+    var container = document.getElementById("connected-apps-list");
+    if(!container) {
+        return;
+    }
+    if(!apps || apps.length === 0) {
+        container.innerHTML = `<p style="font-size: 0.9em;">No apps connected.</p>`;
+        return;
+    }
+
+    var html = "";
+    for(var i = 0; i < apps.length; i++) {
+        var app = apps[i];
+        var scopeItems = "";
+        for(var j = 0; j < app.scopes.length; j++) {
+            scopeItems += `<li>${escapeAccount(app.scopes[j].description)}</li>`;
+        }
+        html += `
+            <div style="border: 1px solid; border-radius: 0.5em; padding: 0.75em; margin-bottom: 0.5em; text-align: left;">
+                <b>${escapeAccount(app.client_name)}</b>
+                <ul style="margin: 0.4em 0; padding-left: 1.2em; font-size: 0.85em;">${scopeItems}</ul>
+                <button type="button" style="padding: 0.5em 1em;" onclick="revokeConnectedApp('${escapeAccount(app.client_id)}')">Disconnect</button>
+            </div>
+        `;
+    }
+    container.innerHTML = html;
+}
+
+function revokeConnectedApp(clientID) {
+    if(!confirm("Disconnect this app? It will lose access to your account.")) {
+        return;
+    }
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e + ' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            if(result.error) {
+                error(result.error);
+            } else {
+                success(result.message);
+                getConnectedApps();
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("delete", api_url + "auth/connected-apps/" + clientID);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
 }
 
 // Render the two-factor section based on whether MFA is currently enabled.
@@ -177,7 +298,7 @@ function mfaEnroll() {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/users/mfa/enroll");
+    xhttp.open("post", api_url + "open/users/mfa/enroll");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -253,7 +374,7 @@ function mfaActivate() {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/users/mfa/activate");
+    xhttp.open("post", api_url + "open/users/mfa/activate");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -344,6 +465,26 @@ function mfaDisable() {
     return false;
 }
 
+// Revoke every session for the current user and return to login.
+function logoutAllDevices() {
+    if(!confirm("Sign out of all devices? You'll need to log in again everywhere.")) {
+        return;
+    }
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            set_cookie("poenskelisten", "", 1);
+            window.location.href = '/login';
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("post", api_url + "auth/tokens/logout-all");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+}
+
 function change_password_toggle() {
 
     var check_box = document.getElementById("password-toggle").checked;
@@ -432,9 +573,6 @@ function send_update_two(form_data) {
             } else {
 
                 success(result.message);
-
-                // store jwt to cookie
-                set_cookie("poenskelisten", result.token, 7);
 
                 if(result.verified) {
                     location.reload();

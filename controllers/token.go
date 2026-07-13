@@ -2,13 +2,10 @@ package controllers
 
 import (
 	"aunefyren/poenskelisten/auth"
-	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
-	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -63,82 +60,14 @@ func GenerateToken(context *gin.Context) {
 		return
 	}
 
-	tokenString, err := auth.GenerateJWT(user.FirstName, user.LastName, *user.Email, user.ID, user.Admin, *user.Verified)
-	if err != nil {
-		logger.Log.Error("Failed to generate token. Error: " + err.Error())
-		context.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials."})
+	if err := issueSSOSession(context, user); err != nil {
+		logger.Log.Error("Failed to issue session. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to log in."})
 		context.Abort()
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"token": tokenString, "message": "Logged in!"})
-}
-
-func ValidateToken(context *gin.Context) {
-	now := time.Now()
-
-	claims, err := middlewares.GetTokenClaims(context.GetHeader("Authorization"))
-	if err != nil {
-		logger.Log.Error("Failed to validate session. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Invalid session. Please log in again."})
-		context.Abort()
-		return
-	} else if claims.ExpiresAt.Time.Before(now) {
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Invalid session. Please log in again."})
-		context.Abort()
-		return
-	}
-
-	token := ""
-
-	// Refresh login if it was issued over 24 hours ago (and is still valid), so
-	// active sessions keep sliding forward instead of expiring abruptly.
-	if claims.IssuedAt != nil {
-
-		// Get time difference between now and token issue time
-		difference := now.Sub(claims.IssuedAt.Time)
-
-		if difference > 24*time.Hour && claims.ExpiresAt.After(now) {
-
-			// Slide the issue/expiry window forward by the standard token lifetime
-			claims.IssuedAt.Time = now
-			claims.ExpiresAt.Time = now.Add(auth.TokenValidDuration)
-
-			// Get user object by ID and check and update admin status
-			userObject, err := database.GetUserInformation(claims.UserID)
-			if err != nil {
-				logger.Log.Error("Failed to check admin status during token refresh. Error: " + err.Error())
-				context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to validate session. Please log in again."})
-				context.Abort()
-				return
-			} else if userObject.Admin != claims.Admin {
-				claims.Admin = userObject.Admin
-			}
-
-			// Re-generate token with updated claims
-			token, err = auth.GenerateJWTFromClaims(claims)
-			if err != nil {
-				logger.Log.Error("Failed to re-sign JWT from claims. Error: " + err.Error())
-				context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to validate session. Please log in again."})
-				context.Abort()
-				return
-			}
-		}
-
-	}
-
-	// Signal the frontend to route the user to MFA enrollment when enforcement is
-	// on and this local account hasn't enrolled yet.
-	mfaEnrollmentRequired := false
-	if config.ConfigFile.MFAEnforced {
-		enabled, isLocal, err := database.GetUserMFAEnrollmentState(claims.UserID)
-		if err != nil {
-			logger.Log.Error("Failed to check MFA enrollment state. Error: " + err.Error())
-		} else if isLocal && !enabled {
-			mfaEnrollmentRequired = true
-		}
-	}
-
-	context.JSON(http.StatusOK, gin.H{"message": "Valid session!", "data": claims, "token": token, "mfa_enrollment_required": mfaEnrollmentRequired})
-
+	// The browser is now logged in at the AS; the frontend continues the OAuth
+	// authorization flow to obtain tokens. No token is returned here.
+	context.JSON(http.StatusOK, gin.H{"message": "Logged in!"})
 }

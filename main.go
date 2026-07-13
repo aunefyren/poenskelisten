@@ -5,6 +5,7 @@ import (
 	"aunefyren/poenskelisten/controllers"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
+	"aunefyren/poenskelisten/mcpserver"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
@@ -136,6 +137,11 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 			open.POST("/users/verify/:code", controllers.VerifyUser)
 			open.POST("/users/verification", controllers.SendUserVerificationCode)
 
+			// MFA enrollment is reachable during the login gate (SSO-authed), so it
+			// lives under /open: a user forced to enroll has no access token yet.
+			open.POST("/users/mfa/enroll", controllers.APIEnrollMFA)
+			open.POST("/users/mfa/activate", controllers.APIActivateMFA)
+
 			open.POST("/tokens/mfa", controllers.APIValidateMFA)
 
 			open.GET("/oidc/config", controllers.APIGetOIDCConfig)
@@ -152,7 +158,11 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 
 		auth := api.Group("/auth").Use(middlewares.Auth(false))
 		{
-			auth.POST("/tokens/validate", controllers.ValidateToken)
+			auth.GET("/me", controllers.APICurrentUser)
+			auth.POST("/tokens/logout-all", controllers.APILogoutAll)
+
+			auth.GET("/connected-apps", controllers.APIListConnectedApps)
+			auth.DELETE("/connected-apps/:client_id", controllers.APIRevokeConnectedApp)
 
 			auth.GET("/currency", controllers.APIGetCurrency)
 
@@ -195,8 +205,6 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 			auth.GET("/users", controllers.GetUsers)
 			auth.POST("/users/update", controllers.UpdateUser)
 
-			auth.POST("/users/mfa/enroll", controllers.APIEnrollMFA)
-			auth.POST("/users/mfa/activate", controllers.APIActivateMFA)
 			auth.POST("/users/mfa/disable", controllers.APIDisableMFA)
 		}
 
@@ -207,6 +215,10 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 
 			admin.DELETE("/users/:user_id", controllers.APIDeleteUser)
 			admin.DELETE("/users/:user_id/mfa", controllers.APIAdminDeleteUserMFA)
+			admin.DELETE("/users/:user_id/sessions", controllers.APIAdminRevokeUserSessions)
+
+			admin.GET("/oauth/clients", controllers.APIAdminListOAuthClients)
+			admin.DELETE("/oauth/clients/:client_id", controllers.APIAdminRevokeOAuthClient)
 
 			admin.POST("/invites", controllers.RegisterInvite)
 			admin.GET("/invites", controllers.APIGetAllInvites)
@@ -270,6 +282,22 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 		logger.Log.Error("failed to build TXT paths. error: " + err.Error())
 	}
 
+	// OAuth 2.1 / MCP discovery documents live at the domain root, outside /api.
+	router.GET("/.well-known/oauth-authorization-server", controllers.APIOAuthAuthorizationServerMetadata)
+	router.GET("/.well-known/oauth-protected-resource", controllers.APIOAuthProtectedResourceMetadata)
+	router.GET("/.well-known/jwks.json", controllers.APIOAuthJWKS)
+
+	// OAuth 2.1 authorization server endpoints (also outside /api).
+	router.GET("/oauth/authorize", controllers.APIOAuthAuthorize)
+	router.POST("/oauth/consent", controllers.APIOAuthConsent)
+	router.POST("/oauth/token", controllers.APIOAuthToken)
+	router.POST("/oauth/revoke", controllers.APIOAuthRevoke)
+	// Open dynamic client registration (RFC 7591), rate-limited per IP.
+	router.POST("/oauth/register", middlewares.RateLimit(10, time.Hour), controllers.APIOAuthRegister)
+
+	// MCP resource server (self-gates on MCPEnabled; OAuth-protected).
+	router.Any("/mcp", mcpserver.Handler())
+
 	return router
 }
 
@@ -328,6 +356,11 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool
 	var oidcClientSecret = flag.String("oidcclientsecret", configFile.OIDCClientSecret, "The OIDC client secret.")
 	var oidcRedirectURL = flag.String("oidcredirecturl", configFile.OIDCRedirectURL, "The OIDC redirect/callback URL registered with the provider.")
 	var oidcAutoCreate = flag.String("oidcautocreateusers", strconv.FormatBool(configFile.OIDCAutoCreateUsers), "If unknown OIDC users are automatically provisioned an account.")
+
+	// MCP toggle. The OAuth issuer/algorithm and the API/MCP resource identifiers
+	// auto-derive from the external URL and can be hand-edited in config.json if a
+	// deployment ever needs to override them.
+	var mcpEnabled = flag.String("mcpenabled", strconv.FormatBool(configFile.MCPEnabled), "If the MCP resource server is enabled.")
 
 	// Generate invite
 	var generateInvite = flag.String("generateinvite", "false", "If an invite code should be automatically generate on startup.")
@@ -479,6 +512,10 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool
 		configFile.OIDCAutoCreateUsers = strings.ToLower(*oidcAutoCreate) == "true"
 	}
 
+	if provided["mcpenabled"] {
+		configFile.MCPEnabled = strings.ToLower(*mcpEnabled) == "true"
+	}
+
 	// Runtime-only action, never persisted to config.
 	if provided["generateinvite"] {
 		generateInviteBool = strings.ToLower(*generateInvite) == "true"
@@ -510,6 +547,8 @@ func registerTemplatedStaticFilesForDirectory(
 	filePathTableList["group.html"] = &filePathTable{urlPath: "/groups/:group_id"}
 	filePathTableList["wishlist.html"] = &filePathTable{urlPath: "/wishlists/:wishlist_id"}
 	filePathTableList["public.html"] = &filePathTable{urlPath: "/wishlists/public/:wishlist_hash"}
+	filePathTableList["callback.html"] = &filePathTable{urlPath: "/oauth/callback"}
+	filePathTableList["enroll.html"] = &filePathTable{urlPath: "/enroll"}
 	filePathTableList["manifest.json"] = &filePathTable{urlPath: "/manifest.json"}
 	filePathTableList["service-worker.js"] = &filePathTable{urlPath: "/service-worker.js"}
 	filePathTableList["robots.txt"] = &filePathTable{urlPath: "/robots.txt"}

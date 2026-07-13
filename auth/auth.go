@@ -19,11 +19,19 @@ const TokenValidDuration = 7 * 24 * time.Hour
 // correct password and TOTP entry remains valid.
 const MFAChallengeValidDuration = 5 * time.Minute
 
-// Token purposes. An empty Purpose denotes a normal session token (the historical
-// default), so existing tokens keep working. Single-purpose tokens carry a
-// non-empty Purpose and are rejected by the normal session-validation path.
+// AccessTokenValidDuration is how long a short-lived access token is valid. It is
+// deliberately short because access tokens are validated statelessly (no DB hit),
+// so revocation only takes effect once the current access token expires.
+const AccessTokenValidDuration = 15 * time.Minute
+
+// Token purposes. An empty Purpose denotes a legacy session token (issued before
+// access/refresh tokens existed); it is still accepted as an access token so
+// upgrades don't force everyone to log in again. PurposeAccess marks a modern
+// short-lived access token. Other purposes are single-use and rejected by the
+// session-validation path.
 const (
 	PurposeMFAChallenge = "mfa_challenge"
+	PurposeAccess       = "access"
 )
 
 // ErrNotAdmin is returned by ValidateToken when an admin session is required but
@@ -55,6 +63,28 @@ func GenerateJWT(firstname string, lastname string, email string, userid uuid.UU
 		Verified:  verified,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(TokenValidDuration)),
+			NotBefore: jwt.NewNumericDate(now),
+			IssuedAt:  jwt.NewNumericDate(now),
+			Issuer:    config.ConfigFile.PoenskelistenName,
+		},
+	}
+	return GenerateJWTFromClaims(claims)
+}
+
+// GenerateAccessJWT issues a short-lived access token (Purpose "access"). Access
+// tokens are what the API middleware validates on every request.
+func GenerateAccessJWT(firstname string, lastname string, email string, userid uuid.UUID, admin bool, verified bool) (tokenString string, err error) {
+	now := time.Now()
+	claims := &JWTClaim{
+		Firstname: firstname,
+		Lastname:  lastname,
+		Email:     email,
+		Admin:     admin,
+		UserID:    userid,
+		Verified:  verified,
+		Purpose:   PurposeAccess,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(AccessTokenValidDuration)),
 			NotBefore: jwt.NewNumericDate(now),
 			IssuedAt:  jwt.NewNumericDate(now),
 			Issuer:    config.ConfigFile.PoenskelistenName,
@@ -95,9 +125,9 @@ func ValidateTokenGetClaims(signedToken string, admin bool) (*JWTClaim, error) {
 	if claims.NotBefore.Time.After(now) {
 		return nil, errors.New("token has not begun")
 	}
-	// A single-purpose token (e.g. an MFA challenge) must never be accepted as a
-	// session token.
-	if claims.Purpose != "" {
+	// Only access tokens (or legacy empty-purpose session tokens) may authenticate
+	// API requests. Single-purpose tokens (e.g. an MFA challenge) are rejected.
+	if claims.Purpose != "" && claims.Purpose != PurposeAccess {
 		return nil, errors.New("token is not a session token")
 	}
 	if admin && !claims.Admin {

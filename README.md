@@ -110,6 +110,8 @@ You can configure Pønskelisten in **three different ways**:
 | oidc_client_secret | oidcclientsecret | oidcclientsecret | string | OIDC client secret |
 | oidc_redirect_url | oidcredirecturl | oidcredirecturl | string | OIDC callback URL; defaults to `<external_url>/api/open/oidc/callback` |
 | oidc_auto_create_users | oidcautocreateusers | oidcautocreateusers | bool | Auto-provision unknown OIDC users (default off) |
+| mcp_enabled | mcpenabled | mcpenabled | bool | Enable the MCP resource server (the OAuth authorization server is always on) |
+| oauth_signing_key | `N/A` | `N/A` | string | PEM signing key; auto-generated + persisted on first run (config.json only) |
 ---
 
 ## 🔐 Single sign-on (OpenID Connect)
@@ -158,6 +160,23 @@ Then configure Pønskelisten (env vars shown; flags/config.json equivalents exis
 
 The redirect URL registered with the IdP must match
 `<external_url>/api/open/oidc/callback`.
+
+## 🤖 MCP server (AI assistants)
+
+Pønskelisten can expose an authenticated **MCP (Model Context Protocol)** endpoint
+so an AI client (e.g. Claude) can read your wishlists on your behalf. It is a full
+OAuth 2.1 setup: the app is its own authorization server, and the MCP endpoint is a
+resource server that only accepts audience-scoped tokens.
+
+Enable it with `mcp_enabled: true` (it's off by default). The endpoint lives at
+`<external_url>/mcp`; the client discovers everything else via
+`<external_url>/.well-known/oauth-protected-resource`, self-registers
+(`/oauth/register`), and runs the browser login + consent flow — no manual client
+setup. HTTPS (a real `external_url`) is required for the token cookies to work.
+
+Current tools are **read-only**: `list_wishlists`, `list_wishes`, `list_groups`
+(gated by the `mcp:wishlists.read` / `mcp:groups.read` scopes you approve on the
+consent screen). You can revoke a connected app any time from the admin panel.
 
 ## 🐳 Docker Setup
 

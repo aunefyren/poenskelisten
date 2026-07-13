@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+
+        <!-- Required meta tags -->
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+        <meta name="description" content="{{.appDescription}}">
+        <title>{{.appName}}</title>
+
+        <!-- Custom CSS -->
+        <link rel="stylesheet" type="text/css" href="/css/main.css">
+        <link rel="manifest" href="/manifest.json" />
+        <script src="/js/enroll.js"></script>
+        <script src="/js/functions.js"></script>
+
+        <link rel="icon" type="image/png" href="/assets/favicons/favicon-32x32.png" sizes="32x32" />
+        <link rel="shortcut icon" type="image/x-icon" href="/assets/favicons/favicon.ico" />
+        <meta name="theme-color" content="#0d1b2a" />
+
+    </head>
+    <body>
+
+        <!-- container -->
+        <main role="main" class="container starter-template">
+            <div class="row">
+                <div class="col">
+                    <div id="response"></div>
+                    <div class="card">
+                        <div class="card-header" id="card-header">Set up two-factor authentication</div>
+                        <div class="card-body" id="content"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <!-- /container -->
+
+        <script>
+
+            var ignoreNav = document.getElementById('response');
+            var jwt = "";
+            var admin = false;
+            runEnroll();
+
+        </script>
+
+        <noscript>
+            <h3>You need JavaScript to use this website.</h3>
+        </noscript>
+
+    </body>
+</html>

@@ -253,16 +253,11 @@ function send_log_in(){
 
             } else {
 
-                // store jwt to cookie
-                set_cookie("poenskelisten", result.token, 7);
-
-                // show home page &amp; tell the user it was a successful login
-                showLoggedInMenu();
-                success(result.message);
+                // The browser is now logged in at the authorization server; resume
+                // the OAuth flow (or go home) to obtain tokens.
                 clear_data();
                 disable_login_button();
-
-                window.location.href = '/';
+                redirectAfterLogin();
 
             }
 
@@ -297,7 +292,7 @@ function action_mfa(mfaToken) {
         <form action="" class="icon-border" onsubmit="event.preventDefault(); send_mfa_code();">
 
             <label id="form-input-icon" for="mfa_code"></label>
-            <input type="text" name="mfa_code" id="mfa_code" placeholder="Authenticator or recovery code" autocomplete="one-time-code" inputmode="text" required autofocus/>
+            <input type="text" name="totp" id="mfa_code" placeholder="Authenticator or recovery code" autocomplete="one-time-code" inputmode="text" aria-label="Authentication code" required autofocus/>
 
             <input type="hidden" name="mfa_token" id="mfa_token" value="` + mfaToken + `" />
 
@@ -350,14 +345,10 @@ function send_mfa_code() {
 
             } else {
 
-                // store jwt to cookie
-                set_cookie("poenskelisten", result.token, 7);
-
-                showLoggedInMenu();
-                success(result.message);
+                // Second factor accepted; the SSO session is set. Resume the OAuth
+                // flow (or go home) to obtain tokens.
                 disable_login_button();
-
-                window.location.href = '/';
+                redirectAfterLogin();
 
             }
 
@@ -370,6 +361,22 @@ function send_mfa_code() {
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.send(form_data);
     return false;
+}
+
+// After a successful login, return to the OAuth flow (the `next` URL set by
+// /oauth/authorize) or the home page.
+function redirectAfterLogin() {
+    var next = "/";
+    try {
+        var url = new URL(window.location.href);
+        var n = url.searchParams.get("next");
+        if(n) {
+            next = n;
+        }
+    } catch(e) {
+        console.log(e);
+    }
+    window.location.href = next;
 }
 
 function clear_data() {

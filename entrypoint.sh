@@ -36,6 +36,11 @@ set -- /app/poenskelisten
 [ -n "$oidcredirecturl" ] && set -- "$@" --oidcredirecturl "$oidcredirecturl"
 [ -n "$oidcautocreateusers" ] && set -- "$@" --oidcautocreateusers "$oidcautocreateusers"
 
+# Enable the MCP resource server if the environment variable is set. The OAuth
+# issuer/algorithm and API/MCP resource identifiers auto-derive from the external
+# URL, so they need no environment variables.
+[ -n "$mcpenabled" ] && set -- "$@" --mcpenabled "$mcpenabled"
+
 # Add flags for invite generation if those environment variables are set
 [ -n "$generateinvite" ] && set -- "$@" --generateinvite "$generateinvite"
 

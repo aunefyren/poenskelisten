@@ -133,6 +133,21 @@ func LoadConfig() (err error) {
 		}
 	}
 
+	// The OAuth signing key is generated once and persisted: it must survive
+	// restarts, otherwise all issued tokens and the published JWKS would break. The
+	// issuer, algorithm, and resource identifiers are not persisted — they are
+	// computed from config at runtime (see OAuthIssuer / APIResource / MCPResource).
+	if ConfigFile.OAuthSigningKey == "" {
+		keyPEM, keyID, err := GenerateOAuthSigningKey(OAuthSigningAlgorithm)
+		if err != nil {
+			return errors.New("failed to generate OAuth signing key. error: " + err.Error())
+		}
+		ConfigFile.OAuthSigningKey = keyPEM
+		ConfigFile.OAuthSigningKeyID = keyID
+		anythingChanged = true
+		fmt.Println("new OAuth signing key generated.")
+	}
+
 	if ConfigFile.PoenskelistenLogLevel == "" {
 		level := logrus.InfoLevel
 		ConfigFile.PoenskelistenLogLevel = level.String()

@@ -325,6 +325,41 @@ func TestValidateTokenGetClaims(t *testing.T) {
 	}
 }
 
+func TestAccessTokenValidatesAsSession(t *testing.T) {
+	setupAuthTestConfig(t)
+
+	tokenString, err := GenerateAccessJWT("Ada", "Lovelace", "ada@example.com", uuid.New(), false, true)
+	if err != nil {
+		t.Fatalf("GenerateAccessJWT returned error: %v", err)
+	}
+
+	claims, err := ValidateTokenGetClaims(tokenString, false)
+	if err != nil {
+		t.Fatalf("ValidateTokenGetClaims rejected an access token: %v", err)
+	}
+	if claims.Purpose != PurposeAccess {
+		t.Errorf("Purpose = %q, want %q", claims.Purpose, PurposeAccess)
+	}
+
+	// Access tokens are short-lived.
+	if claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time) != AccessTokenValidDuration {
+		t.Errorf("access token lifetime = %v, want %v", claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time), AccessTokenValidDuration)
+	}
+}
+
+func TestLegacyEmptyPurposeStillValidates(t *testing.T) {
+	setupAuthTestConfig(t)
+
+	// A pre-upgrade token (empty Purpose) must still authenticate.
+	tokenString, err := GenerateJWT("Ada", "Lovelace", "ada@example.com", uuid.New(), false, true)
+	if err != nil {
+		t.Fatalf("GenerateJWT returned error: %v", err)
+	}
+	if err := ValidateToken(tokenString, false); err != nil {
+		t.Errorf("ValidateToken rejected a legacy empty-purpose token: %v", err)
+	}
+}
+
 func TestMFAChallengeTokenRoundTrip(t *testing.T) {
 	setupAuthTestConfig(t)
 

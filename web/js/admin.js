@@ -86,9 +86,17 @@ function load_page(result) {
                 <label for="mfa-enforced" class="clickable">Require all local users to set up two-factor authentication</label><br>
 
                 <input class="clickable" style="margin-top: 1em;" type="checkbox" id="mfa-recovery-codes" name="mfa-recovery-codes" value="confirm" >
-                <label for="mfa-recovery-codes" class="clickable">Issue recovery codes when users enrol</label><br>
+                <label for="mfa-recovery-codes" class="clickable">Issue recovery codes when users enroll</label><br>
 
                 <button type="submit" onclick="update_server_settings();" id="update_security_button" style=""><img src="assets/check.svg" class="btn_logo"><p2>Update</p2></button>
+
+            </div>
+
+            <div class="oauth-clients-module" id="oauth-clients-module">
+
+                <h3 id="oauth-clients-title">Connected apps:</h3>
+
+                <div class="oauth-client-list" id="oauth-client-list"></div>
 
             </div>
 
@@ -109,6 +117,7 @@ function load_page(result) {
             get_server_info();
             get_invites();
             get_currency();
+            get_oauth_clients();
         }
 
     } else {
@@ -521,6 +530,90 @@ function update_currency() {
 
 }
 
+function get_oauth_clients() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            if(result.error) {
+                error(result.error);
+            } else {
+                place_oauth_clients(result.clients);
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("get", api_url + "admin/oauth/clients");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+}
+
+function place_oauth_clients(clients) {
+    var html = "";
+    if(!clients || clients.length === 0) {
+        html = `<div class="invitation-object"><p style="margin: 0.5em; text-align: center;">...</p></div>`;
+    } else {
+        for(var i = 0; i < clients.length; i++) {
+            var c = clients[i];
+            var name = (c.client_name && c.client_name.trim() !== "") ? c.client_name : c.client_id;
+            var suffix = c.enabled ? "" : " (revoked)";
+
+            html += `<div class="invitation-object">`;
+            html += `<div class="leaderboard-object-code">${escapeServerInfo(name)}${suffix}</div>`;
+
+            if(c.is_first_party) {
+                html += `<div class="leaderboard-object-user">Built-in</div>`;
+            } else if(c.enabled) {
+                html += `<img class="icon-img clickable" onclick="revoke_oauth_client('${escapeServerInfo(c.client_id)}')" src="/assets/trash-2.svg" title="Revoke"></img>`;
+            } else {
+                html += `<div class="leaderboard-object-user">Revoked</div>`;
+            }
+
+            html += `</div>`;
+        }
+    }
+    document.getElementById("oauth-client-list").innerHTML = html;
+}
+
+function revoke_oauth_client(clientID) {
+    if(!confirm("Revoke this app's access? It will need to be authorized again.")) {
+        return;
+    }
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+            if(result.error) {
+                error(result.error);
+            } else {
+                success(result.message);
+                get_oauth_clients();
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("delete", api_url + "admin/oauth/clients/" + clientID);
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+}
+
 function GetUserData(userID) {
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -600,6 +693,7 @@ function PlaceUserDataInModal(user_object) {
         <div id="user-input" class="user-input" style="width: 100%;">
             <button id="register-button" onClick="deleteUser('${user_object.id}');" type="" href="/">Delete user</button>
             ${mfaButton}
+            <button id="revoke-sessions-button" onClick="adminRevokeUserSessions('${user_object.id}');" type="button" style="margin-top: 0.5em; padding: 0.75em 1em;">Sign out everywhere</button>
         </div>
     `;
 
@@ -670,6 +764,38 @@ function adminDeleteUserMFA(userID) {
     };
     xhttp.withCredentials = true;
     xhttp.open("delete", api_url + "admin/users/" + userID + "/mfa");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return;
+}
+
+function adminRevokeUserSessions(userID) {
+    if(!confirm("Sign this user out of all their sessions? They will need to log in again everywhere.")) {
+        return;
+    }
+
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+                error(result.error);
+            } else {
+                toggleModal(false);
+                success(result.message);
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("delete", api_url + "admin/users/" + userID + "/sessions");
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();

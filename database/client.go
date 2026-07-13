@@ -137,11 +137,21 @@ func Migrate() {
 	errWishClaim := Instance.AutoMigrate(&models.WishClaim{})
 	errNews := Instance.AutoMigrate(&models.News{})
 	errMFARecoveryCode := Instance.AutoMigrate(&models.MFARecoveryCode{})
+	errSession := Instance.AutoMigrate(&models.Session{})
+	errOAuthClient := Instance.AutoMigrate(&models.OAuthClient{})
+	errAuthorizationCode := Instance.AutoMigrate(&models.AuthorizationCode{})
+	errOAuthConsent := Instance.AutoMigrate(&models.OAuthConsent{})
 
-	err := errors.Join(errUser, errInvite, errGroup, errGroupMembership, errWishlist, errWishlistMembership, errWishlistCollaborator, errWishCategory, errWish, errWishClaim, errNews, errMFARecoveryCode)
+	err := errors.Join(errUser, errInvite, errGroup, errGroupMembership, errWishlist, errWishlistMembership, errWishlistCollaborator, errWishCategory, errWish, errWishClaim, errNews, errMFARecoveryCode, errSession, errOAuthClient, errAuthorizationCode, errOAuthConsent)
 	if err != nil {
 		panic(err)
 	}
+
+	// Ensure the built-in first-party web client exists.
+	if err := SeedFirstPartyClient(); err != nil {
+		panic(err)
+	}
+
 	logger.Log.Debug("database migration completed")
 }
 
