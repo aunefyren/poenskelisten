@@ -270,6 +270,15 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 		logger.Log.Error("failed to build HTML paths. error: " + err.Error())
 	}
 
+	// The MFA step of login.js navigates here (a real page load, not a DOM
+	// swap) so password managers like Bitwarden re-inject their content
+	// script and offer one-time-code autofill on the new field. Serve the
+	// same template used for /login; login.js reads the challenge token
+	// back out of sessionStorage.
+	router.GET("/login/mfa", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "login.html", templateData)
+	})
+
 	// endpoint handler building for JSON
 	router, err = registerTemplatedStaticFilesForDirectory(router, "/json", true, "./web/json", templateData)
 	if err != nil {
