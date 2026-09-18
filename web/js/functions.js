@@ -94,7 +94,7 @@ function generatePKCE() {
 // (they render on their own, or are part of the flow itself).
 function isPublicAuthPage() {
     var p = window.location.pathname;
-    return p === "/login" || p === "/register" || p === "/verify" || p === "/enroll" ||
+    return p === "/login" || p === "/login/mfa" || p === "/register" || p === "/verify" || p === "/enroll" ||
         p === "/oauth/callback" || p.indexOf("/wishlists/public") === 0;
 }
 

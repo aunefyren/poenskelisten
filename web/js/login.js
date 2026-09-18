@@ -40,7 +40,29 @@ function load_page(result) {
 
     showLoggedOutMenu();
 
-    if(reset_mode) {
+    // The MFA step lives on its own URL (see goToMfaStep) so it's reached by
+    // a real navigation rather than a DOM swap - password managers only
+    // reliably offer one-time-code autofill across an actual page load. The
+    // challenge token can't travel in the URL like reset_code does without
+    // leaking into browser history, so it rides in sessionStorage instead.
+    var mfaToken = null;
+    if(window.location.pathname === "/login/mfa") {
+        try {
+            mfaToken = sessionStorage.getItem("mfa_token");
+        } catch(e) {
+            mfaToken = null;
+        }
+        if(!mfaToken) {
+            // Nothing to resume (e.g. a hard refresh lost the token); fall
+            // back to the normal login form and drop the URL back to /login.
+            history.replaceState(null, "", "/login");
+        }
+    }
+
+    if(mfaToken) {
+        clearResponse();
+        action_mfa(mfaToken);
+    } else if(reset_mode) {
         clearResponse();
         checkResetCode(reset_code);
     } else {
@@ -246,10 +268,11 @@ function send_log_in(){
 
             } else if(result.mfa_required) {
 
-                // Password accepted, but a second factor is required. Show the
-                // code entry step carrying the short-lived challenge token.
+                // Password accepted, but a second factor is required. Navigate
+                // to the dedicated MFA page carrying the short-lived challenge
+                // token, instead of swapping the form in on this page.
                 clear_data();
-                action_mfa(result.mfa_token);
+                goToMfaStep(result.mfa_token);
 
             } else {
 
@@ -270,6 +293,39 @@ function send_log_in(){
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.send(form_data);
     return false;
+}
+
+// Stores the challenge token and sends the browser to /login/mfa. A real
+// navigation is what actually gets Bitwarden (and most password managers) to
+// re-inject their content script and offer one-time-code autofill on the new
+// field - a client-side DOM swap on the same URL isn't enough.
+function goToMfaStep(mfaToken) {
+    try {
+        sessionStorage.setItem("mfa_token", mfaToken);
+    } catch(e) {
+        console.log(e);
+    }
+
+    var target = new URL(window.location.origin + "/login/mfa");
+    try {
+        var next = new URL(window.location.href).searchParams.get("next");
+        if(next) {
+            target.searchParams.set("next", next);
+        }
+    } catch(e) {
+        console.log(e);
+    }
+
+    window.location.href = target.toString();
+}
+
+function backToLogin() {
+    try {
+        sessionStorage.removeItem("mfa_token");
+    } catch(e) {
+        console.log(e);
+    }
+    window.location.href = "/login";
 }
 
 function action_mfa(mfaToken) {
@@ -303,7 +359,7 @@ function action_mfa(mfaToken) {
     `;
 
     var html2 = `
-    <a style="font-size:0.75em;cursor:pointer;" onclick="action_login();">Back to log in</i>
+    <a style="font-size:0.75em;cursor:pointer;" onclick="backToLogin();">Back to log in</i>
     `;
 
     document.getElementById("action").innerHTML = html;
@@ -347,6 +403,11 @@ function send_mfa_code() {
 
                 // Second factor accepted; the SSO session is set. Resume the OAuth
                 // flow (or go home) to obtain tokens.
+                try {
+                    sessionStorage.removeItem("mfa_token");
+                } catch(e) {
+                    console.log(e);
+                }
                 disable_login_button();
                 redirectAfterLogin();
 
