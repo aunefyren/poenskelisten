@@ -1,9 +1,14 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestDeriveNames(t *testing.T) {
@@ -42,5 +47,38 @@ func TestOIDCResolveErrorMessage(t *testing.T) {
 	}
 	if msg := oidcResolveErrorMessage(errors.New("boom")); msg != "Single sign-on failed." {
 		t.Errorf("unknown error mapped to %q, want generic message", msg)
+	}
+}
+
+// TestOIDCCallbackClearsFlowCookiesBeforeRedirect covers a bug where the
+// one-time state/nonce cookies were cleared via `defer` after ctx.Redirect
+// had already run - too late, since gin finalizes response headers at
+// redirect time, so the Set-Cookie header clearing them never reached the
+// client. redirectLoginError must clear them beforehand instead.
+func TestOIDCCallbackClearsFlowCookiesBeforeRedirect(t *testing.T) {
+	setupControllersDB(t)
+	config.ConfigFile.OIDCEnabled = false
+	t.Cleanup(func() { config.ConfigFile.OIDCEnabled = false })
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("GET", "/oidc/callback?state=abc&code=xyz", nil)
+	ctx.Request.AddCookie(&http.Cookie{Name: oidcStateCookie, Value: "abc"})
+	ctx.Request.AddCookie(&http.Cookie{Name: oidcNonceCookie, Value: "def"})
+
+	OIDCCallback(ctx)
+
+	if w.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusFound)
+	}
+
+	cleared := map[string]bool{}
+	for _, c := range w.Result().Cookies() {
+		if c.MaxAge < 0 {
+			cleared[c.Name] = true
+		}
+	}
+	if !cleared[oidcStateCookie] || !cleared[oidcNonceCookie] {
+		t.Errorf("expected both flow cookies cleared in the redirect response, got: %v", w.Result().Cookies())
 	}
 }

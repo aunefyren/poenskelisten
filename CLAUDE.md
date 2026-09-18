@@ -8,6 +8,8 @@ Pønskelisten — a self-hosted wishlist-sharing web app. Go/Gin backend (module
 
 **Read `docs/development.md` before touching any code.** It has the naming, error-handling, and testing conventions this repo expects, and every change should follow them.
 
+**Read `docs/wip.md` at the start of every session.** It tracks known bugs and intentional coverage gaps found but not yet fixed — check it before assuming behavior is correct or coverage gaps are accidental, and keep it in sync (remove an entry once its bug is fixed) as you work.
+
 Never run `git` commands (commit, push, branch, reset, etc.) in this repo — git is managed by the maintainer.
 
 ## Commands
@@ -24,7 +26,7 @@ Tests:
 go test ./...                                     # whole module
 go test ./controllers/...                         # one package
 go test ./controllers/... -run TestGroupJoin -v    # one test, verbose
-go test -race -covermode=atomic -coverprofile=coverage.out ./...   # exactly what CI runs
+go test -race -covermode=atomic -coverprofile=coverage.out -timeout 20m ./...   # exactly what CI runs
 go tool cover -func=coverage.out | tail -1         # print the total %
 ```
 Coverage note: plain `./...` only credits a package with what *its own* test file(s) exercise — that's the number CI's badge/gate use. Add `-coverpkg=./...` to instead credit a package with everything exercised across *all* packages' tests (e.g. `controllers` tests indirectly running code in `database`); the two numbers can differ a lot in this repo.

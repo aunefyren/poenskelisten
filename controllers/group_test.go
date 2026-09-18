@@ -459,18 +459,13 @@ func TestRemoveFromGroupMissingAuth(t *testing.T) {
 
 // --- RemoveSelfFromGroup ---
 
-// RemoveSelfFromGroup is currently broken for every caller, not just owners.
-// It builds an unbound, zero-value models.GroupMembership{} and passes its
-// MemberID (uuid.Nil) into database.VerifyUserOwnershipToGroup instead of the
-// authenticated caller's ID. That function filters with a GORM struct Where
-// clause (Instance.Where(&models.Group{OwnerID: UserID})), and GORM silently
-// drops zero-value fields from a struct condition - so the OwnerID filter
-// vanishes and the query degrades to "does an enabled group with this ID
-// exist", which is true for any enabled group. The handler then always hits
-// its "Owners cannot remove themselves as members." branch, so nobody can
-// ever leave a group through this endpoint. This is a real bug (both tests
-// below document current, broken behavior; not fixed here per instructions).
-func TestRemoveSelfFromGroupAlwaysBlockedByBrokenOwnershipCheck(t *testing.T) {
+// RemoveSelfFromGroup's ownership check must be evaluated against the
+// authenticated caller's own ID, not an unbound, zero-value
+// models.GroupMembership{}'s MemberID (uuid.Nil) - the latter let GORM's
+// struct Where clause silently drop the OwnerID filter, degrading the check to
+// "does an enabled group with this ID exist" (true for any enabled group) and
+// blocking every caller, not just owners.
+func TestRemoveSelfFromGroupMemberSuccess(t *testing.T) {
 	setupControllersDB(t)
 	owner := createTestUser(t)
 	group := createTestGroup(t, owner.ID)
@@ -483,8 +478,24 @@ func TestRemoveSelfFromGroupAlwaysBlockedByBrokenOwnershipCheck(t *testing.T) {
 	ctx.Request.Header.Set("Authorization", authHeader(t, member.ID, false))
 	RemoveSelfFromGroup(ctx)
 
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201 for a plain member leaving; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestRemoveSelfFromGroupOwnerBlocked(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String()+"/leave", "")
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RemoveSelfFromGroup(ctx)
+
 	if w.Code != 400 {
-		t.Fatalf("status = %d, want 400 (current, buggy behavior: a plain member can't leave either); body=%s", w.Code, w.Body.String())
+		t.Fatalf("status = %d, want 400 (owners cannot remove themselves); body=%s", w.Code, w.Body.String())
 	}
 }
 

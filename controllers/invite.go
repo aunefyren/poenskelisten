@@ -30,13 +30,7 @@ func RegisterInvite(context *gin.Context) {
 		return
 	}
 
-	inviteObjects, err := ConvertInvitesToInviteObjects(invites)
-	if err != nil {
-		logger.Log.Error("Failed to process invites. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process invites."})
-		context.Abort()
-		return
-	}
+	inviteObjects := ConvertInvitesToInviteObjects(invites)
 
 	// Sort invites  by creation date
 	sort.Slice(inviteObjects, func(i, j int) bool {
@@ -91,13 +85,7 @@ func APIDeleteInvite(context *gin.Context) {
 		return
 	}
 
-	inviteObjects, err := ConvertInvitesToInviteObjects(invites)
-	if err != nil {
-		logger.Log.Error("Failed to process invites. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process invites."})
-		context.Abort()
-		return
-	}
+	inviteObjects := ConvertInvitesToInviteObjects(invites)
 
 	context.JSON(http.StatusCreated, gin.H{"message": "Invite deleted.", "invites": inviteObjects})
 }
@@ -112,13 +100,7 @@ func APIGetAllInvites(context *gin.Context) {
 		return
 	}
 
-	inviteObjects, err := ConvertInvitesToInviteObjects(invites)
-	if err != nil {
-		logger.Log.Error("Failed to process invites. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process invites."})
-		context.Abort()
-		return
-	}
+	inviteObjects := ConvertInvitesToInviteObjects(invites)
 
 	// Sort invites  by creation date
 	sort.Slice(inviteObjects, func(i, j int) bool {
@@ -159,7 +141,9 @@ func ConvertInviteToInviteObject(invite models.Invite) (models.InviteObject, err
 
 }
 
-func ConvertInvitesToInviteObjects(invites []models.Invite) ([]models.InviteObject, error) {
+// ConvertInvitesToInviteObjects converts each invite it can and silently skips
+// the rest (e.g. one with a dangling RecipientID), so it never fails as a whole.
+func ConvertInvitesToInviteObjects(invites []models.Invite) []models.InviteObject {
 
 	inviteObjects := []models.InviteObject{}
 
@@ -172,6 +156,6 @@ func ConvertInvitesToInviteObjects(invites []models.Invite) ([]models.InviteObje
 		inviteObjects = append(inviteObjects, inviteObject)
 	}
 
-	return inviteObjects, nil
+	return inviteObjects
 
 }

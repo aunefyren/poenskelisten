@@ -6,14 +6,29 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
 	"database/sql"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	_ "modernc.org/sqlite"
 )
+
+// TestMain drops models.BcryptCost to bcrypt's minimum for the whole
+// package's test run. Several tests (newUserWithPassword,
+// createTestUserWithPassword, and the handlers they exercise via
+// CheckPassword) hash or verify a real password; at the production cost
+// that's deliberately slow, and under `go test -race` it's roughly another
+// order of magnitude slower still (measured: ~1s per op at the production
+// cost without -race, ~12s with it) - these tests only need the round-trip
+// to work, not production-strength hardness.
+func TestMain(m *testing.M) {
+	models.BcryptCost = bcrypt.MinCost
+	os.Exit(m.Run())
+}
 
 // allControllersTestModels is the full schema, kept in one place so every
 // controller test can migrate everything it might touch (a handler under test

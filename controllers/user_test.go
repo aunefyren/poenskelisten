@@ -926,14 +926,13 @@ func TestUpdateUserWeakNewPassword(t *testing.T) {
 	}
 }
 
-// TestUpdateUserEmailChangeDoesNotActuallyUnverify pins a real bug (see
-// docs/wip.md): UpdateUser calls database.SetUserVerification(userID, false)
-// directly against the DB after an e-mail change, but never updates the
-// in-memory userOriginal.Verified field to match. The very next line saves
-// that stale (still-verified) struct back with database.UpdateUserInDB,
-// silently reverting the unverify. If this test starts failing because the
-// bug got fixed, update the expectations here and delete the wip.md entry.
-func TestUpdateUserEmailChangeDoesNotActuallyUnverify(t *testing.T) {
+// TestUpdateUserEmailChangeActuallyUnverifies covers a regression (see
+// docs/wip.md history): UpdateUser calls database.SetUserVerification(userID,
+// false) directly against the DB after an e-mail change, and must also update
+// the in-memory userOriginal.Verified field to match before saving it back
+// with database.UpdateUserInDB, or that save would silently revert the
+// unverify.
+func TestUpdateUserEmailChangeActuallyUnverifies(t *testing.T) {
 	setupControllersDB(t)
 	user := newUserWithPassword(t, "CorrectHorse1!")
 
@@ -943,10 +942,8 @@ func TestUpdateUserEmailChangeDoesNotActuallyUnverify(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("status = %d, want 200; body=%v", code, resp)
 	}
-	// Bug: this "should" be false (see comment above) but the stale-struct
-	// save reverts it to true.
-	if resp["verified"] != true {
-		t.Errorf("verified = %v, want true (documenting the current bug - it should be false)", resp["verified"])
+	if resp["verified"] != false {
+		t.Errorf("verified = %v, want false", resp["verified"])
 	}
 
 	updated, err := database.GetAllUserInformation(user.ID)
@@ -956,16 +953,16 @@ func TestUpdateUserEmailChangeDoesNotActuallyUnverify(t *testing.T) {
 	if *updated.Email != "new-address@example.com" {
 		t.Errorf("email = %q, want the new address", *updated.Email)
 	}
-	if updated.Verified == nil || !*updated.Verified {
-		t.Error("bug regression: expected Verified to still (incorrectly) be true in the DB")
+	if updated.Verified == nil || *updated.Verified {
+		t.Error("expected Verified to be false in the DB after an e-mail change")
 	}
 }
 
-// TestUpdateUserEmailChangeSMTPEnabledDoesNotSendVerification is a
-// consequence of the same bug: since Verified is never actually flipped to
-// false, the "send a new verification e-mail after an e-mail change" branch
-// (gated on `!*user.Verified`) never fires, even with SMTP enabled.
-func TestUpdateUserEmailChangeSMTPEnabledDoesNotSendVerification(t *testing.T) {
+// TestUpdateUserEmailChangeSMTPEnabledSendsVerification is a consequence of
+// the fix above: once Verified is actually flipped to false, the "send a new
+// verification e-mail after an e-mail change" branch (gated on
+// `!*user.Verified`) fires when SMTP is enabled.
+func TestUpdateUserEmailChangeSMTPEnabledSendsVerification(t *testing.T) {
 	setupControllersDB(t)
 	user := newUserWithPassword(t, "CorrectHorse1!")
 	srv := startFakeSMTPServer(t)
@@ -977,8 +974,43 @@ func TestUpdateUserEmailChangeSMTPEnabledDoesNotSendVerification(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("status = %d, want 200; body=%v", code, resp)
 	}
-	if srv.messageCount() != 0 {
-		t.Errorf("messageCount = %d, want 0 (documenting the current bug - a re-verification e-mail should have been sent)", srv.messageCount())
+	if srv.messageCount() != 1 {
+		t.Errorf("messageCount = %d, want 1 (re-verification e-mail after e-mail change)", srv.messageCount())
+	}
+}
+
+// TestUpdateUserSendsVerificationEmailForUnverifiedUser covers the
+// "send verification e-mail" branch for an already-unverified account (e.g. a
+// name-only edit, no e-mail change). This used to crash with a nil-pointer
+// dereference at `*user.VerificationCode = verificationCode`, since the
+// freshly-refetched user has a nil VerificationCode until one is allocated.
+func TestUpdateUserSendsVerificationEmailForUnverifiedUser(t *testing.T) {
+	setupControllersDB(t)
+	config.ConfigFile.SMTPEnabled = true
+	t.Cleanup(func() { config.ConfigFile.SMTPEnabled = false })
+
+	user := newUserWithPassword(t, "CorrectHorse1!")
+	var verifiedBool bool = false
+	user.Verified = &verifiedBool
+	user, err := database.UpdateUserInDB(user)
+	if err != nil {
+		t.Fatalf("failed to mark user unverified: %v", err)
+	}
+
+	srv := startFakeSMTPServer(t)
+	configureTestSMTP(t, srv)
+
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	body := `{"email":"` + *user.Email + `","password_original":"CorrectHorse1!"}`
+	code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil)
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	if resp["verified"] != false {
+		t.Errorf("verified = %v, want false", resp["verified"])
+	}
+	if srv.messageCount() != 1 {
+		t.Errorf("messageCount = %d, want 1", srv.messageCount())
 	}
 }
 
@@ -1048,12 +1080,6 @@ func TestAPIChangePasswordWeakPassword(t *testing.T) {
 		t.Fatalf("status = %d, want 400; body=%v", code, resp)
 	}
 }
-
-// NOTE: a test exercising UpdateUser's "send verification e-mail to an
-// unverified user" branch (SMTPEnabled + user.Verified == false) was removed
-// here — it crashes the process with a nil-pointer dereference at
-// `*user.VerificationCode = verificationCode` in controllers/user.go, since
-// the freshly-refetched user has a nil VerificationCode. See docs/wip.md.
 
 func TestUpdateUserProfileImageFailure(t *testing.T) {
 	setupControllersDB(t)

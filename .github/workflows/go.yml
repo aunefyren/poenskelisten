@@ -39,7 +39,12 @@ jobs:
         run: go vet ./...
 
       - name: Test (race + coverage)
-        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+        # -timeout is raised from Go's 10m default: -race adds heavy instrumentation
+        # to bcrypt's blowfish key expansion, and the controllers package's real
+        # bcrypt-hashing test helpers (newUserWithPassword, createTestUserWithPassword)
+        # push its runtime to ~11m under race, occasionally tripping the default and
+        # failing CI with an unhelpful "test timed out" panic instead of a real failure.
+        run: go test -race -covermode=atomic -coverprofile=coverage.out -timeout 20m ./...
 
       - name: Extract coverage total
         run: |

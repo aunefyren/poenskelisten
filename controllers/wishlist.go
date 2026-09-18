@@ -431,7 +431,7 @@ func GetWishlists(context *gin.Context) {
 			context.Abort()
 			return
 		} else if !MembershipStatus {
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not a member of this group."})
+			context.JSON(http.StatusBadRequest, gin.H{"error": "You are not a member of this group."})
 			context.Abort()
 			return
 		}
@@ -527,7 +527,7 @@ func GetWishlists(context *gin.Context) {
 	topString, okay := context.GetQuery("top")
 	if okay {
 		topInt, err := strconv.Atoi(topString)
-		if err == nil && topInt > 0 && (len(wishlistObjects)-1) > topInt {
+		if err == nil && topInt > 0 && len(wishlistObjects) > topInt {
 			wishlistObjects = wishlistObjects[0:topInt]
 		}
 	}
@@ -1077,11 +1077,7 @@ func ConvertWishlistToWishlistObject(wishlist models.Wishlist, RequestUserID *uu
 		return models.WishlistUser{}, err
 	}
 
-	groupObjects, err := ConvertGroupsToGroupObjects(groups)
-	if err != nil {
-		logger.Log.Error("Failed to convert groups to groups objects. Returning. Error: " + err.Error())
-		return models.WishlistUser{}, err
-	}
+	groupObjects := ConvertGroupsToGroupObjects(groups)
 
 	wishlistsCollabs, err := database.GetWishlistCollaboratorsFromWishlist(wishlist.ID)
 	if err != nil {

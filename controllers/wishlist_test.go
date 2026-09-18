@@ -292,11 +292,8 @@ func TestGetWishlistsGroupFilterNotMember(t *testing.T) {
 	group := createTestGroup(t, owner.ID)
 
 	code, _ := wlDo(GetWishlists, "GET", "/api/auth/wishlists?group="+group.ID.String(), "", authHeader(t, stranger.ID, false), nil)
-	// The handler reports non-membership as a 500 (an existing inconsistency
-	// with the 400 used elsewhere for the same condition) - asserting the
-	// actual behavior here, not the "should be" status.
-	if code != 500 {
-		t.Fatalf("status = %d, want 500 for a non-member group filter (see note above)", code)
+	if code != 400 {
+		t.Fatalf("status = %d, want 400 for a non-member group filter", code)
 	}
 }
 
@@ -783,9 +780,9 @@ func TestGetWishlistsGroupFilterBadUUID(t *testing.T) {
 	}
 }
 
-// TestGetWishlistsTopLimitOffByOne pins down the documented bug in docs/wip.md:
-// with exactly top+1 items, the filter fails to truncate at all.
-func TestGetWishlistsTopLimitOffByOne(t *testing.T) {
+// TestGetWishlistsTopLimitExactlyOneOver covers the boundary case where the
+// result count is exactly top+1: the ?top= filter must still truncate.
+func TestGetWishlistsTopLimitExactlyOneOver(t *testing.T) {
 	setupControllersDB(t)
 	owner := createTestUser(t)
 	for i := 0; i < 3; i++ {
@@ -797,8 +794,8 @@ func TestGetWishlistsTopLimitOffByOne(t *testing.T) {
 		t.Fatalf("status = %d, want 200; body=%v", code, resp)
 	}
 	list, ok := resp["wishlists"].([]interface{})
-	if !ok || len(list) != 3 {
-		t.Fatalf("wishlists = %v, want all 3 (documented off-by-one bug: top=2 should truncate to 2 but doesn't at exactly top+1 items)", resp["wishlists"])
+	if !ok || len(list) != 2 {
+		t.Fatalf("wishlists = %v, want exactly 2 (top=2 should truncate)", resp["wishlists"])
 	}
 }
 

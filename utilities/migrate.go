@@ -3,6 +3,7 @@ package utilities
 import (
 	"aunefyren/poenskelisten/logger"
 	"bufio"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -62,7 +63,10 @@ func MigrateSQL(sqlContent *bufio.Scanner) (modifiedSQL2 string, err error) {
 
 		if currentMode == "insert" && valueLineRegEx.Match([]byte(line)) {
 			logger.Log.Info("INSERT MODE ON TABLE: " + currentTable)
-			modifiedLine, IDMaps = ReplaceValues(modifiedLine, currentTable, IDMaps, false)
+			modifiedLine, IDMaps, err = ReplaceValues(modifiedLine, currentTable, IDMaps, false)
+			if err != nil {
+				return "", err
+			}
 		} else if currentMode == "insert" && insertIntoRegEx.Match([]byte(line)) {
 			modifiedLine = ChangeColumns(modifiedLine, currentTable)
 		} else if currentMode == "create" {
@@ -97,7 +101,10 @@ func MigrateSQL(sqlContent *bufio.Scanner) (modifiedSQL2 string, err error) {
 
 		if currentMode == "insert" && valueLineRegEx.Match([]byte(line)) {
 			logger.Log.Info("INSERT MODE ON TABLE: " + currentTable)
-			modifiedLine, IDMaps = ReplaceValues(modifiedLine, currentTable, IDMaps, true)
+			modifiedLine, IDMaps, err = ReplaceValues(modifiedLine, currentTable, IDMaps, true)
+			if err != nil {
+				return "", err
+			}
 		} else if currentMode == "create" {
 			logger.Log.Info("CREATE MODE ON TABLE: " + currentTable)
 			modifiedLine = ChangeColumns(modifiedLine, currentTable)
@@ -176,7 +183,7 @@ func ChangeColumns(line string, currentTable string) (newLine string) {
 	return
 }
 
-func ReplaceValues(line string, currentTable string, IDMaps []IDMap, secondRun bool) (newLine string, UpdatedIDMaps []IDMap) {
+func ReplaceValues(line string, currentTable string, IDMaps []IDMap, secondRun bool) (newLine string, UpdatedIDMaps []IDMap, err error) {
 	newLine = line
 	UpdatedIDMaps = IDMaps
 
@@ -236,43 +243,49 @@ func ReplaceValues(line string, currentTable string, IDMaps []IDMap, secondRun b
 		values[0] = "'" + newIDMap.UUID + "'"
 	} else {
 
+		// The column indices below encode the exact column order of the old,
+		// pre-UUID schema (undocumented anywhere else - see docs/wip.md). If a
+		// real dump's column count doesn't match what's assumed here, mapColumn
+		// fails loudly instead of letting a stale index either panic or, worse,
+		// silently substitute the wrong column's value.
 		switch currentTable {
 		case "groups":
-			newUUID := MatchIDToUUID(UpdatedIDMaps, "users", values[7])
-			values[7] = newUUID
+			err = mapColumn(values, 7, UpdatedIDMaps, "users", currentTable)
 		case "group_memberships":
-			newUUID := MatchIDToUUID(UpdatedIDMaps, "groups", values[4])
-			values[4] = newUUID
-			newUUID = MatchIDToUUID(UpdatedIDMaps, "users", values[6])
-			values[6] = newUUID
+			err = mapColumn(values, 4, UpdatedIDMaps, "groups", currentTable)
+			if err == nil {
+				err = mapColumn(values, 6, UpdatedIDMaps, "users", currentTable)
+			}
 		case "invites":
-			newUUID := MatchIDToUUID(UpdatedIDMaps, "users", values[6])
-			values[6] = newUUID
+			err = mapColumn(values, 6, UpdatedIDMaps, "users", currentTable)
 		case "wishes":
-			newUUID := MatchIDToUUID(UpdatedIDMaps, "users", values[7])
-			values[7] = newUUID
-			newUUID = MatchIDToUUID(UpdatedIDMaps, "wishlists", values[9])
-			values[9] = newUUID
+			err = mapColumn(values, 7, UpdatedIDMaps, "users", currentTable)
+			if err == nil {
+				err = mapColumn(values, 9, UpdatedIDMaps, "wishlists", currentTable)
+			}
 		case "wishlists":
-			newUUID := MatchIDToUUID(UpdatedIDMaps, "users", values[7])
-			values[7] = newUUID
+			err = mapColumn(values, 7, UpdatedIDMaps, "users", currentTable)
 		case "wishlist_collaborators":
-			newUUID := MatchIDToUUID(UpdatedIDMaps, "users", values[4])
-			values[4] = newUUID
-			newUUID = MatchIDToUUID(UpdatedIDMaps, "wishlists", values[6])
-			values[6] = newUUID
+			err = mapColumn(values, 4, UpdatedIDMaps, "users", currentTable)
+			if err == nil {
+				err = mapColumn(values, 6, UpdatedIDMaps, "wishlists", currentTable)
+			}
 		case "wishlist_memberships":
-			newUUID := MatchIDToUUID(UpdatedIDMaps, "groups", values[4])
-			values[4] = newUUID
-			newUUID = MatchIDToUUID(UpdatedIDMaps, "wishlists", values[6])
-			values[6] = newUUID
+			err = mapColumn(values, 4, UpdatedIDMaps, "groups", currentTable)
+			if err == nil {
+				err = mapColumn(values, 6, UpdatedIDMaps, "wishlists", currentTable)
+			}
 		case "wish_claims":
-			newUUID := MatchIDToUUID(UpdatedIDMaps, "wishes", values[4])
-			values[4] = newUUID
-			newUUID = MatchIDToUUID(UpdatedIDMaps, "users", values[5])
-			values[5] = newUUID
+			err = mapColumn(values, 4, UpdatedIDMaps, "wishes", currentTable)
+			if err == nil {
+				err = mapColumn(values, 5, UpdatedIDMaps, "users", currentTable)
+			}
 		default:
 			logger.Log.Info("No column updates on: " + currentTable)
+		}
+
+		if err != nil {
+			return "", UpdatedIDMaps, err
 		}
 
 	}
@@ -286,7 +299,23 @@ func ReplaceValues(line string, currentTable string, IDMaps []IDMap, secondRun b
 	}
 	newLineTwo += endString
 
-	return newLineTwo, UpdatedIDMaps
+	return newLineTwo, UpdatedIDMaps, nil
+}
+
+// mapColumn rewrites values[idx] in place from its legacy numeric ID to the
+// migrated UUID for referencedTable. It guards against the hardcoded
+// per-table column-index mapping in ReplaceValues no longer matching a real
+// dump's column count, which would otherwise panic with an unhelpful
+// out-of-range index instead of identifying the actual problem.
+func mapColumn(values []string, idx int, idMaps []IDMap, referencedTable string, currentTable string) error {
+	if idx < 0 || idx >= len(values) {
+		return fmt.Errorf(
+			"legacy-schema column mapping for table '%s' expected a column at index %d, but this row only has %d columns - the hardcoded mapping in ReplaceValues no longer matches this dump",
+			currentTable, idx, len(values),
+		)
+	}
+	values[idx] = MatchIDToUUID(idMaps, referencedTable, values[idx])
+	return nil
 }
 
 func MatchIDToUUID(IDMaps []IDMap, currentTable string, ID string) string {

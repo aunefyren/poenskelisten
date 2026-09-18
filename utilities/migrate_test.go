@@ -160,6 +160,31 @@ func TestMigrateSQLStopsAtAlterTable(t *testing.T) {
 	}
 }
 
+// TestMigrateSQLColumnMappingOutOfRange covers the defensive guard in
+// mapColumn: the per-table column-index mapping in ReplaceValues (e.g.
+// "groups" expects an owner ID at column index 7) encodes an undocumented,
+// unverified legacy schema (see docs/wip.md). If a real dump's row for one of
+// those special-cased tables has fewer columns than assumed, MigrateSQL must
+// return a clear error identifying the mismatch instead of panicking with an
+// unhelpful out-of-range index or silently rewriting the wrong column.
+func TestMigrateSQLColumnMappingOutOfRange(t *testing.T) {
+	input := "CREATE TABLE `groups` (\n" +
+		"`id` bigint(20) UNSIGNED NOT NULL\n" +
+		");\n" +
+		"INSERT INTO `groups` (`id`, `name`, `owner`) VALUES\n" +
+		"(1, 'Family', 5);\n" +
+		"\n"
+
+	scanner := bufio.NewScanner(strings.NewReader(input))
+	_, err := MigrateSQL(scanner)
+	if err == nil {
+		t.Fatal("expected MigrateSQL to return an error for a row too short for the groups column mapping")
+	}
+	if !strings.Contains(err.Error(), "groups") {
+		t.Errorf("error = %q, want it to name the table", err.Error())
+	}
+}
+
 func TestMigrateDBToV2(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Chdir(t.TempDir())
