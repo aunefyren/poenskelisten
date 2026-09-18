@@ -829,9 +829,18 @@ func TestAPIGetWish_NotMember(t *testing.T) {
 	}
 }
 
-// NOTE: a "wish not found" case for APIGetWish is intentionally not tested
-// here - it currently panics (nil pointer dereference calling err.Error() on
-// a nil err) rather than returning 400. See docs/wip.md.
+func TestAPIGetWish_UnknownWishlist(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+
+	w, ctx := wishCtx("GET", "/api/wishes/"+uuid.NewString(), "")
+	ctx.Params = gin.Params{{Key: "wish_id", Value: uuid.NewString()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	APIGetWish(ctx)
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a wish with no matching wishlist; body=%s", w.Code, w.Body.String())
+	}
+}
 
 func TestAPIGetWish_MembershipCheckDBFailure(t *testing.T) {
 	// Migrate without the WishlistMembership/Group/GroupMembership tables so
@@ -965,6 +974,26 @@ func TestConvertWishToWishObject_WithCategory(t *testing.T) {
 	}
 }
 
+// TestConvertWishToWishObject_DanglingWishlistIDErrors covers a wish whose
+// WishlistID points at a wishlist that no longer exists. This used to panic
+// (a nil-pointer dereference on *wishlist.Claimable), since
+// database.GetWishlistByWishlistID returns a zero-value Wishlist with a nil
+// Claimable and a false "found" bool rather than an error.
+func TestConvertWishToWishObject_DanglingWishlistIDErrors(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+
+	wish := models.Wish{Name: "Orphaned wish", Enabled: true, OwnerID: owner.ID, WishlistID: uuid.New()}
+	wish.ID = uuid.New()
+	if _, err := database.CreateWishInDB(wish); err != nil {
+		t.Fatalf("failed to create wish: %v", err)
+	}
+
+	if _, err := ConvertWishToWishObject(wish, &owner.ID); err == nil {
+		t.Error("expected an error for a wish with a dangling wishlist ID, got nil")
+	}
+}
+
 func TestConvertWishesToWishObjects_SkipsUnconvertible(t *testing.T) {
 	setupControllersDB(t)
 	owner := createTestUser(t)
@@ -974,9 +1003,7 @@ func TestConvertWishesToWishObjects_SkipsUnconvertible(t *testing.T) {
 	// A wish whose owner no longer exists can't be converted
 	// (ConvertWishToWishObject needs to resolve the owner via GetUserInformation
 	// first, which errors cleanly for an unknown user) - it should be skipped
-	// rather than failing the whole batch. Note: a dangling WishlistID instead
-	// of a dangling OwnerID would panic here rather than erroring cleanly - see
-	// the ConvertWishToWishObject bug noted in docs/wip.md.
+	// rather than failing the whole batch.
 	broken := models.Wish{Name: "Broken", Enabled: true, OwnerID: uuid.New(), WishlistID: wishlist.ID}
 	broken.ID = uuid.New()
 	if _, err := database.CreateWishInDB(broken); err != nil {
@@ -1081,8 +1108,6 @@ func TestDeleteWish_CollaboratorSuccess(t *testing.T) {
 	}
 }
 
-// TestDeleteWish_UnknownID pins down the currently-buggy behavior documented in
-// docs/wip.md: a nonexistent wish returns 500 rather than 404/400.
 func TestDeleteWish_UnknownID(t *testing.T) {
 	setupControllersDB(t)
 	owner := createTestUser(t)
@@ -1091,8 +1116,8 @@ func TestDeleteWish_UnknownID(t *testing.T) {
 	ctx.Params = gin.Params{{Key: "wish_id", Value: uuid.NewString()}}
 	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
 	DeleteWish(ctx)
-	if w.Code != 500 {
-		t.Fatalf("status = %d, want 500 (documented bug, see docs/wip.md); body=%s", w.Code, w.Body.String())
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a nonexistent wish; body=%s", w.Code, w.Body.String())
 	}
 }
 
