@@ -436,8 +436,7 @@ func RemoveFromGroup(context *gin.Context) {
 // The user's membership to the group is verified, and the user's ownership of the group is also verified to ensure that the user is not the owner of the group.
 // If everything checks out, the function deletes the user's membership record from the database and returns a success message along with an updated list of groups with the owner to the caller.
 func RemoveSelfFromGroup(context *gin.Context) {
-	// Bind groupmembership request and get group ID from URL parameter
-	var groupMembershipRequest models.GroupMembership
+	// Get group ID from URL parameter
 	groupID := context.Param("group_id")
 
 	// Get user ID from authorization header
@@ -473,7 +472,7 @@ func RemoveSelfFromGroup(context *gin.Context) {
 	}
 
 	// Verify group is not owned by requester
-	ownershipStatus, err := database.VerifyUserOwnershipToGroup(groupMembershipRequest.MemberID, groupIDInt)
+	ownershipStatus, err := database.VerifyUserOwnershipToGroup(userID, groupIDInt)
 	if err != nil {
 		logger.Log.Error("Failed to verify ownership of group. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of group."})
@@ -696,13 +695,7 @@ func GetGroupObjects(userID uuid.UUID) ([]models.GroupUser, error) {
 		return []models.GroupUser{}, errors.New("Failed to get groups from database.")
 	}
 
-	groupObjects, err := ConvertGroupsToGroupObjects(groups)
-	if err != nil {
-		logger.Log.Error("Failed to convert groups to group objects. Error: " + err.Error())
-		return []models.GroupUser{}, errors.New("Failed to convert groups to group objects.")
-	}
-
-	return groupObjects, nil
+	return ConvertGroupsToGroupObjects(groups), nil
 
 }
 
@@ -1039,9 +1032,10 @@ func ConvertGroupToGroupObject(group models.Group) (groupObject models.GroupUser
 	return
 }
 
-func ConvertGroupsToGroupObjects(groups []models.Group) (groupObjects []models.GroupUser, err error) {
-	err = nil
-	groupObjects = []models.GroupUser{}
+// ConvertGroupsToGroupObjects converts each group it can and silently skips the
+// rest (e.g. one whose owner no longer exists), so it never fails as a whole.
+func ConvertGroupsToGroupObjects(groups []models.Group) []models.GroupUser {
+	groupObjects := []models.GroupUser{}
 
 	for _, group := range groups {
 		groupObject, err := ConvertGroupToGroupObject(group)
@@ -1052,7 +1046,7 @@ func ConvertGroupsToGroupObjects(groups []models.Group) (groupObjects []models.G
 		groupObjects = append(groupObjects, groupObject)
 	}
 
-	return
+	return groupObjects
 }
 
 func APIAddWishlistsToGroup(context *gin.Context) {

@@ -604,6 +604,9 @@ func UpdateUser(context *gin.Context) {
 			return
 		}
 
+		var verifiedBool bool = false
+		userOriginal.Verified = &verifiedBool
+
 		*userOriginal.Email = userUpdateRequest.Email
 
 	}
@@ -658,7 +661,7 @@ func UpdateUser(context *gin.Context) {
 			return
 		}
 
-		*user.VerificationCode = verificationCode
+		user.VerificationCode = &verificationCode
 
 		logger.Log.Debug("Sending verification e-mail to new user: " + user.FirstName + " " + user.LastName + ".")
 

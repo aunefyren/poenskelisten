@@ -77,10 +77,6 @@ func OIDCCallback(ctx *gin.Context) {
 		return
 	}
 
-	// The one-time flow cookies are consumed regardless of outcome.
-	defer clearFlowCookie(ctx, oidcStateCookie)
-	defer clearFlowCookie(ctx, oidcNonceCookie)
-
 	// Validate state (CSRF protection).
 	stateParam := ctx.Query("state")
 	stateCookie, _ := ctx.Cookie(oidcStateCookie)
@@ -164,6 +160,11 @@ func OIDCCallback(ctx *gin.Context) {
 		return
 	}
 
+	// gin finalizes response headers at redirect time, so the one-time flow
+	// cookies must be cleared before Redirect is called, not deferred after it.
+	clearFlowCookie(ctx, oidcStateCookie)
+	clearFlowCookie(ctx, oidcNonceCookie)
+
 	ctx.Redirect(http.StatusFound, "/")
 }
 
@@ -231,5 +232,11 @@ func clearFlowCookie(ctx *gin.Context, name string) {
 }
 
 func redirectLoginError(ctx *gin.Context, message string) {
+	// Cookies must be cleared before Redirect is called: gin finalizes response
+	// headers at that point, so a deferred SetCookie afterwards is too late.
+	// Clearing cookies that were never set (e.g. failures before the OIDC flow
+	// started) is a harmless no-op.
+	clearFlowCookie(ctx, oidcStateCookie)
+	clearFlowCookie(ctx, oidcNonceCookie)
 	ctx.Redirect(http.StatusFound, "/login?error="+url.QueryEscape(message))
 }

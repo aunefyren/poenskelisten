@@ -139,10 +139,13 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 		return models.WishObject{}, err
 	}
 
-	_, wishlist, err := database.GetWishlistByWishlistID(wish.WishlistID)
+	wishlistFound, wishlist, err := database.GetWishlistByWishlistID(wish.WishlistID)
 	if err != nil {
 		logger.Log.Error("Failed to get wishlist for wish'" + wish.ID.String() + "'. Returning. Error: " + err.Error())
 		return models.WishObject{}, err
+	} else if !wishlistFound {
+		logger.Log.Error("Failed to find wishlist '" + wish.WishlistID.String() + "' for wish '" + wish.ID.String() + "'. Returning.")
+		return models.WishObject{}, errors.New("wishlist not found for wish")
 	}
 
 	wishlistOwnerUser, err := database.GetUserInformation(wishlist.OwnerID)
@@ -494,7 +497,7 @@ func DeleteWish(context *gin.Context) {
 		context.Abort()
 		return
 	} else if wish == nil {
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find wish."})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wish."})
 		context.Abort()
 		return
 	}
@@ -1197,7 +1200,7 @@ func APIGetWish(context *gin.Context) {
 		context.Abort()
 		return
 	} else if wishlistID == nil {
-		logger.Log.Error("Failed to find wishlist. Error: " + err.Error())
+		logger.Log.Error("Failed to find wishlist for wish.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
 		context.Abort()
 		return

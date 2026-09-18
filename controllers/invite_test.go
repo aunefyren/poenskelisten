@@ -205,10 +205,7 @@ func TestConvertInvitesToInviteObjectsSkipsBroken(t *testing.T) {
 		t.Fatalf("failed to set a dangling recipient: %v", result.Error)
 	}
 
-	objects, err := ConvertInvitesToInviteObjects([]models.Invite{good, broken})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	objects := ConvertInvitesToInviteObjects([]models.Invite{good, broken})
 	if len(objects) != 1 {
 		t.Fatalf("objects = %v, want exactly the one good invite (the broken one should be skipped)", objects)
 	}

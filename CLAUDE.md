@@ -8,6 +8,8 @@ Pønskelisten — a self-hosted wishlist-sharing web app. Go/Gin backend (module
 
 **Read `docs/development.md` before touching any code.** It has the naming, error-handling, and testing conventions this repo expects, and every change should follow them.
 
+**Read `docs/wip.md` at the start of every session.** It tracks known bugs and intentional coverage gaps found but not yet fixed — check it before assuming behavior is correct or coverage gaps are accidental, and keep it in sync (remove an entry once its bug is fixed) as you work.
+
 Never run `git` commands (commit, push, branch, reset, etc.) in this repo — git is managed by the maintainer.
 
 ## Commands
