@@ -156,3 +156,53 @@ func TestGetTokenClaims(t *testing.T) {
 		t.Errorf("claims mismatch: %+v", claims)
 	}
 }
+
+func TestAuthMiddlewareRejectsMissingToken(t *testing.T) {
+	setupMiddlewareConfig(t)
+
+	ctx := newContext("")
+	Auth(false)(ctx)
+
+	if !ctx.IsAborted() {
+		t.Error("expected the request to be aborted without a token")
+	}
+	if ctx.Writer.Status() != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", ctx.Writer.Status())
+	}
+}
+
+func TestAuthMiddlewareAllowsValidToken(t *testing.T) {
+	setupMiddlewareConfig(t)
+
+	ctx := newContext("Bearer " + apiTokenForUser(t, uuid.New(), false))
+	Auth(false)(ctx)
+
+	if ctx.IsAborted() {
+		t.Error("expected a valid token to not abort the request")
+	}
+}
+
+func TestAuthMiddlewareRejectsNonAdminForAdminRoute(t *testing.T) {
+	setupMiddlewareConfig(t)
+
+	ctx := newContext("Bearer " + apiTokenForUser(t, uuid.New(), false))
+	Auth(true)(ctx)
+
+	if !ctx.IsAborted() {
+		t.Error("expected a non-admin token to be rejected on an admin-only route")
+	}
+	if ctx.Writer.Status() != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", ctx.Writer.Status())
+	}
+}
+
+func TestAuthMiddlewareAllowsAdminForAdminRoute(t *testing.T) {
+	setupMiddlewareConfig(t)
+
+	ctx := newContext("Bearer " + apiTokenForUser(t, uuid.New(), true))
+	Auth(true)(ctx)
+
+	if ctx.IsAborted() {
+		t.Error("expected an admin token to be allowed on an admin-only route")
+	}
+}

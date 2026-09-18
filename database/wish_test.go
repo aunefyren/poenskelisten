@@ -196,3 +196,34 @@ func TestGetWishlistByWishID(t *testing.T) {
 		t.Fatalf("expected to resolve wishlist from wish")
 	}
 }
+
+func TestCreateWishInDBFailure(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	if err := Instance.Migrator().DropTable(&models.Wish{}); err != nil {
+		t.Fatalf("failed to drop wishes table: %v", err)
+	}
+
+	wish := models.Wish{Name: "Test", Enabled: true, OwnerID: owner.ID, WishlistID: wishlist.ID}
+	wish.ID = uuid.New()
+	if _, err := CreateWishInDB(wish); err == nil {
+		t.Error("expected an error when the wishes table is unavailable")
+	}
+}
+
+func TestCreateWishClaimInDBFailure(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wish := createWishForOwner(t, wishlist.ID, owner.ID, "Test")
+	if err := Instance.Migrator().DropTable(&models.WishClaim{}); err != nil {
+		t.Fatalf("failed to drop wish_claims table: %v", err)
+	}
+
+	claim := models.WishClaim{WishID: wish.ID, UserID: owner.ID, Enabled: true}
+	claim.ID = uuid.New()
+	if _, err := CreateWishClaimInDB(claim); err == nil {
+		t.Error("expected an error when the wish_claims table is unavailable")
+	}
+}
