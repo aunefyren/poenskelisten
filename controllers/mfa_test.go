@@ -582,6 +582,66 @@ func TestUpdateServerSettingsSuccess(t *testing.T) {
 	}
 }
 
+func TestEnrollMFAEncryptionFailure(t *testing.T) {
+	setupControllersDB(t)
+	orig := config.ConfigFile.PrivateKey
+	config.ConfigFile.PrivateKey = ""
+	t.Cleanup(func() { config.ConfigFile.PrivateKey = orig })
+	user := createTestUser(t)
+
+	code, _ := runJSONHandler(APIEnrollMFA, "POST", "/api/mfa/enroll", "", map[string]string{
+		"Authorization": authHeader(t, user.ID, false),
+	}, nil)
+	if code != 500 {
+		t.Errorf("status = %d, want 500 when the server has no private key configured to encrypt the TOTP secret", code)
+	}
+}
+
+func TestDisableMFAUserNotFound(t *testing.T) {
+	setupControllersDB(t)
+
+	// A well-formed access token for a user ID that was never created in the DB.
+	code, _ := runJSONHandler(APIDisableMFA, "POST", "/api/mfa/disable", `{"password":"x","code":"000000"}`, map[string]string{
+		"Authorization": authHeader(t, uuid.New(), false),
+	}, nil)
+	if code != 500 {
+		t.Errorf("status = %d, want 500 when the token's user doesn't exist", code)
+	}
+}
+
+func TestValidateMFAUserNotFound(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+
+	// A well-formed challenge token for a user ID that was never created in the DB.
+	challenge, err := auth.GenerateMFAChallengeToken(uuid.New())
+	if err != nil {
+		t.Fatalf("failed to generate challenge token: %v", err)
+	}
+	body := `{"mfa_token":"` + challenge + `","code":"123456"}`
+	code, _ := runJSONHandler(APIValidateMFA, "POST", "/api/mfa/validate", body, nil, nil)
+	if code != 500 {
+		t.Errorf("status = %d, want 500 when the challenge token's user doesn't exist", code)
+	}
+}
+
+func TestUpdateServerSettingsSaveFailure(t *testing.T) {
+	setupControllersDB(t)
+	origEnforced := config.ConfigFile.MFAEnforced
+	t.Cleanup(func() { config.ConfigFile.MFAEnforced = origEnforced })
+
+	// No "files" directory present, so config.SaveConfig()'s WriteFile fails
+	// and the handler takes its 500 path (see currency_test.go for the same
+	// pattern: configFilePath is a fixed absolute path resolved once at
+	// process start, so this is a plain directory-presence check, not a chdir).
+	os.RemoveAll("files")
+
+	code, _ := runJSONHandler(APIUpdateServerSettings, "PUT", "/api/admin/settings", `{"mfa_enforced":true}`, nil, nil)
+	if code != 500 {
+		t.Errorf("status = %d, want 500 when the config file can't be written", code)
+	}
+}
+
 func TestVerifySecondFactorRecoveryDisabledByConfig(t *testing.T) {
 	setupControllersDB(t)
 	enableTOTPEncryption(t)

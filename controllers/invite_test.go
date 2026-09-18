@@ -38,6 +38,34 @@ func TestRegisterInvite(t *testing.T) {
 	}
 }
 
+func TestRegisterInviteDatabaseFailure(t *testing.T) {
+	// Migrate without the Invite table so GenerateRandomInvite's insert fails.
+	setupControllersDB(t, &models.User{})
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("POST", "/api/admin/invites", nil)
+	RegisterInvite(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the invite table is unavailable; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetAllInvitesDatabaseFailure(t *testing.T) {
+	// Migrate without the Invite table so GetAllEnabledInvites fails.
+	setupControllersDB(t, &models.User{})
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("GET", "/api/admin/invites", nil)
+	APIGetAllInvites(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the invite table is unavailable; body=%s", w.Code, w.Body.String())
+	}
+}
+
 func TestGetAllInvites(t *testing.T) {
 	setupControllersDB(t)
 	createTestInvite(t)

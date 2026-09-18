@@ -1,8 +1,22 @@
 package database
 
 import (
+	"aunefyren/poenskelisten/logger"
+	"aunefyren/poenskelisten/models"
+	"database/sql"
 	"testing"
+
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
+
+func init() {
+	if logger.Log == nil {
+		logger.Log = logrus.New()
+	}
+}
 
 func TestUserVerificationFlow(t *testing.T) {
 	setupTestDB(t)
@@ -54,4 +68,64 @@ func TestSetUserVerification(t *testing.T) {
 	if verified, err := VerifyUserIsVerified(user.ID); err != nil || !verified {
 		t.Fatalf("expected user to be verified (verified=%v err=%v)", verified, err)
 	}
+}
+
+func TestMigrate(t *testing.T) {
+	dbSQL, err := sql.Open("sqlite", "file:"+uuid.NewString()+"?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatalf("failed to open in-memory sqlite: %v", err)
+	}
+	t.Cleanup(func() { dbSQL.Close() })
+	dbSQL.SetMaxOpenConns(1)
+
+	instance, err := gorm.Open(sqlite.Dialector{Conn: dbSQL}, &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open gorm: %v", err)
+	}
+	Instance = instance
+
+	// Migrate() panics on failure; a clean unmigrated DB should succeed.
+	Migrate()
+
+	if !Instance.Migrator().HasTable(&models.User{}) {
+		t.Error("expected the users table to exist after Migrate()")
+	}
+	if !Instance.Migrator().HasTable(&models.OAuthClient{}) {
+		t.Error("expected the o_auth_clients table to exist after Migrate()")
+	}
+
+	clients, err := GetAllOAuthClients()
+	if err != nil {
+		t.Fatalf("GetAllOAuthClients error: %v", err)
+	}
+	found := false
+	for _, c := range clients {
+		if c.IsFirstParty {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected Migrate() to have seeded the first-party client")
+	}
+}
+
+func TestMigratePanicsOnFailure(t *testing.T) {
+	// A closed connection makes every AutoMigrate call fail.
+	dbSQL, err := sql.Open("sqlite", "file:"+uuid.NewString()+"?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatalf("failed to open in-memory sqlite: %v", err)
+	}
+	instance, err := gorm.Open(sqlite.Dialector{Conn: dbSQL}, &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open gorm: %v", err)
+	}
+	dbSQL.Close()
+	Instance = instance
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected Migrate() to panic when the underlying connection is closed")
+		}
+	}()
+	Migrate()
 }

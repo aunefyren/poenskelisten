@@ -1,8 +1,12 @@
 package middlewares
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestRateLimiterAllowsUpToMax(t *testing.T) {
@@ -45,5 +49,43 @@ func TestRateLimiterWindowExpiry(t *testing.T) {
 	time.Sleep(30 * time.Millisecond)
 	if !limiter.allow("k") {
 		t.Error("request after the window should be allowed again")
+	}
+}
+
+func rateLimitTestContext() *gin.Context {
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	ctx.Request.RemoteAddr = "203.0.113.1:12345"
+	return ctx
+}
+
+func TestRateLimitMiddlewareAllowsWithinLimit(t *testing.T) {
+	handler := RateLimit(2, time.Minute)
+
+	ctx := rateLimitTestContext()
+	handler(ctx)
+	if ctx.IsAborted() {
+		t.Error("first request should not be aborted")
+	}
+}
+
+func TestRateLimitMiddlewareBlocksOverLimit(t *testing.T) {
+	handler := RateLimit(1, time.Minute)
+
+	first := rateLimitTestContext()
+	handler(first)
+	if first.IsAborted() {
+		t.Fatal("first request should not be aborted")
+	}
+
+	// Same middleware instance (same limiter state), same client IP.
+	second := rateLimitTestContext()
+	handler(second)
+	if !second.IsAborted() {
+		t.Error("second request over the limit should be aborted")
+	}
+	if second.Writer.Status() != http.StatusTooManyRequests {
+		t.Errorf("status = %d, want 429", second.Writer.Status())
 	}
 }

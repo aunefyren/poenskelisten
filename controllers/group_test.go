@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/models"
 	"encoding/json"
 	"net/http/httptest"
 	"strings"
@@ -150,6 +152,46 @@ func TestRegisterGroupUnknownMember(t *testing.T) {
 	}
 }
 
+func TestRegisterGroupNameInvalidCharacters(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+
+	ctx, w := groupTestContext("POST", "/api/groups", `{"name":"<script>","description":"A group"}`)
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RegisterGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a name with disallowed characters", w.Code)
+	}
+}
+
+func TestRegisterGroupDescriptionInvalidCharacters(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+
+	ctx, w := groupTestContext("POST", "/api/groups", `{"name":"Valid Name","description":"<script>bad</script>"}`)
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RegisterGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a description with disallowed characters", w.Code)
+	}
+}
+
+func TestRegisterGroupWishlistNotFound(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+
+	reqBody := `{"name":"Team Group","description":"desc","wishlists":["` + uuid.NewString() + `"]}`
+	ctx, w := groupTestContext("POST", "/api/groups", reqBody)
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RegisterGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a nonexistent wishlist ID", w.Code)
+	}
+}
+
 func TestRegisterGroupWishlistNotOwned(t *testing.T) {
 	setupControllersDB(t)
 	owner := createTestUser(t)
@@ -231,6 +273,55 @@ func TestJoinGroupUnknownUser(t *testing.T) {
 
 	if w.Code != 400 {
 		t.Fatalf("status = %d, want 400 for an unknown user", w.Code)
+	}
+}
+
+func TestJoinGroupInvalidBody(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String()+"/join", `not-json`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	JoinGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for invalid JSON", w.Code)
+	}
+}
+
+func TestJoinGroupMissingAuth(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	member := createTestUser(t)
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String()+"/join", `{"members":["`+member.ID.String()+`"]}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	JoinGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 without auth", w.Code)
+	}
+}
+
+func TestJoinGroupCallerNotOwner(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+	nonOwnerMember := createTestUser(t)
+	addGroupMembership(t, group.ID, nonOwnerMember.ID)
+	newUser := createTestUser(t)
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String()+"/join", `{"members":["`+newUser.ID.String()+`"]}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, nonOwnerMember.ID, false))
+	JoinGroup(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the caller is a member but not the owner (current handler behavior)", w.Code)
 	}
 }
 
@@ -318,6 +409,51 @@ func TestRemoveFromGroupMembershipMissing(t *testing.T) {
 
 	if w.Code != 400 {
 		t.Fatalf("status = %d, want 400 when the target isn't a member", w.Code)
+	}
+}
+
+func TestRemoveFromGroupInvalidBody(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String()+"/remove", `not-json`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RemoveFromGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for invalid JSON", w.Code)
+	}
+}
+
+func TestRemoveFromGroupInvalidGroupID(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	member := createTestUser(t)
+
+	ctx, w := groupTestContext("POST", "/api/groups/not-a-uuid/remove", `{"member_id":"`+member.ID.String()+`"}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: "not-a-uuid"}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RemoveFromGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a malformed group ID", w.Code)
+	}
+}
+
+func TestRemoveFromGroupMissingAuth(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	member := createTestUser(t)
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String()+"/remove", `{"member_id":"`+member.ID.String()+`"}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	RemoveFromGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 without auth", w.Code)
 	}
 }
 
@@ -415,6 +551,20 @@ func TestDeleteGroupInvalidID(t *testing.T) {
 
 	if w.Code != 400 {
 		t.Fatalf("status = %d, want 400 for a malformed group ID", w.Code)
+	}
+}
+
+func TestDeleteGroupMissingAuth(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+
+	ctx, w := groupTestContext("DELETE", "/api/groups/"+group.ID.String(), "")
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	DeleteGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 without auth", w.Code)
 	}
 }
 
@@ -580,6 +730,20 @@ func TestGetGroupInvalidID(t *testing.T) {
 	}
 }
 
+func TestGetGroupMissingAuth(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+
+	ctx, w := groupTestContext("GET", "/api/groups/"+group.ID.String(), "")
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	GetGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 without auth", w.Code)
+	}
+}
+
 // --- GetGroupMembers ---
 
 func TestGetGroupMembersSuccess(t *testing.T) {
@@ -621,6 +785,34 @@ func TestGetGroupMembersNotMember(t *testing.T) {
 	// actual behavior here rather than the arguably-more-correct 400/403.
 	if w.Code != 500 {
 		t.Fatalf("status = %d, want 500 for a non-member (current handler behavior)", w.Code)
+	}
+}
+
+func TestGetGroupMembersInvalidGroupID(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+
+	ctx, w := groupTestContext("GET", "/api/groups/not-a-uuid/members", "")
+	ctx.Params = gin.Params{{Key: "group_id", Value: "not-a-uuid"}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	GetGroupMembers(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a malformed group ID", w.Code)
+	}
+}
+
+func TestGetGroupMembersMissingAuth(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+
+	ctx, w := groupTestContext("GET", "/api/groups/"+group.ID.String()+"/members", "")
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	GetGroupMembers(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 without auth", w.Code)
 	}
 }
 
@@ -709,6 +901,85 @@ func TestAPIUpdateGroupDescriptionTooShort(t *testing.T) {
 	}
 }
 
+func TestAPIUpdateGroupInvalidGroupID(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+
+	ctx, w := groupTestContext("PUT", "/api/groups/not-a-uuid", `{"name":"Renamed Group","description":"New description"}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: "not-a-uuid"}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	APIUpdateGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a malformed group ID", w.Code)
+	}
+}
+
+func TestAPIUpdateGroupMissingAuth(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+
+	ctx, w := groupTestContext("PUT", "/api/groups/"+group.ID.String(), `{"name":"Renamed Group","description":"New description"}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	APIUpdateGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 without auth", w.Code)
+	}
+}
+
+func TestAPIUpdateGroupNameInvalidCharacters(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+
+	ctx, w := groupTestContext("PUT", "/api/groups/"+group.ID.String(), `{"name":"<script>bad</script>","description":"New description"}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	APIUpdateGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a name with disallowed characters", w.Code)
+	}
+}
+
+func TestAPIUpdateGroupDescriptionInvalidCharacters(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+
+	ctx, w := groupTestContext("PUT", "/api/groups/"+group.ID.String(), `{"name":"`+group.Name+`","description":"<script>bad</script>"}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	APIUpdateGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a description with disallowed characters", w.Code)
+	}
+}
+
+func TestAPIUpdateGroupSameNameSkipsNameValidation(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+
+	// Same name as before (even though it's short), only the description
+	// changes - the name-changed branch (and its length/charset checks)
+	// should be skipped entirely.
+	ctx, w := groupTestContext("PUT", "/api/groups/"+group.ID.String(), `{"name":"`+group.Name+`","description":"A brand new description"}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	APIUpdateGroup(ctx)
+
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
+}
+
 func TestAPIUpdateGroupInvalidBody(t *testing.T) {
 	setupControllersDB(t)
 	owner := createTestUser(t)
@@ -726,6 +997,67 @@ func TestAPIUpdateGroupInvalidBody(t *testing.T) {
 }
 
 // --- APIAddWishlistsToGroup ---
+
+func TestAPIAddWishlistsToGroupInvalidBody(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String()+"/wishlists", `not-json`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	APIAddWishlistsToGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for invalid JSON", w.Code)
+	}
+}
+
+func TestAPIAddWishlistsToGroupMissingAuth(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	wishlist := createTestWishlist(t, owner.ID)
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String()+"/wishlists", `{"wishlists":["`+wishlist.ID.String()+`"]}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	APIAddWishlistsToGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 without auth", w.Code)
+	}
+}
+
+func TestAPIAddWishlistsToGroupInvalidGroupID(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+
+	ctx, w := groupTestContext("POST", "/api/groups/not-a-uuid/wishlists", `{"wishlists":["`+wishlist.ID.String()+`"]}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: "not-a-uuid"}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	APIAddWishlistsToGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a malformed group ID", w.Code)
+	}
+}
+
+func TestAPIAddWishlistsToGroupWishlistNotFound(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String()+"/wishlists", `{"wishlists":["`+uuid.NewString()+`"]}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	APIAddWishlistsToGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a nonexistent wishlist", w.Code)
+	}
+}
 
 func TestAPIAddWishlistsToGroupSuccess(t *testing.T) {
 	setupControllersDB(t)
@@ -811,5 +1143,182 @@ func TestAPIAddWishlistsToGroupNotGroupMember(t *testing.T) {
 
 	if w.Code != 400 {
 		t.Fatalf("status = %d, want 400 when the caller isn't a member of the group", w.Code)
+	}
+}
+
+func TestGetGroupObjectsDatabaseFailure(t *testing.T) {
+	// Migrate without GroupMembership so the join in GetGroupsAUserIsAMemberOf fails.
+	setupControllersDB(t, &models.User{}, &models.Group{})
+	user := createTestUser(t)
+
+	if _, err := GetGroupObjects(user.ID); err == nil {
+		t.Error("expected an error when the group_memberships table is unavailable")
+	}
+}
+
+func TestGetGroupObjectDatabaseFailure(t *testing.T) {
+	setupControllersDB(t, &models.User{}, &models.Group{})
+	user := createTestUser(t)
+
+	if _, err := GetGroupObject(user.ID, uuid.New()); err == nil {
+		t.Error("expected an error when the group_memberships table is unavailable")
+	}
+}
+
+func TestGetGroupObjectConvertFailure(t *testing.T) {
+	// Group + GroupMembership present so the lookup succeeds, but the User
+	// table is gone, so ConvertGroupToGroupObject's owner lookup fails.
+	setupControllersDB(t, &models.User{}, &models.Group{}, &models.GroupMembership{})
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+
+	if result := database.Instance.Migrator().DropTable(&models.User{}); result != nil {
+		t.Fatalf("failed to drop users table: %v", result)
+	}
+
+	if _, err := GetGroupObject(owner.ID, group.ID); err == nil {
+		t.Error("expected an error when the owner's user record can't be loaded")
+	}
+}
+
+func TestRegisterGroupOwnerMembershipCreateFailure(t *testing.T) {
+	// Group table present so the duplicate-name check and CreateGroupInDB
+	// succeed, but GroupMembership is missing so the owner-membership insert
+	// fails.
+	setupControllersDB(t, &models.User{}, &models.Group{})
+	owner := createTestUser(t)
+
+	ctx, w := groupTestContext("POST", "/api/groups", `{"name":"My Group","description":"A group"}`)
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RegisterGroup(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the group_memberships table is unavailable; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestRegisterGroupWishlistMembershipCreateFailure(t *testing.T) {
+	// Everything needed for the group + owner membership + wishlist ownership
+	// check to succeed is present, but WishlistMembership is missing so the
+	// final wishlist-linking insert fails.
+	setupControllersDB(t, &models.User{}, &models.Group{}, &models.GroupMembership{}, &models.Wishlist{})
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+
+	reqBody := `{"name":"Team Group","description":"desc","wishlists":["` + wishlist.ID.String() + `"]}`
+	ctx, w := groupTestContext("POST", "/api/groups", reqBody)
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RegisterGroup(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the wishlist_memberships table is unavailable; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestJoinGroupMembershipCheckFailure(t *testing.T) {
+	// GroupMembership table missing so VerifyUserMembershipToGroup fails.
+	setupControllersDB(t, &models.User{}, &models.Group{})
+	owner := createTestUser(t)
+	newMember := createTestUser(t)
+
+	ctx, w := groupTestContext("POST", "/api/groups/x/join", `{"members":["`+newMember.ID.String()+`"]}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: uuid.NewString()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	JoinGroup(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the group_memberships table is unavailable; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestJoinGroupOwnershipCheckFailure(t *testing.T) {
+	// GroupMembership present (so the not-already-a-member check succeeds),
+	// Group missing so the ownership check fails.
+	setupControllersDB(t, &models.User{}, &models.GroupMembership{})
+	owner := createTestUser(t)
+	newMember := createTestUser(t)
+
+	ctx, w := groupTestContext("POST", "/api/groups/x/join", `{"members":["`+newMember.ID.String()+`"]}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: uuid.NewString()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	JoinGroup(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the groups table is unavailable; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestRemoveFromGroupMembershipCheckFailure(t *testing.T) {
+	setupControllersDB(t, &models.User{}, &models.Group{})
+	owner := createTestUser(t)
+	member := createTestUser(t)
+
+	ctx, w := groupTestContext("POST", "/api/groups/x/remove", `{"member_id":"`+member.ID.String()+`"}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: uuid.NewString()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RemoveFromGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 when the group_memberships table is unavailable; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestRemoveFromGroupInformationCheckFailure(t *testing.T) {
+	// GroupMembership present so the membership check succeeds; Group missing
+	// so GetGroupInformation fails next.
+	setupControllersDB(t, &models.User{}, &models.GroupMembership{})
+	owner := createTestUser(t)
+	member := createTestUser(t)
+	groupID := uuid.New()
+	addGroupMembership(t, groupID, member.ID)
+
+	ctx, w := groupTestContext("POST", "/api/groups/x/remove", `{"member_id":"`+member.ID.String()+`"}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: groupID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RemoveFromGroup(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the groups table is unavailable; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetGroupsMemberOfWishlistBadUUID(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+
+	ctx, w := groupTestContext("GET", "/api/groups?memberOfWishlistID=not-a-uuid", "")
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	GetGroups(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a malformed memberOfWishlistID", w.Code)
+	}
+}
+
+func TestGetGroupsNotAMemberOfWishlistBadUUID(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+
+	ctx, w := groupTestContext("GET", "/api/groups?notAMemberOfWishlistID=not-a-uuid", "")
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	GetGroups(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a malformed notAMemberOfWishlistID", w.Code)
+	}
+}
+
+func TestDeleteGroupOwnershipCheckFailure(t *testing.T) {
+	setupControllersDB(t, &models.User{})
+	owner := createTestUser(t)
+
+	ctx, w := groupTestContext("DELETE", "/api/groups/x", "")
+	ctx.Params = gin.Params{{Key: "group_id", Value: uuid.NewString()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	DeleteGroup(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the groups table is unavailable; body=%s", w.Code, w.Body.String())
 	}
 }

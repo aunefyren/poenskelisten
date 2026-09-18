@@ -218,3 +218,43 @@ func TestConsentUpsertAndCover(t *testing.T) {
 		t.Error("consent still present after revoke")
 	}
 }
+
+func TestSetUserSessionsInvalidatedAt(t *testing.T) {
+	setupTestDB(t)
+	user := createTestUser(t)
+
+	at := time.Now().Truncate(time.Second)
+	if err := SetUserSessionsInvalidatedAt(user.ID, at); err != nil {
+		t.Fatalf("SetUserSessionsInvalidatedAt error: %v", err)
+	}
+
+	updated, err := GetUserInformationAnyState(user.ID)
+	if err != nil {
+		t.Fatalf("GetUserInformationAnyState error: %v", err)
+	}
+	if updated.SessionsInvalidatedAt == nil || !updated.SessionsInvalidatedAt.Equal(at) {
+		t.Errorf("SessionsInvalidatedAt = %v, want %v", updated.SessionsInvalidatedAt, at)
+	}
+}
+
+func TestGetOAuthClientDatabaseFailure(t *testing.T) {
+	setupTestDB(t)
+	if err := Instance.Migrator().DropTable(&models.OAuthClient{}); err != nil {
+		t.Fatalf("failed to drop o_auth_clients table: %v", err)
+	}
+
+	if _, _, err := GetOAuthClient("any-client"); err == nil {
+		t.Error("expected an error when the o_auth_clients table is unavailable")
+	}
+}
+
+func TestDisableOAuthClientDatabaseFailure(t *testing.T) {
+	setupTestDB(t)
+	if err := Instance.Migrator().DropTable(&models.OAuthClient{}); err != nil {
+		t.Fatalf("failed to drop o_auth_clients table: %v", err)
+	}
+
+	if err := DisableOAuthClient("any-client"); err == nil {
+		t.Error("expected an error when the o_auth_clients table is unavailable")
+	}
+}

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/models"
 	"encoding/json"
 	"net/http/httptest"
@@ -99,5 +100,76 @@ func TestAdminRevokeUserSessionsUnknownUser(t *testing.T) {
 	// Revoking sessions for a user with none is not an error.
 	if w.Code != 200 {
 		t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestLogoutAllSessionRevokeFailure(t *testing.T) {
+	// User table present (so auth/user lookup works) but no Session table, so
+	// the second step of revokeAllForUser (RevokeAllUserSessions) fails.
+	setupControllersDB(t, &models.User{})
+	user := createTestUser(t)
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("POST", "/api/auth/logout/all", nil)
+	ctx.Request.Header.Set("Authorization", authHeader(t, user.ID, false))
+	APILogoutAll(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when sessions can't be revoked; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestAdminRevokeUserSessionsFailure(t *testing.T) {
+	setupControllersDB(t, &models.User{})
+	user := createTestUser(t)
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("POST", "/api/admin/users/"+user.ID.String()+"/sessions/revoke", nil)
+	ctx.Params = gin.Params{{Key: "user_id", Value: user.ID.String()}}
+	APIAdminRevokeUserSessions(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when sessions can't be revoked; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestIssueSSOSessionFailsWithoutPrivateKey(t *testing.T) {
+	setupControllersDB(t, &models.User{}, &models.Session{})
+	// Deliberately leave config.ConfigFile.PrivateKey unset.
+	config.ConfigFile.PrivateKey = ""
+	user := createTestUser(t)
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("POST", "/", nil)
+
+	if err := issueSSOSession(ctx, user); err == nil {
+		t.Error("expected an error when no private key is configured")
+	}
+}
+
+func TestIssueSSOSessionSuccess(t *testing.T) {
+	setupControllersDB(t, &models.User{}, &models.Session{})
+	enablePrivateKey(t)
+	user := createTestUser(t)
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("POST", "/", nil)
+
+	if err := issueSSOSession(ctx, user); err != nil {
+		t.Fatalf("issueSSOSession returned error: %v", err)
+	}
+
+	found := false
+	for _, c := range w.Result().Cookies() {
+		if c.Name == ssoCookieName && c.Value != "" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected the SSO cookie to be set")
 	}
 }

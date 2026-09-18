@@ -455,3 +455,126 @@ func TestDeleteWishImage(t *testing.T) {
 		t.Errorf("exists = %v err = %v, want false after deletion", exists, err)
 	}
 }
+
+func TestUpdateUserProfileImageTooLarge(t *testing.T) {
+	setupControllersDB(t)
+	imageTestSetup(t)
+	user := createTestUser(t)
+
+	huge := make([]byte, 10_000_001)
+	uri := imageTestDataURI("image/jpeg", huge)
+	if err := UpdateUserProfileImage(user.ID, uri); err == nil {
+		t.Error("expected an error for an image over the maximum size")
+	}
+}
+
+func TestSaveWishImageTooLarge(t *testing.T) {
+	imageTestSetup(t)
+	huge := make([]byte, 10_000_001)
+	uri := imageTestDataURI("image/jpeg", huge)
+	if err := SaveWishImage(uuid.New(), uri); err == nil {
+		t.Error("expected an error for an image over the maximum size")
+	}
+}
+
+func TestLoadDefaultProfileImageMissingFile(t *testing.T) {
+	imageTestSetup(t)
+	default_profile_image_path = filepath.Join(t.TempDir(), "does-not-exist.svg")
+
+	if _, err := LoadDefaultProfileImage(); err == nil {
+		t.Error("expected an error when the default avatar file is missing")
+	}
+}
+
+func TestSaveImageFileDirectoryCollision(t *testing.T) {
+	dir := t.TempDir()
+	// Create a plain file where SaveImageFile wants to MkdirAll a directory,
+	// so the MkdirAll call fails.
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0644); err != nil {
+		t.Fatalf("failed to seed blocking file: %v", err)
+	}
+
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	if err := SaveImageFile(blocker, "pic.jpg", img); err == nil {
+		t.Error("expected an error when the target path collides with an existing file")
+	}
+}
+
+func TestGetUserProfileImageResizeFailure(t *testing.T) {
+	setupControllersDB(t)
+	imageTestSetup(t)
+	user := createTestUser(t)
+
+	if err := os.MkdirAll(profile_image_path, 0755); err != nil {
+		t.Fatalf("failed to create profile image dir: %v", err)
+	}
+	corrupt := filepath.Join(profile_image_path, user.ID.String()+".jpg")
+	if err := os.WriteFile(corrupt, []byte("not a real jpeg"), 0644); err != nil {
+		t.Fatalf("failed to seed corrupt image: %v", err)
+	}
+
+	code, body := getWithParams(APIGetUserProfileImage, "/api/users/x/image", gin.Params{{Key: "user_id", Value: user.ID.String()}}, nil)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500 when the saved file isn't a decodable image; body=%v", code, body)
+	}
+}
+
+func TestGetWishImageResizeFailure(t *testing.T) {
+	setupControllersDB(t)
+	imageTestSetup(t)
+	owner := createTestUser(t)
+	wishlist := imageTestPublicWishlist(t, owner.ID)
+	wish := createTestWish(t, owner.ID, wishlist.ID)
+
+	if err := os.MkdirAll(wish_image_path, 0755); err != nil {
+		t.Fatalf("failed to create wish image dir: %v", err)
+	}
+	corrupt := filepath.Join(wish_image_path, wish.ID.String()+".jpg")
+	if err := os.WriteFile(corrupt, []byte("not a real jpeg"), 0644); err != nil {
+		t.Fatalf("failed to seed corrupt image: %v", err)
+	}
+
+	code, body := getWithParams(APIGetWishImage, "/api/wishes/x/image", gin.Params{{Key: "wish_id", Value: wish.ID.String()}}, nil)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500 when the saved file isn't a decodable image; body=%v", code, body)
+	}
+}
+
+func TestDeleteWishImageRemoveFailure(t *testing.T) {
+	imageTestSetup(t)
+	wishID := uuid.New()
+
+	raw := imageTestRandomImageBytes(t, 200, 200, false)
+	if err := SaveWishImage(wishID, imageTestDataURI("image/jpeg", raw)); err != nil {
+		t.Fatalf("failed to save wish image: %v", err)
+	}
+
+	// Strip write permission from the containing directory so the file is
+	// still readable (CheckIfWishImageExists succeeds) but os.Remove fails.
+	if err := os.Chmod(wish_image_path, 0555); err != nil {
+		t.Fatalf("failed to chmod wish image dir: %v", err)
+	}
+	t.Cleanup(func() { os.Chmod(wish_image_path, 0755) })
+
+	if err := DeleteWishImage(wishID); err == nil {
+		t.Error("expected an error when the image file can't be removed")
+	}
+}
+
+func TestSaveImageFileCreateFailure(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "pics")
+	if err := os.MkdirAll(target, 0755); err != nil {
+		t.Fatalf("failed to create target dir: %v", err)
+	}
+	if err := os.Chmod(target, 0555); err != nil {
+		t.Fatalf("failed to chmod target dir: %v", err)
+	}
+	t.Cleanup(func() { os.Chmod(target, 0755) })
+
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	if err := SaveImageFile(target, "pic.jpg", img); err == nil {
+		t.Error("expected an error when the target directory isn't writable")
+	}
+}

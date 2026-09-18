@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/models"
 	"encoding/json"
 	"net/http/httptest"
 	"testing"
@@ -260,4 +261,39 @@ func TestGetWishlistCategoriesSuccess(t *testing.T) {
 	if len(body.Categories) != 1 {
 		t.Errorf("categories = %v, want 1", body.Categories)
 	}
+}
+
+func TestCleanupWishCategoryIfEmptyCountFailure(t *testing.T) {
+	// Migrate without the Wish table so CountEnabledWishesInCategory fails.
+	setupControllersDB(t, &models.User{}, &models.Wishlist{}, &models.WishCategory{})
+	user := createTestUser(t)
+	wishlist := createTestWishlist(t, user.ID)
+	category := createTestWishCategory(t, wishlist.ID, user.ID)
+
+	// Should not panic; the failure is logged and swallowed.
+	CleanupWishCategoryIfEmpty(category.ID)
+
+	got, err := database.GetWishCategoryByID(category.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Error("expected the category to remain untouched when the count query fails")
+	}
+}
+
+func TestCleanupWishCategoryIfEmptyDeleteFailure(t *testing.T) {
+	// Wish table present (so counting succeeds and returns 0) but drop the
+	// WishCategory table afterward so the delete step fails.
+	setupControllersDB(t, &models.User{}, &models.Wishlist{}, &models.WishCategory{}, &models.Wish{})
+	user := createTestUser(t)
+	wishlist := createTestWishlist(t, user.ID)
+	category := createTestWishCategory(t, wishlist.ID, user.ID)
+
+	if err := database.Instance.Migrator().DropTable(&models.WishCategory{}); err != nil {
+		t.Fatalf("failed to drop wish_categories table: %v", err)
+	}
+
+	// Should not panic; the failure is logged and swallowed.
+	CleanupWishCategoryIfEmpty(category.ID)
 }

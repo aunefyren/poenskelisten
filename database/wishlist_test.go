@@ -305,3 +305,89 @@ func TestWishlistCollaborators(t *testing.T) {
 		t.Fatalf("expected collaborator to be gone after delete (ok=%v err=%v)", ok, err)
 	}
 }
+
+func TestVerifyUniqueWishNameInWishlistExcludingWish(t *testing.T) {
+	setupTestDB(t)
+
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wish := createWishForOwner(t, wishlist.ID, owner.ID, "Headphones")
+
+	t.Run("the wish's own name, excluding itself, is unique", func(t *testing.T) {
+		ok, err := VerifyUniqueWishNameInWishlistExcludingWish("Headphones", wishlist.ID, wish.ID)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !ok {
+			t.Error("expected the wish's own name to be considered unique when excluding itself")
+		}
+	})
+
+	t.Run("a genuinely new name is unique", func(t *testing.T) {
+		ok, err := VerifyUniqueWishNameInWishlistExcludingWish("Something Else", wishlist.ID, wish.ID)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !ok {
+			t.Error("expected a new name to be unique")
+		}
+	})
+
+	t.Run("a name used by a different wish is not unique", func(t *testing.T) {
+		createWishForOwner(t, wishlist.ID, owner.ID, "Watch")
+		ok, err := VerifyUniqueWishNameInWishlistExcludingWish("Watch", wishlist.ID, wish.ID)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if ok {
+			t.Error("expected the name of a different wish to not be unique")
+		}
+	})
+}
+
+func TestCreateWishlistInDBFailure(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	if err := Instance.Migrator().DropTable(&models.Wishlist{}); err != nil {
+		t.Fatalf("failed to drop wishlists table: %v", err)
+	}
+
+	now := time.Now()
+	wishlist := models.Wishlist{Name: "Test", Enabled: true, OwnerID: owner.ID, Date: &now}
+	wishlist.ID = uuid.New()
+	if _, err := CreateWishlistInDB(wishlist); err == nil {
+		t.Error("expected an error when the wishlists table is unavailable")
+	}
+}
+
+func TestCreateWishlistCollaboratorInDBFailure(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	collaborator := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	if err := Instance.Migrator().DropTable(&models.WishlistCollaborator{}); err != nil {
+		t.Fatalf("failed to drop wishlist_collaborators table: %v", err)
+	}
+
+	collab := models.WishlistCollaborator{UserID: collaborator.ID, WishlistID: wishlist.ID, Enabled: true}
+	collab.ID = uuid.New()
+	if err := CreateWishlistCollaboratorInDB(collab); err == nil {
+		t.Error("expected an error when the wishlist_collaborators table is unavailable")
+	}
+}
+
+func TestCreateWishlistMembershipInDBFailure(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	group := createTestGroup(t, owner.ID)
+	if err := Instance.Migrator().DropTable(&models.WishlistMembership{}); err != nil {
+		t.Fatalf("failed to drop wishlist_memberships table: %v", err)
+	}
+
+	membership := models.WishlistMembership{GroupID: group.ID, WishlistID: wishlist.ID, Enabled: true}
+	membership.ID = uuid.New()
+	if _, err := CreateWishlistMembershipInDB(membership); err == nil {
+		t.Error("expected an error when the wishlist_memberships table is unavailable")
+	}
+}

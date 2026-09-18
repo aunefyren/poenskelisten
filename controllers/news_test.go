@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/models"
 	"encoding/json"
 	"net/http/httptest"
 	"strings"
@@ -8,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func TestGetNewsRequiresAuth(t *testing.T) {
@@ -54,6 +57,144 @@ func TestGetNewsFiltersFutureAndExpiredForNonAdmin(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected the past-dated news post to be included, got %+v", body.News)
+	}
+}
+
+func TestGetNewsUserNotFound(t *testing.T) {
+	setupControllersDB(t)
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("GET", "/api/news", nil)
+	ctx.Request.Header.Set("Authorization", authHeader(t, uuid.New(), false))
+	GetNews(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the token's user doesn't exist", w.Code)
+	}
+}
+
+func TestGetNewsAdminSeesFuturePosts(t *testing.T) {
+	setupControllersDB(t)
+	// GetNews checks the DB user's Admin field, not the token's admin claim.
+	admin := createTestUser(t)
+	admin.Admin = true
+	admin, err := database.UpdateUserInDB(admin)
+	if err != nil {
+		t.Fatalf("failed to promote user to admin: %v", err)
+	}
+
+	future := models.News{
+		Title:   "Future post",
+		Body:    "Body",
+		Enabled: true,
+		Date:    time.Now().Add(24 * time.Hour),
+	}
+	future.ID = uuid.New()
+	if _, err := database.CreateNewsPostInDB(future); err != nil {
+		t.Fatalf("failed to create future news post: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("GET", "/api/news", nil)
+	ctx.Request.Header.Set("Authorization", authHeader(t, admin.ID, true))
+	GetNews(ctx)
+
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
+	var body struct {
+		News []struct {
+			ID string `json:"ID"`
+		} `json:"news"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	found := false
+	for _, n := range body.News {
+		if n.ID == future.ID.String() {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected an admin to see a future-dated post, got %+v", body.News)
+	}
+}
+
+func TestGetNewsExcludesFuturePostsForNonAdmin(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+
+	future := models.News{
+		Title:   "Future post",
+		Body:    "Body",
+		Enabled: true,
+		Date:    time.Now().Add(24 * time.Hour),
+	}
+	future.ID = uuid.New()
+	if _, err := database.CreateNewsPostInDB(future); err != nil {
+		t.Fatalf("failed to create future news post: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("GET", "/api/news", nil)
+	ctx.Request.Header.Set("Authorization", authHeader(t, user.ID, false))
+	GetNews(ctx)
+
+	var body struct {
+		News []struct {
+			ID string `json:"ID"`
+		} `json:"news"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	for _, n := range body.News {
+		if n.ID == future.ID.String() {
+			t.Error("did not expect a non-admin to see a future-dated post")
+		}
+	}
+}
+
+func TestGetNewsExcludesExpiredEvenForAdmin(t *testing.T) {
+	setupControllersDB(t)
+	admin := createTestUser(t)
+
+	past := time.Now().Add(-48 * time.Hour)
+	expired := time.Now().Add(-24 * time.Hour)
+	expiredPost := models.News{
+		Title:      "Expired post",
+		Body:       "Body",
+		Enabled:    true,
+		Date:       past,
+		ExpiryDate: &expired,
+	}
+	expiredPost.ID = uuid.New()
+	if _, err := database.CreateNewsPostInDB(expiredPost); err != nil {
+		t.Fatalf("failed to create expired news post: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("GET", "/api/news", nil)
+	ctx.Request.Header.Set("Authorization", authHeader(t, admin.ID, true))
+	GetNews(ctx)
+
+	var body struct {
+		News []struct {
+			ID string `json:"ID"`
+		} `json:"news"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	for _, n := range body.News {
+		if n.ID == expiredPost.ID.String() {
+			t.Error("did not expect an admin to see an expired post")
+		}
 	}
 }
 
@@ -108,6 +249,15 @@ func TestRegisterNewsPostRequiresAuth(t *testing.T) {
 	code, _ := postNewsPost(t, "", `{"title":"Hello world","body":"Some news body"}`)
 	if code != 400 {
 		t.Errorf("status = %d, want 400 without auth", code)
+	}
+}
+
+func TestRegisterNewsPostUserNotFound(t *testing.T) {
+	setupControllersDB(t)
+
+	code, _ := postNewsPost(t, authHeader(t, uuid.New(), true), `{"title":"Hello world","body":"Some news body"}`)
+	if code != 500 {
+		t.Errorf("status = %d, want 500 when the token's user doesn't exist", code)
 	}
 }
 
@@ -278,6 +428,26 @@ func TestEditNewsPostBodyTooShort(t *testing.T) {
 	code, _ := putNewsPost(t, news.ID.String(), `{"title":"Hello world","body":"Hi"}`)
 	if code != 400 {
 		t.Errorf("status = %d, want 400 for a too-short body", code)
+	}
+}
+
+func TestEditNewsPostInvalidTitleCharacters(t *testing.T) {
+	setupControllersDB(t)
+	news := createTestNews(t)
+
+	code, _ := putNewsPost(t, news.ID.String(), `{"title":"<script>bad</script>","body":"Some news body"}`)
+	if code != 400 {
+		t.Errorf("status = %d, want 400 for an invalid title", code)
+	}
+}
+
+func TestEditNewsPostInvalidBodyCharacters(t *testing.T) {
+	setupControllersDB(t)
+	news := createTestNews(t)
+
+	code, _ := putNewsPost(t, news.ID.String(), `{"title":"Hello world","body":"<script>bad</script>"}`)
+	if code != 400 {
+		t.Errorf("status = %d, want 400 for an invalid body", code)
 	}
 }
 

@@ -156,3 +156,54 @@ func TestRevokeConnectedAppUnknownClient(t *testing.T) {
 		t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
 	}
 }
+
+func TestRevokeConnectedAppConsentDeleteFailure(t *testing.T) {
+	// Migrate without the oauth_consents table so RevokeConsent's DELETE fails.
+	setupControllersDB(t, &models.User{}, &models.Session{})
+	user := createTestUser(t)
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("DELETE", "/api/auth/connected-apps/test-client", nil)
+	ctx.Request.Header.Set("Authorization", authHeader(t, user.ID, false))
+	ctx.Params = gin.Params{{Key: "client_id", Value: "test-client"}}
+	APIRevokeConnectedApp(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the consent table is unavailable; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestRevokeConnectedAppSessionRevokeFailure(t *testing.T) {
+	// Migrate without the sessions table so RevokeUserClientSessions fails,
+	// even though the preceding RevokeConsent succeeds.
+	setupControllersDB(t, &models.User{}, &models.OAuthConsent{})
+	user := createTestUser(t)
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("DELETE", "/api/auth/connected-apps/test-client", nil)
+	ctx.Request.Header.Set("Authorization", authHeader(t, user.ID, false))
+	ctx.Params = gin.Params{{Key: "client_id", Value: "test-client"}}
+	APIRevokeConnectedApp(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the sessions table is unavailable; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestListConnectedAppsDatabaseFailure(t *testing.T) {
+	// Migrate without the oauth_consents table so GetUserConsents fails.
+	setupControllersDB(t, &models.User{})
+	user := createTestUser(t)
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("GET", "/api/auth/connected-apps", nil)
+	ctx.Request.Header.Set("Authorization", authHeader(t, user.ID, false))
+	APIListConnectedApps(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the consent table is unavailable; body=%s", w.Code, w.Body.String())
+	}
+}

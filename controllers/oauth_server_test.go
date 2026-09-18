@@ -736,3 +736,69 @@ func TestHTMLEscape(t *testing.T) {
 		t.Errorf("htmlEscape produced unexpected output: %q", htmlEscape(`<b>"a" & 'b'</b>`))
 	}
 }
+
+func TestIssueAuthorizationCodeDatabaseFailure(t *testing.T) {
+	// Migrate without the AuthorizationCode table so database.CreateAuthorizationCode fails.
+	setupControllersDB(t, &models.User{}, &models.OAuthClient{})
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("GET", "/", nil)
+
+	issueAuthorizationCode(ctx, client, user, client.RedirectURIs[0], []string{"openid"}, "", "challenge", "state123")
+
+	if w.Code != http.StatusFound {
+		t.Fatalf("status = %d, want 302 (error redirect); body=%s", w.Code, w.Body.String())
+	}
+	loc := w.Header().Get("Location")
+	if !strings.Contains(loc, "error=server_error") {
+		t.Errorf("Location = %q, want a server_error redirect", loc)
+	}
+	if !strings.Contains(loc, "state=state123") {
+		t.Errorf("Location = %q, want the state param preserved", loc)
+	}
+}
+
+func TestHandleRefreshTokenGrantUserNotFound(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+	authCode, verifier := oauthServerTestIssueCode(t, client, user)
+
+	// Exchange the code for a real refresh token.
+	exchangeForm := url.Values{
+		"grant_type": {"authorization_code"}, "code": {authCode},
+		"redirect_uri": {client.RedirectURIs[0]}, "client_id": {client.ClientID},
+		"code_verifier": {verifier},
+	}
+	exchangeCode, exchangeBody, _ := postForm(APIOAuthToken, "/oauth/token", exchangeForm)
+	if exchangeCode != http.StatusOK {
+		t.Fatalf("token exchange status = %d, want 200; body=%v", exchangeCode, exchangeBody)
+	}
+	refreshToken, _ := exchangeBody["refresh_token"].(string)
+	if refreshToken == "" {
+		t.Fatal("expected a refresh_token from the exchange")
+	}
+
+	// The session now exists, but the user behind it is gone.
+	if result := database.Instance.Unscoped().Delete(&models.User{}, "id = ?", user.ID); result.Error != nil {
+		t.Fatalf("failed to hard-delete user: %v", result.Error)
+	}
+
+	refreshForm := url.Values{
+		"grant_type":    {"refresh_token"},
+		"client_id":     {client.ClientID},
+		"refresh_token": {refreshToken},
+	}
+	code, body, _ := postForm(APIOAuthToken, "/oauth/token", refreshForm)
+	if code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 when the session's user no longer exists; body=%v", code, body)
+	}
+	if body["error"] != "invalid_grant" {
+		t.Errorf("error = %v, want invalid_grant", body["error"])
+	}
+}
