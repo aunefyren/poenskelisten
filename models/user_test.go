@@ -1,6 +1,22 @@
 package models
 
-import "testing"
+import (
+	"os"
+	"testing"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+// TestMain drops BcryptCost to bcrypt's minimum for the whole package's test
+// run. At the production cost, hashing is deliberately slow, and under
+// `go test -race` that cost is amplified roughly another order of magnitude
+// (measured: ~1s per hash at the production cost without -race, ~12s with
+// it) - real tests only need the round-trip to work, not production-strength
+// hardness.
+func TestMain(m *testing.M) {
+	BcryptCost = bcrypt.MinCost
+	os.Exit(m.Run())
+}
 
 func strPtr(s string) *string { return &s }
 func boolPtr(b bool) *bool    { return &b }

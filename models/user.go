@@ -113,8 +113,18 @@ type ServerSettingsRequest struct {
 	MFARecoveryCodesEnabled bool `json:"mfa_recovery_codes_enabled"`
 }
 
+// BcryptCost is the work factor passed to bcrypt when hashing a password.
+// It's a package variable rather than a literal so tests can override it to
+// bcrypt.MinCost: at the production value, hashing is CPU-heavy by design
+// (that's the point of bcrypt), and under `go test -race` that cost is
+// amplified roughly another order of magnitude, since -race instruments
+// bcrypt's tight blowfish key-expansion loop - real tests that hash or check
+// a handful of passwords would otherwise add minutes to the suite for no
+// correctness benefit.
+var BcryptCost = 14
+
 func (user *User) HashPassword(password string) error {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
 	if err != nil {
 		return err
 	}
