@@ -139,3 +139,40 @@ func TestDisableUserMFAIdempotent(t *testing.T) {
 		t.Errorf("DisableUserMFA on non-enrolled user returned error: %v", err)
 	}
 }
+
+func TestClearUserRecoveryCodes(t *testing.T) {
+	setupTestDB(t)
+	user := createTestUser(t)
+
+	if err := StoreRecoveryCodes(user.ID, []string{"hash-1", "hash-2"}); err != nil {
+		t.Fatalf("StoreRecoveryCodes error: %v", err)
+	}
+	before, err := GetActiveRecoveryCodes(user.ID)
+	if err != nil {
+		t.Fatalf("GetActiveRecoveryCodes error: %v", err)
+	}
+	if len(before) != 2 {
+		t.Fatalf("got %d recovery codes before clearing, want 2", len(before))
+	}
+
+	if err := ClearUserRecoveryCodes(user.ID); err != nil {
+		t.Fatalf("ClearUserRecoveryCodes error: %v", err)
+	}
+
+	after, err := GetActiveRecoveryCodes(user.ID)
+	if err != nil {
+		t.Fatalf("GetActiveRecoveryCodes error: %v", err)
+	}
+	if len(after) != 0 {
+		t.Errorf("got %d recovery codes after clearing, want 0", len(after))
+	}
+}
+
+func TestClearUserRecoveryCodesNoneStored(t *testing.T) {
+	setupTestDB(t)
+	user := createTestUser(t)
+
+	if err := ClearUserRecoveryCodes(user.ID); err != nil {
+		t.Errorf("ClearUserRecoveryCodes with nothing stored returned error: %v", err)
+	}
+}

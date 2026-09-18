@@ -3,6 +3,7 @@ package controllers
 import (
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/logger"
+	"aunefyren/poenskelisten/models"
 	"encoding/json"
 	"net/http/httptest"
 	"testing"
@@ -118,5 +119,17 @@ func TestJWKSEndpoint(t *testing.T) {
 	}
 	if jwks.Keys[0]["kid"] != config.ConfigFile.OAuthSigningKeyID {
 		t.Errorf("kid = %v, want %v", jwks.Keys[0]["kid"], config.ConfigFile.OAuthSigningKeyID)
+	}
+}
+
+func TestJWKSEndpointNoSigningKey(t *testing.T) {
+	// Deliberately leave OAuthSigningKey unset, so loadOAuthSigner fails.
+	orig := config.ConfigFile
+	t.Cleanup(func() { config.ConfigFile = orig })
+	config.ConfigFile = models.ConfigStruct{}
+
+	code, body := runHandler(APIOAuthJWKS)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500 without a configured signing key; body=%v", code, body)
 	}
 }

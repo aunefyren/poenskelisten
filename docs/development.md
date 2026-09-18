@@ -1,0 +1,22 @@
+# Development
+
+Code conventions for Pønskelisten. See the root `CLAUDE.md` for build/test commands and system architecture.
+
+## Code conventions
+
+- **Layering is strict.** `controllers` never import `gorm.io/*` or touch `database.Instance` directly — all persistence goes through named functions in `database/`, one file per resource, with filenames mirroring `controllers/`.
+- **Naming is camelCase, not snake_case**, wherever Go allows a choice (local variables, parameters, unexported fields) — this is standard idiomatic Go, not project-specific. Acronyms stay uppercase as a single unit: `userID`, `wishlistID`, `apiURL`, not `userId`/`wishlist_id`/`ApiUrl`. Some older code (parts of `controllers/wish.go`, `controllers/wishlist.go`, and elsewhere) still has snake_case locals like `wishlist_id`/`user_id_int` — that's legacy inconsistency, not the standard to match. When you're already editing a function that uses the old style, migrate its identifiers to camelCase as part of the change rather than adding more snake_case next to it. If the same fix would otherwise need to be copy-pasted across many call sites, pull it into a helper function instead.
+- **Handler error handling** follows a fixed shape: log first (`logger.Log.Error("Failed to X. Error: " + err.Error())`), then respond with `context.JSON(status, gin.H{"error": "..."})`, then `context.Abort()`, then `return`. Unexpected/internal failures are `500`; caller mistakes (malformed ID, failed validation, missing field) are `400`; permission failures are `400`/`403` depending on whether the resource's existence should be disclosed to the caller.
+- **Free-text validation** goes through shared helpers before persisting: `utilities.ValidateTextCharacters` (rejects `<`, `>`, `"`, backtick) for names/descriptions/notes, `utilities.ValidatePasswordFormat` for passwords.
+- **Every persisted model embeds `models.GormModel`** (UUID primary key, timestamps, soft delete) instead of declaring its own ID/timestamp fields.
+- **Every package has a doc comment** on one file explaining its role in the system (see `oauth/scopes.go`, `mcpserver/server.go`, `oidcprovider/oidcprovider.go`) — add one when creating a new package.
+- **Comments explain *why*, not *what*.** The codebase uses comments for non-obvious constraints (why a token type exists, why a check has to run in a particular order) rather than restating the code in prose.
+- **gofmt is enforced in CI** (`gofmt -l .` must print nothing) — run `gofmt -w .` before committing.
+
+## Testing conventions
+
+- One `_test.go` file per source file, same package (white-box: internal helpers get tested directly, not only exported handlers).
+- `controllers` tests call handler functions directly instead of going through the router: build a context with `gin.CreateTestContext` + `httptest.NewRequest`/`httptest.NewRecorder`, set `ctx.Params`/headers/body as needed, call the handler, assert on the recorder. Reuse the shared fixtures in `controllers/helpers_test.go` (`setupControllersDB`, `createTestUser`/`createTestGroup`/`createTestWishlist`/`createTestWish`/..., `authHeader`) rather than duplicating setup per test file.
+- Prefer real dependencies over hand-rolled fakes where they're cheap: an in-memory SQLite DB (`modernc.org/sqlite`) for persistence, a real signed JWT for auth, a real TOTP code generated against a real secret for MFA.
+- Table-driven tests (`cases := []struct{...}{...}`) for pure functions with several input/output pairs — validators, parsers, and the like.
+- `config.ConfigFile` is a single package-level global shared by every test in a package's binary. A test that changes a field on it must restore the original value via `t.Cleanup`, or the change leaks into unrelated tests that run later in the same `go test` invocation.

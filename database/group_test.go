@@ -279,3 +279,32 @@ func TestGroupToWishlistMembership(t *testing.T) {
 		t.Fatalf("expected 1 group linked to wishlist, got %d", len(groups))
 	}
 }
+
+func TestCreateGroupInDBFailure(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	if err := Instance.Migrator().DropTable(&models.Group{}); err != nil {
+		t.Fatalf("failed to drop groups table: %v", err)
+	}
+
+	group := models.Group{Name: "Test", Enabled: true, OwnerID: owner.ID}
+	group.ID = uuid.New()
+	if _, err := CreateGroupInDB(group); err == nil {
+		t.Error("expected an error when the groups table is unavailable")
+	}
+}
+
+func TestCreateGroupMembershipInDBFailure(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	if err := Instance.Migrator().DropTable(&models.GroupMembership{}); err != nil {
+		t.Fatalf("failed to drop group_memberships table: %v", err)
+	}
+
+	membership := models.GroupMembership{GroupID: group.ID, MemberID: owner.ID, Enabled: true}
+	membership.ID = uuid.New()
+	if _, err := CreateGroupMembershipInDB(membership); err == nil {
+		t.Error("expected an error when the group_memberships table is unavailable")
+	}
+}

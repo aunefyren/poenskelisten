@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"testing"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -106,5 +108,111 @@ func TestVerifyPKCE(t *testing.T) {
 	}
 	if VerifyPKCE("", challenge) || VerifyPKCE(verifier, "") {
 		t.Error("VerifyPKCE accepted an empty input")
+	}
+}
+
+func TestGenerateIDToken(t *testing.T) {
+	setupOAuthTokenTest(t)
+	userID := uuid.New()
+
+	tokenString, err := GenerateIDToken(userID, "client-abc", "ada@example.com", "Ada Lovelace")
+	if err != nil {
+		t.Fatalf("GenerateIDToken error: %v", err)
+	}
+	if tokenString == "" {
+		t.Fatal("expected a non-empty token string")
+	}
+
+	signer, kid, err := loadOAuthSigner()
+	if err != nil {
+		t.Fatalf("loadOAuthSigner error: %v", err)
+	}
+
+	claims := &IDTokenClaims{}
+	parsed, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if token.Header["kid"] != kid {
+			t.Errorf("kid header = %v, want %v", token.Header["kid"], kid)
+		}
+		return signer.Public(), nil
+	}, jwt.WithValidMethods([]string{oauthSigningMethod().Alg()}))
+	if err != nil {
+		t.Fatalf("failed to parse/verify the ID token: %v", err)
+	}
+	if !parsed.Valid {
+		t.Fatal("ID token reported invalid")
+	}
+
+	if claims.Subject != userID.String() {
+		t.Errorf("sub = %q, want %q", claims.Subject, userID.String())
+	}
+	if claims.Email != "ada@example.com" {
+		t.Errorf("email = %q, want ada@example.com", claims.Email)
+	}
+	if claims.Name != "Ada Lovelace" {
+		t.Errorf("name = %q, want 'Ada Lovelace'", claims.Name)
+	}
+	if len(claims.Audience) != 1 || claims.Audience[0] != "client-abc" {
+		t.Errorf("audience = %v, want [client-abc]", claims.Audience)
+	}
+}
+
+func TestValidateSSOTokenExpired(t *testing.T) {
+	setupAuthTestConfig(t)
+	now := time.Now()
+	claims := &JWTClaim{
+		UserID:  uuid.New(),
+		Purpose: PurposeSSO,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(-time.Hour)),
+			NotBefore: jwt.NewNumericDate(now.Add(-2 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(now.Add(-2 * time.Hour)),
+		},
+	}
+	token, err := GenerateJWTFromClaims(claims)
+	if err != nil {
+		t.Fatalf("GenerateJWTFromClaims error: %v", err)
+	}
+
+	if _, err := ValidateSSOToken(token); err == nil {
+		t.Error("ValidateSSOToken accepted an expired token, want error")
+	}
+}
+
+func TestValidateSSOTokenNotYetValid(t *testing.T) {
+	setupAuthTestConfig(t)
+	now := time.Now()
+	claims := &JWTClaim{
+		UserID:  uuid.New(),
+		Purpose: PurposeSSO,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(2 * time.Hour)),
+			NotBefore: jwt.NewNumericDate(now.Add(time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(now),
+		},
+	}
+	token, err := GenerateJWTFromClaims(claims)
+	if err != nil {
+		t.Fatalf("GenerateJWTFromClaims error: %v", err)
+	}
+
+	if _, err := ValidateSSOToken(token); err == nil {
+		t.Error("ValidateSSOToken accepted a not-yet-valid token, want error")
+	}
+}
+
+func TestValidateSSOTokenMissingClaims(t *testing.T) {
+	setupAuthTestConfig(t)
+	claims := &JWTClaim{
+		UserID:           uuid.New(),
+		Purpose:          PurposeSSO,
+		RegisteredClaims: jwt.RegisteredClaims{},
+	}
+	token, err := GenerateJWTFromClaims(claims)
+	if err != nil {
+		t.Fatalf("GenerateJWTFromClaims error: %v", err)
+	}
+
+	if _, err := ValidateSSOToken(token); err == nil {
+		t.Error("ValidateSSOToken accepted a token with no exp/nbf claims, want error")
 	}
 }

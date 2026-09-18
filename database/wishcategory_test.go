@@ -160,3 +160,18 @@ func TestDeleteWishCategoryDetachesWishes(t *testing.T) {
 		t.Fatalf("expected wish category to be detached, still points at %v", refreshed.CategoryID)
 	}
 }
+
+func TestCreateWishCategoryInDBFailure(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	if err := Instance.Migrator().DropTable(&models.WishCategory{}); err != nil {
+		t.Fatalf("failed to drop wish_categories table: %v", err)
+	}
+
+	category := models.WishCategory{Name: "Test", WishlistID: wishlist.ID, OwnerID: owner.ID, Enabled: true}
+	category.ID = uuid.New()
+	if err := CreateWishCategoryInDB(category); err == nil {
+		t.Error("expected an error when the wish_categories table is unavailable")
+	}
+}
