@@ -6,10 +6,12 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
 	"database/sql"
+	"net/http"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
@@ -314,4 +316,68 @@ func authHeader(t *testing.T, userID uuid.UUID, admin bool) string {
 		t.Fatalf("failed to generate access token: %v", err)
 	}
 	return "Bearer " + token
+}
+
+// breakControllersDB closes the connection behind database.Instance so every
+// query after this point fails. Handlers' "unexpected database error" 500
+// branches can't otherwise be reached with a healthy in-memory DB; the next
+// test's setupControllersDB installs a fresh instance, so nothing leaks.
+func breakControllersDB(t *testing.T) {
+	t.Helper()
+	sqlDB, err := database.Instance.DB()
+	if err != nil {
+		t.Fatalf("failed to get sql.DB: %v", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		t.Fatalf("failed to close sql.DB: %v", err)
+	}
+}
+
+// dbErrorCase is one handler call expected to fail with a 500 once the
+// database is unreachable.
+type dbErrorCase struct {
+	name    string
+	handler gin.HandlerFunc
+	method  string
+	path    string
+	body    string
+	params  gin.Params
+	admin   bool
+}
+
+// runDatabaseErrorCases calls each case's handler as an authenticated user
+// against a broken database and asserts the handler reports a 500 rather than
+// panicking or treating the failure as "not found"/"forbidden".
+func runDatabaseErrorCases(t *testing.T, cases []dbErrorCase) {
+	t.Helper()
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			header := map[string]string{"Authorization": authHeader(t, uuid.New(), c.admin)}
+			breakControllersDB(t)
+
+			status, body, _ := doRequest(c.handler, c.method, c.path, c.body, header, c.params)
+			if status != http.StatusInternalServerError {
+				t.Errorf("status = %d, want 500; body=%v", status, body)
+			}
+		})
+	}
+}
+
+// runUnauthenticatedCases calls each handler with no Authorization header and
+// asserts it rejects the request with a 400 before doing any work. Handlers
+// are normally behind middlewares.Auth, but each re-reads the caller from the
+// header itself, so that branch still has to hold on its own.
+func runUnauthenticatedCases(t *testing.T, cases []dbErrorCase) {
+	t.Helper()
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+
+			status, body, _ := doRequest(c.handler, c.method, c.path, c.body, nil, c.params)
+			if status != http.StatusBadRequest {
+				t.Errorf("status = %d, want 400; body=%v", status, body)
+			}
+		})
+	}
 }

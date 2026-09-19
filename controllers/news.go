@@ -6,6 +6,7 @@ import (
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -284,9 +285,14 @@ func APIEditNewsPost(context *gin.Context) {
 	}
 
 	news, err = database.GetNewsPostByNewsID(newsID)
-	if err != nil {
+	if errors.Is(err, database.ErrNewsPostNotFound) {
+		logger.Log.Error("Failed to find news post. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find news post."})
+		context.Abort()
+		return
+	} else if err != nil {
 		logger.Log.Error("Failed to get news post. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get news post."})
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get news post."})
 		context.Abort()
 		return
 	}

@@ -2,6 +2,8 @@ package database
 
 import (
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestMFAEnrollmentLifecycle(t *testing.T) {
@@ -175,4 +177,32 @@ func TestClearUserRecoveryCodesNoneStored(t *testing.T) {
 	if err := ClearUserRecoveryCodes(user.ID); err != nil {
 		t.Errorf("ClearUserRecoveryCodes with nothing stored returned error: %v", err)
 	}
+}
+
+func TestMfaQueriesFailOnClosedDB(t *testing.T) {
+	runClosedDBCases(t, map[string]func() error{
+		"SetUserPendingMFASecret": func() error {
+			return SetUserPendingMFASecret(uuid.New(), "x")
+		},
+		"ActivateUserMFA": func() error {
+			return ActivateUserMFA(uuid.New())
+		},
+		"DisableUserMFA": func() error {
+			return DisableUserMFA(uuid.New())
+		},
+		"StoreRecoveryCodes": func() error {
+			return StoreRecoveryCodes(uuid.New(), []string{"x"})
+		},
+		"GetActiveRecoveryCodes": func() error {
+			_, err := GetActiveRecoveryCodes(uuid.New())
+			return err
+		},
+		"MarkRecoveryCodeUsed": func() error {
+			return MarkRecoveryCodeUsed(uuid.New())
+		},
+		"GetUserMFAEnrollmentState": func() error {
+			_, _, err := GetUserMFAEnrollmentState(uuid.New())
+			return err
+		},
+	})
 }

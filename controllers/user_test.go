@@ -1174,3 +1174,23 @@ func TestAPICurrentUserDatabaseFailure(t *testing.T) {
 		t.Fatalf("status = %d, want 500 once the user backing the token no longer exists; body=%v", code, resp)
 	}
 }
+
+func TestUserHandlersDatabaseErrors(t *testing.T) {
+	userParam := gin.Params{{Key: "user_id", Value: "00000000-0000-0000-0000-00000000000a"}}
+	runDatabaseErrorCases(t, []dbErrorCase{
+		{name: "APICurrentUser", handler: APICurrentUser, method: "GET", path: "/api/auth/me"},
+		{name: "GetUser", handler: GetUser, method: "GET", path: "/api/auth/users/00000000-0000-0000-0000-00000000000a", params: userParam},
+		{name: "GetUsers", handler: GetUsers, method: "GET", path: "/api/auth/users"},
+		{name: "GetUsers/notAMemberOfGroupID", handler: GetUsers, method: "GET", path: "/api/auth/users?notAMemberOfGroupID=00000000-0000-0000-0000-00000000000a"},
+		{name: "GetUsers/notACollaboratorOfWishlistID", handler: GetUsers, method: "GET", path: "/api/auth/users?notACollaboratorOfWishlistID=00000000-0000-0000-0000-00000000000a"},
+		{name: "UpdateUser", handler: UpdateUser, method: "POST", path: "/api/auth/users/update", body: `{"email":"a@example.com","first_name":"A","last_name":"B"}`},
+		{name: "APIDeleteUser", handler: APIDeleteUser, method: "DELETE", path: "/api/admin/users/00000000-0000-0000-0000-00000000000a", params: userParam, admin: true},
+	})
+}
+
+func TestUserHandlersRequireAuth(t *testing.T) {
+	runUnauthenticatedCases(t, []dbErrorCase{
+		{name: "GetUsers", handler: GetUsers, method: "GET", path: "/api/auth/users"},
+		{name: "APIDeleteUser", handler: APIDeleteUser, method: "DELETE", path: "/api/admin/users/00000000-0000-0000-0000-00000000000a", params: gin.Params{{Key: "user_id", Value: "00000000-0000-0000-0000-00000000000a"}}},
+	})
+}

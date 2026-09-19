@@ -227,3 +227,55 @@ func TestCreateWishClaimInDBFailure(t *testing.T) {
 		t.Error("expected an error when the wish_claims table is unavailable")
 	}
 }
+
+func TestWishQueriesFailOnClosedDB(t *testing.T) {
+	runClosedDBCases(t, map[string]func() error{
+		"GetWishlistIDFromWish": func() error {
+			_, err := GetWishlistIDFromWish(uuid.New())
+			return err
+		},
+		"GetWishByWishID": func() error {
+			_, err := GetWishByWishID(uuid.New())
+			return err
+		},
+		"UpdateWishInDB": func() error {
+			_, err := UpdateWishInDB(models.Wish{})
+			return err
+		},
+		"GetWishesFromWishlist": func() error {
+			_, _, err := GetWishesFromWishlist(uuid.New())
+			return err
+		},
+		"GetWishClaimFromWish": func() error {
+			_, err := GetWishClaimFromWish(uuid.New())
+			return err
+		},
+		"VerifyUserOwnershipToWish": func() error {
+			_, err := VerifyUserOwnershipToWish(uuid.New(), uuid.New())
+			return err
+		},
+		"VerifyUserOwnershipToWishClaimByWish": func() error {
+			_, err := VerifyUserOwnershipToWishClaimByWish(uuid.New(), uuid.New())
+			return err
+		},
+		"VerifyWishIsClaimed": func() error {
+			_, err := VerifyWishIsClaimed(uuid.New())
+			return err
+		},
+		"DeleteWishClaimByUserAndWish": func() error {
+			return DeleteWishClaimByUserAndWish(uuid.New(), uuid.New())
+		},
+		"GetWishlistByWishID": func() error {
+			_, _, err := GetWishlistByWishID(uuid.New())
+			return err
+		},
+		"CreateWishInDB": func() error {
+			_, err := CreateWishInDB(models.Wish{})
+			return err
+		},
+		"CreateWishClaimInDB": func() error {
+			_, err := CreateWishClaimInDB(models.WishClaim{})
+			return err
+		},
+	})
+}

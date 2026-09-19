@@ -207,3 +207,10 @@ func TestListConnectedAppsDatabaseFailure(t *testing.T) {
 		t.Fatalf("status = %d, want 500 when the consent table is unavailable; body=%s", w.Code, w.Body.String())
 	}
 }
+
+func TestConnectedAppsHandlersDatabaseErrors(t *testing.T) {
+	runDatabaseErrorCases(t, []dbErrorCase{
+		{name: "APIListConnectedApps", handler: APIListConnectedApps, method: "GET", path: "/api/auth/connected-apps"},
+		{name: "APIRevokeConnectedApp", handler: APIRevokeConnectedApp, method: "DELETE", path: "/api/auth/connected-apps/client", params: gin.Params{{Key: "client_id", Value: "client"}}},
+	})
+}

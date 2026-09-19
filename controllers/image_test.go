@@ -578,3 +578,10 @@ func TestSaveImageFileCreateFailure(t *testing.T) {
 		t.Error("expected an error when the target directory isn't writable")
 	}
 }
+
+func TestImageHandlersDatabaseErrors(t *testing.T) {
+	runDatabaseErrorCases(t, []dbErrorCase{
+		{name: "APIGetUserProfileImage", handler: APIGetUserProfileImage, method: "GET", path: "/api/auth/users/00000000-0000-0000-0000-00000000000a/image", params: gin.Params{{Key: "user_id", Value: "00000000-0000-0000-0000-00000000000a"}}},
+		{name: "APIGetWishImage", handler: APIGetWishImage, method: "GET", path: "/api/both/wishes/00000000-0000-0000-0000-00000000000a/image", params: gin.Params{{Key: "wish_id", Value: "00000000-0000-0000-0000-00000000000a"}}},
+	})
+}

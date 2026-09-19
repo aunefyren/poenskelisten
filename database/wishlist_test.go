@@ -391,3 +391,94 @@ func TestCreateWishlistMembershipInDBFailure(t *testing.T) {
 		t.Error("expected an error when the wishlist_memberships table is unavailable")
 	}
 }
+
+func TestWishlistQueriesFailOnClosedDB(t *testing.T) {
+	runClosedDBCases(t, map[string]func() error{
+		"UpdateWishlistInDB": func() error {
+			_, err := UpdateWishlistInDB(models.Wishlist{})
+			return err
+		},
+		"CreateWishlistInDB": func() error {
+			_, err := CreateWishlistInDB(models.Wishlist{})
+			return err
+		},
+		"GetWishlistByWishlistID": func() error {
+			_, _, err := GetWishlistByWishlistID(uuid.New())
+			return err
+		},
+		"GetWishlistCollaboratorsFromWishlist": func() error {
+			_, err := GetWishlistCollaboratorsFromWishlist(uuid.New())
+			return err
+		},
+		"GetWishlistCollaboratorByUserIDAndWishlistID": func() error {
+			_, err := GetWishlistCollaboratorByUserIDAndWishlistID(uuid.New(), uuid.New())
+			return err
+		},
+		"CreateWishlistCollaboratorInDB": func() error {
+			return CreateWishlistCollaboratorInDB(models.WishlistCollaborator{})
+		},
+		"VerifyWishlistCollaboratorToWishlist": func() error {
+			_, err := VerifyWishlistCollaboratorToWishlist(uuid.New(), uuid.New())
+			return err
+		},
+		"DeleteWishlistCollaboratorByWishlistCollaboratorID": func() error {
+			return DeleteWishlistCollaboratorByWishlistCollaboratorID(uuid.New())
+		},
+		"GetWishlistsByUserIDThroughWishlistCollaborations": func() error {
+			_, err := GetWishlistsByUserIDThroughWishlistCollaborations(uuid.New())
+			return err
+		},
+		"GetWishlistsByUserIDThroughWishlistMemberships": func() error {
+			_, err := GetWishlistsByUserIDThroughWishlistMemberships(uuid.New())
+			return err
+		},
+		"GetWishlistsFromGroup": func() error {
+			_, err := GetWishlistsFromGroup(uuid.New())
+			return err
+		},
+		"GetOwnedWishlists": func() error {
+			_, err := GetOwnedWishlists(uuid.New())
+			return err
+		},
+		"GetWishlist": func() error {
+			_, err := GetWishlist(uuid.New())
+			return err
+		},
+		"VerifyUniqueWishNameInWishlist": func() error {
+			_, err := VerifyUniqueWishNameInWishlist("x", uuid.New())
+			return err
+		},
+		"VerifyUniqueWishNameInWishlistExcludingWish": func() error {
+			_, err := VerifyUniqueWishNameInWishlistExcludingWish("x", uuid.New(), uuid.New())
+			return err
+		},
+		"VerifyUniqueWishlistNameForUser": func() error {
+			_, err := VerifyUniqueWishlistNameForUser("x", uuid.New())
+			return err
+		},
+		"GetWishlistOwner": func() error {
+			_, err := GetWishlistOwner(uuid.New())
+			return err
+		},
+		"VerifyUserMembershipToGroupMembershipToWishlist": func() error {
+			_, err := VerifyUserMembershipToGroupMembershipToWishlist(uuid.New(), uuid.New())
+			return err
+		},
+		"VerifyUserOwnershipToWishlist": func() error {
+			_, err := VerifyUserOwnershipToWishlist(uuid.New(), uuid.New())
+			return err
+		},
+		"GetMembershipIDForGroupToWishlist": func() error {
+			_, _, err := GetMembershipIDForGroupToWishlist(uuid.New(), uuid.New())
+			return err
+		},
+		"GetPublicWishListByWishlistHash": func() error {
+			_, _, err := GetPublicWishListByWishlistHash(uuid.New())
+			return err
+		},
+		"CreateWishlistMembershipInDB": func() error {
+			_, err := CreateWishlistMembershipInDB(models.WishlistMembership{})
+			return err
+		},
+	})
+}

@@ -666,3 +666,10 @@ func TestVerifySecondFactorNoTOTPSecret(t *testing.T) {
 		t.Error("expected an error when the user has no TOTP secret configured")
 	}
 }
+
+func TestMFAHandlersDatabaseErrors(t *testing.T) {
+	runDatabaseErrorCases(t, []dbErrorCase{
+		{name: "APIDisableMFA", handler: APIDisableMFA, method: "POST", path: "/api/auth/users/mfa/disable", body: `{"code":"123456"}`},
+		{name: "APIAdminDeleteUserMFA", handler: APIAdminDeleteUserMFA, method: "DELETE", path: "/api/admin/users/00000000-0000-0000-0000-00000000000a/mfa", params: gin.Params{{Key: "user_id", Value: "00000000-0000-0000-0000-00000000000a"}}, admin: true},
+	})
+}

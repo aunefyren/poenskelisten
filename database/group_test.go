@@ -308,3 +308,67 @@ func TestCreateGroupMembershipInDBFailure(t *testing.T) {
 		t.Error("expected an error when the group_memberships table is unavailable")
 	}
 }
+
+func TestGroupQueriesFailOnClosedDB(t *testing.T) {
+	runClosedDBCases(t, map[string]func() error{
+		"VerifyGroupExistsByNameForUser": func() error {
+			_, _, err := VerifyGroupExistsByNameForUser("x", uuid.New())
+			return err
+		},
+		"GetGroupInformation": func() error {
+			_, err := GetGroupInformation(uuid.New())
+			return err
+		},
+		"UpdateGroupValuesByID": func() error {
+			return UpdateGroupValuesByID(uuid.New(), "x", "x")
+		},
+		"VerifyUserOwnershipToGroup": func() error {
+			_, err := VerifyUserOwnershipToGroup(uuid.New(), uuid.New())
+			return err
+		},
+		"GetGroupMembersFromWishlist": func() error {
+			_, err := GetGroupMembersFromWishlist(uuid.New(), uuid.New())
+			return err
+		},
+		"GetGroupsAUserIsAMemberOf": func() error {
+			_, err := GetGroupsAUserIsAMemberOf(uuid.New())
+			return err
+		},
+		"GetGroupMembershipsFromGroup": func() error {
+			_, err := GetGroupMembershipsFromGroup(uuid.New())
+			return err
+		},
+		"VerifyIfGroupWithSameNameAndOwnerDoesNotExist": func() error {
+			_, err := VerifyIfGroupWithSameNameAndOwnerDoesNotExist("x", uuid.New())
+			return err
+		},
+		"VerifyUserMembershipToGroup": func() error {
+			_, err := VerifyUserMembershipToGroup(uuid.New(), uuid.New())
+			return err
+		},
+		"VerifyGroupMembershipToWishlist": func() error {
+			_, err := VerifyGroupMembershipToWishlist(uuid.New(), uuid.New())
+			return err
+		},
+		"GetGroupUsingGroupIDAndMembershipUsingUserID": func() error {
+			_, err := GetGroupUsingGroupIDAndMembershipUsingUserID(uuid.New(), uuid.New())
+			return err
+		},
+		"GetGroupUsingGroupIDAndUserIDAsOwner": func() error {
+			_, err := GetGroupUsingGroupIDAndUserIDAsOwner(uuid.New(), uuid.New())
+			return err
+		},
+		"GetGroupMembershipByGroupIDAndMemberID": func() error {
+			_, err := GetGroupMembershipByGroupIDAndMemberID(uuid.New(), uuid.New())
+			return err
+		},
+		"CreateGroupInDB": func() error {
+			_, err := CreateGroupInDB(models.Group{})
+			return err
+		},
+		"CreateGroupMembershipInDB": func() error {
+			_, err := CreateGroupMembershipInDB(models.GroupMembership{})
+			return err
+		},
+	})
+}
