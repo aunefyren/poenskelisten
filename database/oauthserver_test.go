@@ -258,3 +258,45 @@ func TestDisableOAuthClientDatabaseFailure(t *testing.T) {
 		t.Error("expected an error when the o_auth_clients table is unavailable")
 	}
 }
+
+func TestOAuthServerQueriesFailOnClosedDB(t *testing.T) {
+	runClosedDBCases(t, map[string]func() error{
+		"SeedFirstPartyClient": func() error {
+			return SeedFirstPartyClient()
+		},
+		"CreateOAuthClient": func() error {
+			_, err := CreateOAuthClient(models.OAuthClient{})
+			return err
+		},
+		"GetAllOAuthClients": func() error {
+			_, err := GetAllOAuthClients()
+			return err
+		},
+		"DisableOAuthClient": func() error {
+			return DisableOAuthClient("x")
+		},
+		"GetOAuthClient": func() error {
+			_, _, err := GetOAuthClient("x")
+			return err
+		},
+		"CreateAuthorizationCode": func() error {
+			_, err := CreateAuthorizationCode(models.AuthorizationCode{})
+			return err
+		},
+		"ConsumeAuthorizationCode": func() error {
+			_, err := ConsumeAuthorizationCode("x")
+			return err
+		},
+		"GetConsent": func() error {
+			_, _, err := GetConsent(uuid.New(), "x")
+			return err
+		},
+		"GetUserConsents": func() error {
+			_, err := GetUserConsents(uuid.New())
+			return err
+		},
+		"UpsertConsent": func() error {
+			return UpsertConsent(uuid.New(), "x", []string{"x"})
+		},
+	})
+}

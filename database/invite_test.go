@@ -91,3 +91,19 @@ func TestGetAndDeleteInvite(t *testing.T) {
 		t.Fatalf("expected error deleting unknown invite, got nil")
 	}
 }
+
+func TestInviteQueriesFailOnClosedDB(t *testing.T) {
+	runClosedDBCases(t, map[string]func() error{
+		"GetAllEnabledInvites": func() error {
+			_, err := GetAllEnabledInvites()
+			return err
+		},
+		"GetInviteByID": func() error {
+			_, err := GetInviteByID(uuid.New())
+			return err
+		},
+		"DeleteInviteByID": func() error {
+			return DeleteInviteByID(uuid.New())
+		},
+	})
+}

@@ -1,6 +1,7 @@
 package database
 
 import (
+	"aunefyren/poenskelisten/models"
 	"testing"
 
 	"github.com/google/uuid"
@@ -207,4 +208,61 @@ func TestGenerateResetCodeForMissingUser(t *testing.T) {
 	if _, err := GenerateRandomResetCodeForUser(uuid.New(), true); err == nil {
 		t.Fatalf("expected error generating reset code for unknown user, got nil")
 	}
+}
+
+func TestUserQueriesFailOnClosedDB(t *testing.T) {
+	runClosedDBCases(t, map[string]func() error{
+		"GetUserInformation": func() error {
+			_, err := GetUserInformation(uuid.New())
+			return err
+		},
+		"GetUserInformationAnyState": func() error {
+			_, err := GetUserInformationAnyState(uuid.New())
+			return err
+		},
+		"GetAllUserInformation": func() error {
+			_, err := GetAllUserInformation(uuid.New())
+			return err
+		},
+		"GetAllUserInformationAnyState": func() error {
+			_, err := GetAllUserInformationAnyState(uuid.New())
+			return err
+		},
+		"GetUserInformationByEmail": func() error {
+			_, err := GetUserInformationByEmail("x")
+			return err
+		},
+		"GetAllUserInformationByEmail": func() error {
+			_, err := GetAllUserInformationByEmail("x")
+			return err
+		},
+		"GenerateRandomResetCodeForUser": func() error {
+			_, err := GenerateRandomResetCodeForUser(uuid.New(), true)
+			return err
+		},
+		"GetAllUserInformationByResetCode": func() error {
+			_, err := GetAllUserInformationByResetCode("x")
+			return err
+		},
+		"GetAmountOfEnabledUsers": func() error {
+			_, err := GetAmountOfEnabledUsers()
+			return err
+		},
+		"GetEnabledUsers": func() error {
+			_, err := GetEnabledUsers()
+			return err
+		},
+		"GetAllUsers": func() error {
+			_, err := GetAllUsers()
+			return err
+		},
+		"UpdateUserInDB": func() error {
+			_, err := UpdateUserInDB(models.User{})
+			return err
+		},
+		"CreateUserInDB": func() error {
+			_, err := CreateUserInDB(models.User{})
+			return err
+		},
+	})
 }

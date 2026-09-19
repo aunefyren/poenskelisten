@@ -259,9 +259,14 @@ func JoinGroup(context *gin.Context) {
 		var groupMembershipDB models.GroupMembership
 
 		memberObject, err := database.GetUserInformation(memberID)
-		if err != nil {
+		if errors.Is(err, database.ErrUserNotFound) {
 			logger.Log.Error("Failed to find user. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find user."})
+			context.Abort()
+			return
+		} else if err != nil {
+			logger.Log.Error("Failed to get user. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
 			context.Abort()
 			return
 		}
@@ -364,7 +369,7 @@ func RemoveFromGroup(context *gin.Context) {
 	membershipStatus, err := database.VerifyUserMembershipToGroup(groupMembershipRequest.MemberID, groupIDInt)
 	if err != nil {
 		logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership to group."})
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
 		context.Abort()
 		return
 	} else if !membershipStatus {
@@ -1091,9 +1096,14 @@ func APIAddWishlistsToGroup(context *gin.Context) {
 		var wishlistMembership models.WishlistMembership
 
 		wishlist, err := database.GetWishlist(wishlistID)
-		if err != nil {
+		if errors.Is(err, database.ErrWishlistNotFound) {
 			logger.Log.Error("Failed to find wishlist. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
+			context.Abort()
+			return
+		} else if err != nil {
+			logger.Log.Error("Failed to get wishlist. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist."})
 			context.Abort()
 			return
 		} else if wishlist.OwnerID != userID {

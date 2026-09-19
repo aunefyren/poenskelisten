@@ -213,3 +213,11 @@ func TestConvertInvitesToInviteObjectsSkipsBroken(t *testing.T) {
 		t.Errorf("InviteCode = %v, want %v", objects[0].InviteCode, good.Code)
 	}
 }
+
+func TestInviteHandlersDatabaseErrors(t *testing.T) {
+	runDatabaseErrorCases(t, []dbErrorCase{
+		{name: "RegisterInvite", handler: RegisterInvite, method: "POST", path: "/api/admin/invites", admin: true},
+		{name: "APIDeleteInvite", handler: APIDeleteInvite, method: "DELETE", path: "/api/admin/invites/00000000-0000-0000-0000-00000000000a", params: gin.Params{{Key: "invite_id", Value: "00000000-0000-0000-0000-00000000000a"}}, admin: true},
+		{name: "APIGetAllInvites", handler: APIGetAllInvites, method: "GET", path: "/api/admin/invites", admin: true},
+	})
+}

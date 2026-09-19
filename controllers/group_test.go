@@ -4,6 +4,7 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -1270,8 +1271,8 @@ func TestRemoveFromGroupMembershipCheckFailure(t *testing.T) {
 	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
 	RemoveFromGroup(ctx)
 
-	if w.Code != 400 {
-		t.Fatalf("status = %d, want 400 when the group_memberships table is unavailable; body=%s", w.Code, w.Body.String())
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the group_memberships table is unavailable; body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -1331,5 +1332,40 @@ func TestDeleteGroupOwnershipCheckFailure(t *testing.T) {
 
 	if w.Code != 500 {
 		t.Fatalf("status = %d, want 500 when the groups table is unavailable; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestGroupHandlersDatabaseErrors(t *testing.T) {
+	groupParam := gin.Params{{Key: "group_id", Value: "00000000-0000-0000-0000-00000000000a"}}
+	runDatabaseErrorCases(t, []dbErrorCase{
+		{name: "RegisterGroup", handler: RegisterGroup, method: "POST", path: "/api/auth/groups", body: `{"name":"Group","description":"Desc"}`},
+		{name: "JoinGroup", handler: JoinGroup, method: "POST", path: "/api/auth/groups/00000000-0000-0000-0000-00000000000a/join", body: `{"members":["00000000-0000-0000-0000-00000000000a"]}`, params: groupParam},
+		{name: "RemoveFromGroup", handler: RemoveFromGroup, method: "POST", path: "/api/auth/groups/00000000-0000-0000-0000-00000000000a/remove", body: `{"member_id":"00000000-0000-0000-0000-00000000000a"}`, params: groupParam},
+		{name: "APIAddWishlistsToGroup", handler: APIAddWishlistsToGroup, method: "POST", path: "/api/auth/groups/00000000-0000-0000-0000-00000000000a/add", body: `{"wishlists":["00000000-0000-0000-0000-00000000000a"]}`, params: groupParam},
+		{name: "RemoveSelfFromGroup", handler: RemoveSelfFromGroup, method: "POST", path: "/api/auth/groups/00000000-0000-0000-0000-00000000000a/leave", params: groupParam},
+		{name: "DeleteGroup", handler: DeleteGroup, method: "DELETE", path: "/api/auth/groups/00000000-0000-0000-0000-00000000000a", params: groupParam},
+		{name: "GetGroups", handler: GetGroups, method: "GET", path: "/api/auth/groups"},
+		{name: "GetGroups/owned", handler: GetGroups, method: "GET", path: "/api/auth/groups?owned=true"},
+		{name: "GetGroups/memberOfWishlistID", handler: GetGroups, method: "GET", path: "/api/auth/groups?memberOfWishlistID=00000000-0000-0000-0000-00000000000a"},
+		{name: "GetGroups/notAMemberOfWishlistID", handler: GetGroups, method: "GET", path: "/api/auth/groups?notAMemberOfWishlistID=00000000-0000-0000-0000-00000000000a"},
+		{name: "GetGroup", handler: GetGroup, method: "GET", path: "/api/auth/groups/00000000-0000-0000-0000-00000000000a", params: groupParam},
+		{name: "GetGroupMembers", handler: GetGroupMembers, method: "GET", path: "/api/auth/groups/00000000-0000-0000-0000-00000000000a/members", params: groupParam},
+		{name: "APIUpdateGroup", handler: APIUpdateGroup, method: "POST", path: "/api/auth/groups/00000000-0000-0000-0000-00000000000a", body: `{"name":"Group","description":"Desc"}`, params: groupParam},
+	})
+}
+
+func TestGroupHandlersRequireAuth(t *testing.T) {
+	runUnauthenticatedCases(t, []dbErrorCase{
+		{name: "RemoveSelfFromGroup", handler: RemoveSelfFromGroup, method: "POST", path: "/api/auth/groups/00000000-0000-0000-0000-00000000000a/leave", params: gin.Params{{Key: "group_id", Value: "00000000-0000-0000-0000-00000000000a"}}},
+	})
+}
+
+func TestRemoveSelfFromGroupMalformedID(t *testing.T) {
+	setupControllersDB(t)
+	header := map[string]string{"Authorization": authHeader(t, uuid.New(), false)}
+
+	status, body, _ := doRequest(RemoveSelfFromGroup, "POST", "/api/auth/groups/not-a-uuid/leave", "", header, gin.Params{{Key: "group_id", Value: "not-a-uuid"}})
+	if status != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400; body=%v", status, body)
 	}
 }

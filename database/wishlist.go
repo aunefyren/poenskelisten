@@ -8,6 +8,10 @@ import (
 	"github.com/google/uuid"
 )
 
+// ErrWishlistNotFound means the lookup ran but matched no enabled wishlist, as
+// opposed to the query itself failing.
+var ErrWishlistNotFound = errors.New("Wishlist not found.")
+
 // Update values in wishlist object in DB
 func UpdateWishlistInDB(wishlist models.Wishlist) (models.Wishlist, error) {
 	wishlistRecord := Instance.Save(&wishlist)
@@ -250,7 +254,7 @@ func GetWishlist(WishlistID uuid.UUID) (models.Wishlist, error) {
 	if wishlistRecords.Error != nil {
 		return models.Wishlist{}, wishlistRecords.Error
 	} else if wishlistRecords.RowsAffected != 1 {
-		return models.Wishlist{}, errors.New("Wishlist not found.")
+		return models.Wishlist{}, ErrWishlistNotFound
 	}
 
 	return wishlist, nil

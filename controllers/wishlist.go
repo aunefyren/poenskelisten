@@ -427,7 +427,7 @@ func GetWishlists(context *gin.Context) {
 		MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, group_id_int)
 		if err != nil {
 			logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership to group."})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
 			context.Abort()
 			return
 		} else if !MembershipStatus {
@@ -836,11 +836,11 @@ func RemoveFromWishlist(context *gin.Context) {
 		MembershipStatus, err := database.VerifyUserMembershipToGroup(UserID, group_id_int)
 		if err != nil {
 			logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership to group."})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
 			context.Abort()
 			return
 		} else if !MembershipStatus {
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not a member of this group."})
+			context.JSON(http.StatusBadRequest, gin.H{"error": "You are not a member of this group."})
 			context.Abort()
 			return
 		}
@@ -1205,9 +1205,14 @@ func APICollaborateWishlist(context *gin.Context) {
 
 		// Verify user exists
 		user, err := database.GetUserInformation(userID)
-		if err != nil {
+		if errors.Is(err, database.ErrUserNotFound) {
+			logger.Log.Error("Failed to find user. Error: " + err.Error())
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find user."})
+			context.Abort()
+			return
+		} else if err != nil {
 			logger.Log.Error("Failed to get user object. Error: " + err.Error())
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user object."})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user object."})
 			context.Abort()
 			return
 		}

@@ -173,3 +173,10 @@ func TestIssueSSOSessionSuccess(t *testing.T) {
 		t.Error("expected the SSO cookie to be set")
 	}
 }
+
+func TestSessionHandlersDatabaseErrors(t *testing.T) {
+	runDatabaseErrorCases(t, []dbErrorCase{
+		{name: "APILogoutAll", handler: APILogoutAll, method: "POST", path: "/api/auth/tokens/logout-all"},
+		{name: "APIAdminRevokeUserSessions", handler: APIAdminRevokeUserSessions, method: "DELETE", path: "/api/admin/users/00000000-0000-0000-0000-00000000000a/sessions", params: gin.Params{{Key: "user_id", Value: "00000000-0000-0000-0000-00000000000a"}}, admin: true},
+	})
+}

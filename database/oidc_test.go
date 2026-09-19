@@ -4,6 +4,8 @@ import (
 	"aunefyren/poenskelisten/models"
 	"errors"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 const testIssuer = "https://auth.example.com"
@@ -147,4 +149,28 @@ func TestResolveOIDCUserFirstAccountBecomesAdmin(t *testing.T) {
 	if !created.Admin {
 		t.Error("first auto-created account should be admin")
 	}
+}
+
+func TestOidcQueriesFailOnClosedDB(t *testing.T) {
+	runClosedDBCases(t, map[string]func() error{
+		"GetUserByOIDCSubject": func() error {
+			_, _, err := GetUserByOIDCSubject("x", "x")
+			return err
+		},
+		"getEnabledUserByEmail": func() error {
+			_, _, err := getEnabledUserByEmail("x")
+			return err
+		},
+		"linkUserOIDC": func() error {
+			return linkUserOIDC(uuid.New(), "x", "x")
+		},
+		"createOIDCUser": func() error {
+			_, err := createOIDCUser("x", "x", "x", "x", "x")
+			return err
+		},
+		"ResolveOIDCUser": func() error {
+			_, err := ResolveOIDCUser("x", "x", "x", "x", "x", true, true)
+			return err
+		},
+	})
 }

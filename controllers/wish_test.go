@@ -1442,3 +1442,27 @@ func TestAPIUpdateWish_MovingCategoryCleansUpEmptyOne(t *testing.T) {
 		t.Errorf("expected the now-empty old category to be cleaned up, got %v", remaining)
 	}
 }
+
+func TestWishHandlersDatabaseErrors(t *testing.T) {
+	wishParam := gin.Params{{Key: "wish_id", Value: "00000000-0000-0000-0000-00000000000a"}}
+	runDatabaseErrorCases(t, []dbErrorCase{
+		{name: "GetWishesFromWishlist", handler: GetWishesFromWishlist, method: "GET", path: "/api/auth/wishes?wishlist=00000000-0000-0000-0000-00000000000a"},
+		{name: "RegisterWish", handler: RegisterWish, method: "POST", path: "/api/auth/wishes?wishlist=00000000-0000-0000-0000-00000000000a", body: `{"name":"Wish","note":"Note"}`},
+		{name: "DeleteWish", handler: DeleteWish, method: "DELETE", path: "/api/auth/wishes/00000000-0000-0000-0000-00000000000a", params: wishParam},
+		{name: "RegisterWishClaim", handler: RegisterWishClaim, method: "POST", path: "/api/auth/wishes/00000000-0000-0000-0000-00000000000a/claim", body: `{"wishlist_id":"00000000-0000-0000-0000-00000000000a"}`, params: wishParam},
+		{name: "RemoveWishClaim", handler: RemoveWishClaim, method: "POST", path: "/api/auth/wishes/00000000-0000-0000-0000-00000000000a/unclaim", body: `{"wishlist_id":"00000000-0000-0000-0000-00000000000a"}`, params: wishParam},
+		{name: "APIUpdateWish", handler: APIUpdateWish, method: "POST", path: "/api/auth/wishes/00000000-0000-0000-0000-00000000000a", body: `{"name":"Wish","note":"Note"}`, params: wishParam},
+		{name: "APIGetWish", handler: APIGetWish, method: "GET", path: "/api/auth/wishes/00000000-0000-0000-0000-00000000000a", params: wishParam},
+	})
+}
+
+func TestWishHandlersRequireAuth(t *testing.T) {
+	wishParam := gin.Params{{Key: "wish_id", Value: "00000000-0000-0000-0000-00000000000a"}}
+	runUnauthenticatedCases(t, []dbErrorCase{
+		{name: "RegisterWish", handler: RegisterWish, method: "POST", path: "/api/auth/wishes?wishlist=00000000-0000-0000-0000-00000000000a", body: `{"name":"Wish"}`},
+		{name: "DeleteWish", handler: DeleteWish, method: "DELETE", path: "/api/auth/wishes/00000000-0000-0000-0000-00000000000a", params: wishParam},
+		{name: "RegisterWishClaim", handler: RegisterWishClaim, method: "POST", path: "/api/auth/wishes/00000000-0000-0000-0000-00000000000a/claim", body: `{"wishlist_id":"00000000-0000-0000-0000-00000000000a"}`, params: wishParam},
+		{name: "APIUpdateWish", handler: APIUpdateWish, method: "POST", path: "/api/auth/wishes/00000000-0000-0000-0000-00000000000a", body: `{"name":"Wish"}`, params: wishParam},
+		{name: "APIGetWish", handler: APIGetWish, method: "GET", path: "/api/auth/wishes/00000000-0000-0000-0000-00000000000a", params: wishParam},
+	})
+}

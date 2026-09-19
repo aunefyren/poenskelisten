@@ -1,6 +1,7 @@
 package database
 
 import (
+	"aunefyren/poenskelisten/models"
 	"errors"
 	"testing"
 	"time"
@@ -202,4 +203,21 @@ func TestRevokeAllUserSessions(t *testing.T) {
 			t.Errorf("session %s should be revoked", hash)
 		}
 	}
+}
+
+func TestSessionQueriesFailOnClosedDB(t *testing.T) {
+	runClosedDBCases(t, map[string]func() error{
+		"createSession": func() error {
+			_, err := createSession(models.Session{})
+			return err
+		},
+		"getSessionByRefreshHash": func() error {
+			_, _, err := getSessionByRefreshHash("x")
+			return err
+		},
+		"RotateSession": func() error {
+			_, err := RotateSession("x", "x", "x", "x")
+			return err
+		},
+	})
 }

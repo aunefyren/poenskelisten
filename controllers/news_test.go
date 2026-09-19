@@ -473,3 +473,14 @@ func TestEditNewsPostSuccess(t *testing.T) {
 		t.Errorf("message = %v", parsed["message"])
 	}
 }
+
+func TestNewsHandlersDatabaseErrors(t *testing.T) {
+	newsParam := gin.Params{{Key: "news_id", Value: "00000000-0000-0000-0000-00000000000a"}}
+	runDatabaseErrorCases(t, []dbErrorCase{
+		{name: "GetNews", handler: GetNews, method: "GET", path: "/api/auth/news"},
+		{name: "GetNewsPost", handler: GetNewsPost, method: "GET", path: "/api/auth/news/00000000-0000-0000-0000-00000000000a", params: newsParam},
+		{name: "RegisterNewsPost", handler: RegisterNewsPost, method: "POST", path: "/api/admin/news", body: `{"title":"Title","body":"Body"}`, admin: true},
+		{name: "DeleteNewsPost", handler: DeleteNewsPost, method: "DELETE", path: "/api/admin/news/00000000-0000-0000-0000-00000000000a", params: newsParam, admin: true},
+		{name: "APIEditNewsPost", handler: APIEditNewsPost, method: "POST", path: "/api/admin/news/00000000-0000-0000-0000-00000000000a", body: `{"title":"Title","body":"Body"}`, params: newsParam, admin: true},
+	})
+}

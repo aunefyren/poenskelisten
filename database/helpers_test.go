@@ -150,3 +150,27 @@ func createTestGroup(t *testing.T, ownerID uuid.UUID) models.Group {
 
 	return created
 }
+
+// runClosedDBCases runs each call against a database whose connection has been
+// closed, asserting it surfaces the failure as an error rather than panicking
+// or reporting a zero-value success. This is the only cheap way to reach the
+// "query failed" returns in this package with a healthy in-memory DB.
+func runClosedDBCases(t *testing.T, cases map[string]func() error) {
+	t.Helper()
+	setupTestDB(t)
+	sqlDB, err := Instance.DB()
+	if err != nil {
+		t.Fatalf("failed to get sql.DB: %v", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		t.Fatalf("failed to close sql.DB: %v", err)
+	}
+
+	for name, call := range cases {
+		t.Run(name, func(t *testing.T) {
+			if err := call(); err == nil {
+				t.Errorf("%s returned nil error on a closed database", name)
+			}
+		})
+	}
+}

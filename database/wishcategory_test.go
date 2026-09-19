@@ -175,3 +175,34 @@ func TestCreateWishCategoryInDBFailure(t *testing.T) {
 		t.Error("expected an error when the wish_categories table is unavailable")
 	}
 }
+
+func TestWishCategoryQueriesFailOnClosedDB(t *testing.T) {
+	runClosedDBCases(t, map[string]func() error{
+		"CreateWishCategoryInDB": func() error {
+			return CreateWishCategoryInDB(models.WishCategory{})
+		},
+		"GetWishCategoriesFromWishlist": func() error {
+			_, err := GetWishCategoriesFromWishlist(uuid.New())
+			return err
+		},
+		"GetWishCategoryByID": func() error {
+			_, err := GetWishCategoryByID(uuid.New())
+			return err
+		},
+		"GetWishCategoryByNameInWishlist": func() error {
+			_, err := GetWishCategoryByNameInWishlist("x", uuid.New())
+			return err
+		},
+		"GetNextWishCategorySortOrder": func() error {
+			_, err := GetNextWishCategorySortOrder(uuid.New())
+			return err
+		},
+		"CountEnabledWishesInCategory": func() error {
+			_, err := CountEnabledWishesInCategory(uuid.New())
+			return err
+		},
+		"DeleteWishCategory": func() error {
+			return DeleteWishCategory(uuid.New())
+		},
+	})
+}

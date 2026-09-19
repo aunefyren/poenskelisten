@@ -427,6 +427,23 @@ func TestRemoveFromWishlistSuccess(t *testing.T) {
 	}
 }
 
+// A ?group= the caller isn't a member of is a caller mistake, so it's a 400 -
+// this used to be reported as a 500.
+func TestRemoveFromWishlistNotMemberOfQueriedGroup(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	group := createTestGroup(t, owner.ID)
+	addWishlistMembership(t, wishlist.ID, group.ID)
+
+	body := `{"group_id":"` + group.ID.String() + `"}`
+	code, resp := wlDo(RemoveFromWishlist, "POST", "/api/auth/wishlists/"+wishlist.ID.String()+"/leave?group="+group.ID.String(), body, authHeader(t, owner.ID, false),
+		gin.Params{{Key: "wishlist_id", Value: wishlist.ID.String()}})
+	if code != 400 {
+		t.Fatalf("status = %d, want 400 for a group the caller isn't a member of; body=%v", code, resp)
+	}
+}
+
 func TestRemoveFromWishlistFinalListDBFailure(t *testing.T) {
 	// Migrate without the WishlistCollaborator table so, after the membership
 	// is successfully deleted, the final GetWishlistObjects call (used when no
@@ -1152,4 +1169,32 @@ func TestRegisterWishlistSharedWithGroupSuccess(t *testing.T) {
 	if len(memberships) != 1 {
 		t.Errorf("group wishlist memberships = %v, want 1", memberships)
 	}
+}
+
+func TestWishlistHandlersDatabaseErrors(t *testing.T) {
+	wishlistParam := gin.Params{{Key: "wishlist_id", Value: "00000000-0000-0000-0000-00000000000a"}}
+	runDatabaseErrorCases(t, []dbErrorCase{
+		{name: "RegisterWishlist", handler: RegisterWishlist, method: "POST", path: "/api/auth/wishlists", body: `{"name":"Birthday list","description":"Desc","date":"` + wlFutureDate() + `"}`},
+		{name: "DeleteWishlist", handler: DeleteWishlist, method: "DELETE", path: "/api/auth/wishlists/00000000-0000-0000-0000-00000000000a", params: wishlistParam},
+		{name: "GetWishlist", handler: GetWishlist, method: "GET", path: "/api/auth/wishlists/00000000-0000-0000-0000-00000000000a", params: wishlistParam},
+		{name: "GetWishlists", handler: GetWishlists, method: "GET", path: "/api/auth/wishlists"},
+		{name: "GetWishlists/group", handler: GetWishlists, method: "GET", path: "/api/auth/wishlists?group=00000000-0000-0000-0000-00000000000a"},
+		{name: "APICollaborateWishlist", handler: APICollaborateWishlist, method: "POST", path: "/api/auth/wishlists/00000000-0000-0000-0000-00000000000a/collaborate", body: `{"users":["00000000-0000-0000-0000-00000000000a"]}`, params: wishlistParam},
+		{name: "GetWishlists/notAMemberOfGroupID", handler: GetWishlists, method: "GET", path: "/api/auth/wishlists?notAMemberOfGroupID=00000000-0000-0000-0000-00000000000a"},
+		{name: "JoinWishlist", handler: JoinWishlist, method: "POST", path: "/api/auth/wishlists/00000000-0000-0000-0000-00000000000a/join", body: `{"groups":["00000000-0000-0000-0000-00000000000a"]}`, params: wishlistParam},
+		{name: "RemoveFromWishlist", handler: RemoveFromWishlist, method: "POST", path: "/api/auth/wishlists/00000000-0000-0000-0000-00000000000a/remove", body: `{"group_id":"00000000-0000-0000-0000-00000000000a"}`, params: wishlistParam},
+		{name: "APIUpdateWishlist", handler: APIUpdateWishlist, method: "POST", path: "/api/auth/wishlists/00000000-0000-0000-0000-00000000000a", body: `{"name":"Birthday list","description":"Desc","date":"` + wlFutureDate() + `"}`, params: wishlistParam},
+		{name: "APIUnCollaborateWishlist", handler: APIUnCollaborateWishlist, method: "POST", path: "/api/auth/wishlists/00000000-0000-0000-0000-00000000000a/un-collaborate", body: `{"user_id":"00000000-0000-0000-0000-00000000000a"}`, params: wishlistParam},
+		{name: "GetPublicWishlist", handler: GetPublicWishlist, method: "GET", path: "/api/open/wishlists/public/00000000-0000-0000-0000-00000000000a", params: gin.Params{{Key: "wishlist_hash", Value: "00000000-0000-0000-0000-00000000000a"}}},
+	})
+}
+
+func TestWishlistHandlersRequireAuth(t *testing.T) {
+	wishlistParam := gin.Params{{Key: "wishlist_id", Value: "00000000-0000-0000-0000-00000000000a"}}
+	runUnauthenticatedCases(t, []dbErrorCase{
+		{name: "DeleteWishlist", handler: DeleteWishlist, method: "DELETE", path: "/api/auth/wishlists/00000000-0000-0000-0000-00000000000a", params: wishlistParam},
+		{name: "JoinWishlist", handler: JoinWishlist, method: "POST", path: "/api/auth/wishlists/00000000-0000-0000-0000-00000000000a/join", body: `{"groups":["00000000-0000-0000-0000-00000000000a"]}`, params: wishlistParam},
+		{name: "APICollaborateWishlist", handler: APICollaborateWishlist, method: "POST", path: "/api/auth/wishlists/00000000-0000-0000-0000-00000000000a/collaborate", body: `{"users":["00000000-0000-0000-0000-00000000000a"]}`, params: wishlistParam},
+		{name: "APIUnCollaborateWishlist", handler: APIUnCollaborateWishlist, method: "POST", path: "/api/auth/wishlists/00000000-0000-0000-0000-00000000000a/un-collaborate", body: `{"user_id":"00000000-0000-0000-0000-00000000000a"}`, params: wishlistParam},
+	})
 }
