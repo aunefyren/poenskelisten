@@ -59,7 +59,18 @@ function load_page(result) {
         }
     }
 
-    if(mfaToken) {
+    if(!LOCAL_LOGIN_ENABLED) {
+        // OIDC-only instance: password reset and the password-MFA step don't
+        // exist here (the API refuses them), so always show the SSO login.
+        if(window.location.pathname !== "/login") {
+            history.replaceState(null, "", "/login");
+        }
+        clearResponse();
+        action_login();
+        if(errorMessage) {
+            error(errorMessage);
+        }
+    } else if(mfaToken) {
         clearResponse();
         action_mfa(mfaToken);
     } else if(reset_mode) {
@@ -75,6 +86,11 @@ function load_page(result) {
 }
 
 function action_login() {
+    if(!LOCAL_LOGIN_ENABLED) {
+        action_login_oidc_only();
+        return;
+    }
+
     try {
         var email = document.getElementById("email").value;
     } catch(e) {
@@ -120,6 +136,31 @@ function action_login() {
     renderOIDCLoginOption();
 }
 
+// Login view for an OIDC-only instance: no password form, no reset link, just
+// the single sign-on button.
+function action_login_oidc_only() {
+    var providerName = escapeHTML(OIDC_PROVIDER_NAME);
+
+    document.getElementById('card-header').innerHTML = 'Welcome!';
+    document.getElementById("action").innerHTML = `
+    <div class="title">
+        Log in
+    </div>
+
+    <div class="text-body">
+        This server uses ` + providerName + ` for sign-in.
+    </div>
+
+    <br>
+    <br>
+
+    <div class="action-block">
+        <button type="button" id="log-in-button" onclick="window.location.href='/api/open/oidc/login';">Log in with ` + providerName + `</button>
+    </div>
+    `;
+    document.getElementById("change_action").innerHTML = "";
+}
+
 // Fetch the public OIDC config and, if single sign-on is enabled, show a button
 // that starts the flow. Runs quietly: any failure just leaves password login.
 function renderOIDCLoginOption() {
@@ -139,7 +180,7 @@ function renderOIDCLoginOption() {
                 return;
             }
 
-            var providerName = result.provider_name || "single sign-on";
+            var providerName = escapeHTML(result.provider_name || "single sign-on");
             container.innerHTML = `
                 <div class="text-body" style="font-size: 0.8em; margin-bottom: 0.5em;">or</div>
                 <button type="button" style="padding: 0.75em 1em;" onclick="window.location.href='${result.login_url}';">Log in with ${providerName}</button>

@@ -101,6 +101,24 @@ func TestGetSuccess(t *testing.T) {
 	}
 }
 
+// With no explicit redirect URL (the normal case) it's derived from the external
+// URL, rather than OIDC reporting itself unconfigured.
+func TestGetDerivesRedirectURL(t *testing.T) {
+	resetCache(t)
+	srv := startFakeOIDCProvider(t)
+	setOIDCConfig(t, srv.URL)
+	config.ConfigFile.OIDCRedirectURL = ""
+	config.ConfigFile.PoenskelistenExternalURL = "https://wishlist.example.com"
+
+	client, err := Get()
+	if err != nil {
+		t.Fatalf("Get() returned error: %v", err)
+	}
+	if client.OAuth2Config.RedirectURL != "https://wishlist.example.com/api/open/oidc/callback" {
+		t.Errorf("RedirectURL = %q, want it derived from the external URL", client.OAuth2Config.RedirectURL)
+	}
+}
+
 func TestGetCachesClientForSameConfig(t *testing.T) {
 	resetCache(t)
 	var discoveryHits int

@@ -95,6 +95,7 @@ You can configure Pønskelisten in **three different ways**:
 | db_password | dbpassword | dbpassword | string | DB password |
 | db_name | dbname | dbname | string | Database name |
 | db_ssl | dbssl | dbssl | bool | Use SSL for DB |
+| db_location | dblocation | dblocation | string | SQLite database file path (default: `files/data.db`) |
 | smtp_enabled | disablesmtp | disablesmtp | bool | Disable/enable email functions |
 | smtp_host | smtphost | smtphost | string | SMTP host |
 | smtp_port | smtpport | smtpport | int | SMTP port |
@@ -110,6 +111,7 @@ You can configure Pønskelisten in **three different ways**:
 | oidc_client_secret | oidcclientsecret | oidcclientsecret | string | OIDC client secret |
 | oidc_redirect_url | oidcredirecturl | oidcredirecturl | string | OIDC callback URL; defaults to `<external_url>/api/open/oidc/callback` |
 | oidc_auto_create_users | oidcautocreateusers | oidcautocreateusers | bool | Auto-provision unknown OIDC users (default off) |
+| local_login_disabled | disablelocallogin | disablelocallogin | bool | OIDC-only mode: turn off password login, registration and password reset (default off; ignored unless OIDC is enabled and configured) |
 | mcp_enabled | mcpenabled | mcpenabled | bool | Enable the MCP resource server (the OAuth authorization server is always on) |
 | oauth_signing_key | `N/A` | `N/A` | string | PEM signing key; auto-generated + persisted on first run (config.json only) |
 ---
@@ -161,6 +163,16 @@ Then configure Pønskelisten (env vars shown; flags/config.json equivalents exis
 The redirect URL registered with the IdP must match
 `<external_url>/api/open/oidc/callback`.
 
+**OIDC-only mode**: set `disablelocallogin: true` to make SSO the only way in.
+Password login (including its MFA step), self-registration and password reset
+are then refused by the API, and the login page only shows the SSO button.
+Existing local accounts keep working through SSO once linked by a verified
+email, and local MFA enforcement no longer applies, since the IdP owns MFA.
+The setting is ignored, with a warning in the log, unless OIDC is enabled with
+an issuer URL and client ID, so a broken SSO setup can't lock everyone out. If
+the IdP is unavailable, set `disablelocallogin: false` and restart to get
+password login back.
+
 ## 🤖 MCP server (AI assistants)
 
 Pønskelisten can expose an authenticated **MCP (Model Context Protocol)** endpoint
@@ -201,6 +213,8 @@ services:
       - ./images/:/app/images/:rw
 ```
 Remove `generateinvite` after first run to stop generating codes on start up.
+
+`PUID`/`PGID` pick the user and group the app runs as (default `1000`). The container starts as root, gives that user ownership of `/app/files` and `/app/images` (including any bind-mounted folder Docker created as root), and then drops to it. Set them to match the owner of your host folders. If you'd rather the container never runs as root, set `user: "1000:1000"` on the service instead. In that case `PUID`/`PGID` are ignored, and the host folders must already be writable by that user.
 
 ### **Minimal docker-compose.yml for postgres**
 
@@ -254,7 +268,7 @@ Remove `generateinvite` after first run to stop generating codes on start up.
 
 - Additional invite codes can be created in the admin panel
 
-- If you lose access: restart with generateinvite=true
+- If you lose access: restart with generateinvite=true (in OIDC-only mode, also set `disablelocallogin: false`, since invites are used through self-registration)
 
 ## 🔧 Building from Source
 

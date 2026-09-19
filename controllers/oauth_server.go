@@ -120,7 +120,9 @@ func APIOAuthAuthorize(ctx *gin.Context) {
 		ctx.Redirect(http.StatusFound, "/verify")
 		return
 	}
-	if config.ConfigFile.MFAEnforced && user.IsLocalAuth() && !user.IsMFAEnabled() {
+	// Local MFA only guards password login; with that disabled, a linked local
+	// account signs in via the IdP (which owns MFA), so enrollment would be moot.
+	if config.ConfigFile.MFAEnforced && config.LocalLoginEnabled() && user.IsLocalAuth() && !user.IsMFAEnabled() {
 		ctx.Redirect(http.StatusFound, "/enroll")
 		return
 	}

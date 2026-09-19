@@ -35,6 +35,7 @@ type ServerInfoReply struct {
 	OIDCClientID        string `json:"oidc_client_id"`
 	OIDCRedirectURL     string `json:"oidc_redirect_url"`
 	OIDCAutoCreateUsers bool   `json:"oidc_auto_create_users"`
+	LocalLoginEnabled   bool   `json:"local_login_enabled"`
 
 	// Security (MFA)
 	MFAEnforced             bool `json:"mfa_enforced"`

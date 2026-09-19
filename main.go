@@ -10,6 +10,7 @@ import (
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -65,6 +66,12 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Log.Info("flags parsed")
+
+	if config.ConfigFile.LocalLoginDisabled && config.LocalLoginEnabled() {
+		logger.Log.Warn("local login is set to disabled, but OIDC is not enabled and configured; keeping password login on so the instance stays reachable")
+	} else if !config.LocalLoginEnabled() {
+		logger.Log.Info("local login disabled; users can only sign in with OIDC")
+	}
 
 	// Persist the config only when flags/ENV actually overrode something, to
 	// avoid rewriting config.json on every startup.
@@ -128,12 +135,15 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 	{
 		open := api.Group("/open")
 		{
-			open.POST("/tokens/register", controllers.GenerateToken)
+			// Password-based entry points; all refused when local login is
+			// disabled (OIDC-only), see middlewares.RequireLocalLogin.
+			localLogin := middlewares.RequireLocalLogin()
+			open.POST("/tokens/register", localLogin, controllers.GenerateToken)
 
-			open.POST("/users", controllers.RegisterUser)
-			open.POST("/users/reset", controllers.APIResetPassword)
-			open.GET("/users/reset/:resetCode", controllers.APIVerifyResetCode)
-			open.POST("/users/password", controllers.APIChangePassword)
+			open.POST("/users", localLogin, controllers.RegisterUser)
+			open.POST("/users/reset", localLogin, controllers.APIResetPassword)
+			open.GET("/users/reset/:resetCode", localLogin, controllers.APIVerifyResetCode)
+			open.POST("/users/password", localLogin, controllers.APIChangePassword)
 			open.POST("/users/verify/:code", controllers.VerifyUser)
 			open.POST("/users/verification", controllers.SendUserVerificationCode)
 
@@ -142,7 +152,7 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 			open.POST("/users/mfa/enroll", controllers.APIEnrollMFA)
 			open.POST("/users/mfa/activate", controllers.APIActivateMFA)
 
-			open.POST("/tokens/mfa", controllers.APIValidateMFA)
+			open.POST("/tokens/mfa", localLogin, controllers.APIValidateMFA)
 
 			open.GET("/oidc/config", controllers.APIGetOIDCConfig)
 			open.GET("/oidc/login", controllers.OIDCLogin)
@@ -251,11 +261,19 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 	router.Static("/assets", "./web/assets")
 	router.Static("/css", "./web/css")
 
+	// JSON-encoded so it's a safe JS string literal: JS templates are text/template
+	// and don't escape. Marshalling a plain string can't fail.
+	oidcProviderNameJSON, _ := json.Marshal(config.OIDCDisplayName())
+
 	// Create template for HTML variables
 	templateData := gin.H{
 		"appName":        configFile.PoenskelistenName,
 		"currency":       configFile.PoenskelistenCurrency,
 		"appDescription": configFile.PoenskelistenDescription,
+		// Rendered into the JS so the login/register pages never flash a
+		// password form on an OIDC-only instance.
+		"localLoginEnabled":    config.LocalLoginEnabled(),
+		"oidcProviderNameJSON": string(oidcProviderNameJSON),
 	}
 
 	// endpoint handler building for JS
@@ -365,6 +383,7 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool
 	var oidcClientSecret = flag.String("oidcclientsecret", configFile.OIDCClientSecret, "The OIDC client secret.")
 	var oidcRedirectURL = flag.String("oidcredirecturl", configFile.OIDCRedirectURL, "The OIDC redirect/callback URL registered with the provider.")
 	var oidcAutoCreate = flag.String("oidcautocreateusers", strconv.FormatBool(configFile.OIDCAutoCreateUsers), "If unknown OIDC users are automatically provisioned an account.")
+	var disableLocalLogin = flag.String("disablelocallogin", strconv.FormatBool(configFile.LocalLoginDisabled), "Disables password login, registration and reset so users can only sign in with OIDC. Ignored unless OIDC is enabled and configured.")
 
 	// MCP toggle. The OAuth issuer/algorithm and the API/MCP resource identifiers
 	// auto-derive from the external URL and can be hand-edited in config.json if a
@@ -519,6 +538,10 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool
 
 	if provided["oidcautocreateusers"] {
 		configFile.OIDCAutoCreateUsers = strings.ToLower(*oidcAutoCreate) == "true"
+	}
+
+	if provided["disablelocallogin"] {
+		configFile.LocalLoginDisabled = strings.ToLower(*disableLocalLogin) == "true"
 	}
 
 	if provided["mcpenabled"] {
