@@ -111,6 +111,7 @@ You can configure Pønskelisten in **three different ways**:
 | oidc_client_secret | oidcclientsecret | oidcclientsecret | string | OIDC client secret |
 | oidc_redirect_url | oidcredirecturl | oidcredirecturl | string | OIDC callback URL; defaults to `<external_url>/api/open/oidc/callback` |
 | oidc_auto_create_users | oidcautocreateusers | oidcautocreateusers | bool | Auto-provision unknown OIDC users (default off) |
+| local_login_disabled | disablelocallogin | disablelocallogin | bool | OIDC-only mode: turn off password login, registration and password reset (default off; ignored unless OIDC is enabled and configured) |
 | mcp_enabled | mcpenabled | mcpenabled | bool | Enable the MCP resource server (the OAuth authorization server is always on) |
 | oauth_signing_key | `N/A` | `N/A` | string | PEM signing key; auto-generated + persisted on first run (config.json only) |
 ---
@@ -161,6 +162,16 @@ Then configure Pønskelisten (env vars shown; flags/config.json equivalents exis
 
 The redirect URL registered with the IdP must match
 `<external_url>/api/open/oidc/callback`.
+
+**OIDC-only mode**: set `disablelocallogin: true` to make SSO the only way in.
+Password login (including its MFA step), self-registration and password reset
+are then refused by the API, and the login page only shows the SSO button.
+Existing local accounts keep working through SSO once linked by a verified
+email, and local MFA enforcement no longer applies, since the IdP owns MFA.
+The setting is ignored, with a warning in the log, unless OIDC is enabled with
+an issuer URL and client ID, so a broken SSO setup can't lock everyone out. If
+the IdP is unavailable, set `disablelocallogin: false` and restart to get
+password login back.
 
 ## 🤖 MCP server (AI assistants)
 
@@ -257,7 +268,7 @@ Remove `generateinvite` after first run to stop generating codes on start up.
 
 - Additional invite codes can be created in the admin panel
 
-- If you lose access: restart with generateinvite=true
+- If you lose access: restart with generateinvite=true (in OIDC-only mode, also set `disablelocallogin: false`, since invites are used through self-registration)
 
 ## 🔧 Building from Source
 

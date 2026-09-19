@@ -44,6 +44,7 @@ argCount=$#
 [ -n "$oidcclientsecret" ] && set -- "$@" --oidcclientsecret "$oidcclientsecret"
 [ -n "$oidcredirecturl" ] && set -- "$@" --oidcredirecturl "$oidcredirecturl"
 [ -n "$oidcautocreateusers" ] && set -- "$@" --oidcautocreateusers "$oidcautocreateusers"
+[ -n "$disablelocallogin" ] && set -- "$@" --disablelocallogin "$disablelocallogin"
 
 # Enable the MCP resource server if the environment variable is set. The OAuth
 # issuer/algorithm and API/MCP resource identifiers auto-derive from the external

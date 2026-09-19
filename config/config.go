@@ -119,18 +119,18 @@ func LoadConfig() (err error) {
 		anythingChanged = true
 	}
 
-	// OIDC defaults: only relevant when OIDC is enabled. Give the login button a
-	// sensible label and derive the redirect URL from the external URL when the
-	// admin hasn't set one explicitly.
-	if ConfigFile.OIDCEnabled {
-		if ConfigFile.OIDCProviderName == "" {
-			ConfigFile.OIDCProviderName = "Single sign-on"
-			anythingChanged = true
-		}
-		if ConfigFile.OIDCRedirectURL == "" && ConfigFile.PoenskelistenExternalURL != "" {
-			ConfigFile.OIDCRedirectURL = strings.TrimRight(ConfigFile.PoenskelistenExternalURL, "/") + "/api/open/oidc/callback"
-			anythingChanged = true
-		}
+	// OIDC defaults are computed at runtime (see OIDCDisplayName/OIDCCallbackURL)
+	// rather than persisted here: LoadConfig runs before flags/env vars are
+	// applied, so a default derived now would miss an oidcenabled/externalurl set
+	// that way. Older versions did persist them; clear values identical to the
+	// default so they follow later changes to the external URL.
+	if ConfigFile.OIDCProviderName == defaultOIDCProviderName {
+		ConfigFile.OIDCProviderName = ""
+		anythingChanged = true
+	}
+	if ConfigFile.OIDCRedirectURL != "" && ConfigFile.OIDCRedirectURL == derivedOIDCCallbackURL() {
+		ConfigFile.OIDCRedirectURL = ""
+		anythingChanged = true
 	}
 
 	// The OAuth signing key is generated once and persisted: it must survive
@@ -251,4 +251,51 @@ func GenerateSecureKey(length int) (string, error) {
 	}
 	// Encode to Base64 to make it easy to store
 	return base64.StdEncoding.EncodeToString(key), nil
+}
+
+const (
+	// defaultOIDCProviderName labels the SSO login button when no provider name is set.
+	defaultOIDCProviderName = "Single sign-on"
+	// oidcCallbackPath is where the IdP sends the browser back to (controllers.OIDCCallback).
+	oidcCallbackPath = "/api/open/oidc/callback"
+)
+
+// OIDCDisplayName is the SSO login button label: the configured provider name,
+// or a generic default.
+func OIDCDisplayName() string {
+	if strings.TrimSpace(ConfigFile.OIDCProviderName) != "" {
+		return ConfigFile.OIDCProviderName
+	}
+	return defaultOIDCProviderName
+}
+
+// OIDCCallbackURL is the redirect URL registered with the IdP: the explicitly
+// configured one, or else derived from the external URL. Like OAuthIssuer it is
+// computed on every call rather than persisted, so it always reflects the
+// final configuration after flags/env vars are applied.
+func OIDCCallbackURL() string {
+	if strings.TrimSpace(ConfigFile.OIDCRedirectURL) != "" {
+		return ConfigFile.OIDCRedirectURL
+	}
+	return derivedOIDCCallbackURL()
+}
+
+func derivedOIDCCallbackURL() string {
+	return OAuthIssuer() + oidcCallbackPath
+}
+
+// LocalLoginEnabled reports whether password login, self-registration and
+// password reset are available. Disabling them only takes effect while OIDC is
+// enabled and configured, so a broken or missing SSO setup can never leave the
+// instance with no way to log in at all.
+func LocalLoginEnabled() bool {
+	return !ConfigFile.LocalLoginDisabled || !OIDCConfigured()
+}
+
+// OIDCConfigured reports whether OIDC is enabled with the settings needed to
+// start a login (the client secret is optional for public clients).
+func OIDCConfigured() bool {
+	return ConfigFile.OIDCEnabled &&
+		strings.TrimSpace(ConfigFile.OIDCIssuerURL) != "" &&
+		strings.TrimSpace(ConfigFile.OIDCClientID) != ""
 }

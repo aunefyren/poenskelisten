@@ -36,11 +36,12 @@ func APIGetServerInfo(context *gin.Context) {
 
 		// Single sign-on (client secret intentionally omitted)
 		OIDCEnabled:         config.ConfigFile.OIDCEnabled,
-		OIDCProviderName:    config.ConfigFile.OIDCProviderName,
+		OIDCProviderName:    config.OIDCDisplayName(),
 		OIDCIssuerURL:       config.ConfigFile.OIDCIssuerURL,
 		OIDCClientID:        config.ConfigFile.OIDCClientID,
-		OIDCRedirectURL:     config.ConfigFile.OIDCRedirectURL,
+		OIDCRedirectURL:     config.OIDCCallbackURL(),
 		OIDCAutoCreateUsers: config.ConfigFile.OIDCAutoCreateUsers,
+		LocalLoginEnabled:   config.LocalLoginEnabled(),
 
 		// Security
 		MFAEnforced:             config.ConfigFile.MFAEnforced,
