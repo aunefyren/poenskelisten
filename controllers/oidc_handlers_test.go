@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"aunefyren/poenskelisten/config"
+	"aunefyren/poenskelisten/database"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
@@ -106,6 +107,27 @@ func TestGetOIDCConfigEnabled(t *testing.T) {
 	}
 	if body["provider_name"] != "Test IdP" {
 		t.Errorf("provider_name = %v, want Test IdP", body["provider_name"])
+	}
+	if body["local_login_enabled"] != true {
+		t.Errorf("local_login_enabled = %v, want true by default", body["local_login_enabled"])
+	}
+}
+
+func TestGetOIDCConfigLocalLoginDisabled(t *testing.T) {
+	enableFakeOIDC(t)
+	defer disableOIDC()
+	config.ConfigFile.LocalLoginDisabled = true
+	defer func() { config.ConfigFile.LocalLoginDisabled = false }()
+
+	w := httptest.NewRecorder()
+	ctxTestHelper(w, httptest.NewRequest("GET", "/api/open/oidc/config", nil), APIGetOIDCConfig)
+
+	var body map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if body["local_login_enabled"] != false {
+		t.Errorf("local_login_enabled = %v, want false", body["local_login_enabled"])
 	}
 }
 
@@ -226,6 +248,10 @@ type oidcSigningFixture struct {
 	signer    jose.Signer
 	kid       string
 	nextIDTok string
+	// userInfo, when set, is served from the advertised userinfo endpoint;
+	// userInfoCalls counts requests to it.
+	userInfo      map[string]interface{}
+	userInfoCalls int
 }
 
 func startFakeOIDCServerWithSigning(t *testing.T) *oidcSigningFixture {
@@ -255,7 +281,17 @@ func startFakeOIDCServerWithSigning(t *testing.T) *oidcSigningFixture {
 			"authorization_endpoint": server.URL + "/authorize",
 			"token_endpoint":         server.URL + "/token",
 			"jwks_uri":               server.URL + "/keys",
+			"userinfo_endpoint":      server.URL + "/userinfo",
 		})
+	})
+	mux.HandleFunc("/userinfo", func(w http.ResponseWriter, r *http.Request) {
+		fixture.userInfoCalls++
+		if fixture.userInfo == nil || r.Header.Get("Authorization") != "Bearer test-access-token" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(fixture.userInfo)
 	})
 	mux.HandleFunc("/keys", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -453,6 +489,73 @@ func TestOIDCCallbackSuccessAutoCreatesUser(t *testing.T) {
 	}
 	if !foundSSOCookie {
 		t.Error("expected an SSO cookie to be set after a successful OIDC login")
+	}
+}
+
+// Authelia >= 4.39 (by default) and other IdPs leave email/profile claims out
+// of the ID token and serve them only from userinfo.
+func TestOIDCCallbackUsesUserInfoClaims(t *testing.T) {
+	setupControllersDB(t)
+	fixture := enableFakeOIDCWithSigning(t)
+	defer disableOIDC()
+	config.ConfigFile.OIDCAutoCreateUsers = true
+	enablePrivateKey(t)
+	fixture.sign(t, "user-1", "matching-nonce", "", false, "", "", "")
+	fixture.userInfo = map[string]interface{}{
+		"sub": "user-1", "email": "grace@example.com", "email_verified": true,
+		"given_name": "Grace", "family_name": "Hopper",
+	}
+
+	w := httptest.NewRecorder()
+	ctxTestHelper(w, callbackRequest("matching-state"), OIDCCallback)
+
+	if loc := w.Header().Get("Location"); w.Code != http.StatusFound || loc != "/" {
+		t.Fatalf("status = %d, Location = %q; want 302 to /", w.Code, loc)
+	}
+	user, err := database.GetUserInformationByEmail("grace@example.com")
+	if err != nil {
+		t.Fatalf("expected an account provisioned from the userinfo email: %v", err)
+	}
+	if user.FirstName != "Grace" || user.LastName != "Hopper" {
+		t.Errorf("name = %q %q, want Grace Hopper from userinfo", user.FirstName, user.LastName)
+	}
+}
+
+func TestOIDCCallbackIgnoresUserInfoForOtherSubject(t *testing.T) {
+	setupControllersDB(t)
+	fixture := enableFakeOIDCWithSigning(t)
+	defer disableOIDC()
+	config.ConfigFile.OIDCAutoCreateUsers = true
+	fixture.sign(t, "user-1", "matching-nonce", "", false, "", "", "")
+	fixture.userInfo = map[string]interface{}{"sub": "someone-else", "email": "mallory@example.com", "email_verified": true}
+
+	w := httptest.NewRecorder()
+	ctxTestHelper(w, callbackRequest("matching-state"), OIDCCallback)
+
+	if loc := w.Header().Get("Location"); loc != "/login?error=Your+identity+provider+did+not+share+an+email+address." {
+		t.Errorf("Location = %q, want the no-email error", loc)
+	}
+	if _, err := database.GetUserInformationByEmail("mallory@example.com"); err == nil {
+		t.Error("an account was provisioned from another subject's userinfo")
+	}
+}
+
+func TestOIDCCallbackSkipsUserInfoWhenIDTokenComplete(t *testing.T) {
+	setupControllersDB(t)
+	fixture := enableFakeOIDCWithSigning(t)
+	defer disableOIDC()
+	config.ConfigFile.OIDCAutoCreateUsers = true
+	enablePrivateKey(t)
+	fixture.sign(t, "user-1", "matching-nonce", "ada@example.com", true, "Ada", "Lovelace", "")
+
+	w := httptest.NewRecorder()
+	ctxTestHelper(w, callbackRequest("matching-state"), OIDCCallback)
+
+	if w.Code != http.StatusFound {
+		t.Fatalf("status = %d, want 302", w.Code)
+	}
+	if fixture.userInfoCalls != 0 {
+		t.Errorf("userinfo called %d times, want 0 when the ID token has email and name", fixture.userInfoCalls)
 	}
 }
 

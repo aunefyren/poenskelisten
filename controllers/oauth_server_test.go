@@ -328,6 +328,57 @@ func TestOAuthAuthorizeFirstPartyAutoApprove(t *testing.T) {
 	}
 }
 
+// authorizeFirstPartyQuery builds a valid first-party authorize request.
+func authorizeFirstPartyQuery(client models.OAuthClient) url.Values {
+	_, challenge := oauthServerTestPKCE()
+	q := url.Values{}
+	q.Set("client_id", client.ClientID)
+	q.Set("redirect_uri", client.RedirectURIs[0])
+	q.Set("response_type", "code")
+	q.Set("scope", strings.Join(client.Scopes, " "))
+	q.Set("state", "xyz")
+	q.Set("code_challenge", challenge)
+	q.Set("code_challenge_method", "S256")
+	return q
+}
+
+func TestOAuthAuthorizeEnforcedMFARedirectsToEnroll(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	original := config.ConfigFile
+	t.Cleanup(func() { config.ConfigFile = original })
+	config.ConfigFile.MFAEnforced = true
+	client := oauthServerTestNewClient(t, true, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+
+	w := getAuthorize(authorizeFirstPartyQuery(client), oauthServerTestSSOCookie(t, user.ID))
+	if loc := w.Header().Get("Location"); w.Code != http.StatusFound || loc != "/enroll" {
+		t.Errorf("status = %d, Location = %q; want 302 to /enroll", w.Code, loc)
+	}
+}
+
+// With password login disabled, local MFA protects nothing (a linked local
+// account signs in via the IdP), so enforcement mustn't force enrollment.
+func TestOAuthAuthorizeEnforcedMFASkippedWhenLocalLoginDisabled(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	original := config.ConfigFile
+	t.Cleanup(func() { config.ConfigFile = original })
+	config.ConfigFile.MFAEnforced = true
+	config.ConfigFile.LocalLoginDisabled = true
+	config.ConfigFile.OIDCEnabled = true
+	config.ConfigFile.OIDCIssuerURL = "https://auth.example.com"
+	config.ConfigFile.OIDCClientID = "poenskelisten"
+	client := oauthServerTestNewClient(t, true, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+
+	w := getAuthorize(authorizeFirstPartyQuery(client), oauthServerTestSSOCookie(t, user.ID))
+	loc, _ := url.Parse(w.Header().Get("Location"))
+	if w.Code != http.StatusFound || loc == nil || loc.Query().Get("code") == "" {
+		t.Errorf("status = %d, Location = %q; want a code issued without enrollment", w.Code, w.Header().Get("Location"))
+	}
+}
+
 func TestOAuthAuthorizeThirdPartyShowsConsent(t *testing.T) {
 	setupControllersDB(t)
 	oauthServerTestSetup(t)

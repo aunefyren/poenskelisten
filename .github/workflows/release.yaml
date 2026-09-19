@@ -19,16 +19,18 @@ jobs:
           - goarch: arm
             goos: windows
     steps:
-    - uses: actions/checkout@v4
-    - uses: wangyoucao577/go-release-action@v1.53
+    - uses: actions/checkout@v7
+    - uses: wangyoucao577/go-release-action@v1.55
       with:
         github_token: ${{ secrets.GIT_HUB_TOKEN }}
         goos: ${{ matrix.goos }}
         goarch: ${{ matrix.goarch }}
-        goversion: "1.26.0"
+        goversion: "1.26"
         binary_name: "poenskelisten"
         ldflags: "-s -w"
-        extra_files: README.md auth config controllers database middlewares models utilities web Dockerfile
+        # Only web/ (templates + static assets) is read at runtime; the Go
+        # packages are compiled into the binary.
+        extra_files: README.md LICENSE web
         retry: 10
         overwrite: true
         release_name: ${{ github.event.release.tag_name }}

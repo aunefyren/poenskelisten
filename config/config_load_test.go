@@ -160,7 +160,25 @@ func TestLoadConfigTestEnvironmentRequiresTestEmail(t *testing.T) {
 	}
 }
 
-func TestLoadConfigOIDCDefaults(t *testing.T) {
+// readSavedConfig decodes the config file LoadConfig saved, to check what was
+// persisted as opposed to what's only in memory.
+func readSavedConfig(t *testing.T, path string) models.ConfigStruct {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read saved config: %v", err)
+	}
+	var saved models.ConfigStruct
+	if err := json.Unmarshal(raw, &saved); err != nil {
+		t.Fatalf("failed to parse saved config: %v", err)
+	}
+	return saved
+}
+
+// OIDC defaults must not be derived/persisted at load time: LoadConfig runs
+// before flags/env vars apply, so an oidcenabled/externalurl given that way on
+// first start would otherwise leave the redirect URL empty.
+func TestLoadConfigDoesNotPersistOIDCDefaults(t *testing.T) {
 	path := withTempConfigFile(t)
 	body := `{"oidc_enabled":true,"poenskelisten_external_url":"https://wishlist.example.com"}`
 	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
@@ -170,12 +188,47 @@ func TestLoadConfigOIDCDefaults(t *testing.T) {
 	if err := LoadConfig(); err != nil {
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
-	if ConfigFile.OIDCProviderName != "Single sign-on" {
-		t.Errorf("OIDCProviderName = %q, want the default", ConfigFile.OIDCProviderName)
+	saved := readSavedConfig(t, path)
+	if saved.OIDCProviderName != "" || saved.OIDCRedirectURL != "" {
+		t.Errorf("persisted OIDC defaults (name %q, redirect %q), want both empty", saved.OIDCProviderName, saved.OIDCRedirectURL)
 	}
-	want := "https://wishlist.example.com/api/open/oidc/callback"
-	if ConfigFile.OIDCRedirectURL != want {
-		t.Errorf("OIDCRedirectURL = %q, want %q", ConfigFile.OIDCRedirectURL, want)
+	if got := OIDCCallbackURL(); got != "https://wishlist.example.com/api/open/oidc/callback" {
+		t.Errorf("OIDCCallbackURL() = %q, want it derived from the external URL", got)
+	}
+}
+
+// Older versions persisted the defaults; values identical to them are cleared so
+// the redirect URL follows later external-URL changes.
+func TestLoadConfigClearsLegacyPersistedOIDCDefaults(t *testing.T) {
+	path := withTempConfigFile(t)
+	body := `{"oidc_enabled":true,"poenskelisten_external_url":"https://wishlist.example.com/",` +
+		`"oidc_provider_name":"Single sign-on","oidc_redirect_url":"https://wishlist.example.com/api/open/oidc/callback"}`
+	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		t.Fatalf("failed to seed config file: %v", err)
+	}
+
+	if err := LoadConfig(); err != nil {
+		t.Fatalf("LoadConfig returned error: %v", err)
+	}
+	saved := readSavedConfig(t, path)
+	if saved.OIDCProviderName != "" || saved.OIDCRedirectURL != "" {
+		t.Errorf("legacy defaults kept (name %q, redirect %q), want both cleared", saved.OIDCProviderName, saved.OIDCRedirectURL)
+	}
+}
+
+func TestLoadConfigKeepsCustomOIDCSettings(t *testing.T) {
+	path := withTempConfigFile(t)
+	body := `{"oidc_enabled":true,"poenskelisten_external_url":"https://wishlist.example.com",` +
+		`"oidc_provider_name":"Authelia","oidc_redirect_url":"https://sso.example.com/cb"}`
+	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		t.Fatalf("failed to seed config file: %v", err)
+	}
+
+	if err := LoadConfig(); err != nil {
+		t.Fatalf("LoadConfig returned error: %v", err)
+	}
+	if ConfigFile.OIDCProviderName != "Authelia" || ConfigFile.OIDCRedirectURL != "https://sso.example.com/cb" {
+		t.Errorf("custom OIDC settings changed: name %q, redirect %q", ConfigFile.OIDCProviderName, ConfigFile.OIDCRedirectURL)
 	}
 }
 

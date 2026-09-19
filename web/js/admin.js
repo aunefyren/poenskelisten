@@ -244,6 +244,7 @@ function place_server_info(server_info) {
         sso.push(serverInfoRow("Client ID", server_info.oidc_client_id, "mono"));
         sso.push(serverInfoRow("Redirect URL", server_info.oidc_redirect_url, "mono"));
         sso.push(serverInfoRow("Auto-create users", server_info.oidc_auto_create_users, "bool"));
+        sso.push(serverInfoRow("Password login", server_info.local_login_enabled, "bool"));
     }
     groups.push(serverInfoGroup("Single sign-on", sso));
 

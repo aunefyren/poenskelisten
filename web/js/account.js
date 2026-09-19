@@ -59,12 +59,12 @@ function load_page(result) {
                             <hr>
                         </div>
                     
+                        <div id="oidc-account-note" class="alert alert-info" style="display:none; margin: 0 1em 1em 1em;"></div>
+
                         <form action="" class="icon-border" style="margin: 0 1em;" onsubmit="event.preventDefault(); send_update();">
 
                             <label id="form-input-icon" for="email"></label>
                             <input type="email" name="email" id="email" placeholder="Email" value="" required/>
-
-                            <div id="oidc-account-note" style="display:none; margin-top: 1em; font-size: 0.9em;"></div>
 
                             <div id="credential-section">
                                 <input class="clickable" onclick="change_password_toggle();" style="margin-top: 2em;" type="checkbox" id="password-toggle" name="password-toggle" value="confirm" >
@@ -703,6 +703,10 @@ function PlaceUserData(user_object) {
         // by the identity provider. Hide the credential controls so the form only
         // updates the profile image.
         applyOIDCAccountUI();
+    } else if(!LOCAL_LOGIN_ENABLED) {
+        // A local account on an OIDC-only instance: its password can't be used to
+        // log in any more, so changing it (or its MFA) would be pointless.
+        applyLocalLoginDisabledAccountUI();
     } else {
         // Reflect the current two-factor state for local accounts.
         renderMFASection(user_object.mfa_enabled === true)
@@ -713,11 +717,8 @@ function PlaceUserData(user_object) {
 // the local MFA section, and drop the "required" flags so the profile form can
 // still be submitted (for the profile image).
 function applyOIDCAccountUI() {
-    var note = document.getElementById("oidc-account-note");
-    if(note) {
-        note.style.display = "block";
-        note.innerHTML = "Your sign-in and email are managed by your identity provider.";
-    }
+    var providerName = escapeHTML(OIDC_PROVIDER_NAME);
+    showAccountNote("You sign in with <b>" + providerName + "</b>. Your email, password and two-factor authentication are managed there, so they can't be changed here.");
 
     var credentialSection = document.getElementById("credential-section");
     if(credentialSection) {
@@ -738,10 +739,37 @@ function applyOIDCAccountUI() {
     } catch(e) { console.log(e); }
 
     // Local MFA is not applicable to OIDC accounts.
+    showMFAManagedByProvider();
+}
+
+// Adjust the account page for a local account on an OIDC-only instance: the
+// password no longer logs in, so hide password/MFA changes. The current
+// password is still asked for to confirm profile changes.
+function applyLocalLoginDisabledAccountUI() {
+    var providerName = escapeHTML(OIDC_PROVIDER_NAME);
+    showAccountNote("Password login is turned off on this server; you sign in with <b>" + providerName + "</b>. Two-factor authentication is managed there. Your current password is still needed to save changes here.");
+
+    var credentialSection = document.getElementById("credential-section");
+    if(credentialSection) {
+        credentialSection.style.display = "none";
+    }
+
+    showMFAManagedByProvider();
+}
+
+function showAccountNote(html) {
+    var note = document.getElementById("oidc-account-note");
+    if(note) {
+        note.style.display = "block";
+        note.innerHTML = html;
+    }
+}
+
+function showMFAManagedByProvider() {
     var mfaStatus = document.getElementById("mfa-status");
     var mfaAction = document.getElementById("mfa-action");
     if(mfaStatus) {
-        mfaStatus.innerHTML = "Managed by your identity provider.";
+        mfaStatus.innerHTML = "Managed by " + escapeHTML(OIDC_PROVIDER_NAME) + ".";
     }
     if(mfaAction) {
         mfaAction.innerHTML = "";

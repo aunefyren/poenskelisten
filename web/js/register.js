@@ -3,6 +3,11 @@ function load_page(result) {
     // Reset cookie
     set_cookie("poenskelisten", "", 1);
 
+    if(!LOCAL_LOGIN_ENABLED) {
+        load_page_oidc_only();
+        return;
+    }
+
     var html = `
                 <div class="" id="forside">
 
@@ -57,6 +62,38 @@ function load_page(result) {
     `;
 
     document.getElementById('content').innerHTML = html;
+    document.getElementById('card-header').innerHTML = 'Tell me more about yourself.';
+    clearResponse();
+    showLoggedOutMenu();
+}
+
+// OIDC-only instance: there's no self-registration; accounts come from the
+// identity provider on first sign-in (or are linked by email).
+function load_page_oidc_only() {
+    var providerName = escapeHTML(OIDC_PROVIDER_NAME);
+
+    document.getElementById('content').innerHTML = `
+                <div class="" id="forside">
+                    <div class="module">
+
+                        <div class="title">
+                            Register
+                        </div>
+
+                        <div class="text-body">
+                            Accounts on this server are managed by ` + providerName + `. Log in with ` + providerName + ` instead; if you're allowed access, your account is set up automatically or by an administrator.
+                        </div>
+
+                        <br>
+                        <br>
+
+                        <div class="action-block">
+                            <button type="button" onclick="window.location.href='/login';">Go to login</button>
+                        </div>
+
+                    </div>
+                </div>
+    `;
     document.getElementById('card-header').innerHTML = 'Tell me more about yourself.';
     clearResponse();
     showLoggedOutMenu();

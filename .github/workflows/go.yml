@@ -15,10 +15,10 @@ jobs:
     env:
       GIST_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.26.x'
           cache: true
@@ -79,14 +79,13 @@ jobs:
           minColorRange: "0"
           maxColorRange: "100"
 
-      # Aspirational coverage gate — runs LAST so the badge/summary are still
-      # produced while coverage is below target. CI fails until total coverage
-      # reaches COVERAGE_MIN; raise this single value as the test suite grows.
-      # Starts at 0 because the repo currently has no tests — bump it once tests
-      # land so the gate actually protects coverage.
+      # Coverage gate — runs LAST so the badge/summary are still produced when
+      # coverage drops below the minimum. Set a little under the current total
+      # (71.6% at the time of writing) so small swings don't fail CI; raise this
+      # single value as the test suite grows.
       - name: Coverage gate
         env:
-          COVERAGE_MIN: "0"
+          COVERAGE_MIN: "70"
         run: |
           echo "Total coverage: ${COVERAGE_TOTAL}% (required minimum: ${COVERAGE_MIN}%)"
           awk -v c="${COVERAGE_TOTAL}" -v min="${COVERAGE_MIN}" 'BEGIN {

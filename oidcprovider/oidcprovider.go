@@ -35,16 +35,13 @@ var ErrNotConfigured = errors.New("oidc is not configured")
 
 func currentKey() string {
 	c := config.ConfigFile
-	return strings.Join([]string{c.OIDCIssuerURL, c.OIDCClientID, c.OIDCClientSecret, c.OIDCRedirectURL}, "|")
+	return strings.Join([]string{c.OIDCIssuerURL, c.OIDCClientID, c.OIDCClientSecret, config.OIDCCallbackURL()}, "|")
 }
 
 // Get returns a ready OIDC client, building (and caching) it on first use.
 func Get() (*Client, error) {
 	c := config.ConfigFile
-	if !c.OIDCEnabled {
-		return nil, ErrNotConfigured
-	}
-	if strings.TrimSpace(c.OIDCIssuerURL) == "" || strings.TrimSpace(c.OIDCClientID) == "" || strings.TrimSpace(c.OIDCRedirectURL) == "" {
+	if !config.OIDCConfigured() {
 		return nil, ErrNotConfigured
 	}
 
@@ -68,7 +65,7 @@ func Get() (*Client, error) {
 			ClientID:     c.OIDCClientID,
 			ClientSecret: c.OIDCClientSecret,
 			Endpoint:     provider.Endpoint(),
-			RedirectURL:  c.OIDCRedirectURL,
+			RedirectURL:  config.OIDCCallbackURL(),
 			Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 		},
 	}

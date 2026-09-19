@@ -15,6 +15,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/oauth2"
 )
 
 const (
@@ -29,9 +30,10 @@ const (
 // single sign-on button. It is intentionally public and reveals no secrets.
 func APIGetOIDCConfig(context *gin.Context) {
 	context.JSON(http.StatusOK, gin.H{
-		"enabled":       config.ConfigFile.OIDCEnabled,
-		"provider_name": config.ConfigFile.OIDCProviderName,
-		"login_url":     "/api/open/oidc/login",
+		"enabled":             config.ConfigFile.OIDCEnabled,
+		"provider_name":       config.OIDCDisplayName(),
+		"login_url":           "/api/open/oidc/login",
+		"local_login_enabled": config.LocalLoginEnabled(),
 	})
 }
 
@@ -122,17 +124,20 @@ func OIDCCallback(ctx *gin.Context) {
 		return
 	}
 
-	var claims struct {
-		Email         string `json:"email"`
-		EmailVerified bool   `json:"email_verified"`
-		GivenName     string `json:"given_name"`
-		FamilyName    string `json:"family_name"`
-		Name          string `json:"name"`
-	}
+	var claims oidcClaims
 	if err := idToken.Claims(&claims); err != nil {
 		logger.Log.Error("Failed to parse OIDC claims. Error: " + err.Error())
 		redirectLoginError(ctx, "Single sign-on failed.")
 		return
+	}
+
+	// Many IdPs (e.g. Authelia >= 4.39, by default) put the email/profile claims
+	// only in the userinfo response, not the ID token. A userinfo failure isn't
+	// fatal here: account resolution below still refuses a missing email.
+	if claims.Email == "" || !claims.hasName() {
+		if err := mergeUserInfoClaims(client.Provider, oauth2Token, idToken.Subject, &claims); err != nil {
+			logger.Log.Warn("Failed to read OIDC userinfo claims. Error: " + err.Error())
+		}
 	}
 
 	firstName, lastName := deriveNames(claims.GivenName, claims.FamilyName, claims.Name, claims.Email)
@@ -166,6 +171,54 @@ func OIDCCallback(ctx *gin.Context) {
 	clearFlowCookie(ctx, oidcNonceCookie)
 
 	ctx.Redirect(http.StatusFound, "/")
+}
+
+// oidcClaims is the subset of ID-token/userinfo claims used to resolve and
+// provision the local account.
+type oidcClaims struct {
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	GivenName     string `json:"given_name"`
+	FamilyName    string `json:"family_name"`
+	Name          string `json:"name"`
+}
+
+func (c oidcClaims) hasName() bool {
+	return c.GivenName != "" || c.FamilyName != "" || c.Name != ""
+}
+
+// mergeUserInfoClaims fills claims missing from the ID token from the IdP's
+// userinfo endpoint. Claims the ID token did carry are never overridden.
+func mergeUserInfoClaims(provider *oidc.Provider, token *oauth2.Token, subject string, claims *oidcClaims) error {
+	info, err := provider.UserInfo(context.Background(), oauth2.StaticTokenSource(token))
+	if err != nil {
+		return err
+	}
+	// OIDC Core 5.3.2: a userinfo response for a different subject than the ID
+	// token must not be used (it could be a substituted token's).
+	if info.Subject != subject {
+		return errors.New("userinfo subject does not match the ID token subject")
+	}
+
+	var extra oidcClaims
+	if err := info.Claims(&extra); err != nil {
+		return err
+	}
+
+	// email and email_verified travel together: verification only counts for
+	// the address it was asserted about.
+	if claims.Email == "" {
+		claims.Email = extra.Email
+		claims.EmailVerified = extra.EmailVerified
+	} else if strings.EqualFold(claims.Email, extra.Email) && extra.EmailVerified {
+		claims.EmailVerified = true
+	}
+	if !claims.hasName() {
+		claims.GivenName = extra.GivenName
+		claims.FamilyName = extra.FamilyName
+		claims.Name = extra.Name
+	}
+	return nil
 }
 
 // deriveNames picks a first/last name from the available claims, falling back to
