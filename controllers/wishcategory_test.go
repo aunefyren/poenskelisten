@@ -297,3 +297,9 @@ func TestCleanupWishCategoryIfEmptyDeleteFailure(t *testing.T) {
 	// Should not panic; the failure is logged and swallowed.
 	CleanupWishCategoryIfEmpty(category.ID)
 }
+
+func TestWishCategoryHandlersDatabaseErrors(t *testing.T) {
+	runDatabaseErrorCases(t, []dbErrorCase{
+		{name: "APIGetWishlistCategories", handler: APIGetWishlistCategories, method: "GET", path: "/api/auth/wishlists/00000000-0000-0000-0000-00000000000a/categories", params: gin.Params{{Key: "wishlist_id", Value: "00000000-0000-0000-0000-00000000000a"}}},
+	})
+}

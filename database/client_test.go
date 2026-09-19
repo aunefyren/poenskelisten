@@ -1,9 +1,12 @@
 package database
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"database/sql"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/uuid"
@@ -128,4 +131,146 @@ func TestMigratePanicsOnFailure(t *testing.T) {
 		}
 	}()
 	Migrate()
+}
+
+// keepInstance restores the package-global Instance (and the DBLocation that
+// Connect's SQLite branch reads from config) after a test that calls Connect,
+// which replaces both.
+func keepInstance(t *testing.T) {
+	t.Helper()
+	origInstance, origLocation := Instance, config.ConfigFile.DBLocation
+	t.Cleanup(func() {
+		if Instance != nil && Instance != origInstance {
+			if sqlDB, err := Instance.DB(); err == nil {
+				sqlDB.Close()
+			}
+		}
+		Instance, config.ConfigFile.DBLocation = origInstance, origLocation
+	})
+}
+
+func TestConnectSQLiteCreatesMissingFile(t *testing.T) {
+	keepInstance(t)
+	location := filepath.Join(t.TempDir(), "new.db")
+	config.ConfigFile.DBLocation = location
+
+	if err := Connect("SQLite", "UTC", "", "", "", 0, "", false, location); err != nil {
+		t.Fatalf("Connect returned error: %v", err)
+	}
+	if _, err := os.Stat(location); err != nil {
+		t.Errorf("expected SQLite file to be created at %s: %v", location, err)
+	}
+	if err := Instance.Exec("SELECT 1").Error; err != nil {
+		t.Errorf("connected Instance can't run a query: %v", err)
+	}
+}
+
+func TestConnectSQLiteOpensExistingFile(t *testing.T) {
+	keepInstance(t)
+	location := filepath.Join(t.TempDir(), "existing.db")
+	if err := os.WriteFile(location, nil, 0o600); err != nil {
+		t.Fatalf("failed to create SQLite file: %v", err)
+	}
+	config.ConfigFile.DBLocation = location
+
+	if err := Connect("sqlite", "UTC", "", "", "", 0, "", false, location); err != nil {
+		t.Fatalf("Connect returned error: %v", err)
+	}
+	if err := Instance.Exec("CREATE TABLE t (id INTEGER)").Error; err != nil {
+		t.Errorf("connected Instance can't write: %v", err)
+	}
+}
+
+func TestConnectSQLiteUncreatableFileFails(t *testing.T) {
+	keepInstance(t)
+	config.ConfigFile.DBLocation = filepath.Join(t.TempDir(), "missing-dir", "db.sqlite")
+
+	if err := Connect("sqlite", "UTC", "", "", "", 0, "", false, ""); err == nil {
+		t.Fatal("expected an error when the SQLite file's directory doesn't exist")
+	}
+}
+
+func TestConnectUnknownTypeFails(t *testing.T) {
+	keepInstance(t)
+
+	if err := Connect("oracle", "UTC", "", "", "", 0, "", false, ""); err == nil {
+		t.Fatal("expected an error for an unrecognized database type")
+	}
+}
+
+// Port 1 on loopback has nothing listening, so the driver's connect-time ping
+// is refused immediately instead of waiting on a timeout.
+func TestConnectPostgresUnreachableFails(t *testing.T) {
+	keepInstance(t)
+
+	for _, ssl := range []bool{false, true} {
+		if err := Connect("postgres", "UTC", "user", "pass", "127.0.0.1", 1, "db", ssl, ""); err == nil {
+			t.Errorf("expected an error connecting to an unreachable postgres (ssl=%v)", ssl)
+		}
+	}
+}
+
+func TestConnectMySQLUnreachableFails(t *testing.T) {
+	keepInstance(t)
+
+	if err := Connect("mysql", "UTC", "user", "pass", "127.0.0.1", 1, "db", false, ""); err == nil {
+		t.Fatal("expected an error connecting to an unreachable mysql")
+	}
+}
+
+func TestCreateTableUnreachableFails(t *testing.T) {
+	if err := CreateTable("user", "pass", "127.0.0.1", 1, "db"); err == nil {
+		t.Fatal("expected an error creating a database on an unreachable mysql")
+	}
+}
+
+func TestClientQueriesFailOnClosedDB(t *testing.T) {
+	runClosedDBCases(t, map[string]func() error{
+		"GenerateRandomInvite": func() error {
+			_, err := GenerateRandomInvite()
+			return err
+		},
+		"GenerateRandomVerificationCodeForUser": func() error {
+			_, err := GenerateRandomVerificationCodeForUser(uuid.New())
+			return err
+		},
+		"VerifyUniqueUserEmail": func() error {
+			_, err := VerifyUniqueUserEmail("x")
+			return err
+		},
+		"VerifyUserHasVerificationCode": func() error {
+			_, err := VerifyUserHasVerificationCode(uuid.New())
+			return err
+		},
+		"VerifyUserVerificationCodeMatches": func() error {
+			_, err := VerifyUserVerificationCodeMatches(uuid.New(), "x")
+			return err
+		},
+		"VerifyUserIsVerified": func() error {
+			_, err := VerifyUserIsVerified(uuid.New())
+			return err
+		},
+		"VerifyUnusedUserInviteCode": func() error {
+			_, err := VerifyUnusedUserInviteCode("x")
+			return err
+		},
+		"SetUsedUserInviteCode": func() error {
+			return SetUsedUserInviteCode("x", uuid.New())
+		},
+		"SetUserVerification": func() error {
+			return SetUserVerification(uuid.New(), true)
+		},
+		"DeleteGroup": func() error {
+			return DeleteGroup(uuid.New())
+		},
+		"DeleteGroupMembership": func() error {
+			return DeleteGroupMembership(uuid.New())
+		},
+		"DeleteWishlist": func() error {
+			return DeleteWishlist(uuid.New())
+		},
+		"DeleteWishlistMembership": func() error {
+			return DeleteWishlistMembership(uuid.New())
+		},
+	})
 }

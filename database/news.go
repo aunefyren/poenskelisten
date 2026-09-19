@@ -7,6 +7,10 @@ import (
 	"github.com/google/uuid"
 )
 
+// ErrNewsPostNotFound means the lookup ran but matched no enabled news post, as
+// opposed to the query itself failing.
+var ErrNewsPostNotFound = errors.New("News post was not found.")
+
 // Set news post to disabled
 func DeleteNewsPost(newsID uuid.UUID) error {
 	var news models.News
@@ -58,7 +62,7 @@ func GetNewsPostByNewsID(newsID uuid.UUID) (models.News, error) {
 	if newsPostRecords.Error != nil {
 		return models.News{}, newsPostRecords.Error
 	} else if newsPostRecords.RowsAffected != 1 {
-		return models.News{}, errors.New("News post was not found.")
+		return models.News{}, ErrNewsPostNotFound
 	}
 
 	return newsPost, nil

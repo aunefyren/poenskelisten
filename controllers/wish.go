@@ -493,7 +493,7 @@ func DeleteWish(context *gin.Context) {
 	wish, err := database.GetWishByWishID(wish_id_int)
 	if err != nil {
 		logger.Log.Error("Failed to get wish. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wish."})
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wish."})
 		context.Abort()
 		return
 	} else if wish == nil {

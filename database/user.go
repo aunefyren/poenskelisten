@@ -12,6 +12,11 @@ import (
 	"github.com/thanhpk/randstr"
 )
 
+// ErrUserNotFound means the lookup ran but matched no user, as opposed to the
+// query itself failing - callers use it to tell a caller mistake (400) from a
+// server fault (500).
+var ErrUserNotFound = errors.New("Failed to find correct user in DB.")
+
 // Get redacted user information based on User ID for enabled users
 func GetUserInformation(UserID uuid.UUID) (models.User, error) {
 	var user models.User
@@ -24,7 +29,7 @@ func GetUserInformation(UserID uuid.UUID) (models.User, error) {
 	if userRecord.Error != nil {
 		return models.User{}, userRecord.Error
 	} else if userRecord.RowsAffected != 1 {
-		return models.User{}, errors.New("Failed to find correct user in DB.")
+		return models.User{}, ErrUserNotFound
 	}
 
 	// Redact user information
@@ -44,7 +49,7 @@ func GetUserInformationAnyState(UserID uuid.UUID) (models.User, error) {
 	if userRecord.Error != nil {
 		return models.User{}, userRecord.Error
 	} else if userRecord.RowsAffected != 1 {
-		return models.User{}, errors.New("Failed to find correct user in DB.")
+		return models.User{}, ErrUserNotFound
 	}
 
 	// Redact user information
@@ -65,7 +70,7 @@ func GetAllUserInformation(UserID uuid.UUID) (models.User, error) {
 	if userRecord.Error != nil {
 		return models.User{}, userRecord.Error
 	} else if userRecord.RowsAffected != 1 {
-		return models.User{}, errors.New("Failed to find correct user in DB.")
+		return models.User{}, ErrUserNotFound
 	}
 
 	return user, nil
@@ -82,7 +87,7 @@ func GetAllUserInformationAnyState(UserID uuid.UUID) (models.User, error) {
 	if userRecord.Error != nil {
 		return models.User{}, userRecord.Error
 	} else if userRecord.RowsAffected != 1 {
-		return models.User{}, errors.New("Failed to find correct user in DB.")
+		return models.User{}, ErrUserNotFound
 	}
 
 	return user, nil
@@ -99,7 +104,7 @@ func GetUserInformationByEmail(email string) (models.User, error) {
 	if userRecord.Error != nil {
 		return models.User{}, userRecord.Error
 	} else if userRecord.RowsAffected != 1 {
-		return models.User{}, errors.New("Failed to find correct user in DB.")
+		return models.User{}, ErrUserNotFound
 	}
 
 	// Redact user information
@@ -119,7 +124,7 @@ func GetAllUserInformationByEmail(email string) (models.User, error) {
 	if userRecord.Error != nil {
 		return models.User{}, userRecord.Error
 	} else if userRecord.RowsAffected != 1 {
-		return models.User{}, errors.New("Failed to find correct user in DB.")
+		return models.User{}, ErrUserNotFound
 	}
 
 	return user, nil
@@ -171,7 +176,7 @@ func GetAllUserInformationByResetCode(resetCode string) (models.User, error) {
 	if userRecord.Error != nil {
 		return models.User{}, userRecord.Error
 	} else if userRecord.RowsAffected != 1 {
-		return models.User{}, errors.New("Failed to find correct user in DB.")
+		return models.User{}, ErrUserNotFound
 	}
 
 	return user, nil

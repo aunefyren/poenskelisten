@@ -88,3 +88,27 @@ func TestGetUpdateDeleteNewsPost(t *testing.T) {
 		t.Fatalf("expected no news posts after delete, got %d", len(posts))
 	}
 }
+
+func TestNewsQueriesFailOnClosedDB(t *testing.T) {
+	runClosedDBCases(t, map[string]func() error{
+		"DeleteNewsPost": func() error {
+			return DeleteNewsPost(uuid.New())
+		},
+		"GetNewsPosts": func() error {
+			_, err := GetNewsPosts()
+			return err
+		},
+		"GetNewsPostByNewsID": func() error {
+			_, err := GetNewsPostByNewsID(uuid.New())
+			return err
+		},
+		"UpdateNewsPostInDB": func() error {
+			_, err := UpdateNewsPostInDB(models.News{})
+			return err
+		},
+		"CreateNewsPostInDB": func() error {
+			_, err := CreateNewsPostInDB(models.News{})
+			return err
+		},
+	})
+}
