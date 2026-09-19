@@ -95,6 +95,7 @@ You can configure Pønskelisten in **three different ways**:
 | db_password | dbpassword | dbpassword | string | DB password |
 | db_name | dbname | dbname | string | Database name |
 | db_ssl | dbssl | dbssl | bool | Use SSL for DB |
+| db_location | dblocation | dblocation | string | SQLite database file path (default: `files/data.db`) |
 | smtp_enabled | disablesmtp | disablesmtp | bool | Disable/enable email functions |
 | smtp_host | smtphost | smtphost | string | SMTP host |
 | smtp_port | smtpport | smtpport | int | SMTP port |
@@ -201,6 +202,8 @@ services:
       - ./images/:/app/images/:rw
 ```
 Remove `generateinvite` after first run to stop generating codes on start up.
+
+`PUID`/`PGID` pick the user and group the app runs as (default `1000`). The container starts as root, gives that user ownership of `/app/files` and `/app/images` (including any bind-mounted folder Docker created as root), and then drops to it. Set them to match the owner of your host folders. If you'd rather the container never runs as root, set `user: "1000:1000"` on the service instead. In that case `PUID`/`PGID` are ignored, and the host folders must already be writable by that user.
 
 ### **Minimal docker-compose.yml for postgres**
 
