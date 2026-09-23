@@ -496,8 +496,8 @@ func TestWishlistLookupsWithNoMatch(t *testing.T) {
 	if owner, err := GetWishlistOwner(missing); err == nil || owner != uuid.Nil {
 		t.Errorf("GetWishlistOwner = (%v, %v), want an error and no owner", owner, err)
 	}
-	if found, _, err := GetMembershipIDForGroupToWishlist(missing, uuid.New()); err == nil || found {
-		t.Errorf("GetMembershipIDForGroupToWishlist = (found=%v, %v), want an error", found, err)
+	if found, _, err := GetMembershipIDForGroupToWishlist(missing, uuid.New()); err != nil || found {
+		t.Errorf("GetMembershipIDForGroupToWishlist = (found=%v, %v), want not found and no error", found, err)
 	}
 }
 

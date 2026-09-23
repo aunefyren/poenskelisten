@@ -355,7 +355,7 @@ func breakControllersDB(t *testing.T) {
 func failDBOperation(t *testing.T, op, table string, skip int) {
 	t.Helper()
 	calls := 0
-	fail := func(db *gorm.DB) {
+	registerDBCallback(t, op, func(db *gorm.DB) {
 		if db.Statement.Table != table {
 			return
 		}
@@ -363,27 +363,52 @@ func failDBOperation(t *testing.T, op, table string, skip int) {
 		if calls > skip {
 			db.AddError(errors.New("injected " + op + " failure on " + table))
 		}
-	}
+	})
+}
 
-	name := "test:fail:" + uuid.NewString()
+// onDBOperation runs fn once, just before the (skip+1)th GORM operation of
+// kind op against table. It reaches the branches for a record that vanishes
+// or changes between two of a handler's checks. fn gets a fresh session on the
+// statement's own connection (and transaction, if any), since the test DB has
+// a single connection and a write through database.Instance would deadlock
+// against an open transaction.
+func onDBOperation(t *testing.T, op, table string, skip int, fn func(tx *gorm.DB)) {
+	t.Helper()
+	calls := 0
+	registerDBCallback(t, op, func(db *gorm.DB) {
+		if db.Statement.Table != table {
+			return
+		}
+		calls++
+		if calls == skip+1 {
+			fn(db.Session(&gorm.Session{NewDB: true}))
+		}
+	})
+}
+
+// registerDBCallback hooks cb in just before GORM's own callback for op on
+// the current database.Instance.
+func registerDBCallback(t *testing.T, op string, cb func(*gorm.DB)) {
+	t.Helper()
+	name := "test:hook:" + uuid.NewString()
 	callbacks := database.Instance.Callback()
 	var err error
 	switch op {
 	case "query":
-		err = callbacks.Query().Before("gorm:query").Register(name, fail)
+		err = callbacks.Query().Before("gorm:query").Register(name, cb)
 	case "create":
-		err = callbacks.Create().Before("gorm:create").Register(name, fail)
+		err = callbacks.Create().Before("gorm:create").Register(name, cb)
 	case "update":
-		err = callbacks.Update().Before("gorm:update").Register(name, fail)
+		err = callbacks.Update().Before("gorm:update").Register(name, cb)
 	case "delete":
-		err = callbacks.Delete().Before("gorm:delete").Register(name, fail)
+		err = callbacks.Delete().Before("gorm:delete").Register(name, cb)
 	case "row":
-		err = callbacks.Row().Before("gorm:row").Register(name, fail)
+		err = callbacks.Row().Before("gorm:row").Register(name, cb)
 	default:
 		t.Fatalf("unknown GORM operation %q", op)
 	}
 	if err != nil {
-		t.Fatalf("failed to register failure callback: %v", err)
+		t.Fatalf("failed to register callback: %v", err)
 	}
 }
 

@@ -255,9 +255,6 @@ func TestClientQueriesFailOnClosedDB(t *testing.T) {
 			_, err := VerifyUnusedUserInviteCode("x")
 			return err
 		},
-		"SetUsedUserInviteCode": func() error {
-			return SetUsedUserInviteCode("x", uuid.New())
-		},
 		"SetUserVerification": func() error {
 			return SetUserVerification(uuid.New(), true)
 		},
@@ -330,9 +327,6 @@ func TestClientMissingRowsReturnErrors(t *testing.T) {
 	if _, err := VerifyUserIsVerified(missing); err == nil {
 		t.Error("VerifyUserIsVerified: expected error for an unknown user")
 	}
-	if err := SetUsedUserInviteCode("NOPE", missing); err == nil {
-		t.Error("SetUsedUserInviteCode: expected error for an unknown code")
-	}
 	if err := SetUserVerification(missing, true); err == nil {
 		t.Error("SetUserVerification: expected error for an unknown user")
 	}
@@ -345,42 +339,4 @@ func TestClientMissingRowsReturnErrors(t *testing.T) {
 	if err := DeleteWishlistMembership(missing); err == nil {
 		t.Error("DeleteWishlistMembership: expected error for an unknown membership")
 	}
-}
-
-// SetUsedUserInviteCode writes the invite twice; each write's failure modes
-// must be reported independently.
-func TestSetUsedUserInviteCodeSecondWriteFailures(t *testing.T) {
-	t.Run("error", func(t *testing.T) {
-		setupTestDB(t)
-		code, err := GenerateRandomInvite()
-		if err != nil {
-			t.Fatalf("GenerateRandomInvite error: %v", err)
-		}
-		injectFault(t, "update", "invites", 1)
-
-		if err := SetUsedUserInviteCode(code, uuid.New()); !errors.Is(err, errInjected) {
-			t.Fatalf("SetUsedUserInviteCode error = %v, want the injected fault", err)
-		}
-	})
-
-	t.Run("no rows", func(t *testing.T) {
-		setupTestDB(t)
-		code, err := GenerateRandomInvite()
-		if err != nil {
-			t.Fatalf("GenerateRandomInvite error: %v", err)
-		}
-		// Only the recipient write is zeroed; the "used" write passes normally.
-		if err := registerCallback("update", true, func(db *gorm.DB) {
-			if dest, ok := db.Statement.Dest.(map[string]interface{}); ok && dest["recipient_id"] != nil {
-				db.RowsAffected = 0
-			}
-		}); err != nil {
-			t.Fatalf("failed to register callback: %v", err)
-		}
-
-		err = SetUsedUserInviteCode(code, uuid.New())
-		if err == nil || err.Error() != "recipient not changed in database" {
-			t.Fatalf("SetUsedUserInviteCode error = %v, want \"recipient not changed in database\"", err)
-		}
-	})
 }

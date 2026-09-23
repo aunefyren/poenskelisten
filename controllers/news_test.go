@@ -637,3 +637,41 @@ func TestEditNewsPostSaveFails(t *testing.T) {
 		t.Errorf("title = %q, want unchanged %q", stored.Title, news.Title)
 	}
 }
+
+func TestVisibleNewsPosts(t *testing.T) {
+	now := time.Now()
+	past := now.Add(-time.Hour)
+	older := now.Add(-2 * time.Hour)
+	future := now.Add(time.Hour)
+
+	post := func(title string, date time.Time, expiry *time.Time) models.News {
+		return models.News{Title: title, Date: date, ExpiryDate: expiry}
+	}
+	posts := []models.News{
+		post("older", older, nil),
+		post("scheduled", future, nil),
+		post("expired", older, &past),
+		post("live", past, &future),
+	}
+
+	cases := []struct {
+		name  string
+		admin bool
+		want  []string
+	}{
+		{"non-admin sees only published, unexpired posts", false, []string{"live", "older"}},
+		{"admin also sees scheduled posts", true, []string{"scheduled", "live", "older"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := visibleNewsPosts(posts, c.admin, now)
+			titles := []string{}
+			for _, p := range got {
+				titles = append(titles, p.Title)
+			}
+			if strings.Join(titles, ",") != strings.Join(c.want, ",") {
+				t.Errorf("titles = %v, want %v (newest first)", titles, c.want)
+			}
+		})
+	}
+}

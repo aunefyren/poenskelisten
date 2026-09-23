@@ -18,6 +18,8 @@ import (
 
 func setupMCPConfig(t *testing.T) {
 	t.Helper()
+	original := config.ConfigFile
+	t.Cleanup(func() { config.ConfigFile = original })
 	keyPEM, kid, err := config.GenerateOAuthSigningKey(config.OAuthAlgES256)
 	if err != nil {
 		t.Fatalf("failed to generate key: %v", err)

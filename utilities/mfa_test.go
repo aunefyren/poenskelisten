@@ -10,6 +10,8 @@ import (
 )
 
 func TestGenerateAndValidateTOTP(t *testing.T) {
+	original := config.ConfigFile
+	t.Cleanup(func() { config.ConfigFile = original })
 	config.ConfigFile.PoenskelistenName = "TestApp"
 
 	secret, url, qrCode, err := GenerateTOTPSecret("user@example.com")

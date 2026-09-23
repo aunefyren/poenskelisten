@@ -4,6 +4,7 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
 	"encoding/json"
+	"gorm.io/gorm"
 	"io"
 	"net/http/httptest"
 	"os"
@@ -1019,6 +1020,100 @@ func TestAPIUpdateWishlistCollaboratorSuccess(t *testing.T) {
 		gin.Params{{Key: "wishlist_id", Value: wishlist.ID.String()}})
 	if code != 201 {
 		t.Fatalf("status = %d, want 201; body=%v", code, resp)
+	}
+
+	// Editing as a collaborator must not hand the wishlist to the collaborator.
+	updated, err := database.GetWishlist(wishlist.ID)
+	if err != nil {
+		t.Fatalf("failed to reload wishlist: %v", err)
+	}
+	if updated.Name != "Updated by collaborator" {
+		t.Errorf("name = %q, want the collaborator's edit to be saved", updated.Name)
+	}
+	if updated.OwnerID != owner.ID {
+		t.Errorf("owner = %v, want the original owner %v", updated.OwnerID, owner.ID)
+	}
+}
+
+// Names are unique per owner, so a collaborator can't rename a wishlist to
+// clash with another of the owner's wishlists...
+func TestAPIUpdateWishlistCollaboratorDuplicateOfOwnersName(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	collaborator := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	ownersOther := createTestWishlist(t, owner.ID)
+	addWishCollaborator(t, wishlist.ID, collaborator.ID)
+
+	body := `{"name":"` + ownersOther.Name + `"}`
+	code, resp := wlDo(APIUpdateWishlist, "PUT", "/api/auth/wishlists/"+wishlist.ID.String(), body, authHeader(t, collaborator.ID, false), wishlistTestParams(wishlist.ID))
+	if code != 400 {
+		t.Fatalf("status = %d, want 400; body=%v", code, resp)
+	}
+}
+
+// ...but may reuse a name the collaborator has on their own profile.
+func TestAPIUpdateWishlistCollaboratorMayReuseOwnName(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	collaborator := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	collaboratorsOwn := createTestWishlist(t, collaborator.ID)
+	addWishCollaborator(t, wishlist.ID, collaborator.ID)
+
+	body := `{"name":"` + collaboratorsOwn.Name + `"}`
+	code, resp := wlDo(APIUpdateWishlist, "PUT", "/api/auth/wishlists/"+wishlist.ID.String(), body, authHeader(t, collaborator.ID, false), wishlistTestParams(wishlist.ID))
+	if code != 201 {
+		t.Fatalf("status = %d, want 201; body=%v", code, resp)
+	}
+}
+
+func TestAPIUpdateWishlistKeepsPublicLinkOnEdit(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := wishlistTestSave(t, createTestWishlist(t, owner.ID), func(w *models.Wishlist) {
+		w.Public = boolPtr(true)
+		w.PublicHash = uuid.New()
+	})
+
+	body := `{"name":"` + wishlist.Name + `","description":"Only the description changed","public":true}`
+	code, resp := wlDo(APIUpdateWishlist, "PUT", "/api/auth/wishlists/"+wishlist.ID.String(), body, authHeader(t, owner.ID, false), wishlistTestParams(wishlist.ID))
+	if code != 201 {
+		t.Fatalf("status = %d, want 201; body=%v", code, resp)
+	}
+
+	updated, err := database.GetWishlist(wishlist.ID)
+	if err != nil {
+		t.Fatalf("failed to reload wishlist: %v", err)
+	}
+	if updated.PublicHash != wishlist.PublicHash {
+		t.Errorf("public hash changed from %v to %v; an ordinary edit must keep shared links working", wishlist.PublicHash, updated.PublicHash)
+	}
+}
+
+func TestAPIUpdateWishlistRepublishingIssuesNewPublicLink(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := wishlistTestSave(t, createTestWishlist(t, owner.ID), func(w *models.Wishlist) {
+		w.Public = boolPtr(false)
+		w.PublicHash = uuid.New()
+	})
+
+	body := `{"name":"` + wishlist.Name + `","public":true}`
+	code, resp := wlDo(APIUpdateWishlist, "PUT", "/api/auth/wishlists/"+wishlist.ID.String(), body, authHeader(t, owner.ID, false), wishlistTestParams(wishlist.ID))
+	if code != 201 {
+		t.Fatalf("status = %d, want 201; body=%v", code, resp)
+	}
+
+	updated, err := database.GetWishlist(wishlist.ID)
+	if err != nil {
+		t.Fatalf("failed to reload wishlist: %v", err)
+	}
+	if updated.PublicHash == wishlist.PublicHash {
+		t.Error("public hash unchanged; re-publishing a private wishlist must revoke the old link")
+	}
+	if updated.Public == nil || !*updated.Public {
+		t.Error("wishlist should now be public")
 	}
 }
 
@@ -2116,5 +2211,47 @@ func TestGetPublicWishlistWishesNewestFirst(t *testing.T) {
 	wishes, _ := obj["wishes"].([]interface{})
 	if len(wishes) != 2 || wishes[0].(map[string]interface{})["id"] != latest.ID.String() {
 		t.Errorf("wishes = %v, want 2 with the latest first", wishes)
+	}
+}
+
+// A real database error while building the wishlist object is a 500; only a
+// missing wishlist or owner (TestGetWishlistOwnerDisabled) is a 400.
+func TestGetWishlistObjectDBFailure(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	header := authHeader(t, owner.ID, false)
+	failDBOperation(t, "query", "users", 0)
+
+	code, resp := wlDo(GetWishlist, "GET", "/api/auth/wishlists/"+wishlist.ID.String(), "", header, wishlistTestParams(wishlist.ID))
+	if code != 500 {
+		t.Fatalf("status = %d, want 500; body=%v", code, resp)
+	}
+	if resp["error"] != "Failed to get wishlist object." {
+		t.Errorf("error = %v", resp["error"])
+	}
+}
+
+// The membership is verified, then looked up again to delete it; if it's
+// removed in between, the caller gets a 400 rather than a 500.
+func TestRemoveFromWishlistMembershipVanishes(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	group := createTestGroup(t, owner.ID)
+	membership := addWishlistMembership(t, wishlist.ID, group.ID)
+	onDBOperation(t, "query", "wishlist_memberships", 1, func(tx *gorm.DB) {
+		if err := tx.Exec("UPDATE wishlist_memberships SET enabled = ? WHERE id = ?", false, membership.ID).Error; err != nil {
+			t.Errorf("failed to disable membership: %v", err)
+		}
+	})
+
+	body := `{"group_id":"` + group.ID.String() + `"}`
+	code, resp := wlDo(RemoveFromWishlist, "POST", "/api/auth/wishlists/"+wishlist.ID.String()+"/remove", body, authHeader(t, owner.ID, false), wishlistTestParams(wishlist.ID))
+	if code != 400 {
+		t.Fatalf("status = %d, want 400; body=%v", code, resp)
+	}
+	if resp["error"] != "Failed to find group membership ID." {
+		t.Errorf("error = %v", resp["error"])
 	}
 }

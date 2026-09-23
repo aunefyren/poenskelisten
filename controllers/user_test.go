@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"gorm.io/gorm"
 	"net"
 	"net/http/httptest"
 	"os"
@@ -877,7 +878,7 @@ func TestGetUsersNotACollaboratorWishlistLookupFailure(t *testing.T) {
 	if code != 500 {
 		t.Fatalf("status = %d, want 500; body=%v", code, resp)
 	}
-	if resp["error"] != "Failed to parse wishlist." {
+	if resp["error"] != "Failed to get wishlist." {
 		t.Errorf("error = %v", resp["error"])
 	}
 }
@@ -1263,8 +1264,8 @@ func TestRegisterUserDatabaseFailures(t *testing.T) {
 		{"user count", "query", "users", 0, 500, "Failed to verify user amount."},
 		{"invite lookup", "query", "invites", 0, 500, "Failed to verify invite code."},
 		{"unique e-mail check", "query", "users", 1, 500, "Failed to verify unique e-mail."},
-		{"user insert", "create", "users", 0, 500, "Failed to get create user."},
-		{"mark invite used", "update", "invites", 0, 500, "Failed to set invite code to used."},
+		{"user insert", "create", "users", 0, 500, "Failed to create user."},
+		{"claim invite", "update", "invites", 0, 500, "Failed to create user."},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1280,6 +1281,57 @@ func TestRegisterUserDatabaseFailures(t *testing.T) {
 				t.Errorf("error = %v, want %q", resp["error"], c.wantError)
 			}
 		})
+	}
+}
+
+// A failure while claiming the invite must not leave the new account behind
+// with the invite still reusable.
+func TestRegisterUserInviteClaimFailureLeavesNoUser(t *testing.T) {
+	setupControllersDB(t)
+	invite := createTestInvite(t)
+	failDBOperation(t, "update", "invites", 0)
+
+	code, resp, _ := doRequest(RegisterUser, "POST", "/api/open/users/register", userTestRegisterBody(invite.Code, "Sup3rSecret!"), nil, nil)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500; body=%v", code, resp)
+	}
+	if userTestInviteUsed(t, invite.Code) {
+		t.Error("the invite must stay unused when registration fails")
+	}
+	count, err := database.GetAmountOfEnabledUsers()
+	if err != nil {
+		t.Fatalf("failed to count users: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("users = %d, want 0 (the insert should have been rolled back)", count)
+	}
+}
+
+// Two registrations can both pass the "unused invite" check; only one may
+// claim it. Simulate losing that race by marking the invite used just before
+// the claim.
+func TestRegisterUserInviteClaimedConcurrently(t *testing.T) {
+	setupControllersDB(t)
+	invite := createTestInvite(t)
+	onDBOperation(t, "update", "invites", 0, func(tx *gorm.DB) {
+		if err := tx.Exec("UPDATE invites SET used = ? WHERE id = ?", true, invite.ID).Error; err != nil {
+			t.Errorf("failed to mark invite used: %v", err)
+		}
+	})
+
+	code, resp, _ := doRequest(RegisterUser, "POST", "/api/open/users/register", userTestRegisterBody(invite.Code, "Sup3rSecret!"), nil, nil)
+	if code != 400 {
+		t.Fatalf("status = %d, want 400; body=%v", code, resp)
+	}
+	if resp["error"] != "Invitiation code is not valid." {
+		t.Errorf("error = %v", resp["error"])
+	}
+	count, err := database.GetAmountOfEnabledUsers()
+	if err != nil {
+		t.Fatalf("failed to count users: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("users = %d, want 0 (the losing registration must be rolled back)", count)
 	}
 }
 

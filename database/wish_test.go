@@ -160,6 +160,32 @@ func TestWishClaimLifecycle(t *testing.T) {
 	}
 }
 
+// Unclaiming disables the claim row rather than deleting it, so after a
+// re-claim there's an old disabled row next to the new one. Unclaiming again
+// must only touch the live row.
+func TestDeleteWishClaimAfterReclaim(t *testing.T) {
+	setupTestDB(t)
+
+	owner := createTestUser(t)
+	claimer := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wish := createWishForOwner(t, wishlist.ID, owner.ID, "Reclaimable")
+
+	for round := 1; round <= 2; round++ {
+		claim := models.WishClaim{WishID: wish.ID, UserID: claimer.ID, Enabled: true}
+		claim.ID = uuid.New()
+		if _, err := CreateWishClaimInDB(claim); err != nil {
+			t.Fatalf("round %d: failed to create wish claim: %v", round, err)
+		}
+		if err := DeleteWishClaimByUserAndWish(wish.ID, claimer.ID); err != nil {
+			t.Fatalf("round %d: failed to delete claim: %v", round, err)
+		}
+		if claimed, err := VerifyWishIsClaimed(wish.ID); err != nil || claimed {
+			t.Fatalf("round %d: expected wish to be unclaimed (claimed=%v err=%v)", round, claimed, err)
+		}
+	}
+}
+
 func TestUpdateWishInDB(t *testing.T) {
 	setupTestDB(t)
 

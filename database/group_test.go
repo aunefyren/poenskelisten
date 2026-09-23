@@ -163,8 +163,8 @@ func TestDeleteGroupSoftDisables(t *testing.T) {
 		t.Fatalf("DeleteGroup returned error: %v", err)
 	}
 
-	if _, err := GetGroupInformation(group.ID); err == nil {
-		t.Fatalf("expected disabled group to be unreachable, got nil error")
+	if _, err := GetGroupInformation(group.ID); !errors.Is(err, ErrGroupNotFound) {
+		t.Fatalf("err = %v, want ErrGroupNotFound for a disabled group", err)
 	}
 }
 
@@ -207,8 +207,8 @@ func TestGetGroupUsingGroupIDAndUserIDAsOwner(t *testing.T) {
 	}
 
 	// A member who is not the owner must not resolve as owner.
-	if _, err := GetGroupUsingGroupIDAndUserIDAsOwner(member.ID, group.ID); err == nil {
-		t.Fatalf("expected error for non-owner, got nil")
+	if _, err := GetGroupUsingGroupIDAndUserIDAsOwner(member.ID, group.ID); !errors.Is(err, ErrGroupNotFound) {
+		t.Fatalf("err = %v, want ErrGroupNotFound for non-owner", err)
 	}
 }
 
@@ -228,8 +228,8 @@ func TestGetGroupMembershipByGroupIDAndMemberID(t *testing.T) {
 		t.Fatalf("expected membership %v, got %v", membership.ID, got.ID)
 	}
 
-	if _, err := GetGroupMembershipByGroupIDAndMemberID(group.ID, uuid.New()); err == nil {
-		t.Fatalf("expected error for unknown member, got nil")
+	if _, err := GetGroupMembershipByGroupIDAndMemberID(group.ID, uuid.New()); !errors.Is(err, ErrGroupMembershipNotFound) {
+		t.Fatalf("err = %v, want ErrGroupMembershipNotFound for unknown member", err)
 	}
 }
 

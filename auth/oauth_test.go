@@ -14,6 +14,8 @@ import (
 // package-global config (always the fixed ES256 algorithm).
 func setupOAuthKey(t *testing.T) {
 	t.Helper()
+	original := config.ConfigFile
+	t.Cleanup(func() { config.ConfigFile = original })
 	keyPEM, kid, err := config.GenerateOAuthSigningKey(config.OAuthSigningAlgorithm)
 	if err != nil {
 		t.Fatalf("failed to generate OAuth key: %v", err)

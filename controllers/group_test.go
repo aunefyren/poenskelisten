@@ -4,6 +4,7 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
 	"encoding/json"
+	"gorm.io/gorm"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -92,6 +93,64 @@ func TestRegisterGroupNameTooShort(t *testing.T) {
 
 	if w.Code != 400 {
 		t.Fatalf("status = %d, want 400 for a too-short name", w.Code)
+	}
+}
+
+// Surrounding whitespace doesn't count towards the five-letter minimum...
+func TestRegisterGroupNameTooShortAfterTrim(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+
+	ctx, w := groupTestContext("POST", "/api/groups", `{"name":"   Abc   ","description":"A group"}`)
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RegisterGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a name that's too short once trimmed; body=%s", w.Code, w.Body.String())
+	}
+}
+
+// ...and isn't persisted.
+func TestRegisterGroupTrimsInput(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+
+	ctx, w := groupTestContext("POST", "/api/groups", `{"name":"  My Group  ","description":"  A group  "}`)
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RegisterGroup(ctx)
+
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
+	exists, group, err := database.VerifyGroupExistsByNameForUser("My Group", owner.ID)
+	if err != nil || !exists {
+		t.Fatalf("trimmed group name not found (exists=%v err=%v)", exists, err)
+	}
+	if group.Description != "A group" {
+		t.Errorf("description = %q, want it trimmed", group.Description)
+	}
+}
+
+func TestAPIUpdateGroupTrimsInput(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String(), `{"name":"  Renamed Group  ","description":"  New description  "}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	APIUpdateGroup(ctx)
+
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
+	updated, err := database.GetGroupInformation(group.ID)
+	if err != nil {
+		t.Fatalf("failed to reload group: %v", err)
+	}
+	if updated.Name != "Renamed Group" || updated.Description != "New description" {
+		t.Errorf("group = (%q, %q), want both trimmed", updated.Name, updated.Description)
 	}
 }
 
@@ -1228,35 +1287,36 @@ func TestRegisterGroupWishlistMembershipCreateFailure(t *testing.T) {
 }
 
 func TestJoinGroupMembershipCheckFailure(t *testing.T) {
-	// GroupMembership table missing so VerifyUserMembershipToGroup fails.
-	setupControllersDB(t, &models.User{}, &models.Group{})
+	setupControllersDB(t)
 	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
 	newMember := createTestUser(t)
+	failDBOperation(t, "query", "group_memberships", 0)
 
 	ctx, w := groupTestContext("POST", "/api/groups/x/join", `{"members":["`+newMember.ID.String()+`"]}`)
-	ctx.Params = gin.Params{{Key: "group_id", Value: uuid.NewString()}}
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
 	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
 	JoinGroup(ctx)
 
 	if w.Code != 500 {
-		t.Fatalf("status = %d, want 500 when the group_memberships table is unavailable; body=%s", w.Code, w.Body.String())
+		t.Fatalf("status = %d, want 500 when the membership check fails; body=%s", w.Code, w.Body.String())
 	}
 }
 
 func TestJoinGroupOwnershipCheckFailure(t *testing.T) {
-	// GroupMembership present (so the not-already-a-member check succeeds),
-	// Group missing so the ownership check fails.
-	setupControllersDB(t, &models.User{}, &models.GroupMembership{})
+	setupControllersDB(t)
 	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
 	newMember := createTestUser(t)
+	failDBOperation(t, "query", "groups", 0)
 
 	ctx, w := groupTestContext("POST", "/api/groups/x/join", `{"members":["`+newMember.ID.String()+`"]}`)
-	ctx.Params = gin.Params{{Key: "group_id", Value: uuid.NewString()}}
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
 	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
 	JoinGroup(ctx)
 
 	if w.Code != 500 {
-		t.Fatalf("status = %d, want 500 when the groups table is unavailable; body=%s", w.Code, w.Body.String())
+		t.Fatalf("status = %d, want 500 when the ownership check fails; body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -1585,7 +1645,7 @@ func TestGroupHandlersInjectedDatabaseFailures(t *testing.T) {
 			body:   func(f groupTestFixture) string { return `{"name":"Renamed Group","description":"New description"}` },
 			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
 			op:     "query", table: "groups", skip: 2,
-			wantStatus: http.StatusInternalServerError, wantError: "Failed verify group name.",
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to verify group name.",
 		},
 		{
 			name: "APIUpdateGroup/save", handler: APIUpdateGroup, method: "POST", path: "/api/auth/groups/x",
@@ -1832,5 +1892,114 @@ func TestConvertGroupsToGroupObjectsSkipsBrokenGroup(t *testing.T) {
 	}
 	if len(groupObjects[0].Members) != 2 {
 		t.Errorf("members = %d, want 2", len(groupObjects[0].Members))
+	}
+}
+
+// The membership is checked up front, then looked up again to delete it; if
+// it's removed in between, the caller gets a 400 rather than a 500.
+func TestRemoveFromGroupMembershipVanishes(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+	member := createTestUser(t)
+	membership := addGroupMembership(t, group.ID, member.ID)
+	onDBOperation(t, "query", "group_memberships", 1, func(tx *gorm.DB) {
+		if err := tx.Exec("UPDATE group_memberships SET enabled = ? WHERE id = ?", false, membership.ID).Error; err != nil {
+			t.Errorf("failed to disable membership: %v", err)
+		}
+	})
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String()+"/remove", `{"member_id":"`+member.ID.String()+`"}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RemoveFromGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+	}
+	if got := groupJSONBody(t, w)["error"]; got != "User is not a member of this group." {
+		t.Errorf("error = %v", got)
+	}
+}
+
+// The membership is checked up front, then looked up again to delete it; if
+// it's removed in between, that's still a caller-visible "not a member".
+func TestRemoveSelfFromGroupMembershipVanishes(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	member := createTestUser(t)
+	membership := addGroupMembership(t, group.ID, member.ID)
+	onDBOperation(t, "query", "group_memberships", 1, func(tx *gorm.DB) {
+		if err := tx.Exec("UPDATE group_memberships SET enabled = ? WHERE id = ?", false, membership.ID).Error; err != nil {
+			t.Errorf("failed to disable membership: %v", err)
+		}
+	})
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String()+"/leave", "")
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, member.ID, false))
+	RemoveSelfFromGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+	}
+	if got := groupJSONBody(t, w)["error"]; got != "You are not a member of this group." {
+		t.Errorf("error = %v", got)
+	}
+}
+
+// A disabled account keeps its membership row; it must be left out of the
+// listing rather than failing the whole request.
+func TestGetGroupMembersSkipsDisabledMember(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+	member := createTestUser(t)
+	addGroupMembership(t, group.ID, member.ID)
+	member.Enabled = boolPtr(false)
+	if _, err := database.UpdateUserInDB(member); err != nil {
+		t.Fatalf("failed to disable member: %v", err)
+	}
+
+	ctx, w := groupTestContext("GET", "/api/groups/"+group.ID.String()+"/members", "")
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	GetGroupMembers(ctx)
+
+	if w.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+	members, ok := groupJSONBody(t, w)["group_members"].([]interface{})
+	if !ok || len(members) != 1 {
+		t.Fatalf("group_members = %v, want only the enabled owner", groupJSONBody(t, w)["group_members"])
+	}
+}
+
+// Ownership is checked first, then the group is loaded; if it's deleted in
+// between, the caller gets a 400 rather than a 500.
+func TestAPIUpdateGroupVanishesAfterOwnershipCheck(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+	onDBOperation(t, "query", "groups", 1, func(tx *gorm.DB) {
+		if err := tx.Exec("UPDATE groups SET enabled = ? WHERE id = ?", false, group.ID).Error; err != nil {
+			t.Errorf("failed to disable group: %v", err)
+		}
+	})
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String(), `{"name":"Renamed Group","description":"New description"}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	APIUpdateGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+	}
+	if got := groupJSONBody(t, w)["error"]; got != "Failed to find group." {
+		t.Errorf("error = %v", got)
 	}
 }

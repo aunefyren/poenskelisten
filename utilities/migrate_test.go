@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestChangeColumns(t *testing.T) {
@@ -237,6 +238,50 @@ func TestMigrateSQLQuotedValueContainingSeparator(t *testing.T) {
 	rowRe := regexp.MustCompile(`\('[0-9a-f-]{36}', 'Red, green, blue', 3\);`)
 	if !rowRe.MatchString(result) {
 		t.Errorf("expected the row to keep 'Red, green, blue' as one value after a UUID key; got:\n%s", result)
+	}
+}
+
+// A quoted value at the end of the row that contains the separator must be
+// re-joined too - the last value has nothing after it, which is where the
+// merge used to go wrong.
+func TestMigrateSQLQuotedLastValueContainingSeparator(t *testing.T) {
+	input := "INSERT INTO `widgets` (`id`, `name`) VALUES\n" +
+		"(1, 'Red, green, blue');\n" +
+		"\n"
+
+	result, err := MigrateSQL(bufio.NewScanner(strings.NewReader(input)))
+	if err != nil {
+		t.Fatalf("MigrateSQL returned error: %v", err)
+	}
+	rowRe := regexp.MustCompile(`\('[0-9a-f-]{36}', 'Red, green, blue'\);`)
+	if !rowRe.MatchString(result) {
+		t.Errorf("expected 'Red, green, blue' to stay one value; got:\n%s", result)
+	}
+}
+
+// A quoted value that never closes used to spin ReplaceValues forever; it
+// must now surface as an error naming the table.
+func TestMigrateSQLUnterminatedQuotedValue(t *testing.T) {
+	input := "INSERT INTO `widgets` (`id`, `name`) VALUES\n" +
+		"(1, 'abc);\n" +
+		"\n"
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := MigrateSQL(bufio.NewScanner(strings.NewReader(input)))
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected an error for an unterminated quoted value")
+		}
+		if !strings.Contains(err.Error(), "widgets") {
+			t.Errorf("error = %q, want it to name the table", err.Error())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("MigrateSQL did not return; the unterminated value is being looped on")
 	}
 }
 

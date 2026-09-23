@@ -2083,19 +2083,11 @@ func TestAPIGetWish_WishDisappearsMidRequest(t *testing.T) {
 
 	// Disable the wish just before the ownership check - after the handler
 	// has resolved its wishlist, but before it loads the wish itself.
-	fired := false
-	err := database.Instance.Callback().Query().Before("gorm:query").Register("test:wish:disable:"+uuid.NewString(), func(db *gorm.DB) {
-		if fired || db.Statement.Table != "wishlists" {
-			return
-		}
-		fired = true
-		if err := database.Instance.Exec("UPDATE wishes SET enabled = ? WHERE id = ?", false, wish.ID).Error; err != nil {
+	onDBOperation(t, "query", "wishlists", 0, func(tx *gorm.DB) {
+		if err := tx.Exec("UPDATE wishes SET enabled = ? WHERE id = ?", false, wish.ID).Error; err != nil {
 			t.Errorf("failed to disable wish: %v", err)
 		}
 	})
-	if err != nil {
-		t.Fatalf("failed to register callback: %v", err)
-	}
 
 	w := wishTestSend(t, wishTestReq{handler: APIGetWish, method: "GET", params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}}, header)
 	if w.Code != 404 {

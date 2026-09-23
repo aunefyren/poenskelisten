@@ -9,6 +9,8 @@ import (
 // key so the encryption-key derivation works without a config.json on disk.
 func setupCryptoTestKey(t *testing.T) {
 	t.Helper()
+	original := config.ConfigFile
+	t.Cleanup(func() { config.ConfigFile = original })
 
 	key, err := config.GenerateSecureKey(64)
 	if err != nil {
