@@ -50,18 +50,81 @@ func TestParseFlagsNoFlagsKeepsConfig(t *testing.T) {
 		MFAEnforced:       true,
 	}
 
-	out, generateInvite, flagsProvided, err := parseFlags(in)
+	out, actions, flagsProvided, err := parseFlags(in)
 	if err != nil {
 		t.Fatalf("parseFlags returned error: %v", err)
 	}
 	if flagsProvided {
 		t.Error("flagsProvided = true with no flags on the command line")
 	}
-	if generateInvite {
-		t.Error("generateInvite = true with no flags on the command line")
+	if actions != (startupActions{}) {
+		t.Errorf("actions = %+v with no flags on the command line", actions)
 	}
 	if out != in {
 		t.Errorf("config changed with no flags provided:\n got %+v\nwant %+v", out, in)
+	}
+}
+
+func TestParseFlagsRecoveryActions(t *testing.T) {
+	cases := []struct {
+		name        string
+		args        []string
+		want        startupActions
+		wantErr     bool
+		wantPersist bool
+	}{
+		{
+			name: "both flags, cleaned",
+			args: []string{"-resetpassword", "  'Admin@Example.com' ", "-resetmfa", "\tadmin@example.com\n"},
+			want: startupActions{resetPasswordEmail: "Admin@Example.com", resetMFAEmail: "admin@example.com"},
+		},
+		{
+			name: "empty value means not requested",
+			args: []string{"-resetpassword", "", "-resetmfa", "   "},
+		},
+		{
+			name: "action flags alone don't persist config",
+			args: []string{"-generateinvite", "true", "-resetmfa", "a@b.c"},
+			want: startupActions{generateInvite: true, resetMFAEmail: "a@b.c"},
+		},
+		{
+			name:        "config flag alongside still persists",
+			args:        []string{"-resetmfa", "a@b.c", "-port", "9000"},
+			want:        startupActions{resetMFAEmail: "a@b.c"},
+			wantPersist: true,
+		},
+		{
+			name:    "embedded newline rejected",
+			args:    []string{"-resetpassword", "a@b.c\nfake log line"},
+			wantErr: true,
+		},
+		{
+			name:    "not an address rejected",
+			args:    []string{"-resetmfa", "admin"},
+			wantErr: true,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			withArgs(t, c.args...)
+
+			_, actions, flagsProvided, err := parseFlags(models.ConfigStruct{})
+			if c.wantErr {
+				if err == nil {
+					t.Errorf("expected an error, got actions %+v", actions)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseFlags returned error: %v", err)
+			}
+			if actions != c.want {
+				t.Errorf("actions = %+v, want %+v", actions, c.want)
+			}
+			if flagsProvided != c.wantPersist {
+				t.Errorf("flagsProvided = %v, want %v", flagsProvided, c.wantPersist)
+			}
+		})
 	}
 }
 
@@ -117,14 +180,14 @@ func TestParseFlagsOverridesEveryField(t *testing.T) {
 	logLevel := logger.Log.GetLevel()
 	t.Cleanup(func() { logger.Log.SetLevel(logLevel) })
 
-	out, generateInvite, flagsProvided, err := parseFlags(models.ConfigStruct{})
+	out, actions, flagsProvided, err := parseFlags(models.ConfigStruct{})
 	if err != nil {
 		t.Fatalf("parseFlags returned error: %v", err)
 	}
 	if !flagsProvided {
 		t.Error("flagsProvided = false with flags on the command line")
 	}
-	if !generateInvite {
+	if !actions.generateInvite {
 		t.Error("generateInvite = false with -generateinvite true")
 	}
 

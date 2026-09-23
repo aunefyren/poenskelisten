@@ -54,6 +54,10 @@ argCount=$#
 # Add flags for invite generation if those environment variables are set
 [ -n "$generateinvite" ] && set -- "$@" --generateinvite "$generateinvite"
 
+# Account recovery; see "Recovering an account from the server" in README.md
+[ -n "$resetpassword" ] && set -- "$@" --resetpassword "$resetpassword"
+[ -n "$resetmfa" ] && set -- "$@" --resetmfa "$resetmfa"
+
 # Add flags for SMTP settings if those environment variables are set
 [ -n "$disablesmtp" ] && set -- "$@" --disablesmtp "$disablesmtp"
 [ -n "$smtphost" ] && set -- "$@" --smtphost "$smtphost"

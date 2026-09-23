@@ -1,8 +1,12 @@
 package utilities
 
 import (
+	"errors"
 	"fmt"
+	"net/mail"
 	"regexp"
+	"strings"
+	"unicode"
 )
 
 var DBTrue = true
@@ -60,4 +64,31 @@ func ValidateTextCharacters(string string) (bool, string, error) {
 
 	return true, requirements, nil
 
+}
+
+// CleanConsoleEmail normalises an e-mail address given as a startup flag or
+// environment variable before it is used for a lookup or written to the log.
+// It trims surrounding whitespace and quotes, which are easy to paste in by
+// accident, and rejects control characters (which could forge log lines) and
+// anything that isn't a bare address.
+func CleanConsoleEmail(input string) (string, error) {
+	email := strings.TrimSpace(strings.Trim(strings.TrimSpace(input), `"'`))
+	if email == "" {
+		return "", errors.New("e-mail address is empty")
+	}
+	if len(email) > 254 {
+		return "", errors.New("e-mail address is too long")
+	}
+	for _, r := range email {
+		if unicode.IsControl(r) || unicode.IsSpace(r) {
+			return "", errors.New("e-mail address contains whitespace or control characters")
+		}
+	}
+	// ParseAddress also accepts forms like "Name <a@b>"; requiring the parsed
+	// address to equal the input keeps it to a bare address.
+	address, err := mail.ParseAddress(email)
+	if err != nil || address.Address != email {
+		return "", errors.New("not a valid e-mail address")
+	}
+	return email, nil
 }

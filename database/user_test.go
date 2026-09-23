@@ -2,6 +2,8 @@ package database
 
 import (
 	"aunefyren/poenskelisten/models"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -265,4 +267,35 @@ func TestUserQueriesFailOnClosedDB(t *testing.T) {
 			return err
 		},
 	})
+}
+
+func TestGetAllUserInformationByEmailCaseInsensitive(t *testing.T) {
+	setupTestDB(t)
+
+	user := createTestUser(t)
+	mixedCase := "Mixed.Case." + *user.Email
+	user.Email = &mixedCase
+	if _, err := UpdateUserInDB(user); err != nil {
+		t.Fatalf("failed to update user: %v", err)
+	}
+
+	got, err := GetAllUserInformationByEmailCaseInsensitive(strings.ToUpper(mixedCase))
+	if err != nil || got.ID != user.ID {
+		t.Fatalf("got user %v err %v, want %v", got.ID, err, user.ID)
+	}
+
+	if _, err := GetAllUserInformationByEmailCaseInsensitive("nobody@example.com"); !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("err = %v, want ErrUserNotFound", err)
+	}
+
+	// Two accounts differing only in case must not resolve to either one.
+	other := createTestUser(t)
+	lowerCase := strings.ToLower(mixedCase)
+	other.Email = &lowerCase
+	if _, err := UpdateUserInDB(other); err != nil {
+		t.Fatalf("failed to update second user: %v", err)
+	}
+	if _, err := GetAllUserInformationByEmailCaseInsensitive(mixedCase); err == nil {
+		t.Error("expected an error when two users match ignoring case")
+	}
 }

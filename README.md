@@ -88,6 +88,8 @@ You can configure Pønskelisten in **three different ways**:
 | poenskelisten_log_level | loglevel | loglevel | string | How detailed the logs are. `info`, `debug` or `trace`
 | timezone | timezone | timezone | string | E.g. `Europe/Oslo` |
 | `N/A` | generateinvite | generateinvite | bool | Generate an invite code on startup. Do `generateinvite true` |
+| `N/A` | resetpassword | resetpassword | string | E-mail of a user to issue a password reset link for on startup. See [Admin Access](#-admin-access) |
+| `N/A` | resetmfa | resetmfa | string | E-mail of a user to remove MFA for on startup. See [Admin Access](#-admin-access) |
 | db_type | dbtype | dbtype | string | `sqlite`, `postgres` or `mysql` |
 | db_ip | dbip | dbip | string | DB host |
 | db_port | dbport | dbport | int | DB port |
@@ -269,6 +271,27 @@ Remove `generateinvite` after first run to stop generating codes on start up.
 - Additional invite codes can be created in the admin panel
 
 - If you lose access: restart with generateinvite=true (in OIDC-only mode, also set `disablelocallogin: false`, since invites are used through self-registration)
+
+### Recovering an account from the server
+
+If a user (including yourself) has lost their password or their MFA device, anyone who can start Pønskelisten can recover the account. Neither option needs SMTP.
+
+- **`resetpassword <e-mail>`** issues a password reset link and writes it to the log (`files/poenskelisten.log` and the console/`docker logs`). Open the link to choose a new password. It works like the e-mailed reset link: valid for 24 hours, single-use, and the normal password rules apply. In OIDC-only mode, also set `disablelocallogin: false`, since password reset is part of local login.
+- **`resetmfa <e-mail>`** removes MFA and the recovery codes for the user, the same as the admin panel's "remove MFA". If MFA is enforced, the user sets it up again at their next login.
+
+The e-mail is matched ignoring case. Surrounding whitespace and quotes are trimmed, and anything that isn't a plain address is refused before any account is touched.
+
+```bash
+./poenskelisten -resetmfa admin@example.com -resetpassword admin@example.com
+```
+
+```yaml
+    environment:
+      resetmfa: admin@example.com
+      resetpassword: admin@example.com
+```
+
+**Remove the flag or variable once you're back in.** Both run on every start: `resetpassword` issues a new link each time, and `resetmfa` would remove MFA again after the user re-enrols. The reset link also stays in the log file until it expires, so treat the log as sensitive in the meantime.
 
 ## 🔧 Building from Source
 

@@ -130,6 +130,30 @@ func GetAllUserInformationByEmail(email string) (models.User, error) {
 	return user, nil
 }
 
+// GetAllUserInformationByEmailCaseInsensitive finds an enabled user by e-mail,
+// ignoring case. Used for addresses typed by an operator (the account recovery
+// startup flags), where the capitalisation used at registration isn't known.
+// More than one match is an error rather than a guess.
+func GetAllUserInformationByEmailCaseInsensitive(email string) (models.User, error) {
+	var users []models.User
+
+	userRecords := Instance.
+		Where(&models.User{Enabled: &utilities.DBTrue}).
+		Where("LOWER(email) = LOWER(?)", email).
+		Limit(2).
+		Find(&users)
+
+	if userRecords.Error != nil {
+		return models.User{}, userRecords.Error
+	} else if len(users) == 0 {
+		return models.User{}, ErrUserNotFound
+	} else if len(users) > 1 {
+		return models.User{}, errors.New("More than one user matches this e-mail address when ignoring case.")
+	}
+
+	return users[0], nil
+}
+
 // Generate a random reset code and return it
 // If valid bool, the reset time will be in the future
 func GenerateRandomResetCodeForUser(userID uuid.UUID, valid bool) (string, error) {
