@@ -33,5 +33,7 @@ jobs:
         extra_files: README.md LICENSE web
         retry: 10
         overwrite: true
-        release_name: ${{ github.event.release.tag_name }}
+        # No release_name: when it's set, go-release-action blanks the release tag,
+        # which left asset names like poenskelisten--linux-amd64. On a release
+        # event the tag (and target release) come from the event itself.
         pre_command: sed -i 's/{{RELEASE_TAG}}/${{ github.event.release.tag_name }}/g' config/config.go # Replace release variable with the name of this release

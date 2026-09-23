@@ -9,10 +9,6 @@ Future and in-progress ideas only. Once something here is finished, delete its e
 - **`files/config.json` is written world-readable (`0644`, `config.SaveConfig`)** yet holds the OAuth ES256 signing key, the HS256 `private_key`, and any DB/SMTP/OIDC secrets. Flag and env values get persisted there too, so secrets passed as env vars also land on disk. The roadmap's security posture says signing keys are stored `0600`. Write the file as `0600`, and consider `chmod`-ing an existing one on load.
 - **Only `/oauth/register` is rate-limited.** The roadmap's security posture also lists `/oauth/token` and `/oauth/authorize`, and the password login (`POST /api/open/tokens/register`) and MFA verify endpoints have no rate limit either (a gap from before 2.4.0).
 
-## Release tooling
-
-- **Release assets are missing the version tag in their file names** (e.g. `poenskelisten--linux-amd64.tar.gz` on v2.3.0 — note the empty segment between the dashes). `wangyoucao577/go-release-action` builds the name as `<binary_name>-<release_tag>-<goos>-<goarch>`, and the tag part comes out empty. Probably fixed by passing `asset_name: poenskelisten-${{ github.event.release.tag_name }}-${{ matrix.goos }}-${{ matrix.goarch }}` (or `release_tag`) in `.github/workflows/release.yaml`. Check it on the v2.4.0 release.
-
 ## Known coverage gaps (intentional, for now)
 
 - **`main()` itself (`main.go:35-130`, ~59 statements) is untested** because it calls `os.Exit` and `log.Fatal(router.Run(...))`. Covering it would mean extracting a `run() error`; not done since coverage is above target without it.
