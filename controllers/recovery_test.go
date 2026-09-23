@@ -8,6 +8,7 @@ import (
 )
 
 func TestIssuePasswordResetLink(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 	originalURL := config.ConfigFile.PoenskelistenExternalURL
 	t.Cleanup(func() { config.ConfigFile.PoenskelistenExternalURL = originalURL })
@@ -81,5 +82,38 @@ func TestResetUserMFAUnknownUser(t *testing.T) {
 
 	if _, err := ResetUserMFA("nobody@example.com"); err == nil {
 		t.Error("expected an error for an unknown e-mail")
+	}
+}
+
+func TestIssuePasswordResetLinkStoreFails(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+	failDBOperation(t, "update", "users", 0)
+
+	_, link, err := IssuePasswordResetLink(*user.Email)
+	if err == nil || err.Error() != "Failed to generate reset code." || link != "" {
+		t.Errorf("link = %q err = %v, want 'Failed to generate reset code.'", link, err)
+	}
+}
+
+func TestResetUserMFAStoreFails(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+	user.MFAEnabled = boolPtr(true)
+	user, err := database.UpdateUserInDB(user)
+	if err != nil {
+		t.Fatalf("failed to enable MFA: %v", err)
+	}
+	failDBOperation(t, "update", "users", 0)
+
+	if _, err := ResetUserMFA(*user.Email); err == nil || err.Error() != "Failed to disable MFA." {
+		t.Errorf("err = %v, want 'Failed to disable MFA.'", err)
+	}
+	reloaded, err := database.GetAllUserInformation(user.ID)
+	if err != nil {
+		t.Fatalf("failed to reload user: %v", err)
+	}
+	if !reloaded.IsMFAEnabled() {
+		t.Error("MFA should still be enabled after a failed reset")
 	}
 }

@@ -472,3 +472,46 @@ func TestGenerateJWTFromClaimsRoundTrip(t *testing.T) {
 		t.Errorf("ValidateToken rejected a token built from valid claims: %v", err)
 	}
 }
+
+// TestTokenFunctionsFailWithoutPrivateKey proves minting and parsing refuse to
+// run with no HS256 secret rather than signing with an empty key.
+func TestTokenFunctionsFailWithoutPrivateKey(t *testing.T) {
+	origKey := config.ConfigFile.PrivateKey
+	t.Cleanup(func() { config.ConfigFile.PrivateKey = origKey })
+	config.ConfigFile.PrivateKey = ""
+
+	if token, err := GenerateJWTFromClaims(&JWTClaim{UserID: uuid.New()}); err == nil || token != "" {
+		t.Errorf("GenerateJWTFromClaims = (%q, %v), want empty token and an error", token, err)
+	}
+	if _, err := GenerateMFAChallengeToken(uuid.New()); err == nil {
+		t.Error("GenerateMFAChallengeToken succeeded without a private key")
+	}
+	if claims, err := ParseToken("any.token.value"); err == nil || claims != nil {
+		t.Errorf("ParseToken = (%v, %v), want nil claims and an error", claims, err)
+	}
+	if _, err := ValidateMFAChallengeToken("any.token.value"); err == nil {
+		t.Error("ValidateMFAChallengeToken succeeded without a private key")
+	}
+}
+
+func TestMFAChallengeTokenMissingClaims(t *testing.T) {
+	setupAuthTestConfig(t)
+
+	// Right purpose and a valid signature, but no exp/nbf: the manual guard in
+	// ValidateMFAChallengeToken must still reject it.
+	tokenString, err := GenerateJWTFromClaims(&JWTClaim{
+		UserID:  uuid.New(),
+		Purpose: PurposeMFAChallenge,
+	})
+	if err != nil {
+		t.Fatalf("GenerateJWTFromClaims returned error: %v", err)
+	}
+
+	userID, err := ValidateMFAChallengeToken(tokenString)
+	if err == nil || !strings.Contains(err.Error(), "claims not present") {
+		t.Errorf("ValidateMFAChallengeToken error = %v, want 'claims not present'", err)
+	}
+	if userID != (uuid.UUID{}) {
+		t.Errorf("userID = %v, want zero UUID on failure", userID)
+	}
+}

@@ -898,7 +898,7 @@ func RemoveWishClaim(context *gin.Context) {
 	err = database.DeleteWishClaimByUserAndWish(wish_id_int, UserID)
 	if err != nil {
 		logger.Log.Error("Failed to delete claim. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to delete claim."})
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete claim."})
 		context.Abort()
 		return
 	}
@@ -1240,7 +1240,7 @@ func APIGetWish(context *gin.Context) {
 		context.Abort()
 		return
 	} else if wish == nil {
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find wish in the database."})
+		context.JSON(http.StatusNotFound, gin.H{"error": "Failed to find wish in the database."})
 		context.Abort()
 		return
 	}

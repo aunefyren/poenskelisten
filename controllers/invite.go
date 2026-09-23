@@ -56,7 +56,11 @@ func APIDeleteInvite(context *gin.Context) {
 	}
 
 	invite, err := database.GetInviteByID(inviteIDInt)
-	if err != nil {
+	if errors.Is(err, database.ErrInviteNotFound) {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find invite."})
+		context.Abort()
+		return
+	} else if err != nil {
 		logger.Log.Error("Failed to find invite. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find invite."})
 		context.Abort()
@@ -64,7 +68,7 @@ func APIDeleteInvite(context *gin.Context) {
 	}
 
 	if invite.Used {
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Invite already used."})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Invite already used."})
 		context.Abort()
 		return
 	}
@@ -87,7 +91,7 @@ func APIDeleteInvite(context *gin.Context) {
 
 	inviteObjects := ConvertInvitesToInviteObjects(invites)
 
-	context.JSON(http.StatusCreated, gin.H{"message": "Invite deleted.", "invites": inviteObjects})
+	context.JSON(http.StatusOK, gin.H{"message": "Invite deleted.", "invites": inviteObjects})
 }
 
 func APIGetAllInvites(context *gin.Context) {

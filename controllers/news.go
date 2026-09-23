@@ -44,27 +44,32 @@ func GetNews(context *gin.Context) {
 		return
 	}
 
-	now := time.Now()
-	temporaryNewsPosts := []models.News{}
-	for _, newsPost := range newsPosts {
-		if newsPost.Date.After(now) && !userObject.Admin {
-			continue
-		}
-
-		if newsPost.ExpiryDate != nil && newsPost.ExpiryDate.Before(now) {
-			continue
-		}
-
-		temporaryNewsPosts = append(temporaryNewsPosts, newsPost)
-	}
-	newsPosts = temporaryNewsPosts
-
-	sort.Slice(newsPosts, func(i, j int) bool {
-		return newsPosts[j].Date.Before(newsPosts[i].Date)
-	})
+	newsPosts = visibleNewsPosts(newsPosts, userObject.Admin, time.Now())
 
 	// Return a response with all news posts
 	context.JSON(http.StatusCreated, gin.H{"message": "News retrieved.", "news": newsPosts})
+}
+
+// visibleNewsPosts drops expired posts, and for non-admins also posts dated
+// in the future (scheduled but not yet published), then sorts newest first.
+// Every handler that returns the news list goes through this so they can't
+// disagree about what a caller gets to see.
+func visibleNewsPosts(newsPosts []models.News, admin bool, now time.Time) []models.News {
+	visible := []models.News{}
+	for _, newsPost := range newsPosts {
+		if newsPost.Date.After(now) && !admin {
+			continue
+		}
+		if newsPost.ExpiryDate != nil && newsPost.ExpiryDate.Before(now) {
+			continue
+		}
+		visible = append(visible, newsPost)
+	}
+
+	sort.Slice(visible, func(i, j int) bool {
+		return visible[j].Date.Before(visible[i].Date)
+	})
+	return visible
 }
 
 func GetNewsPost(context *gin.Context) {
@@ -194,20 +199,7 @@ func RegisterNewsPost(context *gin.Context) {
 		return
 	}
 
-	now := time.Now()
-	temporaryNewsPosts := []models.News{}
-	for _, newsPost := range newsPosts {
-		if newsPost.Date.Before(now) && !userObject.Admin {
-			continue
-		}
-
-		if newsPost.ExpiryDate != nil && newsPost.ExpiryDate.Before(now) {
-			continue
-		}
-
-		temporaryNewsPosts = append(temporaryNewsPosts, newsPost)
-	}
-	newsPosts = temporaryNewsPosts
+	newsPosts = visibleNewsPosts(newsPosts, userObject.Admin, time.Now())
 
 	// Return a response indicating that the group was created, along with the updated list of groups
 	context.JSON(http.StatusCreated, gin.H{"message": "News post created.", "news": newsPosts})
@@ -254,6 +246,9 @@ func DeleteNewsPost(context *gin.Context) {
 		context.Abort()
 		return
 	}
+
+	// The route is admin-only, so scheduled posts stay in the list.
+	newsPosts = visibleNewsPosts(newsPosts, true, time.Now())
 
 	context.JSON(http.StatusCreated, gin.H{"message": "News post deleted.", "news": newsPosts})
 

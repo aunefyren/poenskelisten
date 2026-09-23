@@ -4,10 +4,12 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
 	"encoding/json"
+	"gorm.io/gorm"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -91,6 +93,64 @@ func TestRegisterGroupNameTooShort(t *testing.T) {
 
 	if w.Code != 400 {
 		t.Fatalf("status = %d, want 400 for a too-short name", w.Code)
+	}
+}
+
+// Surrounding whitespace doesn't count towards the five-letter minimum...
+func TestRegisterGroupNameTooShortAfterTrim(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+
+	ctx, w := groupTestContext("POST", "/api/groups", `{"name":"   Abc   ","description":"A group"}`)
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RegisterGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a name that's too short once trimmed; body=%s", w.Code, w.Body.String())
+	}
+}
+
+// ...and isn't persisted.
+func TestRegisterGroupTrimsInput(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+
+	ctx, w := groupTestContext("POST", "/api/groups", `{"name":"  My Group  ","description":"  A group  "}`)
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RegisterGroup(ctx)
+
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
+	exists, group, err := database.VerifyGroupExistsByNameForUser("My Group", owner.ID)
+	if err != nil || !exists {
+		t.Fatalf("trimmed group name not found (exists=%v err=%v)", exists, err)
+	}
+	if group.Description != "A group" {
+		t.Errorf("description = %q, want it trimmed", group.Description)
+	}
+}
+
+func TestAPIUpdateGroupTrimsInput(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String(), `{"name":"  Renamed Group  ","description":"  New description  "}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	APIUpdateGroup(ctx)
+
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
+	updated, err := database.GetGroupInformation(group.ID)
+	if err != nil {
+		t.Fatalf("failed to reload group: %v", err)
+	}
+	if updated.Name != "Renamed Group" || updated.Description != "New description" {
+		t.Errorf("group = (%q, %q), want both trimmed", updated.Name, updated.Description)
 	}
 }
 
@@ -321,8 +381,8 @@ func TestJoinGroupCallerNotOwner(t *testing.T) {
 	ctx.Request.Header.Set("Authorization", authHeader(t, nonOwnerMember.ID, false))
 	JoinGroup(ctx)
 
-	if w.Code != 500 {
-		t.Fatalf("status = %d, want 500 when the caller is a member but not the owner (current handler behavior)", w.Code)
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 when the caller is a member but not the owner", w.Code)
 	}
 }
 
@@ -793,10 +853,8 @@ func TestGetGroupMembersNotMember(t *testing.T) {
 	ctx.Request.Header.Set("Authorization", authHeader(t, stranger.ID, false))
 	GetGroupMembers(ctx)
 
-	// The handler reports non-membership as a 500, not a 400 - documenting
-	// actual behavior here rather than the arguably-more-correct 400/403.
-	if w.Code != 500 {
-		t.Fatalf("status = %d, want 500 for a non-member (current handler behavior)", w.Code)
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a non-member", w.Code)
 	}
 }
 
@@ -1229,35 +1287,36 @@ func TestRegisterGroupWishlistMembershipCreateFailure(t *testing.T) {
 }
 
 func TestJoinGroupMembershipCheckFailure(t *testing.T) {
-	// GroupMembership table missing so VerifyUserMembershipToGroup fails.
-	setupControllersDB(t, &models.User{}, &models.Group{})
+	setupControllersDB(t)
 	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
 	newMember := createTestUser(t)
+	failDBOperation(t, "query", "group_memberships", 0)
 
 	ctx, w := groupTestContext("POST", "/api/groups/x/join", `{"members":["`+newMember.ID.String()+`"]}`)
-	ctx.Params = gin.Params{{Key: "group_id", Value: uuid.NewString()}}
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
 	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
 	JoinGroup(ctx)
 
 	if w.Code != 500 {
-		t.Fatalf("status = %d, want 500 when the group_memberships table is unavailable; body=%s", w.Code, w.Body.String())
+		t.Fatalf("status = %d, want 500 when the membership check fails; body=%s", w.Code, w.Body.String())
 	}
 }
 
 func TestJoinGroupOwnershipCheckFailure(t *testing.T) {
-	// GroupMembership present (so the not-already-a-member check succeeds),
-	// Group missing so the ownership check fails.
-	setupControllersDB(t, &models.User{}, &models.GroupMembership{})
+	setupControllersDB(t)
 	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
 	newMember := createTestUser(t)
+	failDBOperation(t, "query", "groups", 0)
 
 	ctx, w := groupTestContext("POST", "/api/groups/x/join", `{"members":["`+newMember.ID.String()+`"]}`)
-	ctx.Params = gin.Params{{Key: "group_id", Value: uuid.NewString()}}
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
 	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
 	JoinGroup(ctx)
 
 	if w.Code != 500 {
-		t.Fatalf("status = %d, want 500 when the groups table is unavailable; body=%s", w.Code, w.Body.String())
+		t.Fatalf("status = %d, want 500 when the ownership check fails; body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -1367,5 +1426,580 @@ func TestRemoveSelfFromGroupMalformedID(t *testing.T) {
 	status, body, _ := doRequest(RemoveSelfFromGroup, "POST", "/api/auth/groups/not-a-uuid/leave", "", header, gin.Params{{Key: "group_id", Value: "not-a-uuid"}})
 	if status != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400; body=%v", status, body)
+	}
+}
+
+// --- Deeper failure branches and multi-group ordering ---
+
+// groupTestFixture is a group owned by owner with owner and member enrolled,
+// plus an outsider (not in the group) and a wishlist the owner has not yet
+// linked to the group.
+type groupTestFixture struct {
+	owner    models.User
+	member   models.User
+	outsider models.User
+	group    models.Group
+	wishlist models.Wishlist
+}
+
+func groupTestNewFixture(t *testing.T) groupTestFixture {
+	t.Helper()
+	f := groupTestFixture{
+		owner:    createTestUser(t),
+		member:   createTestUser(t),
+		outsider: createTestUser(t),
+	}
+	f.group = createTestGroup(t, f.owner.ID)
+	addGroupMembership(t, f.group.ID, f.owner.ID)
+	addGroupMembership(t, f.group.ID, f.member.ID)
+	f.wishlist = createTestWishlist(t, f.owner.ID)
+	return f
+}
+
+// groupTestCreateGroupAt inserts a group owned by ownerID with an explicit
+// creation time and enrolls every given member, so tests asserting the
+// handlers' created-at ordering don't depend on clock resolution.
+func groupTestCreateGroupAt(t *testing.T, ownerID uuid.UUID, name string, createdAt time.Time, memberIDs ...uuid.UUID) models.Group {
+	t.Helper()
+	group := models.Group{Name: name, Enabled: true, OwnerID: ownerID}
+	group.ID = uuid.New()
+	group.CreatedAt = createdAt
+	created, err := database.CreateGroupInDB(group)
+	if err != nil {
+		t.Fatalf("failed to create group: %v", err)
+	}
+	for _, memberID := range memberIDs {
+		addGroupMembership(t, created.ID, memberID)
+	}
+	return created
+}
+
+// groupTestNames returns the "name" of each entry in body["groups"], in order.
+func groupTestNames(t *testing.T, body map[string]interface{}) []string {
+	t.Helper()
+	groups, ok := body["groups"].([]interface{})
+	if !ok {
+		t.Fatalf("groups = %v, want a list", body["groups"])
+	}
+	names := []string{}
+	for _, g := range groups {
+		names = append(names, g.(map[string]interface{})["name"].(string))
+	}
+	return names
+}
+
+func TestGroupHandlersInjectedDatabaseFailures(t *testing.T) {
+	groupParam := func(f groupTestFixture) gin.Params {
+		return gin.Params{{Key: "group_id", Value: f.group.ID.String()}}
+	}
+	cases := []struct {
+		name       string
+		handler    gin.HandlerFunc
+		method     string
+		path       string
+		body       func(f groupTestFixture) string
+		caller     func(f groupTestFixture) uuid.UUID
+		op, table  string
+		skip       int
+		wantStatus int
+		wantError  string
+	}{
+		{
+			name: "RegisterGroup/create group", handler: RegisterGroup, method: "POST", path: "/api/auth/groups",
+			body:   func(f groupTestFixture) string { return `{"name":"Fresh Group","description":"Desc"}` },
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "create", table: "groups", skip: 0,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to create group in database.",
+		},
+		{
+			// A lookup that fails (rather than finding no such user) is an
+			// internal error; TestRegisterGroupUnknownMember covers the 400.
+			name: "RegisterGroup/member lookup", handler: RegisterGroup, method: "POST", path: "/api/auth/groups",
+			body: func(f groupTestFixture) string {
+				return `{"name":"Fresh Group","description":"Desc","members":["` + f.outsider.ID.String() + `"]}`
+			},
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "query", table: "users", skip: 0,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to get user.",
+		},
+		{
+			// The owner's own membership is create #1; the requested member's is #2.
+			name: "RegisterGroup/create member membership", handler: RegisterGroup, method: "POST", path: "/api/auth/groups",
+			body: func(f groupTestFixture) string {
+				return `{"name":"Fresh Group","description":"Desc","members":["` + f.outsider.ID.String() + `"]}`
+			},
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "create", table: "group_memberships", skip: 1,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to create group memberships.",
+		},
+		{
+			// Query #1 on groups is the duplicate-name check.
+			name: "RegisterGroup/list groups", handler: RegisterGroup, method: "POST", path: "/api/auth/groups",
+			body:   func(f groupTestFixture) string { return `{"name":"Fresh Group","description":"Desc"}` },
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "query", table: "groups", skip: 1,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to get group objects.",
+		},
+		{
+			name: "JoinGroup/create membership", handler: JoinGroup, method: "POST", path: "/api/auth/groups/x/join",
+			body:   func(f groupTestFixture) string { return `{"members":["` + f.outsider.ID.String() + `"]}` },
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "create", table: "group_memberships", skip: 0,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to create group membership in database.",
+		},
+		{
+			// Query #1 on groups is the ownership check.
+			name: "JoinGroup/list groups", handler: JoinGroup, method: "POST", path: "/api/auth/groups/x/join",
+			body:   func(f groupTestFixture) string { return `{"members":["` + f.outsider.ID.String() + `"]}` },
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "query", table: "groups", skip: 1,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to get groups for user.",
+		},
+		{
+			// Query #1 on group_memberships is the membership check.
+			name: "RemoveFromGroup/membership lookup", handler: RemoveFromGroup, method: "POST", path: "/api/auth/groups/x/remove",
+			body:   func(f groupTestFixture) string { return `{"member_id":"` + f.member.ID.String() + `"}` },
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "query", table: "group_memberships", skip: 1,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to verify membership.",
+		},
+		{
+			name: "RemoveFromGroup/delete membership", handler: RemoveFromGroup, method: "POST", path: "/api/auth/groups/x/remove",
+			body:   func(f groupTestFixture) string { return `{"member_id":"` + f.member.ID.String() + `"}` },
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "update", table: "group_memberships", skip: 0,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to delete group membership.",
+		},
+		{
+			// Query #1 on groups is GetGroupInformation.
+			name: "RemoveFromGroup/list groups", handler: RemoveFromGroup, method: "POST", path: "/api/auth/groups/x/remove",
+			body:   func(f groupTestFixture) string { return `{"member_id":"` + f.member.ID.String() + `"}` },
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "query", table: "groups", skip: 1,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to get group objects.",
+		},
+		{
+			name: "RemoveSelfFromGroup/ownership check", handler: RemoveSelfFromGroup, method: "POST", path: "/api/auth/groups/x/leave",
+			caller: func(f groupTestFixture) uuid.UUID { return f.member.ID },
+			op:     "query", table: "groups", skip: 0,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to verify ownership of group.",
+		},
+		{
+			name: "RemoveSelfFromGroup/membership lookup", handler: RemoveSelfFromGroup, method: "POST", path: "/api/auth/groups/x/leave",
+			caller: func(f groupTestFixture) uuid.UUID { return f.member.ID },
+			op:     "query", table: "group_memberships", skip: 1,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to verify membership to group.",
+		},
+		{
+			name: "RemoveSelfFromGroup/delete membership", handler: RemoveSelfFromGroup, method: "POST", path: "/api/auth/groups/x/leave",
+			caller: func(f groupTestFixture) uuid.UUID { return f.member.ID },
+			op:     "update", table: "group_memberships", skip: 0,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to delete group membership.",
+		},
+		{
+			name: "RemoveSelfFromGroup/list groups", handler: RemoveSelfFromGroup, method: "POST", path: "/api/auth/groups/x/leave",
+			caller: func(f groupTestFixture) uuid.UUID { return f.member.ID },
+			op:     "query", table: "groups", skip: 1,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to get group objects.",
+		},
+		{
+			name: "DeleteGroup/disable group", handler: DeleteGroup, method: "DELETE", path: "/api/auth/groups/x",
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "update", table: "groups", skip: 0,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to delete the group.",
+		},
+		{
+			name: "DeleteGroup/list groups", handler: DeleteGroup, method: "DELETE", path: "/api/auth/groups/x",
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "query", table: "groups", skip: 1,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to get group objects.",
+		},
+		{
+			name: "GetGroup/load group object", handler: GetGroup, method: "GET", path: "/api/auth/groups/x",
+			caller: func(f groupTestFixture) uuid.UUID { return f.member.ID },
+			op:     "query", table: "groups", skip: 0,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed process group object.",
+		},
+		{
+			name: "GetGroupMembers/list memberships", handler: GetGroupMembers, method: "GET", path: "/api/auth/groups/x/members",
+			caller: func(f groupTestFixture) uuid.UUID { return f.member.ID },
+			op:     "query", table: "group_memberships", skip: 1,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to get group memberships for group.",
+		},
+		{
+			name: "GetGroupMembers/load member", handler: GetGroupMembers, method: "GET", path: "/api/auth/groups/x/members",
+			caller: func(f groupTestFixture) uuid.UUID { return f.member.ID },
+			op:     "query", table: "users", skip: 0,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to get user object for group member.",
+		},
+		{
+			// Query #1 on groups is the ownership check.
+			name: "APIUpdateGroup/load original", handler: APIUpdateGroup, method: "POST", path: "/api/auth/groups/x",
+			body:   func(f groupTestFixture) string { return `{"name":"Renamed Group","description":"New description"}` },
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "query", table: "groups", skip: 1,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to find group.",
+		},
+		{
+			name: "APIUpdateGroup/duplicate-name check", handler: APIUpdateGroup, method: "POST", path: "/api/auth/groups/x",
+			body:   func(f groupTestFixture) string { return `{"name":"Renamed Group","description":"New description"}` },
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "query", table: "groups", skip: 2,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to verify group name.",
+		},
+		{
+			name: "APIUpdateGroup/save", handler: APIUpdateGroup, method: "POST", path: "/api/auth/groups/x",
+			body:   func(f groupTestFixture) string { return `{"name":"Renamed Group","description":"New description"}` },
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "update", table: "groups", skip: 0,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed update group.",
+		},
+		{
+			// Unchanged name skips the duplicate-name query, so query #3 is
+			// the reload after saving.
+			name: "APIUpdateGroup/reload", handler: APIUpdateGroup, method: "POST", path: "/api/auth/groups/x",
+			body: func(f groupTestFixture) string {
+				return `{"name":"` + f.group.Name + `","description":"New description"}`
+			},
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "query", table: "groups", skip: 2,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed convert group to group object.",
+		},
+		{
+			name: "APIAddWishlistsToGroup/wishlist link check", handler: APIAddWishlistsToGroup, method: "POST", path: "/api/auth/groups/x/add",
+			body:   func(f groupTestFixture) string { return `{"wishlists":["` + f.wishlist.ID.String() + `"]}` },
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "query", table: "wishlist_memberships", skip: 0,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to verify membership to group.",
+		},
+		{
+			name: "APIAddWishlistsToGroup/group membership check", handler: APIAddWishlistsToGroup, method: "POST", path: "/api/auth/groups/x/add",
+			body:   func(f groupTestFixture) string { return `{"wishlists":["` + f.wishlist.ID.String() + `"]}` },
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "query", table: "group_memberships", skip: 0,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to verify membership to group.",
+		},
+		{
+			name: "APIAddWishlistsToGroup/create link", handler: APIAddWishlistsToGroup, method: "POST", path: "/api/auth/groups/x/add",
+			body:   func(f groupTestFixture) string { return `{"wishlists":["` + f.wishlist.ID.String() + `"]}` },
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "create", table: "wishlist_memberships", skip: 0,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to create group membership for wishlist in database.",
+		},
+		{
+			name: "APIAddWishlistsToGroup/list groups", handler: APIAddWishlistsToGroup, method: "POST", path: "/api/auth/groups/x/add",
+			body:   func(f groupTestFixture) string { return `{"wishlists":["` + f.wishlist.ID.String() + `"]}` },
+			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
+			op:     "query", table: "groups", skip: 0,
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to get groups for user.",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			f := groupTestNewFixture(t)
+			body := ""
+			if c.body != nil {
+				body = c.body(f)
+			}
+			header := map[string]string{"Authorization": authHeader(t, c.caller(f), false)}
+			failDBOperation(t, c.op, c.table, c.skip)
+
+			status, resp, _ := doRequest(c.handler, c.method, c.path, body, header, groupParam(f))
+			if status != c.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%v", status, c.wantStatus, resp)
+			}
+			if resp["error"] != c.wantError {
+				t.Errorf("error = %v, want %q", resp["error"], c.wantError)
+			}
+		})
+	}
+}
+
+func TestGetGroupsWishlistFilterDatabaseFailure(t *testing.T) {
+	for _, query := range []string{"memberOfWishlistID", "notAMemberOfWishlistID"} {
+		t.Run(query, func(t *testing.T) {
+			setupControllersDB(t)
+			f := groupTestNewFixture(t)
+			header := map[string]string{"Authorization": authHeader(t, f.owner.ID, false)}
+			failDBOperation(t, "query", "wishlist_memberships", 0)
+
+			status, resp, _ := doRequest(GetGroups, "GET", "/api/auth/groups?"+query+"="+f.wishlist.ID.String(), "", header, nil)
+			if status != http.StatusInternalServerError {
+				t.Fatalf("status = %d, want 500; body=%v", status, resp)
+			}
+			if resp["error"] != "Failed to validate group membership." {
+				t.Errorf("error = %v", resp["error"])
+			}
+		})
+	}
+}
+
+// The mutating handlers answer with the caller's groups newest first.
+func TestGroupHandlersSortGroupsNewestFirst(t *testing.T) {
+	older := time.Now().Add(-2 * time.Hour)
+	newer := time.Now().Add(-1 * time.Hour)
+
+	t.Run("RegisterGroup", func(t *testing.T) {
+		setupControllersDB(t)
+		owner := createTestUser(t)
+		groupTestCreateGroupAt(t, owner.ID, "Older Group", older, owner.ID)
+		header := map[string]string{"Authorization": authHeader(t, owner.ID, false)}
+
+		status, resp, _ := doRequest(RegisterGroup, "POST", "/api/auth/groups", `{"name":"Newest Group","description":"Desc"}`, header, nil)
+		if status != http.StatusCreated {
+			t.Fatalf("status = %d, want 201; body=%v", status, resp)
+		}
+		if got := groupTestNames(t, resp); len(got) != 2 || got[0] != "Newest Group" || got[1] != "Older Group" {
+			t.Errorf("groups = %v, want [Newest Group Older Group]", got)
+		}
+	})
+
+	t.Run("JoinGroup", func(t *testing.T) {
+		setupControllersDB(t)
+		owner := createTestUser(t)
+		joiner := createTestUser(t)
+		target := groupTestCreateGroupAt(t, owner.ID, "Older Group", older, owner.ID)
+		groupTestCreateGroupAt(t, owner.ID, "Newer Group", newer, owner.ID)
+		header := map[string]string{"Authorization": authHeader(t, owner.ID, false)}
+
+		status, resp, _ := doRequest(JoinGroup, "POST", "/api/auth/groups/x/join", `{"members":["`+joiner.ID.String()+`"]}`, header, gin.Params{{Key: "group_id", Value: target.ID.String()}})
+		if status != http.StatusCreated {
+			t.Fatalf("status = %d, want 201; body=%v", status, resp)
+		}
+		if got := groupTestNames(t, resp); len(got) != 2 || got[0] != "Newer Group" || got[1] != "Older Group" {
+			t.Errorf("groups = %v, want [Newer Group Older Group]", got)
+		}
+	})
+
+	t.Run("RemoveFromGroup", func(t *testing.T) {
+		setupControllersDB(t)
+		owner := createTestUser(t)
+		member := createTestUser(t)
+		target := groupTestCreateGroupAt(t, owner.ID, "Older Group", older, owner.ID, member.ID)
+		groupTestCreateGroupAt(t, owner.ID, "Newer Group", newer, owner.ID)
+		header := map[string]string{"Authorization": authHeader(t, owner.ID, false)}
+
+		status, resp, _ := doRequest(RemoveFromGroup, "POST", "/api/auth/groups/x/remove", `{"member_id":"`+member.ID.String()+`"}`, header, gin.Params{{Key: "group_id", Value: target.ID.String()}})
+		if status != http.StatusCreated {
+			t.Fatalf("status = %d, want 201; body=%v", status, resp)
+		}
+		if got := groupTestNames(t, resp); len(got) != 2 || got[0] != "Newer Group" || got[1] != "Older Group" {
+			t.Errorf("groups = %v, want [Newer Group Older Group]", got)
+		}
+		if isMember, err := database.VerifyUserMembershipToGroup(member.ID, target.ID); err != nil || isMember {
+			t.Errorf("member still in group after removal: isMember=%v err=%v", isMember, err)
+		}
+	})
+
+	t.Run("RemoveSelfFromGroup", func(t *testing.T) {
+		setupControllersDB(t)
+		owner := createTestUser(t)
+		member := createTestUser(t)
+		groupTestCreateGroupAt(t, owner.ID, "Older Group", older, owner.ID, member.ID)
+		groupTestCreateGroupAt(t, owner.ID, "Newer Group", newer, owner.ID, member.ID)
+		leaving := groupTestCreateGroupAt(t, owner.ID, "Left Group", time.Now(), owner.ID, member.ID)
+		header := map[string]string{"Authorization": authHeader(t, member.ID, false)}
+
+		status, resp, _ := doRequest(RemoveSelfFromGroup, "POST", "/api/auth/groups/x/leave", "", header, gin.Params{{Key: "group_id", Value: leaving.ID.String()}})
+		if status != http.StatusCreated {
+			t.Fatalf("status = %d, want 201; body=%v", status, resp)
+		}
+		if got := groupTestNames(t, resp); len(got) != 2 || got[0] != "Newer Group" || got[1] != "Older Group" {
+			t.Errorf("groups = %v, want [Newer Group Older Group]", got)
+		}
+	})
+
+	t.Run("DeleteGroup", func(t *testing.T) {
+		setupControllersDB(t)
+		owner := createTestUser(t)
+		groupTestCreateGroupAt(t, owner.ID, "Older Group", older, owner.ID)
+		groupTestCreateGroupAt(t, owner.ID, "Newer Group", newer, owner.ID)
+		doomed := groupTestCreateGroupAt(t, owner.ID, "Doomed Group", time.Now(), owner.ID)
+		header := map[string]string{"Authorization": authHeader(t, owner.ID, false)}
+
+		status, resp, _ := doRequest(DeleteGroup, "DELETE", "/api/auth/groups/x", "", header, gin.Params{{Key: "group_id", Value: doomed.ID.String()}})
+		if status != http.StatusCreated {
+			t.Fatalf("status = %d, want 201; body=%v", status, resp)
+		}
+		if got := groupTestNames(t, resp); len(got) != 2 || got[0] != "Newer Group" || got[1] != "Older Group" {
+			t.Errorf("groups = %v, want [Newer Group Older Group]", got)
+		}
+	})
+
+	t.Run("APIAddWishlistsToGroup", func(t *testing.T) {
+		setupControllersDB(t)
+		owner := createTestUser(t)
+		wishlist := createTestWishlist(t, owner.ID)
+		target := groupTestCreateGroupAt(t, owner.ID, "Older Group", older, owner.ID)
+		groupTestCreateGroupAt(t, owner.ID, "Newer Group", newer, owner.ID)
+		header := map[string]string{"Authorization": authHeader(t, owner.ID, false)}
+
+		status, resp, _ := doRequest(APIAddWishlistsToGroup, "POST", "/api/auth/groups/x/add", `{"wishlists":["`+wishlist.ID.String()+`"]}`, header, gin.Params{{Key: "group_id", Value: target.ID.String()}})
+		if status != http.StatusCreated {
+			t.Fatalf("status = %d, want 201; body=%v", status, resp)
+		}
+		if got := groupTestNames(t, resp); len(got) != 2 || got[0] != "Newer Group" || got[1] != "Older Group" {
+			t.Errorf("groups = %v, want [Newer Group Older Group]", got)
+		}
+		if linked, err := database.VerifyGroupMembershipToWishlist(wishlist.ID, target.ID); err != nil || !linked {
+			t.Errorf("wishlist not linked to group: linked=%v err=%v", linked, err)
+		}
+	})
+}
+
+func TestConvertGroupToGroupObjectMembershipsFailure(t *testing.T) {
+	setupControllersDB(t)
+	f := groupTestNewFixture(t)
+	failDBOperation(t, "query", "group_memberships", 0)
+
+	groupObject, err := ConvertGroupToGroupObject(f.group)
+	if err == nil {
+		t.Fatal("expected an error when group memberships can't be loaded")
+	}
+	// The partially-built object (owner filled in, no members) is returned
+	// alongside the error.
+	if groupObject.ID != f.group.ID || groupObject.Owner.ID != f.owner.ID || len(groupObject.Members) != 0 {
+		t.Errorf("groupObject = %+v, want the group with its owner and no members", groupObject)
+	}
+}
+
+func TestConvertGroupToGroupObjectMemberLookupFailure(t *testing.T) {
+	setupControllersDB(t)
+	f := groupTestNewFixture(t)
+	// Users query #1 is the owner lookup; #2 is the first member.
+	failDBOperation(t, "query", "users", 1)
+
+	groupObject, err := ConvertGroupToGroupObject(f.group)
+	if err == nil {
+		t.Fatal("expected an error when a member's user record can't be loaded")
+	}
+	if groupObject.ID != uuid.Nil {
+		t.Errorf("groupObject = %+v, want the zero value", groupObject)
+	}
+}
+
+func TestConvertGroupsToGroupObjectsSkipsBrokenGroup(t *testing.T) {
+	setupControllersDB(t)
+	f := groupTestNewFixture(t)
+	orphan := models.Group{Name: "Orphaned Group", Enabled: true, OwnerID: uuid.New()}
+	orphan.ID = uuid.New()
+
+	groupObjects := ConvertGroupsToGroupObjects([]models.Group{orphan, f.group})
+	if len(groupObjects) != 1 || groupObjects[0].ID != f.group.ID {
+		t.Fatalf("groupObjects = %+v, want only the group whose owner exists", groupObjects)
+	}
+	if len(groupObjects[0].Members) != 2 {
+		t.Errorf("members = %d, want 2", len(groupObjects[0].Members))
+	}
+}
+
+// The membership is checked up front, then looked up again to delete it; if
+// it's removed in between, the caller gets a 400 rather than a 500.
+func TestRemoveFromGroupMembershipVanishes(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+	member := createTestUser(t)
+	membership := addGroupMembership(t, group.ID, member.ID)
+	onDBOperation(t, "query", "group_memberships", 1, func(tx *gorm.DB) {
+		if err := tx.Exec("UPDATE group_memberships SET enabled = ? WHERE id = ?", false, membership.ID).Error; err != nil {
+			t.Errorf("failed to disable membership: %v", err)
+		}
+	})
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String()+"/remove", `{"member_id":"`+member.ID.String()+`"}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RemoveFromGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+	}
+	if got := groupJSONBody(t, w)["error"]; got != "User is not a member of this group." {
+		t.Errorf("error = %v", got)
+	}
+}
+
+// The membership is checked up front, then looked up again to delete it; if
+// it's removed in between, that's still a caller-visible "not a member".
+func TestRemoveSelfFromGroupMembershipVanishes(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	member := createTestUser(t)
+	membership := addGroupMembership(t, group.ID, member.ID)
+	onDBOperation(t, "query", "group_memberships", 1, func(tx *gorm.DB) {
+		if err := tx.Exec("UPDATE group_memberships SET enabled = ? WHERE id = ?", false, membership.ID).Error; err != nil {
+			t.Errorf("failed to disable membership: %v", err)
+		}
+	})
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String()+"/leave", "")
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, member.ID, false))
+	RemoveSelfFromGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+	}
+	if got := groupJSONBody(t, w)["error"]; got != "You are not a member of this group." {
+		t.Errorf("error = %v", got)
+	}
+}
+
+// A disabled account keeps its membership row; it must be left out of the
+// listing rather than failing the whole request.
+func TestGetGroupMembersSkipsDisabledMember(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+	member := createTestUser(t)
+	addGroupMembership(t, group.ID, member.ID)
+	member.Enabled = boolPtr(false)
+	if _, err := database.UpdateUserInDB(member); err != nil {
+		t.Fatalf("failed to disable member: %v", err)
+	}
+
+	ctx, w := groupTestContext("GET", "/api/groups/"+group.ID.String()+"/members", "")
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	GetGroupMembers(ctx)
+
+	if w.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+	members, ok := groupJSONBody(t, w)["group_members"].([]interface{})
+	if !ok || len(members) != 1 {
+		t.Fatalf("group_members = %v, want only the enabled owner", groupJSONBody(t, w)["group_members"])
+	}
+}
+
+// Ownership is checked first, then the group is loaded; if it's deleted in
+// between, the caller gets a 400 rather than a 500.
+func TestAPIUpdateGroupVanishesAfterOwnershipCheck(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+	onDBOperation(t, "query", "groups", 1, func(tx *gorm.DB) {
+		if err := tx.Exec("UPDATE groups SET enabled = ? WHERE id = ?", false, group.ID).Error; err != nil {
+			t.Errorf("failed to disable group: %v", err)
+		}
+	})
+
+	ctx, w := groupTestContext("POST", "/api/groups/"+group.ID.String(), `{"name":"Renamed Group","description":"New description"}`)
+	ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	APIUpdateGroup(ctx)
+
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+	}
+	if got := groupJSONBody(t, w)["error"]; got != "Failed to find group." {
+		t.Errorf("error = %v", got)
 	}
 }

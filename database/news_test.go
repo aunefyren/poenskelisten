@@ -112,3 +112,25 @@ func TestNewsQueriesFailOnClosedDB(t *testing.T) {
 		},
 	})
 }
+
+func TestNewsPostFailureBranches(t *testing.T) {
+	setupTestDB(t)
+
+	if err := DeleteNewsPost(uuid.New()); err == nil {
+		t.Error("DeleteNewsPost: expected error for an unknown post")
+	}
+
+	// Rows reported but none scanned must still yield [] rather than nil.
+	forceRowsAffected(t, "query", "news", 1)
+	posts, err := GetNewsPosts()
+	if err != nil || posts == nil || len(posts) != 0 {
+		t.Errorf("GetNewsPosts = %v, %v; want empty non-nil slice", posts, err)
+	}
+
+	forceRowsAffected(t, "create", "news", 0)
+	news := models.News{Title: "t", Body: "b", Enabled: true, Date: time.Now()}
+	news.ID = uuid.New()
+	if _, err := CreateNewsPostInDB(news); err == nil || err.Error() != "News post not added to database." {
+		t.Errorf("CreateNewsPostInDB error = %v, want \"News post not added to database.\"", err)
+	}
+}

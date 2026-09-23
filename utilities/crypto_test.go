@@ -9,6 +9,8 @@ import (
 // key so the encryption-key derivation works without a config.json on disk.
 func setupCryptoTestKey(t *testing.T) {
 	t.Helper()
+	original := config.ConfigFile
+	t.Cleanup(func() { config.ConfigFile = original })
 
 	key, err := config.GenerateSecureKey(64)
 	if err != nil {
@@ -83,6 +85,21 @@ func TestDecryptGarbageFails(t *testing.T) {
 	for _, garbage := range []string{"", "not-base64!!!", "YWJj"} {
 		if _, err := DecryptString(garbage); err == nil {
 			t.Errorf("DecryptString(%q) succeeded, want error", garbage)
+		}
+	}
+}
+
+func TestEncryptDecryptWithoutPrivateKey(t *testing.T) {
+	orig := config.ConfigFile.PrivateKey
+	t.Cleanup(func() { config.ConfigFile.PrivateKey = orig })
+
+	for _, key := range []string{"", "not base64!!"} {
+		config.ConfigFile.PrivateKey = key
+		if _, err := EncryptString("secret"); err == nil {
+			t.Errorf("EncryptString with private key %q: expected an error", key)
+		}
+		if _, err := DecryptString("c2VjcmV0"); err == nil {
+			t.Errorf("DecryptString with private key %q: expected an error", key)
 		}
 	}
 }

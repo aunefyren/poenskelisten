@@ -7,6 +7,15 @@ import (
 	"github.com/google/uuid"
 )
 
+// ErrGroupNotFound means the lookup ran but matched no enabled group (or, for
+// GetGroupUsingGroupIDAndUserIDAsOwner, none owned by that user), as opposed
+// to the query itself failing.
+var ErrGroupNotFound = errors.New("Failed to find group in database.")
+
+// ErrGroupMembershipNotFound means the lookup ran but matched no enabled
+// membership, as opposed to the query itself failing.
+var ErrGroupMembershipNotFound = errors.New("Failed to find group membership.")
+
 func VerifyGroupExistsByNameForUser(groupName string, groupOwnerID uuid.UUID) (bool, models.Group, error) {
 	var groupStruct models.Group
 
@@ -30,7 +39,7 @@ func GetGroupInformation(GroupID uuid.UUID) (models.Group, error) {
 	if groupRecord.Error != nil {
 		return models.Group{}, groupRecord.Error
 	} else if groupRecord.RowsAffected != 1 {
-		return models.Group{}, errors.New("Failed to find correct group in DB.")
+		return models.Group{}, ErrGroupNotFound
 	}
 
 	return group, nil
@@ -234,7 +243,7 @@ func GetGroupUsingGroupIDAndUserIDAsOwner(UserID uuid.UUID, GroupID uuid.UUID) (
 	if groupRecord.Error != nil {
 		return group, groupRecord.Error
 	} else if groupRecord.RowsAffected != 1 {
-		return group, errors.New("Failed to find group in database.")
+		return group, ErrGroupNotFound
 	}
 
 	return group, nil
@@ -252,7 +261,7 @@ func GetGroupMembershipByGroupIDAndMemberID(GroupID uuid.UUID, MemberID uuid.UUI
 	if groupMembershipRecord.Error != nil {
 		return groupMembership, groupMembershipRecord.Error
 	} else if groupMembershipRecord.RowsAffected != 1 {
-		return groupMembership, errors.New("Failed to find group membership.")
+		return groupMembership, ErrGroupMembershipNotFound
 	}
 
 	return groupMembership, err

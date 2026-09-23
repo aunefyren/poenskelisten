@@ -116,3 +116,92 @@ func TestApplyOrientation(t *testing.T) {
 		}
 	}
 }
+
+// app1 wraps a raw TIFF payload in an EXIF APP1 segment and prefixes SOI.
+func app1(tiff []byte) []byte {
+	payload := append([]byte("Exif\x00\x00"), tiff...)
+	out := []byte{0xFF, 0xD8, 0xFF, 0xE1}
+	out = binary.BigEndian.AppendUint16(out, uint16(len(payload)+2))
+	return append(out, payload...)
+}
+
+// tiffIFD builds a little-endian TIFF header plus an IFD0 holding the given
+// (tag, type, value) entries.
+func tiffIFD(entries ...[3]uint16) []byte {
+	b := []byte("II")
+	b = binary.LittleEndian.AppendUint16(b, 0x002A)
+	b = binary.LittleEndian.AppendUint32(b, 8)
+	b = binary.LittleEndian.AppendUint16(b, uint16(len(entries)))
+	for _, e := range entries {
+		b = binary.LittleEndian.AppendUint16(b, e[0])
+		b = binary.LittleEndian.AppendUint16(b, e[1])
+		b = binary.LittleEndian.AppendUint32(b, 1)
+		b = binary.LittleEndian.AppendUint16(b, e[2])
+		b = binary.LittleEndian.AppendUint16(b, 0)
+	}
+	return binary.LittleEndian.AppendUint32(b, 0)
+}
+
+// TestJPEGOrientationMalformed feeds hand-built marker streams and EXIF
+// payloads through every fallback path: anything unparseable must read as
+// upright (1) rather than guessing or panicking, while a valid tag behind
+// padding or an unrelated tag must still be found.
+func TestJPEGOrientationMalformed(t *testing.T) {
+	validIFD := tiffIFD([3]uint16{0x0112, 3, 6})
+
+	withMagic := append([]byte{}, validIFD...)
+	binary.LittleEndian.PutUint16(withMagic[2:4], 0x002B)
+
+	badOffset := append([]byte{}, validIFD...)
+	binary.LittleEndian.PutUint32(badOffset[4:8], 4)
+
+	farOffset := append([]byte{}, validIFD...)
+	binary.LittleEndian.PutUint32(farOffset[4:8], 1000)
+
+	// Entry count claims two entries but only an unrelated one is present.
+	truncatedEntries := tiffIFD([3]uint16{0x010F, 2, 0})[:22]
+	binary.LittleEndian.PutUint16(truncatedEntries[8:10], 2)
+
+	bigEndianHeader := append([]byte("MM"), validIFD[2:]...) // magic now reads 0x2A00
+
+	cases := []struct {
+		name string
+		data []byte
+		want int
+	}{
+		{"fill bytes before exif marker", append([]byte{0xFF, 0xD8, 0xFF}, app1(validIFD)[2:]...), 6},
+		{"unrelated tag before orientation", app1(tiffIFD([3]uint16{0x010F, 2, 0}, [3]uint16{0x0112, 3, 8})), 8},
+		{"orientation not SHORT", app1(tiffIFD([3]uint16{0x0112, 4, 6})), 1},
+		{"no orientation tag", app1(tiffIFD([3]uint16{0x010F, 2, 0})), 1},
+		{"empty IFD", app1(tiffIFD()), 1},
+		{"tiff shorter than header", app1([]byte("II*\x00")), 1},
+		{"unknown byte order", app1(append([]byte("XX"), validIFD[2:]...)), 1},
+		{"bad magic", app1(withMagic), 1},
+		{"byte order mismatch breaks magic", app1(bigEndianHeader), 1},
+		{"IFD offset inside header", app1(badOffset), 1},
+		{"IFD offset past end", app1(farOffset), 1},
+		{"entry truncated", app1(truncatedEntries), 1},
+		{"garbage instead of marker", []byte{0xFF, 0xD8, 0x00, 0x11, 0x22, 0x33}, 1},
+		{"segment length below 2", []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x01, 0x00, 0x00}, 1},
+		{"end of image marker", []byte{0xFF, 0xD8, 0xFF, 0xD9, 0x00, 0x00}, 1},
+		// APP0 segment consumes everything, leaving too few bytes for another marker.
+		{"stream ends after segment", []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x04, 0x4A, 0x46, 0xFF}, 1},
+		{"non-exif APP1", []byte{0xFF, 0xD8, 0xFF, 0xE1, 0x00, 0x06, 'h', 't', 't', 'p', 0xFF, 0xD9, 0x00, 0x00}, 1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := JPEGOrientation(c.data); got != c.want {
+				t.Errorf("JPEGOrientation() = %d, want %d", got, c.want)
+			}
+		})
+	}
+}
+
+func TestApplyOrientationOutOfRangeReturnsInput(t *testing.T) {
+	src := image.NewNRGBA(image.Rect(0, 0, 2, 1))
+	for _, o := range []int{0, 1, 9, -3} {
+		if got := ApplyOrientation(src, o); got != image.Image(src) {
+			t.Errorf("ApplyOrientation(%d) returned a new image, want the input unchanged", o)
+		}
+	}
+}

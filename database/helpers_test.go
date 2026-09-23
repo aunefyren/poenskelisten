@@ -3,6 +3,7 @@ package database
 import (
 	"aunefyren/poenskelisten/models"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -173,4 +174,75 @@ func runClosedDBCases(t *testing.T, cases map[string]func() error) {
 			}
 		})
 	}
+}
+
+// errInjected is the fault injectFault adds, so tests can tell it apart from a
+// genuine failure.
+var errInjected = errors.New("injected database fault")
+
+// injectFault registers a GORM callback that fails the statements of the given
+// kind ("create", "query", "update" or "delete") against table, skipping the
+// first `skip` matching statements. That reaches a function's second or third
+// "query failed" return, which closing the whole connection can't single out.
+func injectFault(t *testing.T, kind, table string, skip int) {
+	t.Helper()
+	seen := 0
+	err := registerCallback(kind, false, func(db *gorm.DB) {
+		if db.Statement.Table != table {
+			return
+		}
+		seen++
+		if seen > skip {
+			db.AddError(errInjected)
+		}
+	})
+	if err != nil {
+		t.Fatalf("failed to register fault callback: %v", err)
+	}
+}
+
+// forceRowsAffected registers a GORM callback that overwrites RowsAffected after
+// every statement of the given kind against table. It is the only way to reach
+// the defensive "wrong row count" branches that a healthy single-row write or
+// a unique-keyed lookup can't otherwise produce.
+func forceRowsAffected(t *testing.T, kind, table string, rows int64) {
+	t.Helper()
+	err := registerCallback(kind, true, func(db *gorm.DB) {
+		if db.Statement.Table == table && db.Error == nil {
+			db.RowsAffected = rows
+		}
+	})
+	if err != nil {
+		t.Fatalf("failed to register rows callback: %v", err)
+	}
+}
+
+// registerCallback hooks fn in just before (or after) GORM's own callback for
+// kind. GORM's processor type is unexported, so each kind is spelled out.
+func registerCallback(kind string, after bool, fn func(*gorm.DB)) error {
+	name, anchor := "test:"+uuid.NewString(), "gorm:"+kind
+	cb := Instance.Callback()
+	switch kind {
+	case "create":
+		if after {
+			return cb.Create().After(anchor).Register(name, fn)
+		}
+		return cb.Create().Before(anchor).Register(name, fn)
+	case "query":
+		if after {
+			return cb.Query().After(anchor).Register(name, fn)
+		}
+		return cb.Query().Before(anchor).Register(name, fn)
+	case "update":
+		if after {
+			return cb.Update().After(anchor).Register(name, fn)
+		}
+		return cb.Update().Before(anchor).Register(name, fn)
+	case "delete":
+		if after {
+			return cb.Delete().After(anchor).Register(name, fn)
+		}
+		return cb.Delete().Before(anchor).Register(name, fn)
+	}
+	return errors.New("unknown callback kind: " + kind)
 }

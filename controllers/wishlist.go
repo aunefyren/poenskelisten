@@ -8,6 +8,7 @@ import (
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -248,7 +249,7 @@ func DeleteWishlist(context *gin.Context) {
 	err = database.DeleteWishlist(wishlist_id_int)
 	if err != nil {
 		logger.Log.Error("Failed to delete wishlist. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to delete wishlist."})
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete wishlist."})
 		context.Abort()
 		return
 	}
@@ -290,7 +291,7 @@ func DeleteWishlist(context *gin.Context) {
 		wishlistObjects, err = GetWishlistObjectsFromGroup(group_id_int, UserID)
 		if err != nil {
 			logger.Log.Error("Failed to get wishlists for group. Error: " + err.Error())
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wishlists for group."})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlists for group."})
 			context.Abort()
 			return
 		}
@@ -366,9 +367,15 @@ func GetWishlist(context *gin.Context) {
 	}
 
 	wishlist_with_user, err := GetWishlistObject(wishlist_id_int, UserID)
-	if err != nil {
-		logger.Log.Error("Failed to get wishlist object. Error: " + err.Error())
+	if errors.Is(err, database.ErrWishlistNotFound) || errors.Is(err, database.ErrUserNotFound) {
+		// The wishlist, or the owner whose profile it's rendered with, is gone
+		// or disabled.
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wishlist object."})
+		context.Abort()
+		return
+	} else if err != nil {
+		logger.Log.Error("Failed to get wishlist object. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist object."})
 		context.Abort()
 		return
 	}
@@ -387,7 +394,7 @@ func GetWishlistObject(WishlistID uuid.UUID, RequestUserID uuid.UUID) (wishlistO
 	wishlistObject, err = ConvertWishlistToWishlistObject(wishlist, &RequestUserID)
 	if err != nil {
 		logger.Log.Error("Failed to convert wishlist '" + WishlistID.String() + "' to object. Returning. Error: " + err.Error())
-		return models.WishlistUser{}, errors.New("Failed to convert wishlist '" + WishlistID.String() + "' to object.")
+		return models.WishlistUser{}, fmt.Errorf("Failed to convert wishlist '%s' to object: %w", WishlistID, err)
 	}
 
 	return
@@ -441,7 +448,7 @@ func GetWishlists(context *gin.Context) {
 		wishlistObjects, err = GetWishlistObjectsFromGroup(group_id_int, UserID)
 		if err != nil {
 			logger.Log.Error("Failed to get wishlists for group. Error: " + err.Error())
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wishlists for group."})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlists for group."})
 			context.Abort()
 			return
 		}
@@ -850,7 +857,7 @@ func RemoveFromWishlist(context *gin.Context) {
 		wishlistObjects, err = GetWishlistObjectsFromGroup(group_id_int, UserID)
 		if err != nil {
 			logger.Log.Error("Failed to get wishlists for group. Error: " + err.Error())
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wishlists for group."})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlists for group."})
 			context.Abort()
 			return
 		}
@@ -952,7 +959,9 @@ func APIUpdateWishlist(context *gin.Context) {
 			return
 		}
 
-		unique_wish_name, err := database.VerifyUniqueWishlistNameForUser(wishlist.Name, UserID)
+		// Names are unique per owner, and a collaborator edits on the owner's
+		// behalf, so check against the owner's wishlists rather than the caller's.
+		unique_wish_name, err := database.VerifyUniqueWishlistNameForUser(wishlist.Name, wishlistOriginal.OwnerID)
 		if err != nil {
 			logger.Log.Error("Failed to verify unique wishlist name. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify unique wishlist name."})
@@ -995,15 +1004,21 @@ func APIUpdateWishlist(context *gin.Context) {
 		wishlistOriginal.Date = &newDate
 	}
 
+	// A fresh public link is only issued when a private wishlist is made public
+	// again, so making it private and re-publishing revokes a leaked link while
+	// ordinary edits keep already-shared links working.
+	wasPublic := wishlistOriginal.Public != nil && *wishlistOriginal.Public
+	if wishlist.Public && !wasPublic {
+		wishlistOriginal.PublicHash = uuid.New()
+	}
+
 	// Finalize wishlist object
-	wishlistOriginal.OwnerID = UserID
 	wishlistOriginal.Description = wishlist.Description
 	wishlistOriginal.Name = wishlist.Name
 	wishlistOriginal.Claimable = &wishlist.Claimable
 	wishlistOriginal.HideClaimers = &wishlist.HideClaimers
 	wishlistOriginal.Expires = &wishlist.Expires
 	wishlistOriginal.Public = &wishlist.Public
-	wishlistOriginal.PublicHash = uuid.New()
 	wishlistOriginal.ID = wishlist_id_int
 
 	if *wishlistOriginal.Public && *wishlistOriginal.Claimable {

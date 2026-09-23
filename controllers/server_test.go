@@ -6,6 +6,7 @@ import (
 )
 
 func TestGetServerInfo(t *testing.T) {
+	restoreConfig(t)
 	config.ConfigFile.PoenskelistenName = "Test App"
 	config.ConfigFile.PoenskelistenVersion = "1.2.3"
 	config.ConfigFile.DBType = "sqlite"

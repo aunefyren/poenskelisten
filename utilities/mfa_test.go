@@ -10,6 +10,8 @@ import (
 )
 
 func TestGenerateAndValidateTOTP(t *testing.T) {
+	original := config.ConfigFile
+	t.Cleanup(func() { config.ConfigFile = original })
 	config.ConfigFile.PoenskelistenName = "TestApp"
 
 	secret, url, qrCode, err := GenerateTOTPSecret("user@example.com")
@@ -109,5 +111,36 @@ func TestLooksLikeTOTPCode(t *testing.T) {
 		if got := LooksLikeTOTPCode(input); got != want {
 			t.Errorf("LooksLikeTOTPCode(%q) = %v, want %v", input, got, want)
 		}
+	}
+}
+
+func TestGenerateTOTPSecretDefaultsIssuer(t *testing.T) {
+	orig := config.ConfigFile.PoenskelistenName
+	t.Cleanup(func() { config.ConfigFile.PoenskelistenName = orig })
+	config.ConfigFile.PoenskelistenName = "   "
+
+	_, url, _, err := GenerateTOTPSecret("user@example.com")
+	if err != nil {
+		t.Fatalf("GenerateTOTPSecret error: %v", err)
+	}
+	if !strings.Contains(url, "issuer=Poenskelisten") {
+		t.Errorf("otpauth URL = %q, want the default issuer when the app name is blank", url)
+	}
+}
+
+func TestGenerateTOTPSecretRequiresAccountName(t *testing.T) {
+	secret, url, qrCode, err := GenerateTOTPSecret("")
+	if err == nil {
+		t.Fatal("GenerateTOTPSecret(\"\") succeeded, want an error")
+	}
+	if secret != "" || url != "" || qrCode != "" {
+		t.Errorf("expected empty results on error, got %q, %q, %d-char QR", secret, url, len(qrCode))
+	}
+}
+
+func TestHashRecoveryCodeTooLong(t *testing.T) {
+	// bcrypt refuses inputs over 72 bytes.
+	if hash, err := HashRecoveryCode(strings.Repeat("A", 73)); err == nil {
+		t.Errorf("HashRecoveryCode of a 73-byte code = %q, want an error", hash)
 	}
 }

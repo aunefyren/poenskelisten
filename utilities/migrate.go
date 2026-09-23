@@ -205,31 +205,22 @@ func ReplaceValues(line string, currentTable string, IDMaps []IDMap, secondRun b
 		return
 	}
 
-	finishedLoop := false
-	sum := 1
-	for sum < 1000 {
-		for index, value := range values {
-			if strings.HasPrefix(value, "'") && !strings.HasSuffix(value, "'") && index < len(values)+1 {
-				newValues := []string{}
-				for indexTwo, valueTwo := range values {
-					if indexTwo == index+1 {
-						newValues[indexTwo-1] += ", " + valueTwo
-					} else {
-						newValues = append(newValues, valueTwo)
-					}
-
-				}
-				values = newValues
-				break
+	// Splitting on ", " also splits quoted strings that contain one; glue each
+	// fragment back onto the value it started in. A quoted value that never
+	// closes is malformed input, reported rather than looped on.
+	merged := []string{}
+	for i := 0; i < len(values); i++ {
+		value := values[i]
+		for strings.HasPrefix(value, "'") && !strings.HasSuffix(value, "'") {
+			if i+1 >= len(values) {
+				return line, IDMaps, fmt.Errorf("unterminated quoted value in %s row: %s", currentTable, line)
 			}
-			if index+1 >= (len(values)) {
-				finishedLoop = true
-			}
+			i++
+			value += ", " + values[i]
 		}
-		if finishedLoop {
-			break
-		}
+		merged = append(merged, value)
 	}
+	values = merged
 
 	// Replace ID
 	if !secondRun {
