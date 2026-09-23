@@ -273,6 +273,36 @@ func TestInitRouterProtectsAuthAndAdminGroups(t *testing.T) {
 	}
 }
 
+// Verifies the body-size override table in initRouter matches real routes: a
+// renamed image route would otherwise silently fall back to the 1 MB default.
+func TestInitRouterBodySizeLimits(t *testing.T) {
+	router := initRouter(models.ConfigStruct{})
+
+	cases := []struct {
+		path          string
+		contentLength int64
+		want          int
+	}{
+		// Under the image limit: passes the size check, stopped by auth instead.
+		{"/api/auth/wishes", 5 << 20, http.StatusUnauthorized},
+		{"/api/auth/wishes/00000000-0000-0000-0000-000000000001", 5 << 20, http.StatusUnauthorized},
+		{"/api/auth/users/update", 5 << 20, http.StatusUnauthorized},
+		{"/api/auth/users/update", 16 << 20, http.StatusRequestEntityTooLarge},
+		// Routes without an override keep the default.
+		{"/api/auth/groups", 2 << 20, http.StatusRequestEntityTooLarge},
+		{"/api/open/users", 2 << 20, http.StatusRequestEntityTooLarge},
+	}
+	for _, c := range cases {
+		request := httptest.NewRequest(http.MethodPost, c.path, strings.NewReader("{}"))
+		request.ContentLength = c.contentLength
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, request)
+		if w.Code != c.want {
+			t.Errorf("POST %s with Content-Length %d = %d, want %d", c.path, c.contentLength, w.Code, c.want)
+		}
+	}
+}
+
 func TestInitRouterUnknownPathIs404(t *testing.T) {
 	router := initRouter(models.ConfigStruct{})
 

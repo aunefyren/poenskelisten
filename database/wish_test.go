@@ -279,3 +279,30 @@ func TestWishQueriesFailOnClosedDB(t *testing.T) {
 		},
 	})
 }
+
+func TestGetWishIDsFromWishlistIncludesDisabledWishes(t *testing.T) {
+	setupTestDB(t)
+
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	other := createTestWishlist(t, owner.ID)
+	enabled := createWishForOwner(t, wishlist.ID, owner.ID, "Enabled")
+	disabled := createWishForOwner(t, wishlist.ID, owner.ID, "Disabled")
+	disabled.Enabled = false
+	if _, err := UpdateWishInDB(disabled); err != nil {
+		t.Fatalf("failed to disable wish: %v", err)
+	}
+	createWishForOwner(t, other.ID, owner.ID, "Other wishlist")
+
+	wishIDs, err := GetWishIDsFromWishlist(wishlist.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := map[uuid.UUID]bool{}
+	for _, id := range wishIDs {
+		got[id] = true
+	}
+	if len(wishIDs) != 2 || !got[enabled.ID] || !got[disabled.ID] {
+		t.Errorf("GetWishIDsFromWishlist() = %v, want exactly %v and %v", wishIDs, enabled.ID, disabled.ID)
+	}
+}
