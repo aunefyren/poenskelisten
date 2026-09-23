@@ -1,8 +1,11 @@
 package main
 
 import (
+	"aunefyren/poenskelisten/config"
+	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
+	"database/sql"
 	"flag"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +15,12 @@ import (
 	textTemplate "text/template"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	logrusTest "github.com/sirupsen/logrus/hooks/test"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	_ "modernc.org/sqlite"
 )
 
 func init() {
@@ -430,6 +438,147 @@ func TestRenderTemplateHandlers(t *testing.T) {
 			}
 			if !strings.Contains(w.Body.String(), "template error") {
 				t.Errorf("body = %q, want a template error", w.Body.String())
+			}
+		})
+	}
+}
+
+// setupRecoveryDB points database.Instance at a fresh in-memory SQLite DB
+// holding the tables the account-recovery actions touch, restoring the
+// previous instance afterwards.
+func setupRecoveryDB(t *testing.T) {
+	t.Helper()
+	dbSQL, err := sql.Open("sqlite", "file:"+uuid.NewString()+"?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatalf("failed to open in-memory sqlite: %v", err)
+	}
+	t.Cleanup(func() { dbSQL.Close() })
+	dbSQL.SetMaxOpenConns(1)
+
+	instance, err := gorm.Open(sqlite.Dialector{Conn: dbSQL}, &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open gorm: %v", err)
+	}
+	if err := instance.AutoMigrate(&models.User{}, &models.MFARecoveryCode{}); err != nil {
+		t.Fatalf("failed to migrate: %v", err)
+	}
+	origInstance := database.Instance
+	t.Cleanup(func() { database.Instance = origInstance })
+	database.Instance = instance
+}
+
+// createRecoveryUser inserts an enabled user with MFA switched on.
+func createRecoveryUser(t *testing.T, email string) models.User {
+	t.Helper()
+	enabled, mfaEnabled, secret := true, true, "encrypted-secret"
+	user := models.User{FirstName: "Ada", Email: &email, Enabled: &enabled, MFAEnabled: &mfaEnabled, MFASecret: &secret}
+	user.ID = uuid.New()
+	if r := database.Instance.Create(&user); r.Error != nil {
+		t.Fatalf("failed to create user: %v", r.Error)
+	}
+	return user
+}
+
+// captureLogs attaches a test hook to logger.Log for the duration of the test.
+func captureLogs(t *testing.T) *logrusTest.Hook {
+	t.Helper()
+	hook := logrusTest.NewLocal(logger.Log)
+	t.Cleanup(func() { logger.Log.ReplaceHooks(make(logrus.LevelHooks)) })
+	return hook
+}
+
+// logged reports whether an entry at level containing substr was captured.
+func logged(hook *logrusTest.Hook, level logrus.Level, substr string) bool {
+	for _, entry := range hook.AllEntries() {
+		if entry.Level == level && strings.Contains(entry.Message, substr) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestRunAccountRecoveryActionsNoneIsNoop(t *testing.T) {
+	hook := captureLogs(t)
+	// No DB is set up: with no actions requested, nothing may touch it.
+	runAccountRecoveryActions(startupActions{generateInvite: true})
+	if n := len(hook.AllEntries()); n != 0 {
+		t.Errorf("logged %d entries with no recovery actions, want 0: %+v", n, hook.AllEntries())
+	}
+}
+
+func TestRunAccountRecoveryActionsResetMFA(t *testing.T) {
+	setupRecoveryDB(t)
+	user := createRecoveryUser(t, "ada@example.com")
+	hook := captureLogs(t)
+
+	runAccountRecoveryActions(startupActions{resetMFAEmail: "ada@example.com"})
+
+	var got models.User
+	if r := database.Instance.First(&got, "id = ?", user.ID); r.Error != nil {
+		t.Fatalf("failed to reload user: %v", r.Error)
+	}
+	if got.MFAEnabled == nil || *got.MFAEnabled || got.MFASecret != nil {
+		t.Errorf("after resetmfa MFAEnabled = %v, MFASecret = %v; want false and nil", got.MFAEnabled, got.MFASecret)
+	}
+	if !logged(hook, logrus.WarnLevel, "removed MFA for user "+user.ID.String()) {
+		t.Errorf("missing resetmfa success warning; entries: %+v", hook.AllEntries())
+	}
+}
+
+func TestRunAccountRecoveryActionsUnknownEmailLogsErrors(t *testing.T) {
+	setupRecoveryDB(t)
+	hook := captureLogs(t)
+
+	// Must log and carry on rather than exit: these flags often linger as env
+	// vars after the user they named is gone.
+	runAccountRecoveryActions(startupActions{resetMFAEmail: "ghost@example.com", resetPasswordEmail: "ghost@example.com"})
+
+	if !logged(hook, logrus.ErrorLevel, "resetmfa: failed to remove MFA for 'ghost@example.com'") {
+		t.Errorf("missing resetmfa error; entries: %+v", hook.AllEntries())
+	}
+	if !logged(hook, logrus.ErrorLevel, "resetpassword: failed to issue a reset link for 'ghost@example.com'") {
+		t.Errorf("missing resetpassword error; entries: %+v", hook.AllEntries())
+	}
+}
+
+func TestRunAccountRecoveryActionsResetPassword(t *testing.T) {
+	cases := []struct {
+		name          string
+		oidcOnly      bool
+		wantOIDCNotes bool
+	}{
+		{"local login enabled", false, false},
+		{"OIDC-only instance warns link is refused", true, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			origConfig := config.ConfigFile
+			t.Cleanup(func() { config.ConfigFile = origConfig })
+			config.ConfigFile.PoenskelistenExternalURL = "https://wishes.example.com"
+			config.ConfigFile.LocalLoginDisabled = c.oidcOnly
+			config.ConfigFile.OIDCEnabled = c.oidcOnly
+			config.ConfigFile.OIDCIssuerURL = "https://idp.example.com"
+			config.ConfigFile.OIDCClientID = "client"
+
+			setupRecoveryDB(t)
+			user := createRecoveryUser(t, "ada@example.com")
+			hook := captureLogs(t)
+
+			runAccountRecoveryActions(startupActions{resetPasswordEmail: "ada@example.com"})
+
+			var got models.User
+			if r := database.Instance.First(&got, "id = ?", user.ID); r.Error != nil {
+				t.Fatalf("failed to reload user: %v", r.Error)
+			}
+			if got.ResetCode == nil || *got.ResetCode == "" {
+				t.Fatal("no reset code was stored for the user")
+			}
+			wantLink := "https://wishes.example.com/login?reset_code=" + *got.ResetCode
+			if !logged(hook, logrus.WarnLevel, wantLink) {
+				t.Errorf("missing warning containing %q; entries: %+v", wantLink, hook.AllEntries())
+			}
+			if gotNote := logged(hook, logrus.WarnLevel, "password login is disabled"); gotNote != c.wantOIDCNotes {
+				t.Errorf("OIDC-only warning logged = %v, want %v", gotNote, c.wantOIDCNotes)
 			}
 		})
 	}

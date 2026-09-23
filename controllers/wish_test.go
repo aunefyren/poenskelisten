@@ -4,12 +4,17 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // wishCtx builds a gin test context for a request with an optional JSON body.
@@ -1465,4 +1470,638 @@ func TestWishHandlersRequireAuth(t *testing.T) {
 		{name: "APIUpdateWish", handler: APIUpdateWish, method: "POST", path: "/api/auth/wishes/00000000-0000-0000-0000-00000000000a", body: `{"name":"Wish"}`, params: wishParam},
 		{name: "APIGetWish", handler: APIGetWish, method: "GET", path: "/api/auth/wishes/00000000-0000-0000-0000-00000000000a", params: wishParam},
 	})
+}
+
+// --- Deeper branches: injected DB failures, sorting, images ---
+
+// wishTestReq is one handler call, built by a fixture before any failure is
+// injected so the fixture's own inserts aren't affected.
+type wishTestReq struct {
+	handler gin.HandlerFunc
+	method  string
+	path    string
+	body    string
+	params  gin.Params
+	userID  uuid.UUID
+}
+
+// wishTestSend runs req as req.userID and returns the recorder.
+func wishTestSend(t *testing.T, req wishTestReq, header string) *httptest.ResponseRecorder {
+	t.Helper()
+	path := req.path
+	if path == "" {
+		path = "/"
+	}
+	w, ctx := wishCtx(req.method, path, req.body)
+	ctx.Params = req.params
+	ctx.Request.Header.Set("Authorization", header)
+	req.handler(ctx)
+	return w
+}
+
+// wishTestFailCase injects a failure into one GORM operation and expects the
+// handler to stop at the branch that reports it.
+type wishTestFailCase struct {
+	name    string
+	fixture func(t *testing.T) wishTestReq
+	op      string
+	table   string
+	skip    int
+	want    int
+	wantErr string
+}
+
+func wishTestRunFailures(t *testing.T, cases []wishTestFailCase) {
+	t.Helper()
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			req := c.fixture(t)
+			header := authHeader(t, req.userID, false)
+			failDBOperation(t, c.op, c.table, c.skip)
+
+			w := wishTestSend(t, req, header)
+			if w.Code != c.want {
+				t.Fatalf("status = %d, want %d; body=%s", w.Code, c.want, w.Body.String())
+			}
+			if got := parseWishBody(t, w)["error"]; got != c.wantErr {
+				t.Errorf("error = %v, want %q", got, c.wantErr)
+			}
+		})
+	}
+}
+
+// wishTestImageDir points wishImageDir at a fresh temp directory for the
+// test, restoring the original afterwards.
+func wishTestImageDir(t *testing.T) string {
+	t.Helper()
+	orig := wishImageDir
+	t.Cleanup(func() { wishImageDir = orig })
+	wishImageDir = filepath.Join(t.TempDir(), "wishes")
+	return wishImageDir
+}
+
+// wishTestBlockImageDelete makes deleting wishID's image fail: a non-empty
+// directory sits where the full-size image file would be, so os.Remove
+// returns ENOTEMPTY rather than "not exist".
+func wishTestBlockImageDelete(t *testing.T, wishID uuid.UUID) {
+	t.Helper()
+	dir := wishTestImageDir(t)
+	blocker := imageFilePath(dir, wishID, false)
+	if err := os.MkdirAll(blocker, 0755); err != nil {
+		t.Fatalf("failed to create blocking dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(blocker, "keep"), []byte("x"), 0644); err != nil {
+		t.Fatalf("failed to populate blocking dir: %v", err)
+	}
+}
+
+// wishTestSeedClaim inserts an enabled claim by userID on wishID.
+func wishTestSeedClaim(t *testing.T, wishID, userID uuid.UUID) {
+	t.Helper()
+	claim := models.WishClaim{UserID: userID, WishID: wishID, Enabled: true}
+	claim.ID = uuid.New()
+	if _, err := database.CreateWishClaimInDB(claim); err != nil {
+		t.Fatalf("failed to seed claim: %v", err)
+	}
+}
+
+// wishTestWishNames returns the "name" of each entry in body["wishes"].
+func wishTestWishNames(t *testing.T, body map[string]interface{}) []string {
+	t.Helper()
+	list, ok := body["wishes"].([]interface{})
+	if !ok {
+		t.Fatalf("wishes = %v, want a list", body["wishes"])
+	}
+	names := []string{}
+	for _, entry := range list {
+		names = append(names, entry.(map[string]interface{})["name"].(string))
+	}
+	return names
+}
+
+// wishTestCreateNamedWish inserts a wish with an explicit name and creation
+// time, so tests can assert the handlers' newest-first ordering.
+func wishTestCreateNamedWish(t *testing.T, ownerID, wishlistID uuid.UUID, name string, created time.Time) models.Wish {
+	t.Helper()
+	wish := models.Wish{Name: name, Enabled: true, OwnerID: ownerID, WishlistID: wishlistID}
+	wish.ID = uuid.New()
+	wish.CreatedAt = created
+	wish.UpdatedAt = created
+	createdWish, err := database.CreateWishInDB(wish)
+	if err != nil {
+		t.Fatalf("failed to create wish: %v", err)
+	}
+	return createdWish
+}
+
+func wishTestWishEnabled(t *testing.T, wishID uuid.UUID) bool {
+	t.Helper()
+	wish, err := database.GetWishByWishID(wishID)
+	if err != nil {
+		t.Fatalf("failed to look up wish: %v", err)
+	}
+	return wish != nil
+}
+
+func TestGetWishesFromWishlist_InjectedFailures(t *testing.T) {
+	fixture := func(t *testing.T) wishTestReq {
+		owner := createTestUser(t)
+		wishlist := createTestWishlist(t, owner.ID)
+		return wishTestReq{handler: GetWishesFromWishlist, method: "GET", path: "/api/wishes?wishlist=" + wishlist.ID.String(), userID: owner.ID}
+	}
+	wishTestRunFailures(t, []wishTestFailCase{
+		{name: "membership check", fixture: fixture, op: "query", table: "wishlist_memberships", want: 500, wantErr: "Failed to verify membership of group."},
+		// First wishlists query is the ownership check, the second the owner lookup.
+		{name: "owner lookup", fixture: fixture, op: "query", table: "wishlists", skip: 1, want: 500, wantErr: "Failed to get wishlist owner."},
+	})
+}
+
+func TestGetWishesFromWishlist_CollaboratorsAndNewestFirst(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	collaborator := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	addWishCollaborator(t, wishlist.ID, collaborator.ID)
+	now := time.Now()
+	wishTestCreateNamedWish(t, owner.ID, wishlist.ID, "Older wish", now.Add(-time.Hour))
+	wishTestCreateNamedWish(t, owner.ID, wishlist.ID, "Newer wish", now)
+
+	w := wishTestSend(t, wishTestReq{handler: GetWishesFromWishlist, method: "GET", path: "/api/wishes?wishlist=" + wishlist.ID.String()}, authHeader(t, owner.ID, false))
+	if w.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+	body := parseWishBody(t, w)
+	collabs, _ := body["collaborators"].([]interface{})
+	if len(collabs) != 1 || collabs[0] != collaborator.ID.String() {
+		t.Errorf("collaborators = %v, want [%s]", body["collaborators"], collaborator.ID)
+	}
+	if names := wishTestWishNames(t, body); len(names) != 2 || names[0] != "Newer wish" {
+		t.Errorf("wishes = %v, want newest first", names)
+	}
+}
+
+func TestConvertWishToWishObject_WishlistQueryFails(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wish := createTestWish(t, owner.ID, wishlist.ID)
+	failDBOperation(t, "query", "wishlists", 0)
+
+	if _, err := ConvertWishToWishObject(wish, nil); err == nil {
+		t.Fatal("expected an error when the wishlist lookup fails")
+	}
+}
+
+func TestConvertWishToWishObject_WishlistOwnerMissing(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlistOwner := createTestUser(t)
+	wishlist := createTestWishlist(t, wishlistOwner.ID)
+	wish := createTestWish(t, owner.ID, wishlist.ID)
+	// The wish owner is the first users lookup, the wishlist owner the second.
+	failDBOperation(t, "query", "users", 1)
+
+	if _, err := ConvertWishToWishObject(wish, nil); err == nil {
+		t.Fatal("expected an error when the wishlist owner lookup fails")
+	}
+}
+
+func TestConvertWishToWishObject_ImageStatErrorTreatedAsNoImage(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wish := createTestWish(t, owner.ID, wishlist.ID)
+
+	// A regular file where the image directory should be makes os.Stat fail
+	// with ENOTDIR, which isn't "not exist".
+	orig := wishImageDir
+	t.Cleanup(func() { wishImageDir = orig })
+	file := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(file, []byte("x"), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+	wishImageDir = file
+
+	object, err := ConvertWishToWishObject(wish, nil)
+	if err != nil {
+		t.Fatalf("ConvertWishToWishObject: %v", err)
+	}
+	if object.Image {
+		t.Error("Image = true, want false when the image can't be checked")
+	}
+}
+
+func TestConvertWishToWishObject_CategoryLookupFailureSkipsCategory(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	category := createTestWishCategory(t, wishlist.ID, owner.ID)
+	wish := createTestWish(t, owner.ID, wishlist.ID)
+	wish.CategoryID = &category.ID
+	failDBOperation(t, "query", "wish_categories", 0)
+
+	object, err := ConvertWishToWishObject(wish, nil)
+	if err != nil {
+		t.Fatalf("ConvertWishToWishObject: %v", err)
+	}
+	if object.Category != nil {
+		t.Errorf("Category = %+v, want nil when the lookup fails", object.Category)
+	}
+}
+
+func TestRegisterWish_InjectedFailures(t *testing.T) {
+	fixture := func(body string) func(t *testing.T) wishTestReq {
+		return func(t *testing.T) wishTestReq {
+			owner := createTestUser(t)
+			wishlist := createTestWishlist(t, owner.ID)
+			return wishTestReq{handler: RegisterWish, method: "POST", path: "/api/wishes?wishlist=" + wishlist.ID.String(), body: body, userID: owner.ID}
+		}
+	}
+	plain := fixture(`{"name":"A nice gift"}`)
+	wishTestRunFailures(t, []wishTestFailCase{
+		{name: "ownership check", fixture: plain, op: "query", table: "wishlists", want: 500, wantErr: "Failed to verify ownership of wishlist."},
+		{name: "category resolution", fixture: fixture(`{"name":"A nice gift","category_name":"Books"}`), op: "query", table: "wish_categories", want: 500, wantErr: "Failed to resolve wish category."},
+		{name: "create", fixture: plain, op: "create", table: "wishes", want: 500, wantErr: "Failed to create wishlist."},
+		// The first wishes query is the unique-name check.
+		{name: "list wishes", fixture: plain, op: "query", table: "wishes", skip: 1, want: 500, wantErr: "Failed to get wishes from database."},
+	})
+}
+
+func TestRegisterWish_InvalidURLCharacters(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+
+	w := wishTestSend(t, wishTestReq{handler: RegisterWish, method: "POST", path: "/api/wishes?wishlist=" + wishlist.ID.String(), body: `{"name":"A nice gift","url":"https://example.com/<b>"}`}, authHeader(t, owner.ID, false))
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+	}
+	if _, wishes, _ := database.GetWishesFromWishlist(wishlist.ID); len(wishes) != 0 {
+		t.Errorf("expected no wish to be created, got %d", len(wishes))
+	}
+}
+
+func TestRegisterWish_ReturnsWishesNewestFirst(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wishTestCreateNamedWish(t, owner.ID, wishlist.ID, "Existing wish", time.Now().Add(-time.Hour))
+
+	w := wishTestSend(t, wishTestReq{handler: RegisterWish, method: "POST", path: "/api/wishes?wishlist=" + wishlist.ID.String(), body: `{"name":"Brand new wish"}`}, authHeader(t, owner.ID, false))
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
+	if names := wishTestWishNames(t, parseWishBody(t, w)); len(names) != 2 || names[0] != "Brand new wish" {
+		t.Errorf("wishes = %v, want the new wish first", names)
+	}
+}
+
+func TestDeleteWish_InjectedFailures(t *testing.T) {
+	fixture := func(t *testing.T) wishTestReq {
+		owner := createTestUser(t)
+		wishlist := createTestWishlist(t, owner.ID)
+		wish := createTestWish(t, owner.ID, wishlist.ID)
+		return wishTestReq{handler: DeleteWish, method: "DELETE", path: "/api/wishes/" + wish.ID.String(), params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}, userID: owner.ID}
+	}
+	wishTestRunFailures(t, []wishTestFailCase{
+		// ConvertWishToWishObject makes the first collaborator and wishlist
+		// queries; the handler's own checks are the second.
+		{name: "collaborator check", fixture: fixture, op: "query", table: "wishlist_collaborators", skip: 1, want: 500, wantErr: "Failed to verify wishlist collaborator status."},
+		{name: "ownership check", fixture: fixture, op: "query", table: "wishlists", skip: 1, want: 500, wantErr: "Failed to verify ownership of wishlist."},
+		{name: "disable wish", fixture: fixture, op: "update", table: "wishes", want: 500, wantErr: "Failed to delete wish."},
+		{name: "list wishes", fixture: fixture, op: "query", table: "wishes", skip: 1, want: 500, wantErr: "Failed to get wishes from database."},
+	})
+}
+
+func TestDeleteWish_ImageDeleteFailureIsNotFatal(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wish := createTestWish(t, owner.ID, wishlist.ID)
+	wishTestBlockImageDelete(t, wish.ID)
+
+	w := wishTestSend(t, wishTestReq{handler: DeleteWish, method: "DELETE", params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}}, authHeader(t, owner.ID, false))
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201 even though the image couldn't be removed; body=%s", w.Code, w.Body.String())
+	}
+	if wishTestWishEnabled(t, wish.ID) {
+		t.Error("expected the wish to be disabled")
+	}
+}
+
+func TestDeleteWish_ReturnsRemainingWishesNewestFirst(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	now := time.Now()
+	wishTestCreateNamedWish(t, owner.ID, wishlist.ID, "Older wish", now.Add(-2*time.Hour))
+	wishTestCreateNamedWish(t, owner.ID, wishlist.ID, "Newer wish", now.Add(-time.Hour))
+	doomed := createTestWish(t, owner.ID, wishlist.ID)
+
+	w := wishTestSend(t, wishTestReq{handler: DeleteWish, method: "DELETE", params: gin.Params{{Key: "wish_id", Value: doomed.ID.String()}}}, authHeader(t, owner.ID, false))
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
+	names := wishTestWishNames(t, parseWishBody(t, w))
+	if len(names) != 2 || names[0] != "Newer wish" || names[1] != "Older wish" {
+		t.Errorf("wishes = %v, want [Newer wish Older wish]", names)
+	}
+}
+
+// The claimant notification runs after the response is written, so its
+// failures are only logged: the delete must still succeed.
+func TestDeleteWish_ClaimNotificationFailuresAreNotFatal(t *testing.T) {
+	cases := []struct {
+		name  string
+		op    string
+		table string
+		skip  int
+	}{
+		// wishlists: ConvertWishToWishObject, ownership check, then GetWishlist.
+		{name: "wishlist lookup", op: "query", table: "wishlists", skip: 2},
+		{name: "wishlist conversion", op: "query", table: "groups", skip: 0},
+		// users: wish owner, claimant, wishlist owner, the wishlist
+		// conversion's owner lookup, then the claimant's full record.
+		{name: "claimant lookup", op: "query", table: "users", skip: 4},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			owner, claimant, _, wish := claimSetup(t)
+			wishTestSeedClaim(t, wish.ID, claimant.ID)
+			header := authHeader(t, owner.ID, false)
+			failDBOperation(t, c.op, c.table, c.skip)
+
+			w := wishTestSend(t, wishTestReq{handler: DeleteWish, method: "DELETE", params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}}, header)
+			if w.Code != 201 {
+				t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+			}
+			if msg := parseWishBody(t, w)["message"]; msg != "Wish deleted." {
+				t.Errorf("message = %v, want %q", msg, "Wish deleted.")
+			}
+		})
+	}
+}
+
+func TestParseRawURLFunction_Unparseable(t *testing.T) {
+	domain, scheme, _ := parseRawURLFunction("%zz")
+	if domain != "" || scheme != "" {
+		t.Errorf("parseRawURLFunction(%%zz) = (%q, %q), want empty domain and scheme", domain, scheme)
+	}
+}
+
+func TestRegisterWishClaim_InjectedFailures(t *testing.T) {
+	fixture := func(t *testing.T) wishTestReq {
+		_, claimant, wishlist, wish := claimSetup(t)
+		return wishTestReq{handler: RegisterWishClaim, method: "POST", body: `{"wishlist_id":"` + wishlist.ID.String() + `"}`, params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}, userID: claimant.ID}
+	}
+	wishTestRunFailures(t, []wishTestFailCase{
+		{name: "wishlist lookup", fixture: fixture, op: "query", table: "wishlists", want: 500, wantErr: "Failed to get wishlist object."},
+		{name: "ownership check", fixture: fixture, op: "query", table: "wishlists", skip: 1, want: 500, wantErr: "Failed to verify ownership of wishlist."},
+		{name: "membership check", fixture: fixture, op: "query", table: "wishlist_memberships", want: 500, wantErr: "Failed to verify membership to wishlist."},
+		{name: "collaborator check", fixture: fixture, op: "query", table: "wishlist_collaborators", want: 500, wantErr: "Failed to verify wishlist collaborator status."},
+		// The first wishes query resolves the wishlist ID.
+		{name: "wish ownership check", fixture: fixture, op: "query", table: "wishes", skip: 1, want: 500, wantErr: "Failed to verify ownership of wishlist."},
+		{name: "create claim", fixture: fixture, op: "create", table: "wish_claims", want: 500, wantErr: "Failed to create claim."},
+		{name: "list wishes", fixture: fixture, op: "query", table: "wishes", skip: 2, want: 500, wantErr: "Failed to get wishes from database."},
+	})
+}
+
+func TestRegisterWishClaim_ReturnsWishesNewestFirst(t *testing.T) {
+	setupControllersDB(t)
+	owner, claimant, wishlist, wish := claimSetup(t)
+	wishTestCreateNamedWish(t, owner.ID, wishlist.ID, "Older wish", time.Now().Add(-time.Hour))
+
+	w := wishTestSend(t, wishTestReq{handler: RegisterWishClaim, method: "POST", body: `{"wishlist_id":"` + wishlist.ID.String() + `"}`, params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}}, authHeader(t, claimant.ID, false))
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
+	names := wishTestWishNames(t, parseWishBody(t, w))
+	if len(names) != 2 || names[0] != wish.Name {
+		t.Errorf("wishes = %v, want %q first", names, wish.Name)
+	}
+	if claimed, _ := database.VerifyWishIsClaimed(wish.ID); !claimed {
+		t.Error("expected the wish to be claimed")
+	}
+}
+
+func TestRemoveWishClaim_InjectedFailures(t *testing.T) {
+	fixture := func(t *testing.T) wishTestReq {
+		_, claimant, wishlist, wish := claimSetup(t)
+		wishTestSeedClaim(t, wish.ID, claimant.ID)
+		return wishTestReq{handler: RemoveWishClaim, method: "POST", body: `{"wishlist_id":"` + wishlist.ID.String() + `"}`, params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}, userID: claimant.ID}
+	}
+	wishTestRunFailures(t, []wishTestFailCase{
+		{name: "wishlist lookup", fixture: fixture, op: "query", table: "wishlists", want: 500, wantErr: "Failed to get wishlist object."},
+		{name: "ownership check", fixture: fixture, op: "query", table: "wishlists", skip: 1, want: 500, wantErr: "Failed to verify ownership of wishlist."},
+		{name: "membership check", fixture: fixture, op: "query", table: "wishlist_memberships", want: 500, wantErr: "Failed to verify membership to wishlist."},
+		{name: "collaborator check", fixture: fixture, op: "query", table: "wishlist_collaborators", want: 500, wantErr: "Failed to verify wishlist collaborator status."},
+		{name: "delete claim", fixture: fixture, op: "update", table: "wish_claims", want: 500, wantErr: "Failed to delete claim."},
+		{name: "list wishes", fixture: fixture, op: "query", table: "wishes", skip: 1, want: 500, wantErr: "Failed to get wishes from database."},
+	})
+}
+
+func TestRemoveWishClaim_DanglingWishlistID(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	claimant := createTestUser(t)
+	wish := models.Wish{Name: "Gift", Enabled: true, OwnerID: owner.ID, WishlistID: uuid.New()}
+	wish.ID = uuid.New()
+	if _, err := database.CreateWishInDB(wish); err != nil {
+		t.Fatalf("failed to create wish: %v", err)
+	}
+
+	w := wishTestSend(t, wishTestReq{handler: RemoveWishClaim, method: "POST", body: `{}`, params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}}, authHeader(t, claimant.ID, false))
+	if w.Code != 404 {
+		t.Fatalf("status = %d, want 404 for a wish with a dangling wishlist reference; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestRemoveWishClaim_NotMember(t *testing.T) {
+	setupControllersDB(t)
+	_, _, _, wish := claimSetup(t)
+	stranger := createTestUser(t)
+
+	w := wishTestSend(t, wishTestReq{handler: RemoveWishClaim, method: "POST", body: `{}`, params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}}, authHeader(t, stranger.ID, false))
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for a non-member; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestRemoveWishClaim_ReturnsWishesNewestFirst(t *testing.T) {
+	setupControllersDB(t)
+	owner, claimant, wishlist, wish := claimSetup(t)
+	wishTestCreateNamedWish(t, owner.ID, wishlist.ID, "Older wish", time.Now().Add(-time.Hour))
+	wishTestSeedClaim(t, wish.ID, claimant.ID)
+
+	w := wishTestSend(t, wishTestReq{handler: RemoveWishClaim, method: "POST", body: `{"wishlist_id":"` + wishlist.ID.String() + `"}`, params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}}, authHeader(t, claimant.ID, false))
+	if w.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+	names := wishTestWishNames(t, parseWishBody(t, w))
+	if len(names) != 2 || names[0] != wish.Name {
+		t.Errorf("wishes = %v, want %q first", names, wish.Name)
+	}
+	if claimed, _ := database.VerifyWishIsClaimed(wish.ID); claimed {
+		t.Error("expected the claim to be removed")
+	}
+}
+
+// wishTestUpdateFixture builds an APIUpdateWish call by the wish's owner;
+// body is formatted with the wish's current name so it only changes what the
+// test intends to.
+func wishTestUpdateFixture(bodyFormat string) func(t *testing.T) wishTestReq {
+	return func(t *testing.T) wishTestReq {
+		owner := createTestUser(t)
+		wishlist := createTestWishlist(t, owner.ID)
+		wish := createTestWish(t, owner.ID, wishlist.ID)
+		return wishTestReq{handler: APIUpdateWish, method: "POST", body: fmt.Sprintf(bodyFormat, wish.Name), params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}, userID: owner.ID}
+	}
+}
+
+func TestAPIUpdateWish_InjectedFailures(t *testing.T) {
+	same := wishTestUpdateFixture(`{"name":%q}`)
+	wishTestRunFailures(t, []wishTestFailCase{
+		{name: "ownership check", fixture: same, op: "query", table: "wishlists", want: 500, wantErr: "Failed to verify ownership of wishlist."},
+		// The first wishes query loads the original wish.
+		{name: "unique name check", fixture: wishTestUpdateFixture(`{"name":"Renamed %s"}`), op: "query", table: "wishes", skip: 1, want: 500, wantErr: "Failed to verify wish name."},
+		{name: "category resolution", fixture: wishTestUpdateFixture(`{"name":%q,"category_name":"Books"}`), op: "query", table: "wish_categories", want: 500, wantErr: "Failed to resolve wish category."},
+		{name: "save wish", fixture: same, op: "update", table: "wishes", want: 500, wantErr: "Failed to update wish in database."},
+		{name: "convert wish", fixture: same, op: "query", table: "users", want: 500, wantErr: "Failed to convert wish to wish object."},
+		{name: "list wishes", fixture: same, op: "query", table: "wishes", skip: 1, want: 500, wantErr: "Failed to get wishes from database."},
+	})
+}
+
+func TestAPIUpdateWish_InvalidCharacters(t *testing.T) {
+	cases := []struct {
+		name       string
+		bodyFormat string
+	}{
+		{name: "name", bodyFormat: `{"name":"Bad <name> %s"}`},
+		{name: "url", bodyFormat: `{"name":%q,"url":"https://example.com/<b>"}`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			req := wishTestUpdateFixture(c.bodyFormat)(t)
+			w := wishTestSend(t, req, authHeader(t, req.userID, false))
+			if w.Code != 400 {
+				t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestAPIUpdateWish_InvalidImageData(t *testing.T) {
+	setupControllersDB(t)
+	wishTestImageDir(t)
+	req := wishTestUpdateFixture(`{"name":%q,"image_data":"not-valid-base64-image-data"}`)(t)
+
+	w := wishTestSend(t, req, authHeader(t, req.userID, false))
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500; body=%s", w.Code, w.Body.String())
+	}
+	if got := parseWishBody(t, w)["error"]; got != "Failed to save wish image." {
+		t.Errorf("error = %v, want %q", got, "Failed to save wish image.")
+	}
+}
+
+func TestAPIUpdateWish_ImageDelete(t *testing.T) {
+	setupControllersDB(t)
+	dir := wishTestImageDir(t)
+	req := wishTestUpdateFixture(`{"name":%q,"image_delete":true}`)(t)
+	wishID := uuid.MustParse(req.params[0].Value)
+	for _, thumbnail := range []bool{false, true} {
+		path := imageFilePath(dir, wishID, thumbnail)
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("failed to create image dir: %v", err)
+		}
+		if err := os.WriteFile(path, []byte("jpeg"), 0644); err != nil {
+			t.Fatalf("failed to seed image: %v", err)
+		}
+	}
+
+	w := wishTestSend(t, req, authHeader(t, req.userID, false))
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
+	if exists, _ := CheckIfWishImageExists(wishID); exists {
+		t.Error("expected the wish image to be removed")
+	}
+}
+
+func TestAPIUpdateWish_ImageDeleteFailure(t *testing.T) {
+	setupControllersDB(t)
+	req := wishTestUpdateFixture(`{"name":%q,"image_delete":true}`)(t)
+	wishTestBlockImageDelete(t, uuid.MustParse(req.params[0].Value))
+
+	w := wishTestSend(t, req, authHeader(t, req.userID, false))
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestAPIUpdateWish_ReturnsWishesNewestFirst(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wishTestCreateNamedWish(t, owner.ID, wishlist.ID, "Older wish", time.Now().Add(-time.Hour))
+	wish := createTestWish(t, owner.ID, wishlist.ID)
+
+	w := wishTestSend(t, wishTestReq{handler: APIUpdateWish, method: "POST", body: `{"name":"Updated wish name"}`, params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}}, authHeader(t, owner.ID, false))
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
+	names := wishTestWishNames(t, parseWishBody(t, w))
+	if len(names) != 2 || names[0] != "Updated wish name" {
+		t.Errorf("wishes = %v, want the updated wish first", names)
+	}
+}
+
+func TestAPIGetWish_InjectedFailures(t *testing.T) {
+	fixture := func(t *testing.T) wishTestReq {
+		owner := createTestUser(t)
+		wishlist := createTestWishlist(t, owner.ID)
+		wish := createTestWish(t, owner.ID, wishlist.ID)
+		return wishTestReq{handler: APIGetWish, method: "GET", params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}, userID: owner.ID}
+	}
+	wishTestRunFailures(t, []wishTestFailCase{
+		{name: "ownership check", fixture: fixture, op: "query", table: "wishlists", want: 500, wantErr: "Failed to verify wishlist ownership."},
+		// The first wishes query resolves the wishlist ID.
+		{name: "wish lookup", fixture: fixture, op: "query", table: "wishes", skip: 1, want: 500, wantErr: "Failed to get wish from database."},
+		{name: "convert wish", fixture: fixture, op: "query", table: "users", want: 500, wantErr: "Failed to convert wish to wish object."},
+	})
+}
+
+func TestAPIGetWish_WishDisappearsMidRequest(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wish := createTestWish(t, owner.ID, wishlist.ID)
+	header := authHeader(t, owner.ID, false)
+
+	// Disable the wish just before the ownership check - after the handler
+	// has resolved its wishlist, but before it loads the wish itself.
+	fired := false
+	err := database.Instance.Callback().Query().Before("gorm:query").Register("test:wish:disable:"+uuid.NewString(), func(db *gorm.DB) {
+		if fired || db.Statement.Table != "wishlists" {
+			return
+		}
+		fired = true
+		if err := database.Instance.Exec("UPDATE wishes SET enabled = ? WHERE id = ?", false, wish.ID).Error; err != nil {
+			t.Errorf("failed to disable wish: %v", err)
+		}
+	})
+	if err != nil {
+		t.Fatalf("failed to register callback: %v", err)
+	}
+
+	w := wishTestSend(t, wishTestReq{handler: APIGetWish, method: "GET", params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}}, header)
+	if w.Code != 404 {
+		t.Fatalf("status = %d, want 404; body=%s", w.Code, w.Body.String())
+	}
+	if got := parseWishBody(t, w)["error"]; got != "Failed to find wish in the database." {
+		t.Errorf("error = %v, want %q", got, "Failed to find wish in the database.")
+	}
 }

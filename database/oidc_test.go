@@ -174,3 +174,52 @@ func TestOidcQueriesFailOnClosedDB(t *testing.T) {
 		},
 	})
 }
+
+func TestOIDCLookupsRejectDuplicates(t *testing.T) {
+	setupTestDB(t)
+	forceRowsAffected(t, "query", "users", 2)
+
+	if _, found, err := GetUserByOIDCSubject("iss", "sub"); found || err == nil {
+		t.Errorf("GetUserByOIDCSubject = (found=%v, err=%v), want a duplicate error", found, err)
+	}
+	if _, found, err := getEnabledUserByEmail("a@example.com"); found || err == nil {
+		t.Errorf("getEnabledUserByEmail = (found=%v, err=%v), want a duplicate error", found, err)
+	}
+}
+
+func TestLinkUserOIDCUnknownUserFails(t *testing.T) {
+	setupTestDB(t)
+	if err := linkUserOIDC(uuid.New(), "iss", "sub"); err == nil || err.Error() != "OIDC link not stored in database" {
+		t.Fatalf("error = %v, want \"OIDC link not stored in database\"", err)
+	}
+}
+
+func TestResolveOIDCUserPropagatesDBFailures(t *testing.T) {
+	t.Run("email lookup fails", func(t *testing.T) {
+		setupTestDB(t)
+		// The first users query is the subject lookup; fail the email lookup.
+		injectFault(t, "query", "users", 1)
+		if _, err := ResolveOIDCUser("iss", "sub", "a@example.com", "A", "B", true, true); !errors.Is(err, errInjected) {
+			t.Fatalf("error = %v, want the injected fault", err)
+		}
+	})
+
+	t.Run("linking fails", func(t *testing.T) {
+		setupTestDB(t)
+		user := createTestUser(t)
+		injectFault(t, "update", "users", 0)
+		if _, err := ResolveOIDCUser("iss", "sub", *user.Email, "A", "B", true, false); !errors.Is(err, errInjected) {
+			t.Fatalf("error = %v, want the injected fault", err)
+		}
+	})
+
+	t.Run("account creation fails", func(t *testing.T) {
+		setupTestDB(t)
+		injectFault(t, "create", "users", 0)
+		// CreateUserInDB replaces the driver error with its own message.
+		user, err := ResolveOIDCUser("iss", "sub", "new@example.com", "A", "B", true, true)
+		if err == nil || user.ID != uuid.Nil {
+			t.Fatalf("got (%v, %v), want an error and no user", user.ID, err)
+		}
+	})
+}

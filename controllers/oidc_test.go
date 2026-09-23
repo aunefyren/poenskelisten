@@ -56,6 +56,7 @@ func TestOIDCResolveErrorMessage(t *testing.T) {
 // redirect time, so the Set-Cookie header clearing them never reached the
 // client. redirectLoginError must clear them beforehand instead.
 func TestOIDCCallbackClearsFlowCookiesBeforeRedirect(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 	config.ConfigFile.OIDCEnabled = false
 	t.Cleanup(func() { config.ConfigFile.OIDCEnabled = false })

@@ -249,10 +249,30 @@ func TestIsValidRedirectURI(t *testing.T) {
 		"ftp://x/y":                 false,
 		"":                          false,
 		"/relative/path":            false,
+		"http://[::1":               false, // unparseable
 	}
 	for uri, want := range cases {
 		if got := isValidRedirectURI(uri); got != want {
 			t.Errorf("isValidRedirectURI(%q) = %v, want %v", uri, got, want)
 		}
+	}
+}
+
+func TestOAuthRegisterMalformedJSON(t *testing.T) {
+	setupControllersDB(t)
+
+	code, body := postRegister(`not-json`)
+	if code != 400 || body["error"] != "invalid_client_metadata" {
+		t.Errorf("status = %d body=%v, want 400 invalid_client_metadata", code, body)
+	}
+}
+
+func TestAdminListOAuthClientsDatabaseError(t *testing.T) {
+	setupControllersDB(t)
+	breakControllersDB(t)
+
+	status, body, _ := doRequest(APIAdminListOAuthClients, "GET", "/api/admin/oauth/clients", "", nil, nil)
+	if status != 500 || body["error"] != "Failed to list clients." {
+		t.Errorf("status = %d body=%v, want 500 'Failed to list clients.'", status, body)
 	}
 }

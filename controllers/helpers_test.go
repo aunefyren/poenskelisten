@@ -6,6 +6,7 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
 	"database/sql"
+	"errors"
 	"net/http"
 	"os"
 	"testing"
@@ -292,14 +293,26 @@ func createTestUserWithPassword(t *testing.T, plaintext string) models.User {
 // enablePrivateKey installs a valid base64 signing key for the first-party
 // HS256 tokens (SSO session cookie, MFA challenge token, email verification,
 // password reset) so handlers that mint or validate them don't fail with
-// "private key is not configured".
+// "private key is not configured". The previous key is restored on cleanup.
 func enablePrivateKey(t *testing.T) {
 	t.Helper()
 	key, err := config.GenerateSecureKey(64)
 	if err != nil {
 		t.Fatalf("failed to generate test private key: %v", err)
 	}
+	restoreConfig(t)
 	config.ConfigFile.PrivateKey = key
+}
+
+// restoreConfig snapshots config.ConfigFile and puts it back when the test
+// ends. config.ConfigFile is a package-level global shared by every test in
+// the binary, so any test or fixture that writes to it (directly, or through a
+// handler like APIUpdateServerSettings) calls this first. Cleanups run LIFO,
+// so nested snapshots within one test still unwind to the original.
+func restoreConfig(t *testing.T) {
+	t.Helper()
+	original := config.ConfigFile
+	t.Cleanup(func() { config.ConfigFile = original })
 }
 
 func boolPtr(b bool) *bool { return &b }
@@ -330,6 +343,47 @@ func breakControllersDB(t *testing.T) {
 	}
 	if err := sqlDB.Close(); err != nil {
 		t.Fatalf("failed to close sql.DB: %v", err)
+	}
+}
+
+// failDBOperation makes GORM operations of kind op ("query", "create",
+// "update", "delete" or "row") against table fail once skip matching calls
+// have gone through. breakControllersDB can only reach a handler's first
+// query; this reaches the 500 branches further in, after earlier lookups
+// have succeeded. It hooks the current database.Instance, which the next
+// test's setupControllersDB replaces, so nothing leaks between tests.
+func failDBOperation(t *testing.T, op, table string, skip int) {
+	t.Helper()
+	calls := 0
+	fail := func(db *gorm.DB) {
+		if db.Statement.Table != table {
+			return
+		}
+		calls++
+		if calls > skip {
+			db.AddError(errors.New("injected " + op + " failure on " + table))
+		}
+	}
+
+	name := "test:fail:" + uuid.NewString()
+	callbacks := database.Instance.Callback()
+	var err error
+	switch op {
+	case "query":
+		err = callbacks.Query().Before("gorm:query").Register(name, fail)
+	case "create":
+		err = callbacks.Create().Before("gorm:create").Register(name, fail)
+	case "update":
+		err = callbacks.Update().Before("gorm:update").Register(name, fail)
+	case "delete":
+		err = callbacks.Delete().Before("gorm:delete").Register(name, fail)
+	case "row":
+		err = callbacks.Row().Before("gorm:row").Register(name, fail)
+	default:
+		t.Fatalf("unknown GORM operation %q", op)
+	}
+	if err != nil {
+		t.Fatalf("failed to register failure callback: %v", err)
 	}
 }
 

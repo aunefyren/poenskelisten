@@ -22,6 +22,7 @@ func init() {
 // enableOAuth installs a working OAuth/MCP config (issuer + generated key).
 func enableOAuth(t *testing.T) {
 	t.Helper()
+	restoreConfig(t)
 	keyPEM, kid, err := config.GenerateOAuthSigningKey(config.OAuthAlgES256)
 	if err != nil {
 		t.Fatalf("failed to generate key: %v", err)
@@ -85,6 +86,7 @@ func TestProtectedResourceMetadata(t *testing.T) {
 }
 
 func TestProtectedResourceMetadataDisabled(t *testing.T) {
+	restoreConfig(t)
 	enableOAuth(t)
 	config.ConfigFile.MCPEnabled = false
 	if code, _ := runHandler(APIOAuthProtectedResourceMetadata); code != 404 {

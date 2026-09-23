@@ -482,3 +482,56 @@ func TestWishlistQueriesFailOnClosedDB(t *testing.T) {
 		},
 	})
 }
+
+func TestWishlistLookupsWithNoMatch(t *testing.T) {
+	setupTestDB(t)
+	missing := uuid.New()
+
+	if err := DeleteWishlistCollaboratorByWishlistCollaboratorID(missing); err == nil {
+		t.Error("DeleteWishlistCollaboratorByWishlistCollaboratorID: expected error for an unknown collaborator")
+	}
+	if wishlists, err := GetWishlistsFromGroup(missing); err != nil || wishlists == nil || len(wishlists) != 0 {
+		t.Errorf("GetWishlistsFromGroup = (%v, %v), want an empty non-nil slice", wishlists, err)
+	}
+	if owner, err := GetWishlistOwner(missing); err == nil || owner != uuid.Nil {
+		t.Errorf("GetWishlistOwner = (%v, %v), want an error and no owner", owner, err)
+	}
+	if found, _, err := GetMembershipIDForGroupToWishlist(missing, uuid.New()); err == nil || found {
+		t.Errorf("GetMembershipIDForGroupToWishlist = (found=%v, %v), want an error", found, err)
+	}
+}
+
+func TestWishlistWritesRejectWrongRowCount(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	existing := createTestWishlist(t, owner.ID)
+	for _, table := range []string{"wishlists", "wishlist_collaborators", "wishlist_memberships"} {
+		forceRowsAffected(t, "create", table, 0)
+	}
+	// Save falls back to an upsert when its UPDATE touches nothing, so both
+	// paths have to report zero rows to reach the check.
+	forceRowsAffected(t, "update", "wishlists", 0)
+
+	if _, err := UpdateWishlistInDB(existing); err == nil || err.Error() != "Wishlist not changed in database." {
+		t.Errorf("UpdateWishlistInDB error = %v, want \"Wishlist not changed in database.\"", err)
+	}
+
+	now := time.Now()
+	wishlist := models.Wishlist{Name: "w", Enabled: true, OwnerID: owner.ID, Date: &now}
+	wishlist.ID = uuid.New()
+	if _, err := CreateWishlistInDB(wishlist); err == nil || err.Error() != "Wishlist not added to database." {
+		t.Errorf("CreateWishlistInDB error = %v, want \"Wishlist not added to database.\"", err)
+	}
+
+	collaborator := models.WishlistCollaborator{WishlistID: existing.ID, UserID: owner.ID, Enabled: true}
+	collaborator.ID = uuid.New()
+	if err := CreateWishlistCollaboratorInDB(collaborator); err == nil || err.Error() != "Wishlist not added to database." {
+		t.Errorf("CreateWishlistCollaboratorInDB error = %v, want \"Wishlist not added to database.\"", err)
+	}
+
+	membership := models.WishlistMembership{WishlistID: existing.ID, GroupID: uuid.New(), Enabled: true}
+	membership.ID = uuid.New()
+	if _, err := CreateWishlistMembershipInDB(membership); err == nil || err.Error() != "Wishlist not added to database." {
+		t.Errorf("CreateWishlistMembershipInDB error = %v, want \"Wishlist not added to database.\"", err)
+	}
+}

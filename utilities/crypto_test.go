@@ -86,3 +86,18 @@ func TestDecryptGarbageFails(t *testing.T) {
 		}
 	}
 }
+
+func TestEncryptDecryptWithoutPrivateKey(t *testing.T) {
+	orig := config.ConfigFile.PrivateKey
+	t.Cleanup(func() { config.ConfigFile.PrivateKey = orig })
+
+	for _, key := range []string{"", "not base64!!"} {
+		config.ConfigFile.PrivateKey = key
+		if _, err := EncryptString("secret"); err == nil {
+			t.Errorf("EncryptString with private key %q: expected an error", key)
+		}
+		if _, err := DecryptString("c2VjcmV0"); err == nil {
+			t.Errorf("DecryptString with private key %q: expected an error", key)
+		}
+	}
+}

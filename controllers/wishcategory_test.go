@@ -4,6 +4,7 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -302,4 +303,70 @@ func TestWishCategoryHandlersDatabaseErrors(t *testing.T) {
 	runDatabaseErrorCases(t, []dbErrorCase{
 		{name: "APIGetWishlistCategories", handler: APIGetWishlistCategories, method: "GET", path: "/api/auth/wishlists/00000000-0000-0000-0000-00000000000a/categories", params: gin.Params{{Key: "wishlist_id", Value: "00000000-0000-0000-0000-00000000000a"}}},
 	})
+}
+
+func TestResolveWishCategoryForWishDatabaseFailures(t *testing.T) {
+	cases := []struct {
+		name      string
+		byID      bool
+		op, table string
+	}{
+		{name: "name lookup", op: "query", table: "wish_categories"},
+		{name: "next sort order", op: "row", table: "wish_categories"},
+		{name: "create", op: "create", table: "wish_categories"},
+		{name: "ID lookup", byID: true, op: "query", table: "wish_categories"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			user := createTestUser(t)
+			wishlist := createTestWishlist(t, user.ID)
+			var categoryID *uuid.UUID
+			categoryName := "Brand New"
+			if c.byID {
+				existing := createTestWishCategory(t, wishlist.ID, user.ID)
+				categoryID, categoryName = &existing.ID, ""
+			}
+			failDBOperation(t, c.op, c.table, 0)
+
+			resolved, userErr, err := ResolveWishCategoryForWish(wishlist.ID, user.ID, categoryID, categoryName)
+			if err == nil {
+				t.Fatal("expected an internal error")
+			}
+			if userErr != "" || resolved != nil {
+				t.Errorf("resolved = %v, userErr = %q; want nil and empty on an internal failure", resolved, userErr)
+			}
+		})
+	}
+}
+
+func TestGetWishlistCategoriesInjectedDatabaseFailures(t *testing.T) {
+	cases := []struct {
+		name      string
+		table     string
+		wantError string
+	}{
+		{name: "collaborator check", table: "wishlist_collaborators", wantError: "Failed to verify wishlist collaborator status."},
+		{name: "list categories", table: "wish_categories", wantError: "Failed to get categories from database."},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			owner := createTestUser(t)
+			wishlist := createTestWishlist(t, owner.ID)
+			createTestWishCategory(t, wishlist.ID, owner.ID)
+			header := map[string]string{"Authorization": authHeader(t, owner.ID, false)}
+			failDBOperation(t, "query", c.table, 0)
+
+			status, body, _ := doRequest(APIGetWishlistCategories, "GET", "/api/auth/wishlists/"+wishlist.ID.String()+"/categories", "", header, gin.Params{{Key: "wishlist_id", Value: wishlist.ID.String()}})
+			if status != http.StatusInternalServerError {
+				t.Fatalf("status = %d, want 500; body=%v", status, body)
+			}
+			if body["error"] != c.wantError {
+				t.Errorf("error = %v, want %q", body["error"], c.wantError)
+			}
+		})
+	}
 }

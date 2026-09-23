@@ -1,7 +1,9 @@
 package models
 
 import (
+	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"golang.org/x/crypto/bcrypt"
@@ -102,5 +104,20 @@ func TestIsLocalAuth(t *testing.T) {
 				t.Errorf("IsLocalAuth() = %v, want %v", got, c.want)
 			}
 		})
+	}
+}
+
+// TestHashPasswordTooLongKeepsExistingHash: bcrypt refuses inputs over 72
+// bytes, and the stored password must be left untouched when it does.
+func TestHashPasswordTooLongKeepsExistingHash(t *testing.T) {
+	existing := "existing-hash"
+	user := User{Password: &existing}
+
+	err := user.HashPassword(strings.Repeat("a", 73))
+	if !errors.Is(err, bcrypt.ErrPasswordTooLong) {
+		t.Errorf("HashPassword error = %v, want bcrypt.ErrPasswordTooLong", err)
+	}
+	if *user.Password != "existing-hash" {
+		t.Errorf("Password = %q, want the existing hash left in place", *user.Password)
 	}
 }

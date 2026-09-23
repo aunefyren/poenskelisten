@@ -3,6 +3,7 @@ package database
 import (
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/models"
+	"errors"
 	"testing"
 	"time"
 
@@ -298,5 +299,93 @@ func TestOAuthServerQueriesFailOnClosedDB(t *testing.T) {
 		"UpsertConsent": func() error {
 			return UpsertConsent(uuid.New(), "x", []string{"x"})
 		},
+	})
+}
+
+func TestDisableOAuthClientFailures(t *testing.T) {
+	newClient := func(t *testing.T) string {
+		t.Helper()
+		setupTestDB(t)
+		enabled := true
+		client := models.OAuthClient{ClientID: uuid.NewString(), ClientName: "third party", Enabled: &enabled}
+		client.ID = uuid.New()
+		if _, err := CreateOAuthClient(client); err != nil {
+			t.Fatalf("CreateOAuthClient error: %v", err)
+		}
+		return client.ClientID
+	}
+
+	t.Run("unknown client", func(t *testing.T) {
+		setupTestDB(t)
+		if err := DisableOAuthClient("nope"); err == nil || err.Error() != "client not found" {
+			t.Fatalf("error = %v, want \"client not found\"", err)
+		}
+	})
+
+	t.Run("update fails", func(t *testing.T) {
+		clientID := newClient(t)
+		injectFault(t, "update", "o_auth_clients", 0)
+		if err := DisableOAuthClient(clientID); !errors.Is(err, errInjected) {
+			t.Fatalf("error = %v, want the injected fault", err)
+		}
+	})
+
+	t.Run("no row updated", func(t *testing.T) {
+		clientID := newClient(t)
+		forceRowsAffected(t, "update", "o_auth_clients", 0)
+		if err := DisableOAuthClient(clientID); err == nil || err.Error() != "client not disabled in database" {
+			t.Fatalf("error = %v, want \"client not disabled in database\"", err)
+		}
+	})
+}
+
+func TestGetOAuthClientFailures(t *testing.T) {
+	t.Run("query fails", func(t *testing.T) {
+		setupTestDB(t)
+		injectFault(t, "query", "o_auth_clients", 0)
+		if _, found, err := GetOAuthClient("x"); !errors.Is(err, errInjected) || found {
+			t.Fatalf("got (found=%v, err=%v), want the injected fault", found, err)
+		}
+	})
+
+	t.Run("duplicate client_id", func(t *testing.T) {
+		setupTestDB(t)
+		forceRowsAffected(t, "query", "o_auth_clients", 2)
+		_, found, err := GetOAuthClient("x")
+		if found || err == nil || err.Error() != "multiple clients share the same client_id" {
+			t.Fatalf("got (found=%v, err=%v), want the duplicate error", found, err)
+		}
+	})
+}
+
+func TestConsumeAuthorizationCodeLookupFailures(t *testing.T) {
+	insert := func(t *testing.T) {
+		t.Helper()
+		setupTestDB(t)
+		code := models.AuthorizationCode{
+			CodeHash:  "hash-lookup",
+			ClientID:  models.FirstPartyClientID,
+			UserID:    uuid.New(),
+			ExpiresAt: time.Now().Add(time.Minute),
+		}
+		if _, err := CreateAuthorizationCode(code); err != nil {
+			t.Fatalf("CreateAuthorizationCode error: %v", err)
+		}
+	}
+
+	t.Run("lookup fails", func(t *testing.T) {
+		insert(t)
+		injectFault(t, "query", "authorization_codes", 0)
+		if _, err := ConsumeAuthorizationCode("hash-lookup"); !errors.Is(err, errInjected) {
+			t.Fatalf("error = %v, want the injected fault", err)
+		}
+	})
+
+	t.Run("lookup finds nothing", func(t *testing.T) {
+		insert(t)
+		forceRowsAffected(t, "query", "authorization_codes", 0)
+		if _, err := ConsumeAuthorizationCode("hash-lookup"); err == nil || err.Error() != "authorization code not found" {
+			t.Fatalf("error = %v, want \"authorization code not found\"", err)
+		}
 	})
 }

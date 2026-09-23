@@ -3,6 +3,7 @@ package controllers
 import (
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
@@ -11,9 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	jose "github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
+	"golang.org/x/oauth2"
 )
 
 // startFakeOIDCServer serves just enough of the OIDC discovery document for
@@ -55,6 +58,7 @@ func startFakeOIDCServer(t *testing.T) *httptest.Server {
 // succeeds, and returns the server for further customization/inspection.
 func enableFakeOIDC(t *testing.T) *httptest.Server {
 	t.Helper()
+	restoreConfig(t)
 	server := startFakeOIDCServer(t)
 	config.ConfigFile.OIDCEnabled = true
 	config.ConfigFile.OIDCIssuerURL = server.URL
@@ -114,6 +118,7 @@ func TestGetOIDCConfigEnabled(t *testing.T) {
 }
 
 func TestGetOIDCConfigLocalLoginDisabled(t *testing.T) {
+	restoreConfig(t)
 	enableFakeOIDC(t)
 	defer disableOIDC()
 	config.ConfigFile.LocalLoginDisabled = true
@@ -356,6 +361,7 @@ func (f *oidcSigningFixture) sign(t *testing.T, subject, nonce, email string, em
 
 func enableFakeOIDCWithSigning(t *testing.T) *oidcSigningFixture {
 	t.Helper()
+	restoreConfig(t)
 	fixture := startFakeOIDCServerWithSigning(t)
 	config.ConfigFile.OIDCEnabled = true
 	config.ConfigFile.OIDCIssuerURL = fixture.server.URL
@@ -446,6 +452,7 @@ func TestOIDCCallbackNonceMismatch(t *testing.T) {
 }
 
 func TestOIDCCallbackUnknownUserAutoCreateDisabled(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 	fixture := enableFakeOIDCWithSigning(t)
 	defer disableOIDC()
@@ -465,6 +472,7 @@ func TestOIDCCallbackUnknownUserAutoCreateDisabled(t *testing.T) {
 }
 
 func TestOIDCCallbackSuccessAutoCreatesUser(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 	fixture := enableFakeOIDCWithSigning(t)
 	defer disableOIDC()
@@ -495,6 +503,7 @@ func TestOIDCCallbackSuccessAutoCreatesUser(t *testing.T) {
 // Authelia >= 4.39 (by default) and other IdPs leave email/profile claims out
 // of the ID token and serve them only from userinfo.
 func TestOIDCCallbackUsesUserInfoClaims(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 	fixture := enableFakeOIDCWithSigning(t)
 	defer disableOIDC()
@@ -522,6 +531,7 @@ func TestOIDCCallbackUsesUserInfoClaims(t *testing.T) {
 }
 
 func TestOIDCCallbackIgnoresUserInfoForOtherSubject(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 	fixture := enableFakeOIDCWithSigning(t)
 	defer disableOIDC()
@@ -541,6 +551,7 @@ func TestOIDCCallbackIgnoresUserInfoForOtherSubject(t *testing.T) {
 }
 
 func TestOIDCCallbackSkipsUserInfoWhenIDTokenComplete(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 	fixture := enableFakeOIDCWithSigning(t)
 	defer disableOIDC()
@@ -584,4 +595,120 @@ func ctxTestHelper(w *httptest.ResponseRecorder, req *http.Request, handler gin.
 	ctx, _ := gin.CreateTestContext(w)
 	ctx.Request = req
 	handler(ctx)
+}
+
+func TestOIDCCallbackMalformedClaims(t *testing.T) {
+	setupControllersDB(t)
+	fixture := enableFakeOIDCWithSigning(t)
+	defer disableOIDC()
+	// A well-formed, correctly signed token whose email claim has the wrong
+	// type, so decoding into oidcClaims fails after verification succeeds.
+	tok, err := jwt.Signed(fixture.signer).Claims(map[string]interface{}{
+		"iss": fixture.server.URL, "sub": "user-1", "aud": "test-client",
+		"exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(),
+		"nonce": "matching-nonce", "email": 42,
+	}).Serialize()
+	if err != nil {
+		t.Fatalf("failed to sign ID token: %v", err)
+	}
+	fixture.nextIDTok = tok
+
+	w := httptest.NewRecorder()
+	ctxTestHelper(w, callbackRequest("matching-state"), OIDCCallback)
+
+	if loc := w.Header().Get("Location"); w.Code != http.StatusFound || loc != "/login?error=Single+sign-on+failed." {
+		t.Errorf("status = %d Location = %q, want the generic sign-on-failed redirect", w.Code, loc)
+	}
+}
+
+func TestOIDCCallbackSessionIssueFails(t *testing.T) {
+	restoreConfig(t)
+	setupControllersDB(t)
+	fixture := enableFakeOIDCWithSigning(t)
+	defer disableOIDC()
+	origAutoCreate, origKey := config.ConfigFile.OIDCAutoCreateUsers, config.ConfigFile.PrivateKey
+	t.Cleanup(func() {
+		config.ConfigFile.OIDCAutoCreateUsers, config.ConfigFile.PrivateKey = origAutoCreate, origKey
+	})
+	config.ConfigFile.OIDCAutoCreateUsers = true
+	config.ConfigFile.PrivateKey = "" // GenerateSSOToken can't sign without it
+	fixture.sign(t, "user-1", "matching-nonce", "ada@example.com", true, "Ada", "Lovelace", "")
+
+	w := httptest.NewRecorder()
+	ctxTestHelper(w, callbackRequest("matching-state"), OIDCCallback)
+
+	if loc := w.Header().Get("Location"); w.Code != http.StatusFound || loc != "/login?error=Single+sign-on+failed." {
+		t.Errorf("status = %d Location = %q, want the generic sign-on-failed redirect", w.Code, loc)
+	}
+	for _, c := range w.Result().Cookies() {
+		if c.Name == ssoCookieName && c.Value != "" {
+			t.Error("no SSO cookie should be set when the session can't be issued")
+		}
+	}
+}
+
+// oidcTestProvider discovers the signing fixture as a real *oidc.Provider, so
+// mergeUserInfoClaims can be called directly against its userinfo endpoint.
+func oidcTestProvider(t *testing.T, fixture *oidcSigningFixture) *oidc.Provider {
+	t.Helper()
+	provider, err := oidc.NewProvider(context.Background(), fixture.server.URL)
+	if err != nil {
+		t.Fatalf("failed to discover fake provider: %v", err)
+	}
+	return provider
+}
+
+func TestMergeUserInfoClaims(t *testing.T) {
+	token := &oauth2.Token{AccessToken: "test-access-token", TokenType: "Bearer"}
+
+	cases := []struct {
+		name      string
+		userInfo  map[string]interface{}
+		claims    oidcClaims
+		wantErr   bool
+		wantClaim oidcClaims
+	}{
+		{
+			name:      "userinfo request rejected",
+			userInfo:  nil,
+			claims:    oidcClaims{},
+			wantErr:   true,
+			wantClaim: oidcClaims{},
+		},
+		{
+			name:      "undecodable extra claims",
+			userInfo:  map[string]interface{}{"sub": "user-1", "given_name": 42},
+			claims:    oidcClaims{},
+			wantErr:   true,
+			wantClaim: oidcClaims{},
+		},
+		{
+			name:      "same email verified by userinfo",
+			userInfo:  map[string]interface{}{"sub": "user-1", "email": "ada@example.com", "email_verified": true, "name": "Ada Lovelace"},
+			claims:    oidcClaims{Email: "Ada@Example.com"},
+			wantClaim: oidcClaims{Email: "Ada@Example.com", EmailVerified: true, Name: "Ada Lovelace"},
+		},
+		{
+			name:      "different email does not verify",
+			userInfo:  map[string]interface{}{"sub": "user-1", "email": "other@example.com", "email_verified": true},
+			claims:    oidcClaims{Email: "ada@example.com", GivenName: "Ada"},
+			wantClaim: oidcClaims{Email: "ada@example.com", GivenName: "Ada"},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fixture := startFakeOIDCServerWithSigning(t)
+			fixture.userInfo = c.userInfo
+			provider := oidcTestProvider(t, fixture)
+
+			claims := c.claims
+			err := mergeUserInfoClaims(provider, token, "user-1", &claims)
+			if (err != nil) != c.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, c.wantErr)
+			}
+			if claims != c.wantClaim {
+				t.Errorf("claims = %+v, want %+v", claims, c.wantClaim)
+			}
+		})
+	}
 }

@@ -221,3 +221,40 @@ func TestSessionQueriesFailOnClosedDB(t *testing.T) {
 		},
 	})
 }
+
+func TestGetSessionByRefreshHashRejectsDuplicates(t *testing.T) {
+	setupTestDB(t)
+	forceRowsAffected(t, "query", "sessions", 2)
+
+	_, found, err := getSessionByRefreshHash("hash")
+	if found || err == nil || err.Error() != "multiple sessions share the same refresh hash" {
+		t.Fatalf("got (found=%v, err=%v), want the duplicate error", found, err)
+	}
+}
+
+func TestRotateSessionWriteFailures(t *testing.T) {
+	// Faults are injected after the original session exists, so they hit
+	// RotateSession's own writes.
+	cases := []struct {
+		name string
+		kind string
+	}{
+		{"replacement create fails", "create"},
+		{"revoking the old session fails", "update"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupTestDB(t)
+			user := createTestUser(t)
+			if _, err := CreateSession(user.ID, "old", "a", "ip"); err != nil {
+				t.Fatalf("CreateSession error: %v", err)
+			}
+			injectFault(t, c.kind, "sessions", 0)
+
+			result, err := RotateSession("old", "new", "a", "ip")
+			if !errors.Is(err, errInjected) || result.Rotated {
+				t.Fatalf("RotateSession = (%+v, %v), want the injected fault and no rotation", result, err)
+			}
+		})
+	}
+}

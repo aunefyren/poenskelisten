@@ -12,6 +12,7 @@ import (
 )
 
 func TestGetCurrency(t *testing.T) {
+	restoreConfig(t)
 	config.ConfigFile.PoenskelistenCurrency = "NOK"
 	config.ConfigFile.PoenskelistenCurrencyPad = true
 	config.ConfigFile.PoenskelistenCurrencyLeft = false
@@ -60,6 +61,7 @@ func TestUpdateCurrencyRejectsInvalidCharacters(t *testing.T) {
 }
 
 func TestUpdateCurrencySuccess(t *testing.T) {
+	restoreConfig(t)
 	// APIUpdateCurrency persists via config.SaveConfig(), which writes to a
 	// fixed absolute path (./files/config.json resolved once at process
 	// start) - create+remove that directory around the test rather than
@@ -85,6 +87,7 @@ func TestUpdateCurrencySuccess(t *testing.T) {
 }
 
 func TestUpdateCurrencySaveFailure(t *testing.T) {
+	restoreConfig(t)
 	// With no "files" directory present, config.SaveConfig()'s WriteFile
 	// fails and the handler takes its 500 path.
 	os.RemoveAll("files")

@@ -219,3 +219,96 @@ func TestMigrateDBToV2(t *testing.T) {
 		MigrateDBToV2()
 	})
 }
+
+// TestMigrateSQLQuotedValueContainingSeparator covers the re-joining of a
+// quoted string that itself contains the ", " value separator: the row must
+// be split into its real columns, not at every comma, so the primary key is
+// still the first value and the string survives intact.
+func TestMigrateSQLQuotedValueContainingSeparator(t *testing.T) {
+	input := "INSERT INTO `widgets` (`id`, `name`, `size`) VALUES\n" +
+		"(1, 'Red, green, blue', 3);\n" +
+		"\n"
+
+	result, err := MigrateSQL(bufio.NewScanner(strings.NewReader(input)))
+	if err != nil {
+		t.Fatalf("MigrateSQL returned error: %v", err)
+	}
+
+	rowRe := regexp.MustCompile(`\('[0-9a-f-]{36}', 'Red, green, blue', 3\);`)
+	if !rowRe.MatchString(result) {
+		t.Errorf("expected the row to keep 'Red, green, blue' as one value after a UUID key; got:\n%s", result)
+	}
+}
+
+// TestMapColumn exercises mapColumn directly, independently of the legacy
+// per-table indices in ReplaceValues (which stay unverified, see docs/wip.md).
+func TestMapColumn(t *testing.T) {
+	idMaps := []IDMap{{TableName: "users", ID: "5", UUID: "user-uuid"}}
+
+	t.Run("in range rewrites the value", func(t *testing.T) {
+		values := []string{"'row'", "5", "NULL"}
+		if err := mapColumn(values, 1, idMaps, "users", "things"); err != nil {
+			t.Fatalf("mapColumn returned error: %v", err)
+		}
+		if values[1] != "'user-uuid'" {
+			t.Errorf("values[1] = %q, want 'user-uuid'", values[1])
+		}
+		if err := mapColumn(values, 2, idMaps, "users", "things"); err != nil {
+			t.Fatalf("mapColumn returned error: %v", err)
+		}
+		if values[2] != "NULL" {
+			t.Errorf("values[2] = %q, want NULL preserved", values[2])
+		}
+	})
+
+	t.Run("out of range errors", func(t *testing.T) {
+		for _, idx := range []int{-1, 3} {
+			values := []string{"a", "b", "c"}
+			err := mapColumn(values, idx, idMaps, "users", "things")
+			if err == nil || !strings.Contains(err.Error(), "things") {
+				t.Errorf("mapColumn(idx=%d) error = %v, want one naming the table", idx, err)
+			}
+		}
+	})
+}
+
+func TestMigrateDBToV2Panics(t *testing.T) {
+	expectPanic := func(t *testing.T) {
+		t.Helper()
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("expected MigrateDBToV2 to panic")
+			}
+		}()
+		MigrateDBToV2()
+	}
+
+	t.Run("migration error", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		if err := os.MkdirAll("files", 0755); err != nil {
+			t.Fatalf("failed to create files dir: %v", err)
+		}
+		// Too few columns for the groups mapping, so MigrateSQL errors.
+		input := "INSERT INTO `groups` (`id`, `name`) VALUES\n(1, 'Family');\n\n"
+		if err := os.WriteFile("files/db.sql", []byte(input), 0644); err != nil {
+			t.Fatalf("failed to write db.sql: %v", err)
+		}
+		expectPanic(t)
+		if _, err := os.Stat("files/db_modified_sql_file.sql"); err == nil {
+			t.Error("expected no output file after a failed migration")
+		}
+	})
+
+	t.Run("output not writable", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		// A directory in place of the output file makes WriteFile fail.
+		if err := os.MkdirAll("files/db_modified_sql_file.sql", 0755); err != nil {
+			t.Fatalf("failed to create blocking dir: %v", err)
+		}
+		input := "INSERT INTO `widgets` (`id`) VALUES\n(1);\n\n"
+		if err := os.WriteFile("files/db.sql", []byte(input), 0644); err != nil {
+			t.Fatalf("failed to write db.sql: %v", err)
+		}
+		expectPanic(t)
+	})
+}
