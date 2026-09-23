@@ -33,6 +33,9 @@ type OAuthClaims struct {
 	Scope    string `json:"scope"`
 	Admin    bool   `json:"admin"`
 	Verified bool   `json:"verified"`
+	// ClientID is the OAuth client the token was issued to (RFC 9068), so a
+	// resource server can refuse tokens minted for a different client.
+	ClientID string `json:"client_id"`
 	jwt.RegisteredClaims
 }
 
@@ -53,7 +56,7 @@ func oauthSigningMethod() jwt.SigningMethod {
 
 // GenerateOAuthAccessToken mints an ES256 (or RS256) access token bound to an
 // audience (the target resource identifier) and scope.
-func GenerateOAuthAccessToken(userID uuid.UUID, audience string, scope string, admin bool, verified bool) (string, error) {
+func GenerateOAuthAccessToken(userID uuid.UUID, clientID string, audience string, scope string, admin bool, verified bool) (string, error) {
 	signer, kid, err := loadOAuthSigner()
 	if err != nil {
 		return "", err
@@ -64,6 +67,7 @@ func GenerateOAuthAccessToken(userID uuid.UUID, audience string, scope string, a
 		Scope:    scope,
 		Admin:    admin,
 		Verified: verified,
+		ClientID: clientID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID.String(),
 			Audience:  jwt.ClaimStrings{audience},

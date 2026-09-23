@@ -69,6 +69,23 @@ func TestAuthorizationServerMetadata(t *testing.T) {
 	}
 }
 
+// Registration only exists while MCP is on, so the metadata mustn't advertise it
+// otherwise.
+func TestAuthorizationServerMetadataRegistrationFollowsMCP(t *testing.T) {
+	enableOAuth(t)
+
+	_, body := runHandler(APIOAuthAuthorizationServerMetadata)
+	if body["registration_endpoint"] != "https://wishlist.example.com/oauth/register" {
+		t.Errorf("registration_endpoint = %v with MCP on", body["registration_endpoint"])
+	}
+
+	config.ConfigFile.MCPEnabled = false
+	_, body = runHandler(APIOAuthAuthorizationServerMetadata)
+	if _, present := body["registration_endpoint"]; present {
+		t.Errorf("registration_endpoint = %v advertised with MCP off", body["registration_endpoint"])
+	}
+}
+
 func TestProtectedResourceMetadata(t *testing.T) {
 	enableOAuth(t)
 

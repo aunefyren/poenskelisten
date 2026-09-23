@@ -1525,6 +1525,18 @@ textarea {
   padding-right: 0;
 }
 
+/* Misconfiguration the admin should act on: quiet red text, wrapping like mono. */
+.server-info-value.is-warn {
+  background-color: transparent;
+  color: var(--red);
+  font-size: 0.72rem;
+  font-weight: 400;
+  padding: 0;
+  text-align: right;
+  white-space: normal;
+  width: auto;
+}
+
 /* Technical values (URLs, paths, IDs) wrap as monospace instead of clipping. */
 .server-info-value.is-mono {
   background-color: transparent;
