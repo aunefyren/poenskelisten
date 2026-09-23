@@ -549,6 +549,11 @@ func DeleteWish(context *gin.Context) {
 		CleanupWishCategoryIfEmpty(*deletedCategoryID)
 	}
 
+	// The wish is already deleted, so a leftover file is logged, not fatal.
+	if err := DeleteWishImage(wish.ID); err != nil {
+		logger.Log.Error("Failed to delete image of deleted wish. Error: " + err.Error())
+	}
+
 	_, wishes, err := database.GetWishesFromWishlist(wish.WishlistID)
 	if err != nil {
 		logger.Log.Error("Failed to get wishes from database. Error: " + err.Error())

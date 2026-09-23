@@ -57,6 +57,17 @@ func UpdateWishInDB(wishOriginal models.Wish) (wish models.Wish, err error) {
 }
 
 // Get wishes from wishlist
+// GetWishIDsFromWishlist returns the IDs of every wish on a wishlist, enabled
+// or not, so cleanup of per-wish files can't miss any.
+func GetWishIDsFromWishlist(wishlistID uuid.UUID) ([]uuid.UUID, error) {
+	var wishIDs []uuid.UUID
+	err := Instance.
+		Model(&models.Wish{}).
+		Where(&models.Wish{WishlistID: wishlistID}).
+		Pluck("id", &wishIDs).Error
+	return wishIDs, err
+}
+
 func GetWishesFromWishlist(WishlistID uuid.UUID) (bool, []models.Wish, error) {
 	var wishes []models.Wish
 	wishRecords := Instance.

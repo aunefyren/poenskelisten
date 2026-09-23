@@ -511,9 +511,6 @@ function send_update() {
         if(new_profile_image.size > 10000000) {
             error("Image exceeds 10MB size limit.")
             return;
-        } else if(new_profile_image.size < 10000) {
-            error("Image smaller than 0.01MB size requirement.")
-            return;
         }
 
         new_profile_image = get_base64(new_profile_image);

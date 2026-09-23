@@ -129,6 +129,12 @@ func main() {
 
 func initRouter(configFile models.ConfigStruct) *gin.Engine {
 	router := gin.Default()
+	// Routes whose JSON body can carry a base64 image get a raised limit.
+	router.Use(middlewares.MaxBodySize(middlewares.DefaultMaxBodyBytes, map[string]int64{
+		"/api/auth/wishes":          middlewares.ImageUploadMaxBodyBytes,
+		"/api/auth/wishes/:wish_id": middlewares.ImageUploadMaxBodyBytes,
+		"/api/auth/users/update":    middlewares.ImageUploadMaxBodyBytes,
+	}))
 
 	// API endpoint
 	api := router.Group("/api")

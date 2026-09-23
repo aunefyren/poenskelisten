@@ -907,6 +907,11 @@ func APIDeleteUser(context *gin.Context) {
 		return
 	}
 
+	// The user is already deleted, so a leftover file is logged, not fatal.
+	if err := DeleteUserProfileImage(user.ID); err != nil {
+		logger.Log.Error("Failed to delete profile image of deleted user. Error: " + err.Error())
+	}
+
 	user = database.RedactUserObject(user)
 
 	context.JSON(http.StatusOK, gin.H{"user": user, "message": "User deleted."})

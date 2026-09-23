@@ -276,9 +276,6 @@ function editWishFive(wishID, userID, wishlistID, groupID, wishObjectBase64) {
         if(wish_image.size > 10000000) {
             error("Image exceeds 10MB size limit.")
             return;
-        } else if(wish_image.size < 10000) {
-            error("Image smaller than 0.01MB size requirement.")
-            return;
         }
 
         wish_image = get_base64(wish_image);
@@ -464,9 +461,6 @@ function createWishFour(wishlistID, userID, wishObjectBase64){
     if(wish_image) {
         if(wish_image.size > 10000000) {
             error("Image exceeds 10MB size limit.")
-            return;
-        } else if(wish_image.size < 10000) {
-            error("Image smaller than 0.01MB size requirement.")
             return;
         }
 
