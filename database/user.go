@@ -10,12 +10,17 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/thanhpk/randstr"
+	"gorm.io/gorm"
 )
 
 // ErrUserNotFound means the lookup ran but matched no user, as opposed to the
 // query itself failing - callers use it to tell a caller mistake (400) from a
 // server fault (500).
 var ErrUserNotFound = errors.New("Failed to find correct user in DB.")
+
+// ErrInviteCodeUnavailable means the invite code was already used or disabled
+// by the time registration tried to claim it.
+var ErrInviteCodeUnavailable = errors.New("Invite code is not valid.")
 
 // Get redacted user information based on User ID for enabled users
 func GetUserInformation(UserID uuid.UUID) (models.User, error) {
@@ -303,4 +308,31 @@ func CreateUserInDB(userRequest models.User) (user models.User, err error) {
 	}
 
 	return
+}
+
+// CreateUserWithInviteCode creates the user and claims the invite in one
+// transaction. Doing them separately let a failure between the two leave a
+// user behind with the invite still reusable, and let two registrations racing
+// on one code both succeed; the conditional claim below closes both.
+func CreateUserWithInviteCode(userRequest models.User, inviteCode string) (models.User, error) {
+	user := userRequest
+
+	err := Instance.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&user).Error; err != nil {
+			return err
+		}
+
+		claim := tx.Model(&models.Invite{}).
+			Where("code = ? AND used = ? AND enabled = ?", inviteCode, false, true).
+			Updates(map[string]interface{}{"used": true, "recipient_id": user.ID})
+		if claim.Error != nil {
+			return claim.Error
+		}
+		if claim.RowsAffected != 1 {
+			return ErrInviteCodeUnavailable
+		}
+		return nil
+	})
+
+	return user, err
 }

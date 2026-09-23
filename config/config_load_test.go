@@ -3,8 +3,10 @@ package config
 import (
 	"aunefyren/poenskelisten/models"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -294,4 +296,56 @@ func TestLoadConfigNoChangesNeeded(t *testing.T) {
 		t.Errorf("PoenskelistenPort = %d, want 8080", ConfigFile.PoenskelistenPort)
 	}
 	_ = path
+}
+
+// skipIfRoot skips permission-based failure tests: root ignores file modes, so
+// a chmod can't make a file unreadable or unwritable for it.
+func skipIfRoot(t *testing.T) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("file permission checks don't apply to root")
+	}
+}
+
+func TestLoadConfigCreateFailure(t *testing.T) {
+	withTempConfigFile(t)
+	// The file doesn't exist and its parent directory doesn't either, so the
+	// initial CreateConfigFile can't write it.
+	configFilePath = filepath.Join(t.TempDir(), "does-not-exist", "config.json")
+
+	err := LoadConfig()
+	if err == nil || !strings.Contains(err.Error(), "trying to save the file") {
+		t.Errorf("LoadConfig error = %v, want the CreateConfigFile save failure", err)
+	}
+}
+
+func TestLoadConfigOpenFailure(t *testing.T) {
+	skipIfRoot(t)
+	path := withTempConfigFile(t)
+	if err := os.WriteFile(path, []byte("{}"), 0000); err != nil {
+		t.Fatalf("failed to seed config file: %v", err)
+	}
+
+	err := LoadConfig()
+	if !errors.Is(err, os.ErrPermission) {
+		t.Errorf("LoadConfig error = %v, want a permission error from opening the file", err)
+	}
+}
+
+func TestLoadConfigSaveFailureAfterDefaults(t *testing.T) {
+	skipIfRoot(t)
+	path := withTempConfigFile(t)
+	// Readable but not writable: LoadConfig fills in defaults (so it has to
+	// save) and the save must fail rather than be silently dropped.
+	if err := os.WriteFile(path, []byte("{}"), 0444); err != nil {
+		t.Fatalf("failed to seed config file: %v", err)
+	}
+
+	err := LoadConfig()
+	if err == nil || !strings.Contains(err.Error(), "failed to save config file to disk") {
+		t.Errorf("LoadConfig error = %v, want the SaveConfig failure", err)
+	}
+	if raw, _ := os.ReadFile(path); string(raw) != "{}" {
+		t.Errorf("config file changed to %q despite being read-only", raw)
+	}
 }

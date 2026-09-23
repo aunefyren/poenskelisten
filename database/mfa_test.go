@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -205,4 +206,55 @@ func TestMfaQueriesFailOnClosedDB(t *testing.T) {
 			return err
 		},
 	})
+}
+
+func TestMFAWritesForUnknownUserFail(t *testing.T) {
+	setupTestDB(t)
+	missing := uuid.New()
+
+	if err := SetUserPendingMFASecret(missing, "secret"); err == nil {
+		t.Error("SetUserPendingMFASecret: expected error for an unknown user")
+	}
+	if err := ActivateUserMFA(missing); err == nil {
+		t.Error("ActivateUserMFA: expected error for an unknown user")
+	}
+	if err := MarkRecoveryCodeUsed(missing); err == nil {
+		t.Error("MarkRecoveryCodeUsed: expected error for an unknown code")
+	}
+	if _, _, err := GetUserMFAEnrollmentState(missing); err == nil {
+		t.Error("GetUserMFAEnrollmentState: expected error for an unknown user")
+	}
+}
+
+func TestDisableUserMFARecoveryCodeDeleteFails(t *testing.T) {
+	setupTestDB(t)
+	user := createTestUser(t)
+	injectFault(t, "delete", "mfa_recovery_codes", 0)
+
+	if err := DisableUserMFA(user.ID); !errors.Is(err, errInjected) {
+		t.Fatalf("DisableUserMFA error = %v, want the injected fault", err)
+	}
+}
+
+func TestStoreRecoveryCodesEmptyIsNoOp(t *testing.T) {
+	setupTestDB(t)
+	user := createTestUser(t)
+
+	if err := StoreRecoveryCodes(user.ID, nil); err != nil {
+		t.Fatalf("StoreRecoveryCodes(nil) error: %v", err)
+	}
+	codes, err := GetActiveRecoveryCodes(user.ID)
+	if err != nil || len(codes) != 0 {
+		t.Fatalf("expected no stored codes, got %d (err %v)", len(codes), err)
+	}
+}
+
+func TestStoreRecoveryCodesPartialInsertFails(t *testing.T) {
+	setupTestDB(t)
+	forceRowsAffected(t, "create", "mfa_recovery_codes", 1)
+
+	err := StoreRecoveryCodes(uuid.New(), []string{"a", "b"})
+	if err == nil || err.Error() != "not all recovery codes were stored" {
+		t.Fatalf("error = %v, want \"not all recovery codes were stored\"", err)
+	}
 }

@@ -136,6 +136,7 @@ func TestAdminRevokeUserSessionsFailure(t *testing.T) {
 }
 
 func TestIssueSSOSessionFailsWithoutPrivateKey(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t, &models.User{}, &models.Session{})
 	// Deliberately leave config.ConfigFile.PrivateKey unset.
 	config.ConfigFile.PrivateKey = ""

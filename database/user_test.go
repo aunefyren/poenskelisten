@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func TestGetUserInformationRedactsAndFiltersEnabled(t *testing.T) {
@@ -298,4 +299,79 @@ func TestGetAllUserInformationByEmailCaseInsensitive(t *testing.T) {
 	if _, err := GetAllUserInformationByEmailCaseInsensitive(mixedCase); err == nil {
 		t.Error("expected an error when two users match ignoring case")
 	}
+}
+
+func TestUserLookupsForUnknownUserReturnErrUserNotFound(t *testing.T) {
+	setupTestDB(t)
+	missing := uuid.New()
+
+	lookups := map[string]func() error{
+		"GetUserInformationAnyState": func() error {
+			_, err := GetUserInformationAnyState(missing)
+			return err
+		},
+		"GetAllUserInformation": func() error {
+			_, err := GetAllUserInformation(missing)
+			return err
+		},
+		"GetAllUserInformationAnyState": func() error {
+			_, err := GetAllUserInformationAnyState(missing)
+			return err
+		},
+		"GetAllUserInformationByEmail": func() error {
+			_, err := GetAllUserInformationByEmail("nobody@example.com")
+			return err
+		},
+		"GetAllUserInformationByResetCode": func() error {
+			_, err := GetAllUserInformationByResetCode("NOSUCHCODE")
+			return err
+		},
+	}
+	for name, lookup := range lookups {
+		if err := lookup(); !errors.Is(err, ErrUserNotFound) {
+			t.Errorf("%s error = %v, want ErrUserNotFound", name, err)
+		}
+	}
+}
+
+func TestGetAllUserInformationByEmailCaseInsensitiveQueryFails(t *testing.T) {
+	setupTestDB(t)
+	injectFault(t, "query", "users", 0)
+
+	if _, err := GetAllUserInformationByEmailCaseInsensitive("a@example.com"); !errors.Is(err, errInjected) {
+		t.Fatalf("error = %v, want the injected fault", err)
+	}
+}
+
+// GenerateRandomResetCodeForUser writes the code and its expiry separately;
+// a failure of the expiry write must not be reported as success.
+func TestGenerateRandomResetCodeForUserExpiryWriteFailures(t *testing.T) {
+	t.Run("error", func(t *testing.T) {
+		setupTestDB(t)
+		user := createTestUser(t)
+		injectFault(t, "update", "users", 1)
+
+		if code, err := GenerateRandomResetCodeForUser(user.ID, true); !errors.Is(err, errInjected) || code != "" {
+			t.Fatalf("got (%q, %v), want no code and the injected fault", code, err)
+		}
+	})
+
+	t.Run("no rows", func(t *testing.T) {
+		setupTestDB(t)
+		user := createTestUser(t)
+		if err := registerCallback("update", true, func(db *gorm.DB) {
+			if dest, ok := db.Statement.Dest.(map[string]interface{}); ok {
+				if _, isExpiry := dest["reset_expiration"]; isExpiry {
+					db.RowsAffected = 0
+				}
+			}
+		}); err != nil {
+			t.Fatalf("failed to register callback: %v", err)
+		}
+
+		code, err := GenerateRandomResetCodeForUser(user.ID, true)
+		if code != "" || err == nil || err.Error() != "Reset code expiration not changed in database." {
+			t.Fatalf("got (%q, %v), want the expiration error", code, err)
+		}
+	})
 }

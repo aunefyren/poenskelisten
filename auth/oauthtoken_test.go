@@ -216,3 +216,36 @@ func TestValidateSSOTokenMissingClaims(t *testing.T) {
 		t.Error("ValidateSSOToken accepted a token with no exp/nbf claims, want error")
 	}
 }
+
+// TestOAuthTokenFunctionsFailWithoutSigningKey proves every ES256 mint/verify
+// path surfaces a missing signing key instead of panicking on a nil signer.
+func TestOAuthTokenFunctionsFailWithoutSigningKey(t *testing.T) {
+	origKey := config.ConfigFile.OAuthSigningKey
+	t.Cleanup(func() { config.ConfigFile.OAuthSigningKey = origKey })
+	config.ConfigFile.OAuthSigningKey = ""
+
+	if token, err := GenerateOAuthAccessToken(uuid.New(), "aud", "scope", false, true); err == nil || token != "" {
+		t.Errorf("GenerateOAuthAccessToken = (%q, %v), want empty token and an error", token, err)
+	}
+	if token, err := GenerateIDToken(uuid.New(), "client", "a@b.c", "Name"); err == nil || token != "" {
+		t.Errorf("GenerateIDToken = (%q, %v), want empty token and an error", token, err)
+	}
+	if claims, err := ValidateOAuthAccessToken("a.b.c", "aud"); err == nil || claims != nil {
+		t.Errorf("ValidateOAuthAccessToken = (%v, %v), want nil claims and an error", claims, err)
+	}
+}
+
+// TestValidateSSOTokenRequiresPrivateKey covers the ParseToken failure path of
+// ValidateSSOToken.
+func TestValidateSSOTokenRequiresPrivateKey(t *testing.T) {
+	origKey := config.ConfigFile.PrivateKey
+	t.Cleanup(func() { config.ConfigFile.PrivateKey = origKey })
+	config.ConfigFile.PrivateKey = ""
+
+	if _, err := GenerateSSOToken(uuid.New()); err == nil {
+		t.Error("GenerateSSOToken succeeded without a private key")
+	}
+	if claims, err := ValidateSSOToken("a.b.c"); err == nil || claims != nil {
+		t.Errorf("ValidateSSOToken = (%v, %v), want nil claims and an error", claims, err)
+	}
+}

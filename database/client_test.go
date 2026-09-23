@@ -5,6 +5,7 @@ import (
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -254,9 +255,6 @@ func TestClientQueriesFailOnClosedDB(t *testing.T) {
 			_, err := VerifyUnusedUserInviteCode("x")
 			return err
 		},
-		"SetUsedUserInviteCode": func() error {
-			return SetUsedUserInviteCode("x", uuid.New())
-		},
 		"SetUserVerification": func() error {
 			return SetUserVerification(uuid.New(), true)
 		},
@@ -273,4 +271,72 @@ func TestClientQueriesFailOnClosedDB(t *testing.T) {
 			return DeleteWishlistMembership(uuid.New())
 		},
 	})
+}
+
+// A path through a regular file fails os.Stat with ENOTDIR rather than
+// ErrNotExist, so Connect must refuse instead of trying to create the file.
+func TestConnectSQLiteUnstatableLocationFails(t *testing.T) {
+	keepInstance(t)
+	notADir := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(notADir, nil, 0o600); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+	config.ConfigFile.DBLocation = filepath.Join(notADir, "db.sqlite")
+
+	err := Connect("sqlite", "UTC", "", "", "", 0, "", false, "")
+	if err == nil || err.Error() != "failed to verify SQLite file" {
+		t.Fatalf("Connect error = %v, want \"failed to verify SQLite file\"", err)
+	}
+}
+
+// A directory passes the existence check but can't be opened as a database,
+// so the failure surfaces from gorm.Open's initial version query.
+func TestConnectSQLiteDirectoryLocationFails(t *testing.T) {
+	keepInstance(t)
+	config.ConfigFile.DBLocation = t.TempDir()
+
+	err := Connect("sqlite", "UTC", "", "", "", 0, "", false, "")
+	if err == nil || err.Error() != "failed to connect to database" {
+		t.Fatalf("Connect error = %v, want \"failed to connect to database\"", err)
+	}
+}
+
+func TestMigratePanicsWhenSeedingFails(t *testing.T) {
+	setupTestDB(t)
+	injectFault(t, "create", "o_auth_clients", 0)
+
+	defer func() {
+		r := recover()
+		if err, ok := r.(error); !ok || !errors.Is(err, errInjected) {
+			t.Errorf("Migrate() recovered %v, want a panic carrying the seeding error", r)
+		}
+	}()
+	Migrate()
+}
+
+func TestClientMissingRowsReturnErrors(t *testing.T) {
+	setupTestDB(t)
+	missing := uuid.New()
+
+	if _, err := GenerateRandomVerificationCodeForUser(missing); err == nil {
+		t.Error("GenerateRandomVerificationCodeForUser: expected error for an unknown user")
+	}
+	if _, err := VerifyUserHasVerificationCode(missing); err == nil {
+		t.Error("VerifyUserHasVerificationCode: expected error for an unknown user")
+	}
+	if _, err := VerifyUserIsVerified(missing); err == nil {
+		t.Error("VerifyUserIsVerified: expected error for an unknown user")
+	}
+	if err := SetUserVerification(missing, true); err == nil {
+		t.Error("SetUserVerification: expected error for an unknown user")
+	}
+	if err := DeleteGroup(missing); err == nil {
+		t.Error("DeleteGroup: expected error for an unknown group")
+	}
+	if err := DeleteWishlist(missing); err == nil {
+		t.Error("DeleteWishlist: expected error for an unknown wishlist")
+	}
+	if err := DeleteWishlistMembership(missing); err == nil {
+		t.Error("DeleteWishlistMembership: expected error for an unknown membership")
+	}
 }

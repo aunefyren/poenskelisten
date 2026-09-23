@@ -37,6 +37,17 @@ func TestGetPrivateKey(t *testing.T) {
 			t.Error("GetPrivateKey accepted invalid base64, want error")
 		}
 	})
+
+	t.Run("key decoding to nothing errors", func(t *testing.T) {
+		// The base64 decoder skips newlines, so this is non-empty yet decodes
+		// cleanly to zero bytes - an HS256 key nobody would notice was blank.
+		ConfigFile.PrivateKey = "\r\n"
+
+		got, err := GetPrivateKey()
+		if err == nil || got != nil {
+			t.Errorf("GetPrivateKey = (%v, %v), want nil key and an error", got, err)
+		}
+	})
 }
 
 func TestOIDCDisplayName(t *testing.T) {

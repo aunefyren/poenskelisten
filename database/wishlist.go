@@ -375,7 +375,7 @@ func GetMembershipIDForGroupToWishlist(WishlistID uuid.UUID, GroupID uuid.UUID) 
 	if wishlistMembershipRecord.Error != nil {
 		return false, wishlistMembership, wishlistMembershipRecord.Error
 	} else if wishlistMembershipRecord.RowsAffected != 1 {
-		return false, wishlistMembership, errors.New("Failed to find membership.")
+		return false, wishlistMembership, nil
 	}
 
 	return true, wishlistMembership, err

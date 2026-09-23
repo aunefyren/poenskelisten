@@ -901,3 +901,270 @@ func imageTestAssertNoFiles(t *testing.T, dir string, id uuid.UUID) {
 		}
 	}
 }
+
+// --- error paths ---
+
+// imageTestReadOnlyDir makes dir read-only for the rest of the test, so files
+// in it stay readable but nothing new can be created or removed.
+func imageTestReadOnlyDir(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatalf("failed to chmod %s: %v", dir, err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0755) })
+}
+
+// imageTestSeedFile writes raw bytes at path, creating its directory.
+func imageTestSeedFile(t *testing.T, path string, raw []byte) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatalf("failed to create image dir: %v", err)
+	}
+	if err := os.WriteFile(path, raw, 0644); err != nil {
+		t.Fatalf("failed to seed image: %v", err)
+	}
+}
+
+func TestGetUserProfileImageDefaultMissing(t *testing.T) {
+	setupControllersDB(t)
+	imageTestSetup(t)
+	defaultProfileImagePath = filepath.Join(t.TempDir(), "missing.svg")
+	user := createTestUser(t)
+
+	code, body := getWithParams(APIGetUserProfileImage, "/api/users/x/image", gin.Params{{Key: "user_id", Value: user.ID.String()}}, nil)
+	if code != 500 || body["error"] != "Failed to load default profile image." {
+		t.Errorf("status = %d body=%v, want 500 for a missing default avatar", code, body)
+	}
+}
+
+func TestGetUserProfileImageConditionalRequest(t *testing.T) {
+	setupControllersDB(t)
+	imageTestSetup(t)
+	user := createTestUser(t)
+
+	request := func(ifNoneMatch string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(w)
+		ctx.Request = httptest.NewRequest("GET", "/api/users/x/image", nil)
+		if ifNoneMatch != "" {
+			ctx.Request.Header.Set("If-None-Match", ifNoneMatch)
+		}
+		ctx.Params = gin.Params{{Key: "user_id", Value: user.ID.String()}}
+		APIGetUserProfileImage(ctx)
+		return w
+	}
+
+	first := request("")
+	etag := first.Header().Get("ETag")
+	if first.Code != 200 || etag == "" {
+		t.Fatalf("status = %d etag = %q, want 200 with an ETag", first.Code, etag)
+	}
+	if cached := request(etag); cached.Code != 304 || cached.Body.Len() != 0 {
+		t.Errorf("status = %d body = %d bytes, want an empty 304 for a matching ETag", cached.Code, cached.Body.Len())
+	}
+}
+
+func TestGetWishImageDefaultMissing(t *testing.T) {
+	setupControllersDB(t)
+	imageTestSetup(t)
+	defaultProfileImagePath = filepath.Join(t.TempDir(), "missing.svg")
+	owner := createTestUser(t)
+	wishlist := imageTestPublicWishlist(t, owner.ID)
+	wish := createTestWish(t, owner.ID, wishlist.ID)
+
+	code, body := getWithParams(APIGetWishImage, "/api/wishes/x/image", gin.Params{{Key: "wish_id", Value: wish.ID.String()}}, nil)
+	if code != 500 || body["error"] != "Failed to load default profile image." {
+		t.Errorf("status = %d body=%v, want 500 for a missing default image", code, body)
+	}
+}
+
+func TestGetWishImageAccessCheckFails(t *testing.T) {
+	setupControllersDB(t)
+	imageTestSetup(t)
+	owner := createTestUser(t)
+	viewer := createTestUser(t)
+	wishlist := imageTestPrivateWishlist(t, owner.ID)
+	wish := createTestWish(t, owner.ID, wishlist.ID)
+	header := map[string]string{"Authorization": authHeader(t, viewer.ID, false)}
+	// The viewer is neither owner nor group member, so the check reaches the
+	// collaborator lookup, which is the one made to fail.
+	failDBOperation(t, "query", "wishlist_collaborators", 0)
+
+	code, body := getWithParams(APIGetWishImage, "/api/wishes/x/image", gin.Params{{Key: "wish_id", Value: wish.ID.String()}}, header)
+	if code != 500 || body["error"] != "Failed to verify wishlist access." {
+		t.Errorf("status = %d body=%v, want 500 when the access check errors", code, body)
+	}
+}
+
+func TestLoadStoredImageReadErrors(t *testing.T) {
+	cases := []struct {
+		name      string
+		dirPath   func(dir string, id uuid.UUID) string
+		thumbnail bool
+	}{
+		{"thumbnail path is a directory", func(dir string, id uuid.UUID) string { return imageFilePath(dir, id, true) }, true},
+		{"full path is a directory", func(dir string, id uuid.UUID) string { return imageFilePath(dir, id, false) }, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			id := uuid.New()
+			if err := os.MkdirAll(c.dirPath(dir, id), 0755); err != nil {
+				t.Fatalf("failed to create blocking directory: %v", err)
+			}
+
+			data, found, err := loadStoredImage(dir, id, c.thumbnail)
+			if err == nil || found || data != nil {
+				t.Errorf("loadStoredImage = (%d bytes, %v, %v), want a read error", len(data), found, err)
+			}
+		})
+	}
+}
+
+func TestLoadStoredImageTruncatedFile(t *testing.T) {
+	dir := t.TempDir()
+	id := uuid.New()
+	full := imageTestRandomImageBytes(t, 300, 300, false)
+	// Keep the header (so DecodeConfig passes) but cut off the scan data.
+	imageTestSeedFile(t, imageFilePath(dir, id, false), full[:len(full)/2])
+
+	_, found, err := loadStoredImage(dir, id, true)
+	if err == nil || found {
+		t.Errorf("found = %v err = %v, want a decode error for a truncated image", found, err)
+	}
+}
+
+func TestLoadStoredImageWriteBackFailuresStillServe(t *testing.T) {
+	cases := []struct {
+		name          string
+		width, height int
+		thumbnail     bool
+		maxDimension  int
+	}{
+		{"oversized legacy full image", 1500, 1200, false, 1000},
+		{"legacy image without thumbnail", 300, 300, true, 250},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			id := uuid.New()
+			original := imageTestRandomImageBytes(t, c.width, c.height, false)
+			imageTestSeedFile(t, imageFilePath(dir, id, false), original)
+			imageTestReadOnlyDir(t, dir)
+
+			data, found, err := loadStoredImage(dir, id, c.thumbnail)
+			if err != nil || !found {
+				t.Fatalf("found = %v err = %v, want the image served despite the failed write-back", found, err)
+			}
+			config, err := jpeg.DecodeConfig(bytes.NewReader(data))
+			if err != nil {
+				t.Fatalf("served bytes aren't a JPEG: %v", err)
+			}
+			if config.Width > c.maxDimension || config.Height > c.maxDimension {
+				t.Errorf("served image is %dx%d, want within %d", config.Width, config.Height, c.maxDimension)
+			}
+
+			// Nothing could be written back, so the original stays as it was.
+			stored, _ := os.ReadFile(imageFilePath(dir, id, false))
+			if !bytes.Equal(stored, original) {
+				t.Error("stored full image changed despite a read-only directory")
+			}
+			if _, err := os.Stat(imageFilePath(dir, id, true)); !errors.Is(err, fs.ErrNotExist) {
+				t.Errorf("thumbnail stat err = %v, want not-exist", err)
+			}
+		})
+	}
+}
+
+func TestCheckIfWishImageExistsStatError(t *testing.T) {
+	imageTestSetup(t)
+	// A regular file where the directory should be makes Stat fail with
+	// ENOTDIR rather than not-exist.
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0644); err != nil {
+		t.Fatalf("failed to seed blocking file: %v", err)
+	}
+	wishImageDir = blocker
+
+	exists, err := CheckIfWishImageExists(uuid.New())
+	if err == nil || exists {
+		t.Errorf("CheckIfWishImageExists = (%v, %v), want (false, error)", exists, err)
+	}
+}
+
+func TestDecodeUploadedImageTruncated(t *testing.T) {
+	cases := []struct {
+		mime  string
+		asPNG bool
+	}{
+		{"image/jpeg", false},
+		{"image/png", true},
+	}
+	for _, c := range cases {
+		t.Run(c.mime, func(t *testing.T) {
+			raw := imageTestRandomImageBytes(t, 200, 200, c.asPNG)
+			img, err := decodeUploadedImage(raw[:len(raw)/2], c.mime)
+			if err == nil || img != nil || err.Error() != "Failed to create image from byte array." {
+				t.Errorf("decodeUploadedImage = (%v, %v), want the decode error", img, err)
+			}
+		})
+	}
+}
+
+func TestSaveWishImageWriteFails(t *testing.T) {
+	imageTestSetup(t)
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0644); err != nil {
+		t.Fatalf("failed to seed blocking file: %v", err)
+	}
+	wishImageDir = blocker
+
+	raw := imageTestRandomImageBytes(t, 200, 200, false)
+	err := SaveWishImage(uuid.New(), imageTestDataURI("image/jpeg", raw))
+	if err == nil || err.Error() != "Failed to save image to disk." {
+		t.Errorf("err = %v, want 'Failed to save image to disk.'", err)
+	}
+}
+
+func TestEncodeJPEGTooLarge(t *testing.T) {
+	// JPEG can't encode a dimension of 65536 or more.
+	img := image.NewGray(image.Rect(0, 0, 1<<16, 1))
+	if data, err := encodeJPEG(img); err == nil || data != nil {
+		t.Errorf("encodeJPEG = (%d bytes, %v), want an error", len(data), err)
+	}
+}
+
+func TestWriteFileAtomicRenameFailure(t *testing.T) {
+	dir := t.TempDir()
+	// A non-empty directory at the target path can't be replaced by rename.
+	target := filepath.Join(dir, "pic.jpg")
+	imageTestSeedFile(t, filepath.Join(target, "inner"), []byte("x"))
+
+	if err := writeFileAtomic(target, []byte("data")); err == nil {
+		t.Fatal("expected an error when the target is a non-empty directory")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("failed to list dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("dir has %d entries, want only the blocking directory (temp file cleaned up)", len(entries))
+	}
+}
+
+func TestDeleteUserProfileImageRemoveFailure(t *testing.T) {
+	imageTestSetup(t)
+	userID := uuid.New()
+	raw := imageTestRandomImageBytes(t, 200, 200, false)
+	if err := UpdateUserProfileImage(userID, imageTestDataURI("image/jpeg", raw)); err != nil {
+		t.Fatalf("failed to save profile image: %v", err)
+	}
+	imageTestReadOnlyDir(t, profileImageDir)
+
+	if err := DeleteUserProfileImage(userID); err == nil || err.Error() != "Failed to delete profile image." {
+		t.Errorf("err = %v, want 'Failed to delete profile image.'", err)
+	}
+	if _, err := os.Stat(imageFilePath(profileImageDir, userID, false)); err != nil {
+		t.Errorf("profile image should still exist: %v", err)
+	}
+}

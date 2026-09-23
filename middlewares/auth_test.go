@@ -206,3 +206,10 @@ func TestAuthMiddlewareAllowsAdminForAdminRoute(t *testing.T) {
 		t.Error("expected an admin token to be allowed on an admin-only route")
 	}
 }
+
+func TestGetTokenClaimsEmptyToken(t *testing.T) {
+	claims, err := GetTokenClaims("")
+	if err == nil || err.Error() != "no Authorization header given" || claims != nil {
+		t.Errorf("GetTokenClaims(\"\") = (%v, %v), want nil claims and 'no Authorization header given'", claims, err)
+	}
+}

@@ -1,6 +1,9 @@
 package database
 
 import (
+	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -27,23 +30,101 @@ func TestGenerateAndVerifyInvite(t *testing.T) {
 	}
 }
 
-func TestSetUsedUserInviteCode(t *testing.T) {
+func TestCreateUserWithInviteCode(t *testing.T) {
 	setupTestDB(t)
-
-	claimer := createTestUser(t)
 	code, err := GenerateRandomInvite()
 	if err != nil {
 		t.Fatalf("GenerateRandomInvite returned error: %v", err)
 	}
 
-	if err := SetUsedUserInviteCode(code, claimer.ID); err != nil {
-		t.Fatalf("SetUsedUserInviteCode returned error: %v", err)
+	user := newInviteTestUser()
+	created, err := CreateUserWithInviteCode(user, code)
+	if err != nil {
+		t.Fatalf("CreateUserWithInviteCode returned error: %v", err)
+	}
+	if _, err := GetUserInformation(created.ID); err != nil {
+		t.Fatalf("created user not found: %v", err)
 	}
 
-	// Once used, it must no longer verify as unused.
+	// Once claimed, the code must no longer verify as unused, and must name
+	// the new user as its recipient.
 	if ok, err := VerifyUnusedUserInviteCode(code); err != nil || ok {
 		t.Fatalf("expected used invite to be invalid (ok=%v err=%v)", ok, err)
 	}
+	var invite models.Invite
+	if err := Instance.Where(&models.Invite{Code: code}).First(&invite).Error; err != nil {
+		t.Fatalf("failed to reload invite: %v", err)
+	}
+	if invite.RecipientID == nil || *invite.RecipientID != created.ID {
+		t.Errorf("recipient = %v, want %v", invite.RecipientID, created.ID)
+	}
+}
+
+// A code that's already claimed (e.g. by a registration that won a race) must
+// fail with ErrInviteCodeUnavailable and leave no user behind.
+func TestCreateUserWithInviteCodeAlreadyUsed(t *testing.T) {
+	setupTestDB(t)
+	code, err := GenerateRandomInvite()
+	if err != nil {
+		t.Fatalf("GenerateRandomInvite returned error: %v", err)
+	}
+	if _, err := CreateUserWithInviteCode(newInviteTestUser(), code); err != nil {
+		t.Fatalf("first registration failed: %v", err)
+	}
+
+	second := newInviteTestUser()
+	if _, err := CreateUserWithInviteCode(second, code); !errors.Is(err, ErrInviteCodeUnavailable) {
+		t.Fatalf("err = %v, want ErrInviteCodeUnavailable", err)
+	}
+	if _, err := GetUserInformation(second.ID); !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("second user lookup err = %v, want ErrUserNotFound (creation rolled back)", err)
+	}
+}
+
+// If claiming the invite fails, the user insert must be rolled back too.
+func TestCreateUserWithInviteCodeClaimFailureRollsBack(t *testing.T) {
+	setupTestDB(t)
+	code, err := GenerateRandomInvite()
+	if err != nil {
+		t.Fatalf("GenerateRandomInvite returned error: %v", err)
+	}
+	injectFault(t, "update", "invites", 0)
+
+	user := newInviteTestUser()
+	if _, err := CreateUserWithInviteCode(user, code); !errors.Is(err, errInjected) {
+		t.Fatalf("err = %v, want the injected fault", err)
+	}
+	if _, err := GetUserInformation(user.ID); !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("user lookup err = %v, want ErrUserNotFound (creation rolled back)", err)
+	}
+	if ok, err := VerifyUnusedUserInviteCode(code); err != nil || !ok {
+		t.Errorf("invite should still be unused (ok=%v err=%v)", ok, err)
+	}
+}
+
+func TestCreateUserWithInviteCodeInsertFailure(t *testing.T) {
+	setupTestDB(t)
+	code, err := GenerateRandomInvite()
+	if err != nil {
+		t.Fatalf("GenerateRandomInvite returned error: %v", err)
+	}
+	injectFault(t, "create", "users", 0)
+
+	if _, err := CreateUserWithInviteCode(newInviteTestUser(), code); !errors.Is(err, errInjected) {
+		t.Fatalf("err = %v, want the injected fault", err)
+	}
+	if ok, err := VerifyUnusedUserInviteCode(code); err != nil || !ok {
+		t.Errorf("invite should still be unused (ok=%v err=%v)", ok, err)
+	}
+}
+
+// newInviteTestUser builds (without inserting) an enabled user with a unique
+// e-mail, for passing to CreateUserWithInviteCode.
+func newInviteTestUser() models.User {
+	email := uuid.NewString() + "@example.com"
+	user := models.User{FirstName: "Invited", LastName: "User", Email: &email, Enabled: &utilities.DBTrue}
+	user.ID = uuid.New()
+	return user
 }
 
 func TestGetAndDeleteInvite(t *testing.T) {
@@ -82,8 +163,8 @@ func TestGetAndDeleteInvite(t *testing.T) {
 	if len(remaining) != 0 {
 		t.Fatalf("expected no enabled invites after delete, got %d", len(remaining))
 	}
-	if _, err := GetInviteByID(invite.ID); err == nil {
-		t.Fatalf("expected error looking up disabled invite, got nil")
+	if _, err := GetInviteByID(invite.ID); !errors.Is(err, ErrInviteNotFound) {
+		t.Fatalf("err = %v, want ErrInviteNotFound looking up disabled invite", err)
 	}
 
 	// Deleting an unknown invite fails (RowsAffected != 1).

@@ -484,3 +484,194 @@ func TestNewsHandlersDatabaseErrors(t *testing.T) {
 		{name: "APIEditNewsPost", handler: APIEditNewsPost, method: "POST", path: "/api/admin/news/00000000-0000-0000-0000-00000000000a", body: `{"title":"Title","body":"Body"}`, params: newsParam, admin: true},
 	})
 }
+
+// newsCreatePost inserts an enabled news post with the given dates.
+func newsCreatePost(t *testing.T, title string, date time.Time, expiry *time.Time) models.News {
+	t.Helper()
+	news := models.News{Title: title, Body: "Body text", Enabled: true, Date: date, ExpiryDate: expiry}
+	news.ID = uuid.New()
+	created, err := database.CreateNewsPostInDB(news)
+	if err != nil {
+		t.Fatalf("failed to create news post: %v", err)
+	}
+	return created
+}
+
+// newsResponseIDs pulls the IDs out of a handler's "news" array, in order.
+func newsResponseIDs(t *testing.T, body map[string]interface{}) []string {
+	t.Helper()
+	raw, ok := body["news"].([]interface{})
+	if !ok {
+		t.Fatalf("response has no news array: %v", body)
+	}
+	ids := make([]string, 0, len(raw))
+	for _, item := range raw {
+		post, _ := item.(map[string]interface{})
+		id, _ := post["id"].(string)
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+func TestGetNewsSortsNewestFirst(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+	older := newsCreatePost(t, "Older post", time.Now().Add(-48*time.Hour), nil)
+	newer := newsCreatePost(t, "Newer post", time.Now().Add(-1*time.Hour), nil)
+	oldest := newsCreatePost(t, "Oldest post", time.Now().Add(-96*time.Hour), nil)
+
+	status, body, _ := doRequest(GetNews, "GET", "/api/auth/news", "", map[string]string{"Authorization": authHeader(t, user.ID, false)}, nil)
+	if status != 201 {
+		t.Fatalf("status = %d, want 201; body=%v", status, body)
+	}
+	got := newsResponseIDs(t, body)
+	want := []string{newer.ID.String(), older.ID.String(), oldest.ID.String()}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("news order = %v, want %v", got, want)
+	}
+}
+
+func TestGetNewsListFails(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	failDBOperation(t, "query", "news", 0)
+
+	status, body, _ := doRequest(GetNews, "GET", "/api/auth/news", "", header, nil)
+	if status != 500 || body["error"] != "Failed to get news." {
+		t.Errorf("status = %d body=%v, want 500 'Failed to get news.'", status, body)
+	}
+}
+
+func TestRegisterNewsPostAdminResponseSkipsExpired(t *testing.T) {
+	setupControllersDB(t)
+	admin := createTestUser(t)
+	admin.Admin = true
+	admin, err := database.UpdateUserInDB(admin)
+	if err != nil {
+		t.Fatalf("failed to promote user to admin: %v", err)
+	}
+	expiredAt := time.Now().Add(-time.Hour)
+	expired := newsCreatePost(t, "Expired post", time.Now().Add(-48*time.Hour), &expiredAt)
+	live := newsCreatePost(t, "Live post", time.Now().Add(-24*time.Hour), nil)
+
+	status, body := postNewsPost(t, authHeader(t, admin.ID, true), `{"title":"Hello world","body":"Some news body"}`)
+	if status != 201 {
+		t.Fatalf("status = %d, want 201; body=%v", status, body)
+	}
+	ids := strings.Join(newsResponseIDs(t, body), ",")
+	if strings.Contains(ids, expired.ID.String()) {
+		t.Error("expired post must not be in the response")
+	}
+	if !strings.Contains(ids, live.ID.String()) {
+		t.Error("live post should be in an admin's response")
+	}
+	if len(newsResponseIDs(t, body)) != 2 {
+		t.Errorf("response news = %v, want the live post plus the new one", ids)
+	}
+}
+
+func TestRegisterNewsPostDatabaseFailures(t *testing.T) {
+	cases := []struct {
+		name      string
+		op        string
+		wantError string
+	}{
+		{"create", "create", "Failed to create news post."},
+		{"reload list", "query", "Failed to get news posts."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			user := createTestUser(t)
+			header := authHeader(t, user.ID, true)
+			failDBOperation(t, c.op, "news", 0)
+
+			status, body := postNewsPost(t, header, `{"title":"Hello world","body":"Some news body"}`)
+			if status != 500 || body["error"] != c.wantError {
+				t.Errorf("status = %d body=%v, want 500 %q", status, body, c.wantError)
+			}
+		})
+	}
+}
+
+func TestDeleteNewsPostDatabaseFailures(t *testing.T) {
+	cases := []struct {
+		name      string
+		op        string
+		skip      int
+		wantError string
+	}{
+		{"disable", "update", 0, "Failed to delete news post."},
+		{"reload list", "query", 1, "Failed to get news posts."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			news := createTestNews(t)
+			failDBOperation(t, c.op, "news", c.skip)
+
+			status, body, _ := doRequest(DeleteNewsPost, "DELETE", "/api/admin/news/"+news.ID.String(), "", nil, gin.Params{{Key: "news_id", Value: news.ID.String()}})
+			if status != 500 || body["error"] != c.wantError {
+				t.Errorf("status = %d body=%v, want 500 %q", status, body, c.wantError)
+			}
+		})
+	}
+}
+
+func TestEditNewsPostSaveFails(t *testing.T) {
+	setupControllersDB(t)
+	news := createTestNews(t)
+	failDBOperation(t, "update", "news", 0)
+
+	status, body := putNewsPost(t, news.ID.String(), `{"title":"Updated title","body":"Updated news body"}`)
+	if status != 500 || body["error"] != "Failed to create news post." {
+		t.Errorf("status = %d body=%v, want 500", status, body)
+	}
+
+	stored, err := database.GetNewsPostByNewsID(news.ID)
+	if err != nil {
+		t.Fatalf("failed to reload news post: %v", err)
+	}
+	if stored.Title != news.Title {
+		t.Errorf("title = %q, want unchanged %q", stored.Title, news.Title)
+	}
+}
+
+func TestVisibleNewsPosts(t *testing.T) {
+	now := time.Now()
+	past := now.Add(-time.Hour)
+	older := now.Add(-2 * time.Hour)
+	future := now.Add(time.Hour)
+
+	post := func(title string, date time.Time, expiry *time.Time) models.News {
+		return models.News{Title: title, Date: date, ExpiryDate: expiry}
+	}
+	posts := []models.News{
+		post("older", older, nil),
+		post("scheduled", future, nil),
+		post("expired", older, &past),
+		post("live", past, &future),
+	}
+
+	cases := []struct {
+		name  string
+		admin bool
+		want  []string
+	}{
+		{"non-admin sees only published, unexpired posts", false, []string{"live", "older"}},
+		{"admin also sees scheduled posts", true, []string{"scheduled", "live", "older"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := visibleNewsPosts(posts, c.admin, now)
+			titles := []string{}
+			for _, p := range got {
+				titles = append(titles, p.Title)
+			}
+			if strings.Join(titles, ",") != strings.Join(c.want, ",") {
+				t.Errorf("titles = %v, want %v (newest first)", titles, c.want)
+			}
+		})
+	}
+}

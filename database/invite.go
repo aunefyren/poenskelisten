@@ -25,6 +25,10 @@ func GetAllEnabledInvites() ([]models.Invite, error) {
 	return inviteStruct, nil
 }
 
+// ErrInviteNotFound means the lookup ran but matched no enabled invite, as
+// opposed to the query itself failing.
+var ErrInviteNotFound = errors.New("Invite not found.")
+
 // Get invite using ID
 func GetInviteByID(inviteID uuid.UUID) (models.Invite, error) {
 	var inviteStruct models.Invite
@@ -38,7 +42,7 @@ func GetInviteByID(inviteID uuid.UUID) (models.Invite, error) {
 		return models.Invite{}, inviteRecords.Error
 	}
 	if inviteRecords.RowsAffected != 1 {
-		return models.Invite{}, errors.New("Invite not found.")
+		return models.Invite{}, ErrInviteNotFound
 	}
 	return inviteStruct, nil
 }

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"encoding/json"
 	"net/http/httptest"
@@ -70,6 +71,11 @@ func TestGenerateTokenSuccess(t *testing.T) {
 
 func TestGenerateTokenMFARequired(t *testing.T) {
 	setupControllersDB(t)
+	// The MFA challenge token is HS256-signed; don't rely on an earlier test
+	// having left a key configured.
+	origKey := config.ConfigFile.PrivateKey
+	t.Cleanup(func() { config.ConfigFile.PrivateKey = origKey })
+	enablePrivateKey(t)
 	user := createTestUserWithPassword(t, "correct-horse-battery-staple")
 
 	user.MFAEnabled = boolPtr(true)
@@ -92,3 +98,45 @@ func TestGenerateTokenMFARequired(t *testing.T) {
 }
 
 func strPtr(s string) *string { return &s }
+
+// tokenTestClearPrivateKey unsets the HS256 signing key for the rest of the
+// test, so minting the MFA challenge token or SSO cookie fails.
+func tokenTestClearPrivateKey(t *testing.T) {
+	t.Helper()
+	orig := config.ConfigFile.PrivateKey
+	t.Cleanup(func() { config.ConfigFile.PrivateKey = orig })
+	config.ConfigFile.PrivateKey = ""
+}
+
+func TestGenerateTokenSessionFailure(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUserWithPassword(t, "correct-horse-battery-staple")
+	tokenTestClearPrivateKey(t)
+
+	code, body := postGenerateToken(`{"email":"` + *user.Email + `","password":"correct-horse-battery-staple"}`)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500 when the session cookie can't be signed; body=%v", code, body)
+	}
+	if body["error"] != "Failed to log in." {
+		t.Errorf("error = %v", body["error"])
+	}
+}
+
+func TestGenerateTokenMFAChallengeFailure(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUserWithPassword(t, "correct-horse-battery-staple")
+	user.MFAEnabled = boolPtr(true)
+	user.MFASecret = strPtr("JBSWY3DPEHPK3PXP")
+	if _, err := database.UpdateUserInDB(user); err != nil {
+		t.Fatalf("failed to enable MFA on test user: %v", err)
+	}
+	tokenTestClearPrivateKey(t)
+
+	code, body := postGenerateToken(`{"email":"` + *user.Email + `","password":"correct-horse-battery-staple"}`)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500 when the MFA challenge token can't be signed; body=%v", code, body)
+	}
+	if body["mfa_token"] != nil {
+		t.Errorf("mfa_token = %v, want absent", body["mfa_token"])
+	}
+}

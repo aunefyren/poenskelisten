@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"testing"
 
 	"aunefyren/poenskelisten/models"
@@ -159,6 +160,32 @@ func TestWishClaimLifecycle(t *testing.T) {
 	}
 }
 
+// Unclaiming disables the claim row rather than deleting it, so after a
+// re-claim there's an old disabled row next to the new one. Unclaiming again
+// must only touch the live row.
+func TestDeleteWishClaimAfterReclaim(t *testing.T) {
+	setupTestDB(t)
+
+	owner := createTestUser(t)
+	claimer := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wish := createWishForOwner(t, wishlist.ID, owner.ID, "Reclaimable")
+
+	for round := 1; round <= 2; round++ {
+		claim := models.WishClaim{WishID: wish.ID, UserID: claimer.ID, Enabled: true}
+		claim.ID = uuid.New()
+		if _, err := CreateWishClaimInDB(claim); err != nil {
+			t.Fatalf("round %d: failed to create wish claim: %v", round, err)
+		}
+		if err := DeleteWishClaimByUserAndWish(wish.ID, claimer.ID); err != nil {
+			t.Fatalf("round %d: failed to delete claim: %v", round, err)
+		}
+		if claimed, err := VerifyWishIsClaimed(wish.ID); err != nil || claimed {
+			t.Fatalf("round %d: expected wish to be unclaimed (claimed=%v err=%v)", round, claimed, err)
+		}
+	}
+}
+
 func TestUpdateWishInDB(t *testing.T) {
 	setupTestDB(t)
 
@@ -304,5 +331,63 @@ func TestGetWishIDsFromWishlistIncludesDisabledWishes(t *testing.T) {
 	}
 	if len(wishIDs) != 2 || !got[enabled.ID] || !got[disabled.ID] {
 		t.Errorf("GetWishIDsFromWishlist() = %v, want exactly %v and %v", wishIDs, enabled.ID, disabled.ID)
+	}
+}
+
+func TestWishLookupsWithNoMatch(t *testing.T) {
+	setupTestDB(t)
+	missing := uuid.New()
+
+	if id, err := GetWishlistIDFromWish(missing); err != nil || id != nil {
+		t.Errorf("GetWishlistIDFromWish = (%v, %v), want (nil, nil)", id, err)
+	}
+	if claims, err := GetWishClaimFromWish(missing); err != nil || claims == nil || len(claims) != 0 {
+		t.Errorf("GetWishClaimFromWish = (%v, %v), want an empty non-nil slice", claims, err)
+	}
+	if owns, err := VerifyUserOwnershipToWishClaimByWish(uuid.New(), missing); err != nil || owns {
+		t.Errorf("VerifyUserOwnershipToWishClaimByWish = (%v, %v), want (false, nil)", owns, err)
+	}
+	if err := DeleteWishClaimByUserAndWish(missing, uuid.New()); err == nil {
+		t.Error("DeleteWishClaimByUserAndWish: expected error when no claim matches")
+	}
+	if found, _, err := GetWishlistByWishID(missing); err != nil || found {
+		t.Errorf("GetWishlistByWishID = (found=%v, %v), want (false, nil)", found, err)
+	}
+}
+
+func TestGetWishClaimFromWishClaimerLookupFails(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	claimer := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wish := createWishForOwner(t, wishlist.ID, owner.ID, "wish")
+	claim := models.WishClaim{WishID: wish.ID, UserID: claimer.ID, Enabled: true}
+	claim.ID = uuid.New()
+	if _, err := CreateWishClaimInDB(claim); err != nil {
+		t.Fatalf("CreateWishClaimInDB error: %v", err)
+	}
+	// The claim query runs against wish_claims; only the follow-up user lookup
+	// hits the users table.
+	injectFault(t, "query", "users", 0)
+
+	if claims, err := GetWishClaimFromWish(wish.ID); !errors.Is(err, errInjected) || len(claims) != 0 {
+		t.Fatalf("got (%v, %v), want no claims and the injected fault", claims, err)
+	}
+}
+
+func TestWishCreatesRejectWrongRowCount(t *testing.T) {
+	setupTestDB(t)
+	forceRowsAffected(t, "create", "wishes", 0)
+	forceRowsAffected(t, "create", "wish_claims", 0)
+
+	wish := models.Wish{Name: "w", Enabled: true, OwnerID: uuid.New(), WishlistID: uuid.New()}
+	wish.ID = uuid.New()
+	if _, err := CreateWishInDB(wish); err == nil || err.Error() != "Wish not added to database." {
+		t.Errorf("CreateWishInDB error = %v, want \"Wish not added to database.\"", err)
+	}
+	claim := models.WishClaim{WishID: uuid.New(), UserID: uuid.New(), Enabled: true}
+	claim.ID = uuid.New()
+	if _, err := CreateWishClaimInDB(claim); err == nil || err.Error() != "WishClaim not added to database." {
+		t.Errorf("CreateWishClaimInDB error = %v, want \"WishClaim not added to database.\"", err)
 	}
 }

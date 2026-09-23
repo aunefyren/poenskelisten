@@ -7,8 +7,11 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"gorm.io/gorm"
 	"net"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -440,11 +443,7 @@ func TestVerifyUserSuccess(t *testing.T) {
 
 	// VerifyUser logs the user in at the SSO layer on success, which signs an
 	// HS256 cookie using the configured private key.
-	key, err := config.GenerateSecureKey(64)
-	if err != nil {
-		t.Fatalf("failed to generate private key: %v", err)
-	}
-	config.ConfigFile.PrivateKey = key
+	enablePrivateKey(t)
 
 	verificationCode, err := database.GenerateRandomVerificationCodeForUser(user.ID)
 	if err != nil {
@@ -868,6 +867,22 @@ func TestGetUsersNotACollaboratorUnknownWishlist(t *testing.T) {
 	}
 }
 
+func TestGetUsersNotACollaboratorWishlistLookupFailure(t *testing.T) {
+	setupControllersDB(t)
+	requester := createTestUser(t)
+	wishlist := createTestWishlist(t, requester.ID)
+	header := map[string]string{"Authorization": authHeader(t, requester.ID, false)}
+	failDBOperation(t, "query", "wishlists", 0)
+
+	code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users?notACollaboratorOfWishlistID="+wishlist.ID.String(), "", header, nil)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500; body=%v", code, resp)
+	}
+	if resp["error"] != "Failed to get wishlist." {
+		t.Errorf("error = %v", resp["error"])
+	}
+}
+
 func TestVerifyUserSSOSessionFailure(t *testing.T) {
 	setupControllersDB(t)
 	user := createTestUser(t)
@@ -1193,4 +1208,638 @@ func TestUserHandlersRequireAuth(t *testing.T) {
 		{name: "GetUsers", handler: GetUsers, method: "GET", path: "/api/auth/users"},
 		{name: "APIDeleteUser", handler: APIDeleteUser, method: "DELETE", path: "/api/admin/users/00000000-0000-0000-0000-00000000000a", params: gin.Params{{Key: "user_id", Value: "00000000-0000-0000-0000-00000000000a"}}},
 	})
+}
+
+// userTestLongPassword satisfies ValidatePasswordFormat but is longer than
+// bcrypt's 72-byte input limit, so HashPassword rejects it. That is the only
+// way to reach the handlers' "failed to hash password" branches.
+var userTestLongPassword = "Aa1" + strings.Repeat("x", 80)
+
+// userTestRegisterBody is a valid RegisterUser request for inviteCode.
+func userTestRegisterBody(inviteCode, password string) string {
+	return fmt.Sprintf(`{"first_name":"Ada","last_name":"Lovelace","email":"ada@example.com","password":"%s","password_repeat":"%s","invite_code":"%s"}`, password, password, inviteCode)
+}
+
+// userTestMakeAdmin flips the admin flag on user in the DB.
+func userTestMakeAdmin(t *testing.T, user models.User) models.User {
+	t.Helper()
+	user.Admin = true
+	updated, err := database.UpdateUserInDB(user)
+	if err != nil {
+		t.Fatalf("failed to make user admin: %v", err)
+	}
+	return updated
+}
+
+// userTestMarkUnverified flips the verified flag off on user in the DB.
+func userTestMarkUnverified(t *testing.T, user models.User) models.User {
+	t.Helper()
+	user.Verified = boolPtr(false)
+	updated, err := database.UpdateUserInDB(user)
+	if err != nil {
+		t.Fatalf("failed to mark user unverified: %v", err)
+	}
+	return updated
+}
+
+// userTestInviteUsed reports whether the invite with code has been claimed.
+func userTestInviteUsed(t *testing.T, code string) bool {
+	t.Helper()
+	unused, err := database.VerifyUnusedUserInviteCode(code)
+	if err != nil {
+		t.Fatalf("failed to look up invite: %v", err)
+	}
+	return !unused
+}
+
+func TestRegisterUserDatabaseFailures(t *testing.T) {
+	cases := []struct {
+		name       string
+		op         string
+		table      string
+		skip       int
+		wantStatus int
+		wantError  string
+	}{
+		{"user count", "query", "users", 0, 500, "Failed to verify user amount."},
+		{"invite lookup", "query", "invites", 0, 500, "Failed to verify invite code."},
+		{"unique e-mail check", "query", "users", 1, 500, "Failed to verify unique e-mail."},
+		{"user insert", "create", "users", 0, 500, "Failed to create user."},
+		{"claim invite", "update", "invites", 0, 500, "Failed to create user."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			invite := createTestInvite(t)
+			failDBOperation(t, c.op, c.table, c.skip)
+
+			code, resp, _ := doRequest(RegisterUser, "POST", "/api/open/users/register", userTestRegisterBody(invite.Code, "Sup3rSecret!"), nil, nil)
+			if code != c.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%v", code, c.wantStatus, resp)
+			}
+			if resp["error"] != c.wantError {
+				t.Errorf("error = %v, want %q", resp["error"], c.wantError)
+			}
+		})
+	}
+}
+
+// A failure while claiming the invite must not leave the new account behind
+// with the invite still reusable.
+func TestRegisterUserInviteClaimFailureLeavesNoUser(t *testing.T) {
+	setupControllersDB(t)
+	invite := createTestInvite(t)
+	failDBOperation(t, "update", "invites", 0)
+
+	code, resp, _ := doRequest(RegisterUser, "POST", "/api/open/users/register", userTestRegisterBody(invite.Code, "Sup3rSecret!"), nil, nil)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500; body=%v", code, resp)
+	}
+	if userTestInviteUsed(t, invite.Code) {
+		t.Error("the invite must stay unused when registration fails")
+	}
+	count, err := database.GetAmountOfEnabledUsers()
+	if err != nil {
+		t.Fatalf("failed to count users: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("users = %d, want 0 (the insert should have been rolled back)", count)
+	}
+}
+
+// Two registrations can both pass the "unused invite" check; only one may
+// claim it. Simulate losing that race by marking the invite used just before
+// the claim.
+func TestRegisterUserInviteClaimedConcurrently(t *testing.T) {
+	setupControllersDB(t)
+	invite := createTestInvite(t)
+	onDBOperation(t, "update", "invites", 0, func(tx *gorm.DB) {
+		if err := tx.Exec("UPDATE invites SET used = ? WHERE id = ?", true, invite.ID).Error; err != nil {
+			t.Errorf("failed to mark invite used: %v", err)
+		}
+	})
+
+	code, resp, _ := doRequest(RegisterUser, "POST", "/api/open/users/register", userTestRegisterBody(invite.Code, "Sup3rSecret!"), nil, nil)
+	if code != 400 {
+		t.Fatalf("status = %d, want 400; body=%v", code, resp)
+	}
+	if resp["error"] != "Invitiation code is not valid." {
+		t.Errorf("error = %v", resp["error"])
+	}
+	count, err := database.GetAmountOfEnabledUsers()
+	if err != nil {
+		t.Fatalf("failed to count users: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("users = %d, want 0 (the losing registration must be rolled back)", count)
+	}
+}
+
+func TestRegisterUserPasswordTooLongToHash(t *testing.T) {
+	setupControllersDB(t)
+	invite := createTestInvite(t)
+
+	code, resp, _ := doRequest(RegisterUser, "POST", "/api/open/users/register", userTestRegisterBody(invite.Code, userTestLongPassword), nil, nil)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500; body=%v", code, resp)
+	}
+	if resp["error"] != "Failed to hash password." {
+		t.Errorf("error = %v", resp["error"])
+	}
+	if userTestInviteUsed(t, invite.Code) {
+		t.Error("the invite must stay unused when registration fails")
+	}
+}
+
+func TestGetUsersListDatabaseFailures(t *testing.T) {
+	cases := []struct {
+		name      string
+		path      string
+		admin     bool
+		wantError string
+	}{
+		{"all users as admin", "/api/auth/users?includeDisabled=true", true, "Failed to get all users."},
+		{"enabled users", "/api/auth/users", false, "Failed to get enabled users."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			user := createTestUser(t)
+			if c.admin {
+				user = userTestMakeAdmin(t, user)
+			}
+			header := map[string]string{"Authorization": authHeader(t, user.ID, c.admin)}
+			// The first users query loads the caller; fail the listing after it.
+			failDBOperation(t, "query", "users", 1)
+
+			code, resp, _ := doRequest(GetUsers, "GET", c.path, "", header, nil)
+			if code != 500 {
+				t.Fatalf("status = %d, want 500; body=%v", code, resp)
+			}
+			if resp["error"] != c.wantError {
+				t.Errorf("error = %v, want %q", resp["error"], c.wantError)
+			}
+		})
+	}
+}
+
+func TestGetUsersNotAMemberOfGroupMembershipLookupFailure(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+	group := createTestGroup(t, user.ID)
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	failDBOperation(t, "query", "group_memberships", 0)
+
+	code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users?notAMemberOfGroupID="+group.ID.String(), "", header, nil)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500; body=%v", code, resp)
+	}
+	if resp["error"] != "Failed to verify ownership to group." {
+		t.Errorf("error = %v", resp["error"])
+	}
+}
+
+func TestGetUsersNotACollaboratorWishlistConversionFailure(t *testing.T) {
+	setupControllersDB(t)
+	requester := createTestUser(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	header := map[string]string{"Authorization": authHeader(t, requester.ID, false)}
+	failDBOperation(t, "query", "wishlist_collaborators", 0)
+
+	code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users?notACollaboratorOfWishlistID="+wishlist.ID.String(), "", header, nil)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500; body=%v", code, resp)
+	}
+	if resp["error"] != "Failed to convert wishlist to wishlist object." {
+		t.Errorf("error = %v", resp["error"])
+	}
+}
+
+func TestGetUsersNotACollaboratorExcludesCollaborators(t *testing.T) {
+	setupControllersDB(t)
+	requester := createTestUser(t)
+	owner := createTestUser(t)
+	collaborator := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+
+	collab := models.WishlistCollaborator{UserID: collaborator.ID, WishlistID: wishlist.ID, Enabled: true}
+	collab.ID = uuid.New()
+	if err := database.CreateWishlistCollaboratorInDB(collab); err != nil {
+		t.Fatalf("failed to add wishlist collaborator: %v", err)
+	}
+
+	header := map[string]string{"Authorization": authHeader(t, requester.ID, false)}
+	code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users?notACollaboratorOfWishlistID="+wishlist.ID.String(), "", header, nil)
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	users, ok := resp["users"].([]interface{})
+	if !ok {
+		t.Fatalf("expected a users array, got %v", resp)
+	}
+	if len(users) != 2 {
+		t.Fatalf("len(users) = %d, want 2 (everyone but the collaborator)", len(users))
+	}
+	for _, u := range users {
+		if u.(map[string]interface{})["id"] == collaborator.ID.String() {
+			t.Error("the collaborator should have been filtered out")
+		}
+	}
+}
+
+func TestVerifyUserDatabaseFailures(t *testing.T) {
+	cases := []struct {
+		name      string
+		op        string
+		skip      int
+		wantError string
+	}{
+		// resolveGateUser's lookup is the first users query.
+		{"code lookup", "query", 1, "Failed to get verification code."},
+		{"set verified", "update", 0, "Failed to set user verification."},
+		{"reload user", "query", 2, "Failed to get user details."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			user := userTestMarkUnverified(t, createTestUser(t))
+			verificationCode, err := database.GenerateRandomVerificationCodeForUser(user.ID)
+			if err != nil {
+				t.Fatalf("failed to generate verification code: %v", err)
+			}
+			header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+			failDBOperation(t, c.op, "users", c.skip)
+
+			params := gin.Params{{Key: "code", Value: verificationCode}}
+			code, resp, _ := doRequest(VerifyUser, "GET", "/api/open/users/verify/"+verificationCode, "", header, params)
+			if code != 500 {
+				t.Fatalf("status = %d, want 500; body=%v", code, resp)
+			}
+			if resp["error"] != c.wantError {
+				t.Errorf("error = %v, want %q", resp["error"], c.wantError)
+			}
+		})
+	}
+}
+
+func TestSendUserVerificationCodeDatabaseFailures(t *testing.T) {
+	cases := []struct {
+		name      string
+		op        string
+		skip      int
+		wantError string
+	}{
+		{"generate code", "update", 0, "Failed to generate verification code."},
+		{"reload user", "query", 1, "Failed to get user."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			user := createTestUser(t)
+			srv := startFakeSMTPServer(t)
+			configureTestSMTP(t, srv)
+			header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+			failDBOperation(t, c.op, "users", c.skip)
+
+			code, resp, _ := doRequest(SendUserVerificationCode, "POST", "/api/open/users/verification", "", header, nil)
+			if code != 500 {
+				t.Fatalf("status = %d, want 500; body=%v", code, resp)
+			}
+			if resp["error"] != c.wantError {
+				t.Errorf("error = %v, want %q", resp["error"], c.wantError)
+			}
+			if srv.messageCount() != 0 {
+				t.Errorf("messageCount = %d, want 0", srv.messageCount())
+			}
+		})
+	}
+}
+
+func TestUpdateUserBadJSON(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", "not-json", header, nil)
+	if code != 400 {
+		t.Fatalf("status = %d, want 400; body=%v", code, resp)
+	}
+}
+
+func TestUpdateUserChangesPassword(t *testing.T) {
+	setupControllersDB(t)
+	user := newUserWithPassword(t, "CorrectHorse1!")
+
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	body := `{"email":"` + *user.Email + `","password_original":"CorrectHorse1!","password":"NewPassw0rd","password_repeat":"NewPassw0rd"}`
+	code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil)
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+
+	updated, err := database.GetAllUserInformation(user.ID)
+	if err != nil {
+		t.Fatalf("failed to reload user: %v", err)
+	}
+	if err := updated.CheckPassword("NewPassw0rd"); err != nil {
+		t.Errorf("new password should be accepted: %v", err)
+	}
+	if err := updated.CheckPassword("CorrectHorse1!"); err == nil {
+		t.Error("old password should no longer be accepted")
+	}
+}
+
+func TestUpdateUserPasswordTooLongToHash(t *testing.T) {
+	setupControllersDB(t)
+	user := newUserWithPassword(t, "CorrectHorse1!")
+
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	body := `{"email":"` + *user.Email + `","password_original":"CorrectHorse1!","password":"` + userTestLongPassword + `","password_repeat":"` + userTestLongPassword + `"}`
+	code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500; body=%v", code, resp)
+	}
+	if resp["error"] != "Failed to hash password." {
+		t.Errorf("error = %v", resp["error"])
+	}
+}
+
+func TestUpdateUserDatabaseFailures(t *testing.T) {
+	cases := []struct {
+		name       string
+		newEmail   bool
+		op         string
+		skip       int
+		wantStatus int
+		wantError  string
+	}{
+		// Users queries in order: caller lookup, userOriginal lookup, then either
+		// the unique-e-mail check (e-mail change) or the final reload.
+		{"load original", false, "query", 1, 500, "Failed to get user details."},
+		{"unique e-mail check", true, "query", 2, 500, "Failed to verify e-mail."},
+		{"unverify on e-mail change", true, "update", 0, 500, "Failed to change verification."},
+		{"save user", false, "update", 0, 500, "Failed to update user."},
+		{"reload user", false, "query", 2, 500, "Failed to get user."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			user := newUserWithPassword(t, "CorrectHorse1!")
+			email := *user.Email
+			if c.newEmail {
+				email = "changed-" + email
+			}
+			header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+			failDBOperation(t, c.op, "users", c.skip)
+
+			body := `{"email":"` + email + `","password_original":"CorrectHorse1!"}`
+			code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil)
+			if code != c.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%v", code, c.wantStatus, resp)
+			}
+			if resp["error"] != c.wantError {
+				t.Errorf("error = %v, want %q", resp["error"], c.wantError)
+			}
+		})
+	}
+}
+
+func TestUpdateUserUnverifiedVerificationCodeFailure(t *testing.T) {
+	setupControllersDB(t)
+	user := userTestMarkUnverified(t, newUserWithPassword(t, "CorrectHorse1!"))
+	srv := startFakeSMTPServer(t)
+	configureTestSMTP(t, srv)
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	// The first users update is the profile save; fail the code generation after it.
+	failDBOperation(t, "update", "users", 1)
+
+	body := `{"email":"` + *user.Email + `","password_original":"CorrectHorse1!"}`
+	code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500; body=%v", code, resp)
+	}
+	if resp["error"] != "Failed to generate verification code." {
+		t.Errorf("error = %v", resp["error"])
+	}
+	if srv.messageCount() != 0 {
+		t.Errorf("messageCount = %d, want 0", srv.messageCount())
+	}
+}
+
+func TestUpdateUserUnverifiedSMTPFailure(t *testing.T) {
+	setupControllersDB(t)
+	user := userTestMarkUnverified(t, newUserWithPassword(t, "CorrectHorse1!"))
+	configureTestSMTP(t, &fakeSMTPServer{host: "127.0.0.1", port: 1}) // nothing listening
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+
+	body := `{"email":"` + *user.Email + `","password_original":"CorrectHorse1!"}`
+	code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500; body=%v", code, resp)
+	}
+	if resp["error"] != "Failed to send e-mail." {
+		t.Errorf("error = %v", resp["error"])
+	}
+}
+
+func TestAPIResetPasswordReloadFailureStillReportsOkay(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+	srv := startFakeSMTPServer(t)
+	configureTestSMTP(t, srv)
+	// The e-mail lookup succeeds; the unredacted reload after it fails.
+	failDBOperation(t, "query", "users", 1)
+
+	code, resp, _ := doRequest(APIResetPassword, "POST", "/api/open/users/reset", `{"email":"`+*user.Email+`"}`, nil, nil)
+	if code != 200 {
+		t.Fatalf("status = %d, want 200 (must not reveal whether the e-mail exists); body=%v", code, resp)
+	}
+	if srv.messageCount() != 0 {
+		t.Errorf("messageCount = %d, want 0", srv.messageCount())
+	}
+}
+
+func TestAPIResetPasswordFailures(t *testing.T) {
+	cases := []struct {
+		name        string
+		op          string
+		skip        int
+		smtpDown    bool
+		wantMessage string
+	}{
+		{"generate reset code", "update", 0, false, "Error."},
+		{"reload user", "query", 2, false, "Error."},
+		{"send e-mail", "", 0, true, "Error. Failed to send e-mail."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			user := createTestUser(t)
+			srv := startFakeSMTPServer(t)
+			if c.smtpDown {
+				srv = &fakeSMTPServer{host: "127.0.0.1", port: 1} // nothing listening
+			}
+			configureTestSMTP(t, srv)
+			if c.op != "" {
+				failDBOperation(t, c.op, "users", c.skip)
+			}
+
+			code, resp, _ := doRequest(APIResetPassword, "POST", "/api/open/users/reset", `{"email":"`+*user.Email+`"}`, nil, nil)
+			if code != 500 {
+				t.Fatalf("status = %d, want 500; body=%v", code, resp)
+			}
+			if resp["message"] != c.wantMessage {
+				t.Errorf("message = %v, want %q", resp["message"], c.wantMessage)
+			}
+		})
+	}
+}
+
+func TestAPIVerifyResetCodeExpired(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+	// valid=false stamps the expiry at "now", so it's already in the past.
+	resetCode, err := database.GenerateRandomResetCodeForUser(user.ID, false)
+	if err != nil {
+		t.Fatalf("failed to generate reset code: %v", err)
+	}
+
+	params := gin.Params{{Key: "resetCode", Value: resetCode}}
+	code, resp, _ := doRequest(APIVerifyResetCode, "GET", "/api/open/users/reset/"+resetCode, "", nil, params)
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	if resp["expired"] != true {
+		t.Errorf("expired = %v, want true", resp["expired"])
+	}
+}
+
+func TestAPIChangePasswordBadJSON(t *testing.T) {
+	setupControllersDB(t)
+
+	code, resp, _ := doRequest(APIChangePassword, "POST", "/api/open/users/password", "not-json", nil, nil)
+	if code != 400 {
+		t.Fatalf("status = %d, want 400; body=%v", code, resp)
+	}
+	if resp["error"] != "Failed to parse request." {
+		t.Errorf("error = %v", resp["error"])
+	}
+}
+
+func TestAPIChangePasswordExpiredCode(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+	resetCode, err := database.GenerateRandomResetCodeForUser(user.ID, false)
+	if err != nil {
+		t.Fatalf("failed to generate reset code: %v", err)
+	}
+
+	body := `{"reset_code":"` + resetCode + `","password":"NewPassw0rd","password_repeat":"NewPassw0rd"}`
+	code, resp, _ := doRequest(APIChangePassword, "POST", "/api/open/users/password", body, nil, nil)
+	if code != 400 {
+		t.Fatalf("status = %d, want 400; body=%v", code, resp)
+	}
+	if resp["error"] != "Reset code has expired." {
+		t.Errorf("error = %v", resp["error"])
+	}
+}
+
+func TestAPIChangePasswordTooLongToHash(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+	resetCode, err := database.GenerateRandomResetCodeForUser(user.ID, true)
+	if err != nil {
+		t.Fatalf("failed to generate reset code: %v", err)
+	}
+
+	body := `{"reset_code":"` + resetCode + `","password":"` + userTestLongPassword + `","password_repeat":"` + userTestLongPassword + `"}`
+	code, resp, _ := doRequest(APIChangePassword, "POST", "/api/open/users/password", body, nil, nil)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500; body=%v", code, resp)
+	}
+	if resp["error"] != "Failed to process password." {
+		t.Errorf("error = %v", resp["error"])
+	}
+}
+
+func TestAPIChangePasswordDatabaseFailures(t *testing.T) {
+	cases := []struct {
+		name        string
+		skip        int
+		wantError   interface{}
+		wantMessage interface{}
+	}{
+		{"save password", 0, "Failed to update user.", nil},
+		{"rotate reset code", 1, nil, "Error."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			user := createTestUser(t)
+			resetCode, err := database.GenerateRandomResetCodeForUser(user.ID, true)
+			if err != nil {
+				t.Fatalf("failed to generate reset code: %v", err)
+			}
+			failDBOperation(t, "update", "users", c.skip)
+
+			body := `{"reset_code":"` + resetCode + `","password":"NewPassw0rd","password_repeat":"NewPassw0rd"}`
+			code, resp, _ := doRequest(APIChangePassword, "POST", "/api/open/users/password", body, nil, nil)
+			if code != 500 {
+				t.Fatalf("status = %d, want 500; body=%v", code, resp)
+			}
+			if resp["error"] != c.wantError || resp["message"] != c.wantMessage {
+				t.Errorf("error = %v, message = %v; want %v, %v", resp["error"], resp["message"], c.wantError, c.wantMessage)
+			}
+		})
+	}
+}
+
+func TestAPIDeleteUserSaveFailure(t *testing.T) {
+	setupControllersDB(t)
+	admin := createTestUser(t)
+	target := createTestUser(t)
+	header := map[string]string{"Authorization": authHeader(t, admin.ID, true)}
+	failDBOperation(t, "update", "users", 0)
+
+	params := gin.Params{{Key: "user_id", Value: target.ID.String()}}
+	code, resp, _ := doRequest(APIDeleteUser, "DELETE", "/api/admin/users/"+target.ID.String(), "", header, params)
+	if code != 500 {
+		t.Fatalf("status = %d, want 500; body=%v", code, resp)
+	}
+	if resp["error"] != "Failed to update user object." {
+		t.Errorf("error = %v", resp["error"])
+	}
+}
+
+// TestAPIDeleteUserImageCleanupFailureIsNotFatal plants a non-empty directory
+// where the user's profile image would be, so os.Remove fails with something
+// other than "not exist". The user is already disabled by then, so the handler
+// must still report success.
+func TestAPIDeleteUserImageCleanupFailureIsNotFatal(t *testing.T) {
+	setupControllersDB(t)
+	admin := createTestUser(t)
+	target := createTestUser(t)
+
+	origDir := profileImageDir
+	t.Cleanup(func() { profileImageDir = origDir })
+	profileImageDir = t.TempDir()
+	if err := os.MkdirAll(filepath.Join(imageFilePath(profileImageDir, target.ID, false), "blocker"), 0755); err != nil {
+		t.Fatalf("failed to plant blocking directory: %v", err)
+	}
+
+	header := map[string]string{"Authorization": authHeader(t, admin.ID, true)}
+	params := gin.Params{{Key: "user_id", Value: target.ID.String()}}
+	code, resp, _ := doRequest(APIDeleteUser, "DELETE", "/api/admin/users/"+target.ID.String(), "", header, params)
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+
+	updated, err := database.GetAllUserInformationAnyState(target.ID)
+	if err != nil {
+		t.Fatalf("failed to reload user: %v", err)
+	}
+	if updated.Enabled == nil || *updated.Enabled {
+		t.Error("expected the deleted user to be disabled")
+	}
 }

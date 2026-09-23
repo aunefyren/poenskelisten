@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -26,6 +27,7 @@ import (
 // be minted.
 func oauthServerTestSetup(t *testing.T) {
 	t.Helper()
+	restoreConfig(t)
 	enableOAuth(t)
 	key, err := config.GenerateSecureKey(64)
 	if err != nil {
@@ -343,6 +345,7 @@ func authorizeFirstPartyQuery(client models.OAuthClient) url.Values {
 }
 
 func TestOAuthAuthorizeEnforcedMFARedirectsToEnroll(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 	oauthServerTestSetup(t)
 	original := config.ConfigFile
@@ -360,6 +363,7 @@ func TestOAuthAuthorizeEnforcedMFARedirectsToEnroll(t *testing.T) {
 // With password login disabled, local MFA protects nothing (a linked local
 // account signs in via the IdP), so enforcement mustn't force enrollment.
 func TestOAuthAuthorizeEnforcedMFASkippedWhenLocalLoginDisabled(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 	oauthServerTestSetup(t)
 	original := config.ConfigFile
@@ -851,5 +855,348 @@ func TestHandleRefreshTokenGrantUserNotFound(t *testing.T) {
 	}
 	if body["error"] != "invalid_grant" {
 		t.Errorf("error = %v, want invalid_grant", body["error"])
+	}
+}
+
+// --- further branches ---
+
+// oauthServerTestExchange runs the authorization_code grant for a freshly
+// issued code and returns the response, failing the test on a non-200.
+func oauthServerTestExchange(t *testing.T, client models.OAuthClient, user models.User) (map[string]interface{}, *httptest.ResponseRecorder) {
+	t.Helper()
+	authCode, verifier := oauthServerTestIssueCode(t, client, user)
+	code, body, w := postForm(APIOAuthToken, "/oauth/token", url.Values{
+		"grant_type": {"authorization_code"}, "code": {authCode},
+		"redirect_uri": {client.RedirectURIs[0]}, "client_id": {client.ClientID},
+		"code_verifier": {verifier},
+	})
+	if code != http.StatusOK {
+		t.Fatalf("token exchange status = %d, want 200; body=%v", code, body)
+	}
+	return body, w
+}
+
+// oauthServerTestCookie returns the named cookie set on the response, or nil.
+func oauthServerTestCookie(w *httptest.ResponseRecorder, name string) *http.Cookie {
+	for _, c := range w.Result().Cookies() {
+		if c.Name == name {
+			return c
+		}
+	}
+	return nil
+}
+
+// oauthServerTestClearSigningKey removes the OAuth signing key so access-token
+// minting fails, restoring it afterwards.
+func oauthServerTestClearSigningKey(t *testing.T) {
+	t.Helper()
+	restoreConfig(t)
+	orig := config.ConfigFile.OAuthSigningKey
+	config.ConfigFile.OAuthSigningKey = ""
+	t.Cleanup(func() { config.ConfigFile.OAuthSigningKey = orig })
+}
+
+func TestResolveSSOUserRejections(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	invalidated := createTestUser(t)
+	cookieBeforeLogout := oauthServerTestSSOCookie(t, invalidated.ID)
+	if err := database.SetUserSessionsInvalidatedAt(invalidated.ID, time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("failed to stamp logout marker: %v", err)
+	}
+
+	cases := []struct {
+		name   string
+		cookie *http.Cookie
+	}{
+		{"no cookie", nil},
+		{"garbage token", &http.Cookie{Name: ssoCookieName, Value: "garbage"}},
+		{"unknown user", oauthServerTestSSOCookie(t, uuid.New())},
+		{"issued before global logout", cookieBeforeLogout},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			ctx.Request = httptest.NewRequest("GET", "/oauth/authorize", nil)
+			if c.cookie != nil {
+				ctx.Request.AddCookie(c.cookie)
+			}
+			if user, ok := resolveSSOUser(ctx); ok {
+				t.Errorf("resolveSSOUser accepted the session for %v", user.ID)
+			}
+		})
+	}
+}
+
+func TestOAuthAuthorizeClientLookupFails(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, true, true, []string{"openid"}, "https://client.example/cb")
+	breakControllersDB(t)
+
+	w := getAuthorize(authorizeFirstPartyQuery(client))
+	if w.Code != http.StatusInternalServerError || w.Body.String() != "Authorization error." {
+		t.Errorf("status = %d body=%q, want 500 'Authorization error.'", w.Code, w.Body.String())
+	}
+}
+
+func TestOAuthAuthorizeUnverifiedUserRedirectsToVerify(t *testing.T) {
+	restoreConfig(t)
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	origSMTP := config.ConfigFile.SMTPEnabled
+	config.ConfigFile.SMTPEnabled = true
+	t.Cleanup(func() { config.ConfigFile.SMTPEnabled = origSMTP })
+	client := oauthServerTestNewClient(t, true, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+	user.Verified = boolPtr(false)
+	if _, err := database.UpdateUserInDB(user); err != nil {
+		t.Fatalf("failed to unverify user: %v", err)
+	}
+
+	w := getAuthorize(authorizeFirstPartyQuery(client), oauthServerTestSSOCookie(t, user.ID))
+	if w.Code != http.StatusFound || w.Header().Get("Location") != "/verify" {
+		t.Errorf("status = %d Location=%q, want 302 to /verify", w.Code, w.Header().Get("Location"))
+	}
+}
+
+func TestOAuthConsentAllowInvalidScope(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+
+	// "email" is a real scope, but not one this client may request.
+	form := url.Values{
+		"client_id": {client.ClientID}, "redirect_uri": {client.RedirectURIs[0]},
+		"scope": {"email"}, "state": {"s1"}, "action": {"allow"},
+	}
+	code, _, w := postForm(APIOAuthConsent, "/oauth/consent", form, oauthServerTestSSOCookie(t, user.ID))
+	loc, _ := url.Parse(w.Header().Get("Location"))
+	if code != http.StatusFound || loc.Query().Get("error") != "invalid_scope" || loc.Query().Get("state") != "s1" {
+		t.Errorf("status = %d Location=%q, want 302 with error=invalid_scope&state=s1", code, w.Header().Get("Location"))
+	}
+	if _, found, _ := database.GetConsent(user.ID, client.ClientID); found {
+		t.Error("no consent should be stored for a rejected scope")
+	}
+}
+
+func TestOAuthConsentStoreFails(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+	failDBOperation(t, "create", "o_auth_consents", 0)
+
+	form := url.Values{
+		"client_id": {client.ClientID}, "redirect_uri": {client.RedirectURIs[0]},
+		"scope": {"openid"}, "state": {"s1"}, "action": {"allow"},
+	}
+	code, _, w := postForm(APIOAuthConsent, "/oauth/consent", form, oauthServerTestSSOCookie(t, user.ID))
+	if code != http.StatusInternalServerError || w.Body.String() != "Failed to store consent." {
+		t.Errorf("status = %d body=%q, want 500 'Failed to store consent.'", code, w.Body.String())
+	}
+}
+
+func TestIssueAuthorizationCodeUnparseableRedirect(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("GET", "/", nil)
+	issueAuthorizationCode(ctx, client, user, "http://[::1", []string{"openid"}, "", "challenge", "")
+
+	if w.Code != http.StatusBadRequest || w.Body.String() != "Invalid redirect URI." {
+		t.Errorf("status = %d body=%q, want 400 'Invalid redirect URI.'", w.Code, w.Body.String())
+	}
+}
+
+func TestRedirectAuthErrorUnparseableRedirect(t *testing.T) {
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest("GET", "/", nil)
+	redirectAuthError(ctx, "http://[::1", "state", "access_denied")
+
+	if w.Code != http.StatusBadRequest || w.Header().Get("Location") != "" {
+		t.Errorf("status = %d Location=%q, want a plain 400 and no redirect", w.Code, w.Header().Get("Location"))
+	}
+}
+
+func TestOAuthTokenAuthorizationCodeUserGone(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+	authCode, verifier := oauthServerTestIssueCode(t, client, user)
+	if result := database.Instance.Unscoped().Delete(&models.User{}, "id = ?", user.ID); result.Error != nil {
+		t.Fatalf("failed to hard-delete user: %v", result.Error)
+	}
+
+	code, body, _ := postForm(APIOAuthToken, "/oauth/token", url.Values{
+		"grant_type": {"authorization_code"}, "code": {authCode},
+		"redirect_uri": {client.RedirectURIs[0]}, "client_id": {client.ClientID},
+		"code_verifier": {verifier},
+	})
+	if code != http.StatusBadRequest || body["error_description"] != "user not found" {
+		t.Errorf("status=%d body=%v, want 400 invalid_grant 'user not found'", code, body)
+	}
+}
+
+func TestOAuthTokenAuthorizationCodeServerErrors(t *testing.T) {
+	cases := []struct {
+		name   string
+		inject func(t *testing.T)
+	}{
+		{"refresh session not stored", func(t *testing.T) { failDBOperation(t, "create", "sessions", 0) }},
+		{"access token not minted", oauthServerTestClearSigningKey},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			oauthServerTestSetup(t)
+			client := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+			user := createTestUser(t)
+			authCode, verifier := oauthServerTestIssueCode(t, client, user)
+			c.inject(t)
+
+			code, body, _ := postForm(APIOAuthToken, "/oauth/token", url.Values{
+				"grant_type": {"authorization_code"}, "code": {authCode},
+				"redirect_uri": {client.RedirectURIs[0]}, "client_id": {client.ClientID},
+				"code_verifier": {verifier},
+			})
+			if code != http.StatusInternalServerError || body["error"] != "server_error" {
+				t.Errorf("status=%d body=%v, want 500 server_error", code, body)
+			}
+		})
+	}
+}
+
+func TestOAuthTokenRefreshUnknownClient(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+
+	code, body, _ := postForm(APIOAuthToken, "/oauth/token", url.Values{
+		"grant_type": {"refresh_token"}, "refresh_token": {"x"}, "client_id": {"does-not-exist"},
+	})
+	if code != http.StatusUnauthorized || body["error"] != "invalid_client" {
+		t.Errorf("status=%d body=%v, want 401 invalid_client", code, body)
+	}
+}
+
+func TestOAuthTokenRefreshFirstPartyCookieRotates(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, true, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+	_, exchange := oauthServerTestExchange(t, client, user)
+	refreshCookie := oauthServerTestCookie(exchange, refreshCookieName)
+	if refreshCookie == nil || refreshCookie.Value == "" {
+		t.Fatal("expected a refresh cookie from the first-party exchange")
+	}
+
+	// The cookie wins over the (bogus) form value for the first-party client.
+	code, body, w := postForm(APIOAuthToken, "/oauth/token", url.Values{
+		"grant_type": {"refresh_token"}, "refresh_token": {"ignored"}, "client_id": {client.ClientID},
+	}, &http.Cookie{Name: refreshCookieName, Value: refreshCookie.Value})
+	if code != http.StatusOK || body["access_token"] == nil || body["id_token"] == nil {
+		t.Fatalf("status=%d body=%v, want 200 with access and id tokens", code, body)
+	}
+	if body["refresh_token"] != nil {
+		t.Error("first-party client should not receive the refresh token in the body")
+	}
+	rotated := oauthServerTestCookie(w, refreshCookieName)
+	if rotated == nil || rotated.Value == "" || rotated.Value == refreshCookie.Value {
+		t.Errorf("rotated refresh cookie = %v, want a new non-empty value", rotated)
+	}
+}
+
+func TestOAuthTokenRefreshFirstPartyInvalidClearsCookie(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, true, true, []string{"openid"}, "https://client.example/cb")
+
+	code, body, w := postForm(APIOAuthToken, "/oauth/token", url.Values{
+		"grant_type": {"refresh_token"}, "client_id": {client.ClientID},
+	}, &http.Cookie{Name: refreshCookieName, Value: "garbage"})
+	if code != http.StatusBadRequest || body["error"] != "invalid_grant" {
+		t.Errorf("status=%d body=%v, want 400 invalid_grant", code, body)
+	}
+	if cleared := oauthServerTestCookie(w, refreshCookieName); cleared == nil || cleared.MaxAge >= 0 {
+		t.Errorf("refresh cookie = %v, want it cleared", cleared)
+	}
+}
+
+func TestOAuthTokenRefreshWithinGraceReturnsSameToken(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+	tokens, _ := oauthServerTestExchange(t, client, user)
+	refreshToken, _ := tokens["refresh_token"].(string)
+
+	form := url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refreshToken}, "client_id": {client.ClientID}}
+	if code, body, _ := postForm(APIOAuthToken, "/oauth/token", form); code != http.StatusOK || body["refresh_token"] == refreshToken {
+		t.Fatalf("first refresh: status=%d body=%v, want 200 with a rotated token", code, body)
+	}
+
+	// A second use of the just-rotated token inside the grace window (e.g. a
+	// concurrent tab) succeeds without rotating again and echoes it back.
+	code, body, _ := postForm(APIOAuthToken, "/oauth/token", form)
+	if code != http.StatusOK || body["refresh_token"] != refreshToken {
+		t.Errorf("second refresh: status=%d body=%v, want 200 echoing the presented token", code, body)
+	}
+}
+
+func TestOAuthTokenRefreshAccessTokenMintFails(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+	tokens, _ := oauthServerTestExchange(t, client, user)
+	oauthServerTestClearSigningKey(t)
+
+	code, body, _ := postForm(APIOAuthToken, "/oauth/token", url.Values{
+		"grant_type": {"refresh_token"}, "refresh_token": {tokens["refresh_token"].(string)}, "client_id": {client.ClientID},
+	})
+	if code != http.StatusInternalServerError || body["error"] != "server_error" {
+		t.Errorf("status=%d body=%v, want 500 server_error", code, body)
+	}
+}
+
+func TestOAuthRevokeWithCookie(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, true, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+	_, exchange := oauthServerTestExchange(t, client, user)
+	refreshCookie := oauthServerTestCookie(exchange, refreshCookieName)
+
+	code, body, _ := postForm(APIOAuthRevoke, "/oauth/revoke", url.Values{}, &http.Cookie{Name: refreshCookieName, Value: refreshCookie.Value})
+	if code != http.StatusOK || body["message"] != "Revoked." {
+		t.Fatalf("status=%d body=%v, want 200 Revoked.", code, body)
+	}
+
+	code, body, _ = postForm(APIOAuthToken, "/oauth/token", url.Values{
+		"grant_type": {"refresh_token"}, "client_id": {client.ClientID},
+	}, &http.Cookie{Name: refreshCookieName, Value: refreshCookie.Value})
+	if code != http.StatusBadRequest || body["error"] != "invalid_grant" {
+		t.Errorf("status=%d body=%v, want the cookie's session to be revoked", code, body)
+	}
+}
+
+func TestOAuthRevokeDatabaseFailureStillLogsOut(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	failDBOperation(t, "update", "sessions", 0)
+
+	code, body, w := postForm(APIOAuthRevoke, "/oauth/revoke", url.Values{"token": {"some-token"}})
+	if code != http.StatusOK || body["message"] != "Revoked." {
+		t.Errorf("status=%d body=%v, want 200 Revoked. even when the revoke write fails", code, body)
+	}
+	if cleared := oauthServerTestCookie(w, ssoCookieName); cleared == nil || cleared.MaxAge >= 0 {
+		t.Errorf("SSO cookie = %v, want it cleared", cleared)
 	}
 }

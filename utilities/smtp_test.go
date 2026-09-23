@@ -248,3 +248,59 @@ func TestSendSMTPVerificationEmailDialFailure(t *testing.T) {
 		t.Error("expected an error when the SMTP server is unreachable")
 	}
 }
+
+// TestSMTPSendersDialFailure covers the error return of every sender when the
+// SMTP server can't be reached.
+func TestSMTPSendersDialFailure(t *testing.T) {
+	orig := config.ConfigFile
+	t.Cleanup(func() { config.ConfigFile = orig })
+
+	// Bind then close a listener so the port is known to have nothing on it.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+
+	config.ConfigFile.SMTPHost = "127.0.0.1"
+	config.ConfigFile.SMTPPort = port
+	config.ConfigFile.SMTPFrom = "noreply@example.com"
+	config.ConfigFile.PoenskelistenEnvironment = "production"
+	user := testUserForSMTP()
+
+	if err := SendSMTPResetEmail(user); err == nil {
+		t.Error("SendSMTPResetEmail: expected an error when the SMTP server is unreachable")
+	}
+	wishlist := models.WishlistUser{Name: "List"}
+	if err := SendSMTPDeletedClaimedWish(user, models.WishObject{Name: "Gift"}, wishlist); err == nil {
+		t.Error("SendSMTPDeletedClaimedWish: expected an error when the SMTP server is unreachable")
+	}
+}
+
+// TestSMTPSendersUseTestAddressInTestEnvironment makes sure the reset and
+// deleted-claim mails, like the verification mail, never reach a real user
+// address in the test environment.
+func TestSMTPSendersUseTestAddressInTestEnvironment(t *testing.T) {
+	srv := startFakeSMTPServer(t)
+	configureTestSMTP(t, srv)
+	config.ConfigFile.PoenskelistenEnvironment = "TEST"
+	config.ConfigFile.PoenskelistenTestEmail = "sink@example.com"
+	user := testUserForSMTP()
+
+	if err := SendSMTPResetEmail(user); err != nil {
+		t.Fatalf("SendSMTPResetEmail returned error: %v", err)
+	}
+	if msg := srv.lastMessage(); !strings.Contains(msg, "sink@example.com") || strings.Contains(msg, "recipient@example.com") {
+		t.Errorf("reset mail not redirected to the test address:\n%s", msg)
+	}
+
+	wishlist := models.WishlistUser{Name: "List"}
+	wishlist.ID = uuid.New()
+	if err := SendSMTPDeletedClaimedWish(user, models.WishObject{Name: "Gift"}, wishlist); err != nil {
+		t.Fatalf("SendSMTPDeletedClaimedWish returned error: %v", err)
+	}
+	if msg := srv.lastMessage(); !strings.Contains(msg, "sink@example.com") || strings.Contains(msg, "recipient@example.com") {
+		t.Errorf("deleted-claim mail not redirected to the test address:\n%s", msg)
+	}
+}

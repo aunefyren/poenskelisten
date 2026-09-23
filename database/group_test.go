@@ -1,7 +1,10 @@
 package database
 
 import (
+	"errors"
 	"testing"
+
+	"gorm.io/gorm"
 
 	"aunefyren/poenskelisten/models"
 
@@ -160,8 +163,8 @@ func TestDeleteGroupSoftDisables(t *testing.T) {
 		t.Fatalf("DeleteGroup returned error: %v", err)
 	}
 
-	if _, err := GetGroupInformation(group.ID); err == nil {
-		t.Fatalf("expected disabled group to be unreachable, got nil error")
+	if _, err := GetGroupInformation(group.ID); !errors.Is(err, ErrGroupNotFound) {
+		t.Fatalf("err = %v, want ErrGroupNotFound for a disabled group", err)
 	}
 }
 
@@ -204,8 +207,8 @@ func TestGetGroupUsingGroupIDAndUserIDAsOwner(t *testing.T) {
 	}
 
 	// A member who is not the owner must not resolve as owner.
-	if _, err := GetGroupUsingGroupIDAndUserIDAsOwner(member.ID, group.ID); err == nil {
-		t.Fatalf("expected error for non-owner, got nil")
+	if _, err := GetGroupUsingGroupIDAndUserIDAsOwner(member.ID, group.ID); !errors.Is(err, ErrGroupNotFound) {
+		t.Fatalf("err = %v, want ErrGroupNotFound for non-owner", err)
 	}
 }
 
@@ -225,8 +228,8 @@ func TestGetGroupMembershipByGroupIDAndMemberID(t *testing.T) {
 		t.Fatalf("expected membership %v, got %v", membership.ID, got.ID)
 	}
 
-	if _, err := GetGroupMembershipByGroupIDAndMemberID(group.ID, uuid.New()); err == nil {
-		t.Fatalf("expected error for unknown member, got nil")
+	if _, err := GetGroupMembershipByGroupIDAndMemberID(group.ID, uuid.New()); !errors.Is(err, ErrGroupMembershipNotFound) {
+		t.Fatalf("err = %v, want ErrGroupMembershipNotFound for unknown member", err)
 	}
 }
 
@@ -371,4 +374,101 @@ func TestGroupQueriesFailOnClosedDB(t *testing.T) {
 			return err
 		},
 	})
+}
+
+func TestUpdateGroupValuesByIDFailures(t *testing.T) {
+	t.Run("unknown group", func(t *testing.T) {
+		setupTestDB(t)
+		err := UpdateGroupValuesByID(uuid.New(), "name", "desc")
+		if err == nil || err.Error() != "Name not changed in database." {
+			t.Fatalf("error = %v, want \"Name not changed in database.\"", err)
+		}
+	})
+
+	t.Run("description write fails", func(t *testing.T) {
+		setupTestDB(t)
+		group := createTestGroup(t, createTestUser(t).ID)
+		injectFault(t, "update", "groups", 1)
+
+		if err := UpdateGroupValuesByID(group.ID, "name", "desc"); !errors.Is(err, errInjected) {
+			t.Fatalf("error = %v, want the injected fault", err)
+		}
+	})
+
+	t.Run("description not written", func(t *testing.T) {
+		setupTestDB(t)
+		group := createTestGroup(t, createTestUser(t).ID)
+		if err := registerCallback("update", true, func(db *gorm.DB) {
+			if dest, ok := db.Statement.Dest.(map[string]interface{}); ok {
+				if _, isDesc := dest["description"]; isDesc {
+					db.RowsAffected = 0
+				}
+			}
+		}); err != nil {
+			t.Fatalf("failed to register callback: %v", err)
+		}
+
+		err := UpdateGroupValuesByID(group.ID, "name", "desc")
+		if err == nil || err.Error() != "Description not changed in database." {
+			t.Fatalf("error = %v, want \"Description not changed in database.\"", err)
+		}
+	})
+}
+
+// The list getters promise a non-nil empty slice (it serializes as [] rather
+// than null), both when nothing matches and when the driver reports rows but
+// scans none.
+func TestGroupListGettersReturnEmptyNonNilSlices(t *testing.T) {
+	setupTestDB(t)
+	user := createTestUser(t)
+
+	groups, err := GetGroupMembersFromWishlist(uuid.New(), user.ID)
+	if err != nil || groups == nil || len(groups) != 0 {
+		t.Errorf("GetGroupMembersFromWishlist = %v, %v; want empty non-nil slice", groups, err)
+	}
+	groups, err = GetGroupsAUserIsAMemberOf(user.ID)
+	if err != nil || groups == nil || len(groups) != 0 {
+		t.Errorf("GetGroupsAUserIsAMemberOf = %v, %v; want empty non-nil slice", groups, err)
+	}
+	memberships, err := GetGroupMembershipsFromGroup(uuid.New())
+	if err != nil || memberships == nil || len(memberships) != 0 {
+		t.Errorf("GetGroupMembershipsFromGroup = %v, %v; want empty non-nil slice", memberships, err)
+	}
+
+	forceRowsAffected(t, "query", "groups", 1)
+	forceRowsAffected(t, "query", "group_memberships", 1)
+
+	groups, err = GetGroupsAUserIsAMemberOf(user.ID)
+	if err != nil || groups == nil || len(groups) != 0 {
+		t.Errorf("GetGroupsAUserIsAMemberOf (rows reported, none scanned) = %v, %v; want empty non-nil slice", groups, err)
+	}
+	memberships, err = GetGroupMembershipsFromGroup(uuid.New())
+	if err != nil || memberships == nil || len(memberships) != 0 {
+		t.Errorf("GetGroupMembershipsFromGroup (rows reported, none scanned) = %v, %v; want empty non-nil slice", memberships, err)
+	}
+}
+
+func TestVerifyIfGroupWithSameNameAndOwnerDoesNotExistNoMatch(t *testing.T) {
+	setupTestDB(t)
+	exists, err := VerifyIfGroupWithSameNameAndOwnerDoesNotExist("no such group", uuid.New())
+	if err != nil || exists {
+		t.Fatalf("got (%v, %v), want (false, nil) when no group matches", exists, err)
+	}
+}
+
+func TestGroupCreatesRejectWrongRowCount(t *testing.T) {
+	setupTestDB(t)
+	forceRowsAffected(t, "create", "groups", 0)
+	forceRowsAffected(t, "create", "group_memberships", 0)
+
+	group := models.Group{Name: "g", Enabled: true, OwnerID: uuid.New()}
+	group.ID = uuid.New()
+	if _, err := CreateGroupInDB(group); err == nil || err.Error() != "Group not added to database." {
+		t.Errorf("CreateGroupInDB error = %v, want \"Group not added to database.\"", err)
+	}
+	membership := models.GroupMembership{GroupID: uuid.New(), MemberID: uuid.New(), Enabled: true}
+	membership.ID = uuid.New()
+	if _, err := CreateGroupMembershipInDB(membership); err == nil || err.Error() != "Group membership not added to database." {
+		t.Errorf("CreateGroupMembershipInDB error = %v, want \"Group membership not added to database.\"", err)
+	}
 }

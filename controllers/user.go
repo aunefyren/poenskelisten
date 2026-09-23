@@ -7,6 +7,7 @@ import (
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -156,20 +157,15 @@ func RegisterUser(context *gin.Context) {
 		return
 	}
 
-	// Create user in DB
-	user, err = database.CreateUserInDB(user)
-	if err != nil {
-		logger.Log.Error("Failed to get create user. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get create user."})
+	// Create the user and claim the invite together
+	user, err = database.CreateUserWithInviteCode(user, userCreationRequest.InviteCode)
+	if errors.Is(err, database.ErrInviteCodeUnavailable) {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Invitiation code is not valid."})
 		context.Abort()
 		return
-	}
-
-	// Set code to used
-	err = database.SetUsedUserInviteCode(userCreationRequest.InviteCode, user.ID)
-	if err != nil {
-		logger.Log.Error("Failed to set invite code to used. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to set invite code to used."})
+	} else if err != nil {
+		logger.Log.Error("Failed to create user. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user."})
 		context.Abort()
 		return
 	}
@@ -328,7 +324,7 @@ func GetUsers(context *gin.Context) {
 			member, err := database.VerifyUserMembershipToGroup(user.ID, notAMemberOfGroupID)
 			if err != nil {
 				logger.Log.Error("Failed to verify ownership to group. Error: " + err.Error())
-				context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify ownership to group."})
+				context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership to group."})
 				context.Abort()
 				return
 			}
@@ -353,9 +349,13 @@ func GetUsers(context *gin.Context) {
 		}
 
 		wishlist, err := database.GetWishlist(notACollaboratorOfWishlistID)
-		if err != nil {
+		if errors.Is(err, database.ErrWishlistNotFound) {
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
+			context.Abort()
+			return
+		} else if err != nil {
 			logger.Log.Error("Failed to get wishlist. Error: " + err.Error())
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist."})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist."})
 			context.Abort()
 			return
 		}
@@ -586,7 +586,7 @@ func UpdateUser(context *gin.Context) {
 		unique_email, err := database.VerifyUniqueUserEmail(userUpdateRequest.Email)
 		if err != nil {
 			logger.Log.Error("Failed to verify e-mail. Error: " + err.Error())
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify e-mail."})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify e-mail."})
 			context.Abort()
 			return
 		} else if !unique_email {

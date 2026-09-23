@@ -2,6 +2,7 @@ package database
 
 import (
 	"aunefyren/poenskelisten/models"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -205,4 +206,46 @@ func TestWishCategoryQueriesFailOnClosedDB(t *testing.T) {
 			return DeleteWishCategory(uuid.New())
 		},
 	})
+}
+
+func TestGetWishCategoryByIDReturnsCategory(t *testing.T) {
+	setupTestDB(t)
+	category := createTestCategory(t, uuid.New(), "Books", 1)
+
+	got, err := GetWishCategoryByID(category.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetWishCategoryByID = (%v, %v), want the category", got, err)
+	}
+	if got.ID != category.ID || got.Name != "Books" {
+		t.Errorf("got category %v %q, want %v \"Books\"", got.ID, got.Name, category.ID)
+	}
+}
+
+func TestDeleteWishCategoryFailures(t *testing.T) {
+	t.Run("unknown category", func(t *testing.T) {
+		setupTestDB(t)
+		if err := DeleteWishCategory(uuid.New()); err == nil || err.Error() != "failed to delete wish category in database" {
+			t.Fatalf("error = %v, want \"failed to delete wish category in database\"", err)
+		}
+	})
+
+	t.Run("disable fails", func(t *testing.T) {
+		setupTestDB(t)
+		category := createTestCategory(t, uuid.New(), "Books", 1)
+		injectFault(t, "update", "wish_categories", 0)
+		if err := DeleteWishCategory(category.ID); !errors.Is(err, errInjected) {
+			t.Fatalf("error = %v, want the injected fault", err)
+		}
+	})
+}
+
+func TestCreateWishCategoryInDBRejectsWrongRowCount(t *testing.T) {
+	setupTestDB(t)
+	forceRowsAffected(t, "create", "wish_categories", 0)
+
+	category := models.WishCategory{Name: "c", WishlistID: uuid.New(), OwnerID: uuid.New(), Enabled: true}
+	category.ID = uuid.New()
+	if err := CreateWishCategoryInDB(category); err == nil || err.Error() != "wish category not added to database" {
+		t.Fatalf("error = %v, want \"wish category not added to database\"", err)
+	}
 }

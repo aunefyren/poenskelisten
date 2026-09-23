@@ -22,6 +22,7 @@ import (
 // DecryptString (TOTP secret storage) and auth.GenerateMFAChallengeToken work.
 func enableTOTPEncryption(t *testing.T) {
 	t.Helper()
+	restoreConfig(t)
 	key, err := config.GenerateSecureKey(64)
 	if err != nil {
 		t.Fatalf("failed to generate private key: %v", err)
@@ -167,6 +168,7 @@ func totpCodeFor(t *testing.T, secret string) string {
 }
 
 func TestActivateMFASuccessWithRecoveryCodes(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 	enableTOTPEncryption(t)
 	config.ConfigFile.MFARecoveryCodesEnabled = true
@@ -187,6 +189,7 @@ func TestActivateMFASuccessWithRecoveryCodes(t *testing.T) {
 }
 
 func TestActivateMFASuccessWithoutRecoveryCodes(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 	enableTOTPEncryption(t)
 	config.ConfigFile.MFARecoveryCodesEnabled = false
@@ -273,6 +276,7 @@ func TestActivateMFARequiresAuth(t *testing.T) {
 // codes issued at activation.
 func activateTestUser(t *testing.T, userID uuid.UUID) (secret string, recoveryCodes []string) {
 	t.Helper()
+	restoreConfig(t)
 	config.ConfigFile.MFARecoveryCodesEnabled = true
 	secret = enrollTestUser(t, userID)
 
@@ -548,6 +552,7 @@ func TestUpdateServerSettingsMalformedJSON(t *testing.T) {
 }
 
 func TestUpdateServerSettingsSuccess(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 
 	// config.ConfigFile is a package-level global shared by every test in this
@@ -583,6 +588,7 @@ func TestUpdateServerSettingsSuccess(t *testing.T) {
 }
 
 func TestEnrollMFAEncryptionFailure(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 	orig := config.ConfigFile.PrivateKey
 	config.ConfigFile.PrivateKey = ""
@@ -626,6 +632,7 @@ func TestValidateMFAUserNotFound(t *testing.T) {
 }
 
 func TestUpdateServerSettingsSaveFailure(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 	origEnforced := config.ConfigFile.MFAEnforced
 	t.Cleanup(func() { config.ConfigFile.MFAEnforced = origEnforced })
@@ -643,6 +650,7 @@ func TestUpdateServerSettingsSaveFailure(t *testing.T) {
 }
 
 func TestVerifySecondFactorRecoveryDisabledByConfig(t *testing.T) {
+	restoreConfig(t)
 	setupControllersDB(t)
 	enableTOTPEncryption(t)
 	config.ConfigFile.MFARecoveryCodesEnabled = false
@@ -672,4 +680,189 @@ func TestMFAHandlersDatabaseErrors(t *testing.T) {
 		{name: "APIDisableMFA", handler: APIDisableMFA, method: "POST", path: "/api/auth/users/mfa/disable", body: `{"code":"123456"}`},
 		{name: "APIAdminDeleteUserMFA", handler: APIAdminDeleteUserMFA, method: "DELETE", path: "/api/admin/users/00000000-0000-0000-0000-00000000000a/mfa", params: gin.Params{{Key: "user_id", Value: "00000000-0000-0000-0000-00000000000a"}}, admin: true},
 	})
+}
+
+// mfaKeepRecoveryCodesSetting restores MFARecoveryCodesEnabled after a test
+// that flips it (activateTestUser turns it on).
+func mfaKeepRecoveryCodesSetting(t *testing.T) {
+	t.Helper()
+	orig := config.ConfigFile.MFARecoveryCodesEnabled
+	t.Cleanup(func() { config.ConfigFile.MFARecoveryCodesEnabled = orig })
+}
+
+// mfaUserWithCorruptSecret stores an MFA-enabled user whose encrypted TOTP
+// secret can't be decrypted, so the TOTP path's DecryptString error surfaces.
+func mfaUserWithCorruptSecret(t *testing.T, plaintext string, enabled bool) models.User {
+	t.Helper()
+	user := mfaTestUserWithPassword(t, plaintext)
+	corrupt := "not-valid-base64!!"
+	user.MFASecret = &corrupt
+	user.MFAEnabled = boolPtr(enabled)
+	updated, err := database.UpdateUserInDB(user)
+	if err != nil {
+		t.Fatalf("failed to store corrupt MFA secret: %v", err)
+	}
+	return updated
+}
+
+func TestVerifySecondFactorCorruptSecret(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	user := mfaUserWithCorruptSecret(t, "correct horse battery staple", true)
+
+	ok, err := verifySecondFactor(user, "123456")
+	if err == nil || ok {
+		t.Errorf("verifySecondFactor = (%v, %v), want (false, error) for an undecryptable secret", ok, err)
+	}
+}
+
+func TestVerifySecondFactorRecoveryCodeLookupFails(t *testing.T) {
+	restoreConfig(t)
+	setupControllersDB(t)
+	mfaKeepRecoveryCodesSetting(t)
+	config.ConfigFile.MFARecoveryCodesEnabled = true
+	user := createTestUser(t)
+	failDBOperation(t, "query", "mfa_recovery_codes", 0)
+
+	ok, err := verifySecondFactor(user, "ABCDEFGHIJKLMNOP")
+	if err == nil || ok {
+		t.Errorf("verifySecondFactor = (%v, %v), want (false, error) when recovery codes can't be loaded", ok, err)
+	}
+}
+
+func TestVerifySecondFactorRecoveryCodeConsumeFails(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	mfaKeepRecoveryCodesSetting(t)
+	user := createTestUser(t)
+	_, recoveryCodes := activateTestUser(t, user.ID)
+	if len(recoveryCodes) == 0 {
+		t.Fatal("expected recovery codes")
+	}
+	failDBOperation(t, "update", "mfa_recovery_codes", 0)
+
+	ok, err := verifySecondFactor(user, recoveryCodes[0])
+	if err == nil || ok {
+		t.Errorf("verifySecondFactor = (%v, %v), want (false, error) when the code can't be marked used", ok, err)
+	}
+
+	// The code wasn't consumed, so it must still be active.
+	active, err := database.GetActiveRecoveryCodes(user.ID)
+	if err != nil {
+		t.Fatalf("failed to list recovery codes: %v", err)
+	}
+	if len(active) != len(recoveryCodes) {
+		t.Errorf("active recovery codes = %d, want %d (nothing consumed)", len(active), len(recoveryCodes))
+	}
+}
+
+func TestEnrollMFAStoreSecretFails(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	user := createTestUser(t)
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	failDBOperation(t, "update", "users", 0)
+
+	code, body := runJSONHandler(APIEnrollMFA, "POST", "/api/mfa/enroll", "", header, nil)
+	if code != 500 || body["error"] != "Failed to store MFA secret." {
+		t.Errorf("status = %d body=%v, want 500 'Failed to store MFA secret.'", code, body)
+	}
+}
+
+func TestActivateMFACorruptSecret(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	user := mfaUserWithCorruptSecret(t, "correct horse battery staple", false)
+
+	code, body := runJSONHandler(APIActivateMFA, "POST", "/api/mfa/activate", `{"code":"123456"}`, map[string]string{
+		"Authorization": authHeader(t, user.ID, false),
+	}, nil)
+	if code != 500 || body["error"] != "Failed to verify code." {
+		t.Errorf("status = %d body=%v, want 500 'Failed to verify code.'", code, body)
+	}
+}
+
+func TestActivateMFADatabaseFailures(t *testing.T) {
+	restoreConfig(t)
+	cases := []struct {
+		name      string
+		op, table string
+		wantError string
+	}{
+		{"clear old recovery codes", "delete", "mfa_recovery_codes", "Failed to store recovery codes."},
+		{"store recovery codes", "create", "mfa_recovery_codes", "Failed to store recovery codes."},
+		{"activate user", "update", "users", "Failed to enable MFA."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupControllersDB(t)
+			enableTOTPEncryption(t)
+			mfaKeepRecoveryCodesSetting(t)
+			config.ConfigFile.MFARecoveryCodesEnabled = true
+			user := createTestUser(t)
+			secret := enrollTestUser(t, user.ID)
+			header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+			failDBOperation(t, c.op, c.table, 0)
+
+			body := `{"code":"` + totpCodeFor(t, secret) + `"}`
+			code, parsed := runJSONHandler(APIActivateMFA, "POST", "/api/mfa/activate", body, header, nil)
+			if code != 500 || parsed["error"] != c.wantError {
+				t.Errorf("status = %d body=%v, want 500 %q", code, parsed, c.wantError)
+			}
+
+			stored, err := database.GetAllUserInformation(user.ID)
+			if err != nil {
+				t.Fatalf("failed to reload user: %v", err)
+			}
+			if stored.IsMFAEnabled() {
+				t.Error("MFA must not be enabled after a failed activation")
+			}
+		})
+	}
+}
+
+func TestDisableMFACorruptSecret(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	user := mfaUserWithCorruptSecret(t, "correct horse battery staple", true)
+
+	body := `{"password":"correct horse battery staple","code":"123456"}`
+	code, parsed := runJSONHandler(APIDisableMFA, "POST", "/api/mfa/disable", body, map[string]string{
+		"Authorization": authHeader(t, user.ID, false),
+	}, nil)
+	if code != 500 || parsed["error"] != "Failed to verify code." {
+		t.Errorf("status = %d body=%v, want 500 'Failed to verify code.'", code, parsed)
+	}
+}
+
+func TestDisableMFAPersistFails(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	mfaKeepRecoveryCodesSetting(t)
+	user := mfaTestUserWithPassword(t, "correct horse battery staple")
+	secret, _ := activateTestUser(t, user.ID)
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	failDBOperation(t, "update", "users", 0)
+
+	body := `{"password":"correct horse battery staple","code":"` + totpCodeFor(t, secret) + `"}`
+	code, parsed := runJSONHandler(APIDisableMFA, "POST", "/api/mfa/disable", body, header, nil)
+	if code != 500 || parsed["error"] != "Failed to disable MFA." {
+		t.Errorf("status = %d body=%v, want 500 'Failed to disable MFA.'", code, parsed)
+	}
+}
+
+func TestValidateMFACorruptSecret(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	user := mfaUserWithCorruptSecret(t, "correct horse battery staple", true)
+
+	challenge, err := auth.GenerateMFAChallengeToken(user.ID)
+	if err != nil {
+		t.Fatalf("failed to generate challenge token: %v", err)
+	}
+	body := `{"mfa_token":"` + challenge + `","code":"123456"}`
+	code, parsed := runJSONHandler(APIValidateMFA, "POST", "/api/mfa/validate", body, nil, nil)
+	if code != 500 || parsed["error"] != "Failed to verify code." {
+		t.Errorf("status = %d body=%v, want 500 'Failed to verify code.'", code, parsed)
+	}
 }

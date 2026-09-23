@@ -31,13 +31,9 @@ func RegisterGroup(context *gin.Context) {
 		return
 	}
 
-	// Trim request input
-	group.Name = strings.TrimSpace(group.Name)
-	group.Description = strings.TrimSpace(group.Description)
-
-	// Copy the data from the GroupCreationRequest model to the Group model
-	group.Description = groupCreationRequest.Description
-	group.Name = groupCreationRequest.Name
+	// Copy the trimmed request input to the Group model
+	group.Description = strings.TrimSpace(groupCreationRequest.Description)
+	group.Name = strings.TrimSpace(groupCreationRequest.Name)
 	group.ID = uuid.New()
 
 	// Get the user ID from the Authorization header of the request
@@ -133,9 +129,13 @@ func RegisterGroup(context *gin.Context) {
 		var groupMembership models.GroupMembership
 
 		newMember, err := database.GetUserInformation(memberID)
-		if err != nil {
+		if errors.Is(err, database.ErrUserNotFound) {
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find user."})
+			context.Abort()
+			return
+		} else if err != nil {
 			logger.Log.Error("Failed to get user. Error: " + err.Error())
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user."})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
 			context.Abort()
 			return
 		}
@@ -253,6 +253,20 @@ func JoinGroup(context *gin.Context) {
 		return
 	}
 
+	// Checked before touching any member so a non-owner learns nothing about
+	// the users they tried to add.
+	_, err = database.GetGroupUsingGroupIDAndUserIDAsOwner(userID, groupIDInt)
+	if errors.Is(err, database.ErrGroupNotFound) {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not the owner of this group."})
+		context.Abort()
+		return
+	} else if err != nil {
+		logger.Log.Error("Failed to verify ownership of group. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of group."})
+		context.Abort()
+		return
+	}
+
 	// Iterate over the members in the groupMembership.Members slice
 	for _, memberID := range groupMembership.Members {
 		// Create a new instance of the GroupMembership model
@@ -285,15 +299,6 @@ func JoinGroup(context *gin.Context) {
 		} else if membershipStatus {
 			// If the user is already a member of the group, return a Bad Request response
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Group membership already exists."})
-			context.Abort()
-			return
-		}
-
-		// Verify that the group is owned by the current user
-		_, err = database.GetGroupUsingGroupIDAndUserIDAsOwner(userID, groupIDInt)
-		if err != nil {
-			logger.Log.Error("Failed to verify ownership of group. Error: " + err.Error())
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of group."})
 			context.Abort()
 			return
 		}
@@ -402,10 +407,13 @@ func RemoveFromGroup(context *gin.Context) {
 
 	// Verify membership exists
 	groupMembership, err := database.GetGroupMembershipByGroupIDAndMemberID(groupIDInt, groupMembershipRequest.MemberID)
-	if err != nil {
-		// Return error if membership does not exist
+	if errors.Is(err, database.ErrGroupMembershipNotFound) {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "User is not a member of this group."})
+		context.Abort()
+		return
+	} else if err != nil {
 		logger.Log.Error("Failed to verify membership. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to verify membership."})
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership."})
 		context.Abort()
 		return
 	}
@@ -492,8 +500,11 @@ func RemoveSelfFromGroup(context *gin.Context) {
 
 	// Verify membership exists
 	groupMembership, err := database.GetGroupMembershipByGroupIDAndMemberID(groupIDInt, userID)
-	if err != nil {
-		// Return error if membership does not exist
+	if errors.Is(err, database.ErrGroupMembershipNotFound) {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not a member of this group."})
+		context.Abort()
+		return
+	} else if err != nil {
 		logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
 		context.Abort()
@@ -808,7 +819,7 @@ func GetGroupMembers(context *gin.Context) {
 		context.Abort()
 		return
 	} else if !MembershipStatus {
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "You are not a member of this group."})
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not a member of this group."})
 		context.Abort()
 		return
 	}
@@ -826,9 +837,13 @@ func GetGroupMembers(context *gin.Context) {
 	for _, membership := range groupMemberships {
 
 		userObject, err := database.GetUserInformation(membership.MemberID)
-		if err != nil {
+		if errors.Is(err, database.ErrUserNotFound) {
+			// A disabled account keeps its membership row; leave it out of the
+			// listing rather than failing the whole request.
+			continue
+		} else if err != nil {
 			logger.Log.Error("Failed to get user object for group member. Error: " + err.Error())
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user object for group member."})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user object for group member."})
 			context.Abort()
 			return
 		}
@@ -866,10 +881,6 @@ func APIUpdateGroup(context *gin.Context) {
 		return
 	}
 
-	// Trim request input
-	group.Name = strings.TrimSpace(group.Name)
-	group.Description = strings.TrimSpace(group.Description)
-
 	// Parse group id for usage
 	groupIDInt, err := uuid.Parse(groupID)
 	if err != nil {
@@ -904,14 +915,18 @@ func APIUpdateGroup(context *gin.Context) {
 	}
 
 	// Copy the data from the GroupUpdateRequest model to the Group model
-	group.Description = groupUpdateRequest.Description
-	group.Name = groupUpdateRequest.Name
+	group.Description = strings.TrimSpace(groupUpdateRequest.Description)
+	group.Name = strings.TrimSpace(groupUpdateRequest.Name)
 	group.OwnerID = userID
 
 	groupOriginal, err := database.GetGroupInformation(groupIDInt)
-	if err != nil {
-		logger.Log.Error(("Failed to find group. Error: " + err.Error()))
+	if errors.Is(err, database.ErrGroupNotFound) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find group."})
+		context.Abort()
+		return
+	} else if err != nil {
+		logger.Log.Error("Failed to find group. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find group."})
 		context.Abort()
 		return
 	}
@@ -942,8 +957,8 @@ func APIUpdateGroup(context *gin.Context) {
 		// Verify that a group with the same name and owner does not already exist
 		groupExists, _, err := database.VerifyGroupExistsByNameForUser(group.Name, group.OwnerID)
 		if err != nil {
-			logger.Log.Error(("Failed verify group name. Error: " + err.Error()))
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed verify group name."})
+			logger.Log.Error("Failed to verify group name. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify group name."})
 			context.Abort()
 			return
 		} else if groupExists {

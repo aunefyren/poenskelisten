@@ -293,36 +293,6 @@ func VerifyUnusedUserInviteCode(providedCode string) (bool, error) {
 	return true, nil
 }
 
-// Set invite code to used
-func SetUsedUserInviteCode(providedCode string, userIDClaimer uuid.UUID) error {
-	var inviteStruct models.Invite
-
-	inviteRecords := Instance.
-		Model(inviteStruct).Where(&models.Invite{Code: providedCode}).
-		Update("used", true)
-
-	if inviteRecords.Error != nil {
-		return inviteRecords.Error
-	}
-	if inviteRecords.RowsAffected != 1 {
-		return errors.New("code not changed in database")
-	}
-
-	inviteRecords = Instance.
-		Model(inviteStruct).
-		Where(&models.Invite{Code: providedCode}).
-		Update("recipient_id", userIDClaimer)
-
-	if inviteRecords.Error != nil {
-		return inviteRecords.Error
-	}
-	if inviteRecords.RowsAffected != 1 {
-		return errors.New("recipient not changed in database")
-	}
-
-	return nil
-}
-
 // Set user to verified
 func SetUserVerification(userID uuid.UUID, verified bool) error {
 	var user models.User
