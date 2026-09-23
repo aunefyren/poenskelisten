@@ -11,6 +11,7 @@ import (
 	"aunefyren/poenskelisten/utilities"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -58,9 +59,9 @@ func main() {
 	logger.Log.Info("running Pønskelisten version: " + config.ConfigFile.PoenskelistenVersion)
 
 	// change the config to respect flags
-	generateInvite := false
+	var actions startupActions
 	flagsProvided := false
-	config.ConfigFile, generateInvite, flagsProvided, err = parseFlags(config.ConfigFile)
+	config.ConfigFile, actions, flagsProvided, err = parseFlags(config.ConfigFile)
 	if err != nil {
 		logger.Log.Error("failed to parse input flags. error: " + err.Error())
 		os.Exit(1)
@@ -112,7 +113,7 @@ func main() {
 	database.Migrate()
 	logger.Log.Info("database connected")
 
-	if generateInvite {
+	if actions.generateInvite {
 		invite, err := database.GenerateRandomInvite()
 		if err != nil {
 			logger.Log.Error("failed to generate random invitation code. error: " + err.Error())
@@ -120,6 +121,8 @@ func main() {
 		}
 		logger.Log.Info("generated new invite code. code: " + invite)
 	}
+
+	runAccountRecoveryActions(actions)
 
 	// Initialize Router
 	router := initRouter(config.ConfigFile)
@@ -334,8 +337,22 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 	return router
 }
 
-func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool, error) {
-	generateInviteBool := false
+// startupActions are one-off tasks requested with startup flags. They aren't
+// configuration: they are never written to config.json, and they run on every
+// start for as long as the flag (or its environment variable) is set.
+type startupActions struct {
+	generateInvite bool
+	// Already cleaned with utilities.CleanConsoleEmail; empty when not set.
+	resetPasswordEmail string
+	resetMFAEmail      string
+}
+
+// actionFlags are the flags that request a startupAction rather than change
+// configuration, so they don't count towards flagsProvided.
+var actionFlags = map[string]bool{"generateinvite": true, "resetpassword": true, "resetmfa": true}
+
+func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, startupActions, bool, error) {
+	var actions startupActions
 
 	// boolean values
 	SMTPBool := "true"
@@ -399,6 +416,10 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool
 	// Generate invite
 	var generateInvite = flag.String("generateinvite", "false", "If an invite code should be automatically generate on startup.")
 
+	// Account recovery for operators with server access; see runAccountRecoveryActions.
+	var resetPassword = flag.String("resetpassword", "", "E-mail of a user to issue a password reset link for on startup. The link is written to the log.")
+	var resetMFA = flag.String("resetmfa", "", "E-mail of a user to remove multi-factor authentication for on startup.")
+
 	// Parse flags
 	flag.Parse()
 
@@ -407,8 +428,13 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool
 	// record which flags were actually provided on the command line. Only
 	// provided flags override the loaded configuration.
 	provided := map[string]bool{}
-	flag.Visit(func(f *flag.Flag) { provided[f.Name] = true })
-	flagsProvided := len(provided) > 0
+	flagsProvided := false
+	flag.Visit(func(f *flag.Flag) {
+		provided[f.Name] = true
+		if !actionFlags[f.Name] {
+			flagsProvided = true
+		}
+	})
 
 	if provided["port"] {
 		configFile.PoenskelistenPort = *port
@@ -554,9 +580,28 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool
 		configFile.MCPEnabled = strings.ToLower(*mcpEnabled) == "true"
 	}
 
-	// Runtime-only action, never persisted to config.
+	// Runtime-only actions, never persisted to config.
 	if provided["generateinvite"] {
-		generateInviteBool = strings.ToLower(*generateInvite) == "true"
+		actions.generateInvite = strings.ToLower(*generateInvite) == "true"
+	}
+
+	// An empty value (e.g. an unset variable expanded by the entrypoint) means
+	// "not requested"; anything else must be a clean address, or startup
+	// stops before touching any account.
+	if provided["resetpassword"] && strings.TrimSpace(*resetPassword) != "" {
+		email, err := utilities.CleanConsoleEmail(*resetPassword)
+		if err != nil {
+			return configFile, actions, flagsProvided, errors.New("invalid -resetpassword value: " + err.Error())
+		}
+		actions.resetPasswordEmail = email
+	}
+
+	if provided["resetmfa"] && strings.TrimSpace(*resetMFA) != "" {
+		email, err := utilities.CleanConsoleEmail(*resetMFA)
+		if err != nil {
+			return configFile, actions, flagsProvided, errors.New("invalid -resetmfa value: " + err.Error())
+		}
+		actions.resetMFAEmail = email
 	}
 
 	// Failsafe, if port is 0, set to default 8080
@@ -564,7 +609,34 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, bool, bool
 		configFile.PoenskelistenPort = 8080
 	}
 
-	return configFile, generateInviteBool, flagsProvided, nil
+	return configFile, actions, flagsProvided, nil
+}
+
+// runAccountRecoveryActions performs the -resetmfa and -resetpassword
+// actions. Failures are logged rather than fatal: these flags are often left
+// set as environment variables, and a user deleted later shouldn't stop the
+// instance from starting.
+func runAccountRecoveryActions(actions startupActions) {
+	if actions.resetMFAEmail != "" {
+		user, err := controllers.ResetUserMFA(actions.resetMFAEmail)
+		if err != nil {
+			logger.Log.Error("resetmfa: failed to remove MFA for '" + actions.resetMFAEmail + "'. error: " + err.Error())
+		} else {
+			logger.Log.Warn("resetmfa: removed MFA for user " + user.ID.String() + " ('" + actions.resetMFAEmail + "'). Remove the resetmfa flag/variable now, or MFA is removed again on every start.")
+		}
+	}
+
+	if actions.resetPasswordEmail != "" {
+		user, link, err := controllers.IssuePasswordResetLink(actions.resetPasswordEmail)
+		if err != nil {
+			logger.Log.Error("resetpassword: failed to issue a reset link for '" + actions.resetPasswordEmail + "'. error: " + err.Error())
+		} else {
+			logger.Log.Warn("resetpassword: password reset link for user " + user.ID.String() + " ('" + actions.resetPasswordEmail + "'), valid for 24 hours: " + link + " Remove the resetpassword flag/variable now, or a new link is issued on every start.")
+			if !config.LocalLoginEnabled() {
+				logger.Log.Warn("resetpassword: password login is disabled (OIDC-only), so the reset link will be refused until disablelocallogin is set to false.")
+			}
+		}
+	}
 }
 
 func registerTemplatedStaticFilesForDirectory(

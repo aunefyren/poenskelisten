@@ -40,7 +40,7 @@ func SendSMTPResetEmail(user models.User) error {
 
 	logger.Log.Debug("sending e-mail to: " + *user.Email + ".")
 
-	link := config.ConfigFile.PoenskelistenExternalURL + "/login?reset_code=" + *user.ResetCode
+	link := PasswordResetLink(*user.ResetCode)
 
 	m := mail.NewMessage()
 	m.SetAddressHeader("From", config.ConfigFile.SMTPFrom, config.ConfigFile.PoenskelistenName)
@@ -83,4 +83,10 @@ func SendSMTPDeletedClaimedWish(user models.User, wish models.WishObject, wishli
 	}
 
 	return nil
+}
+
+// PasswordResetLink is the page a user opens to choose a new password with a
+// reset code, whether the code was e-mailed or issued with -resetpassword.
+func PasswordResetLink(resetCode string) string {
+	return config.ConfigFile.PoenskelistenExternalURL + "/login?reset_code=" + resetCode
 }
