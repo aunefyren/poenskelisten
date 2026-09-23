@@ -253,6 +253,8 @@ func DeleteWishlist(context *gin.Context) {
 		return
 	}
 
+	deleteWishlistImages(wishlist_id_int)
+
 	group_id, okay := context.GetQuery("group")
 	if !okay {
 		wishlistObjects, err = GetWishlistObjects(UserID)
@@ -1410,4 +1412,19 @@ func GetPublicWishlist(context *gin.Context) {
 	})
 
 	context.JSON(http.StatusOK, gin.H{"wishlist": wishlistObject, "message": "Wishlist retrieved.", "currency": config.ConfigFile.PoenskelistenCurrency, "padding": config.ConfigFile.PoenskelistenCurrencyPad})
+}
+
+// deleteWishlistImages removes the image files of every wish on a deleted
+// wishlist. The wishlist is already deleted, so failures are logged, not fatal.
+func deleteWishlistImages(wishlistID uuid.UUID) {
+	wishIDs, err := database.GetWishIDsFromWishlist(wishlistID)
+	if err != nil {
+		logger.Log.Error("Failed to get wishes of deleted wishlist for image cleanup. Error: " + err.Error())
+		return
+	}
+	for _, wishID := range wishIDs {
+		if err := DeleteWishImage(wishID); err != nil {
+			logger.Log.Error("Failed to delete image of wish on deleted wishlist. Error: " + err.Error())
+		}
+	}
 }
