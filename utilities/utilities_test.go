@@ -1,6 +1,9 @@
 package utilities
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestPrintASCII(t *testing.T) {
 	// Just confirm it doesn't panic; it only writes to stdout.
@@ -63,6 +66,40 @@ func TestValidateTextCharacters(t *testing.T) {
 			}
 			if requirements == "" {
 				t.Error("expected a non-empty requirements message")
+			}
+		})
+	}
+}
+
+func TestCleanConsoleEmail(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{"plain", "user@example.com", "user@example.com", false},
+		{"surrounding whitespace", "  user@example.com\t\n", "user@example.com", false},
+		{"double quotes", `"user@example.com"`, "user@example.com", false},
+		{"single quotes and spaces", " 'user@example.com' ", "user@example.com", false},
+		{"case preserved", "User@Example.com", "User@Example.com", false},
+		{"empty", "   ", "", true},
+		{"empty quotes", `""`, "", true},
+		{"embedded newline", "user@example.com\nforged log line", "", true},
+		{"embedded space", "user @example.com", "", true},
+		{"control character", "user@exa\x00mple.com", "", true},
+		{"no at sign", "user.example.com", "", true},
+		{"display name form", "User <user@example.com>", "", true},
+		{"too long", strings.Repeat("a", 250) + "@example.com", "", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := CleanConsoleEmail(c.input)
+			if (err != nil) != c.wantErr {
+				t.Fatalf("CleanConsoleEmail(%q) err = %v, wantErr %v", c.input, err, c.wantErr)
+			}
+			if got != c.want {
+				t.Errorf("CleanConsoleEmail(%q) = %q, want %q", c.input, got, c.want)
 			}
 		})
 	}
