@@ -4,6 +4,7 @@ import (
 	"aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/logger"
+	"aunefyren/poenskelisten/models"
 	"errors"
 	"net/http"
 
@@ -36,7 +37,7 @@ func AuthFunction(context *gin.Context, admin bool) (success bool, errorString s
 		return false, "request does not contain an access token", http.StatusUnauthorized
 	}
 
-	claims, err := auth.ValidateOAuthAccessToken(tokenString, config.APIResource())
+	claims, err := validateAPIToken(tokenString)
 	if err != nil {
 		logger.Log.Error("Failed to validate access token. Error: " + err.Error())
 		return false, "failed to validate token.", http.StatusUnauthorized
@@ -54,7 +55,7 @@ func GetAuthUsername(tokenString string) (uuid.UUID, error) {
 	if tokenString == "" {
 		return uuid.UUID{}, errors.New("no Authorization header given")
 	}
-	claims, err := auth.ValidateOAuthAccessToken(tokenString, config.APIResource())
+	claims, err := validateAPIToken(tokenString)
 	if err != nil {
 		return uuid.UUID{}, err
 	}
@@ -66,5 +67,20 @@ func GetTokenClaims(tokenString string) (*auth.OAuthClaims, error) {
 	if tokenString == "" {
 		return nil, errors.New("no Authorization header given")
 	}
-	return auth.ValidateOAuthAccessToken(tokenString, config.APIResource())
+	return validateAPIToken(tokenString)
+}
+
+// validateAPIToken validates an access token for the JSON API. The API has no
+// per-route scope checks, so any token it accepts is full account access; only
+// the built-in web app may hold one. Third-party clients are confined to the MCP
+// resource, whose tools enforce their own mcp:* scopes.
+func validateAPIToken(tokenString string) (*auth.OAuthClaims, error) {
+	claims, err := auth.ValidateOAuthAccessToken(tokenString, config.APIResource())
+	if err != nil {
+		return nil, err
+	}
+	if claims.ClientID != models.FirstPartyClientID {
+		return nil, errors.New("API access tokens must be issued to the first-party client")
+	}
+	return claims, nil
 }

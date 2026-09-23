@@ -389,3 +389,45 @@ func TestConsumeAuthorizationCodeLookupFailures(t *testing.T) {
 		}
 	})
 }
+
+func TestSeedFirstPartyClientAdditionalURLs(t *testing.T) {
+	setupTestDB(t)
+	original := config.ConfigFile
+	t.Cleanup(func() { config.ConfigFile = original })
+	config.ConfigFile.PoenskelistenExternalURL = "https://wishlist.example.com"
+	config.ConfigFile.PoenskelistenAdditionalURLs = "http://192.168.1.10:8080,http://wish.lan"
+
+	if err := SeedFirstPartyClient(); err != nil {
+		t.Fatalf("SeedFirstPartyClient error: %v", err)
+	}
+	client, _, err := GetOAuthClient(models.FirstPartyClientID)
+	if err != nil {
+		t.Fatalf("GetOAuthClient error: %v", err)
+	}
+	want := []string{
+		"https://wishlist.example.com/oauth/callback",
+		"http://192.168.1.10:8080/oauth/callback",
+		"http://wish.lan/oauth/callback",
+	}
+	if len(client.RedirectURIs) != len(want) {
+		t.Fatalf("RedirectURIs = %v, want %v", client.RedirectURIs, want)
+	}
+	for i := range want {
+		if client.RedirectURIs[i] != want[i] {
+			t.Errorf("RedirectURIs[%d] = %q, want %q", i, client.RedirectURIs[i], want[i])
+		}
+	}
+
+	// Removing an additional URL and restarting must revoke its redirect URI.
+	config.ConfigFile.PoenskelistenAdditionalURLs = "http://wish.lan"
+	if err := SeedFirstPartyClient(); err != nil {
+		t.Fatalf("re-seed error: %v", err)
+	}
+	client, _, _ = GetOAuthClient(models.FirstPartyClientID)
+	if client.HasRedirectURI("http://192.168.1.10:8080/oauth/callback") {
+		t.Errorf("removed additional URL still allowed: %v", client.RedirectURIs)
+	}
+	if !client.HasRedirectURI("http://wish.lan/oauth/callback") {
+		t.Errorf("remaining additional URL missing: %v", client.RedirectURIs)
+	}
+}

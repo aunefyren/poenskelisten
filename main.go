@@ -68,6 +68,14 @@ func main() {
 	}
 	logger.Log.Info("flags parsed")
 
+	if _, err := config.ParseAdditionalURLs(config.ConfigFile.PoenskelistenAdditionalURLs); err != nil {
+		logger.Log.Warn("ignoring invalid entry in poenskelisten_additional_urls: " + err.Error())
+	}
+	logger.Log.Info("login allowed from: " + strings.Join(config.AllowedOrigins(), ", "))
+	if strings.TrimSpace(config.ConfigFile.PoenskelistenExternalURL) == "" {
+		logger.Log.Warn("externalurl is not set, so " + config.OAuthIssuer() + " is used for links, single sign-on and as the main login address. Set externalurl to the address users open Pønskelisten on, and additionalurls for any others.")
+	}
+
 	if config.ConfigFile.LocalLoginDisabled && config.LocalLoginEnabled() {
 		logger.Log.Warn("local login is set to disabled, but OIDC is not enabled and configured; keeping password login on so the instance stays reachable")
 	} else if !config.LocalLoginEnabled() {
@@ -369,6 +377,7 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, startupAct
 	// Define flag variables with the configuration file as default values
 	var port = flag.Int("port", configFile.PoenskelistenPort, "The port Pønskelisten is listening on.")
 	var externalURL = flag.String("externalurl", configFile.PoenskelistenExternalURL, "The URL others would use to access Pønskelisten.")
+	var additionalURLs = flag.String("additionalurls", configFile.PoenskelistenAdditionalURLs, "Comma-separated extra URLs Pønskelisten can be logged in from, e.g. a LAN address.")
 	var timezone = flag.String("timezone", configFile.Timezone, "The timezone Pønskelisten is running in.")
 	var environment = flag.String("environment", configFile.PoenskelistenEnvironment, "The environment Pønskelisten is running in. It will behave differently in 'test'.")
 	var testemail = flag.String("testemail", configFile.PoenskelistenTestEmail, "The email all emails are sent to in test mode.")
@@ -442,6 +451,16 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, startupAct
 
 	if provided["externalurl"] {
 		configFile.PoenskelistenExternalURL = *externalURL
+	}
+
+	// Validated here so a typo stops startup instead of silently leaving an
+	// origin unable to log in. Stored normalized, as a comma-separated list.
+	if provided["additionalurls"] {
+		origins, err := config.ParseAdditionalURLs(*additionalURLs)
+		if err != nil {
+			return configFile, actions, flagsProvided, errors.New("invalid -additionalurls value: " + err.Error())
+		}
+		configFile.PoenskelistenAdditionalURLs = strings.Join(origins, ",")
 	}
 
 	if provided["timezone"] {
