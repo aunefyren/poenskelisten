@@ -83,3 +83,51 @@ func TestOIDCCallbackClearsFlowCookiesBeforeRedirect(t *testing.T) {
 		t.Errorf("expected both flow cookies cleared in the redirect response, got: %v", w.Result().Cookies())
 	}
 }
+
+func TestCookieSecure(t *testing.T) {
+	restoreConfig(t)
+	config.ConfigFile.PoenskelistenExternalURL = "https://wish.example.com"
+	config.ConfigFile.PoenskelistenAdditionalURLs = "http://192.168.1.10:8080"
+
+	cases := []struct {
+		name, host, forwardedProto string
+		tls                        bool
+		want                       bool
+	}{
+		{name: "external https host", host: "wish.example.com", want: true},
+		{name: "external host wins over a mislabelled proxy", host: "wish.example.com", forwardedProto: "http", want: true},
+		{name: "plain-http LAN origin", host: "192.168.1.10:8080", want: false},
+		{name: "TLS always secure", host: "192.168.1.10:8080", tls: true, want: true},
+		{name: "unknown host behind an https proxy", host: "poenskelisten:8080", forwardedProto: "https, http", want: true},
+		{name: "unknown host behind an http proxy", host: "poenskelisten:8080", forwardedProto: "http", want: false},
+		{name: "unknown host falls back to the external URL", host: "poenskelisten:8080", want: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			target := "/"
+			if c.tls {
+				// httptest fills in Request.TLS for an https target.
+				target = "https://" + c.host + "/"
+			}
+			ctx.Request = httptest.NewRequest("GET", target, nil)
+			ctx.Request.Host = c.host
+			if c.forwardedProto != "" {
+				ctx.Request.Header.Set("X-Forwarded-Proto", c.forwardedProto)
+			}
+			if got := cookieSecure(ctx); got != c.want {
+				t.Errorf("cookieSecure() = %v, want %v", got, c.want)
+			}
+		})
+	}
+
+	t.Run("http external URL is not secure", func(t *testing.T) {
+		config.ConfigFile.PoenskelistenExternalURL = "http://wish.lan"
+		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+		ctx.Request = httptest.NewRequest("GET", "/", nil)
+		ctx.Request.Host = "somewhere-else"
+		if cookieSecure(ctx) {
+			t.Error("cookieSecure() = true with an http external URL")
+		}
+	})
+}

@@ -152,6 +152,7 @@ func TestParseFlagsOverridesEveryField(t *testing.T) {
 	withArgs(t,
 		"-port", "9001",
 		"-externalurl", "https://wish.example.com",
+		"-additionalurls", "http://192.168.1.10:8080/, HTTP://Wish.LAN",
 		"-timezone", "Europe/Oslo",
 		"-environment", "test",
 		"-testemail", "test@example.com",
@@ -200,45 +201,55 @@ func TestParseFlagsOverridesEveryField(t *testing.T) {
 	}
 
 	want := models.ConfigStruct{
-		PoenskelistenPort:        9001,
-		PoenskelistenExternalURL: "https://wish.example.com",
-		Timezone:                 "Europe/Oslo",
-		PoenskelistenEnvironment: "test",
-		PoenskelistenTestEmail:   "test@example.com",
-		PoenskelistenName:        "Wishes",
-		PoenskelistenDescription: "A wishlist app",
-		PoenskelistenLogLevel:    "debug",
-		DBPort:                   5432,
-		DBType:                   "postgres",
-		DBUsername:               "dbuser",
-		DBPassword:               "dbpass",
-		DBName:                   "wishes",
-		DBIP:                     "10.0.0.2",
-		DBSSL:                    true,
-		DBLocation:               "/data/db.sqlite",
-		SMTPEnabled:              true,
-		SMTPHost:                 "smtp.example.com",
-		SMTPPort:                 587,
-		SMTPUsername:             "smtpuser",
-		SMTPPassword:             "smtppass",
-		SMTPFrom:                 "noreply@example.com",
-		MFAEnforced:              true,
-		MFARecoveryCodesEnabled:  true,
-		OIDCEnabled:              true,
-		OIDCProviderName:         "Authentik",
-		OIDCIssuerURL:            "https://idp.example.com",
-		OIDCClientID:             "client",
-		OIDCClientSecret:         "secret",
-		OIDCRedirectURL:          "https://wish.example.com/api/open/oidc/callback",
-		OIDCAutoCreateUsers:      true,
-		LocalLoginDisabled:       true,
-		MCPEnabled:               true,
+		PoenskelistenPort:           9001,
+		PoenskelistenExternalURL:    "https://wish.example.com",
+		PoenskelistenAdditionalURLs: "http://192.168.1.10:8080,http://wish.lan",
+		Timezone:                    "Europe/Oslo",
+		PoenskelistenEnvironment:    "test",
+		PoenskelistenTestEmail:      "test@example.com",
+		PoenskelistenName:           "Wishes",
+		PoenskelistenDescription:    "A wishlist app",
+		PoenskelistenLogLevel:       "debug",
+		DBPort:                      5432,
+		DBType:                      "postgres",
+		DBUsername:                  "dbuser",
+		DBPassword:                  "dbpass",
+		DBName:                      "wishes",
+		DBIP:                        "10.0.0.2",
+		DBSSL:                       true,
+		DBLocation:                  "/data/db.sqlite",
+		SMTPEnabled:                 true,
+		SMTPHost:                    "smtp.example.com",
+		SMTPPort:                    587,
+		SMTPUsername:                "smtpuser",
+		SMTPPassword:                "smtppass",
+		SMTPFrom:                    "noreply@example.com",
+		MFAEnforced:                 true,
+		MFARecoveryCodesEnabled:     true,
+		OIDCEnabled:                 true,
+		OIDCProviderName:            "Authentik",
+		OIDCIssuerURL:               "https://idp.example.com",
+		OIDCClientID:                "client",
+		OIDCClientSecret:            "secret",
+		OIDCRedirectURL:             "https://wish.example.com/api/open/oidc/callback",
+		OIDCAutoCreateUsers:         true,
+		LocalLoginDisabled:          true,
+		MCPEnabled:                  true,
 	}
 	if out != want {
 		t.Errorf("parsed config mismatch:\n got %+v\nwant %+v", out, want)
 	}
 	if logger.Log.GetLevel() != logrus.DebugLevel {
 		t.Errorf("logger level = %v, want debug", logger.Log.GetLevel())
+	}
+}
+
+func TestParseFlagsInvalidAdditionalURLsFails(t *testing.T) {
+	withArgs(t, "-additionalurls", "http://wish.lan,192.168.1.10:8080")
+
+	_, _, _, err := parseFlags(models.ConfigStruct{PoenskelistenAdditionalURLs: "http://kept.lan"})
+	if err == nil || !strings.Contains(err.Error(), "additionalurls") {
+		t.Errorf("parseFlags error = %v, want an invalid -additionalurls error", err)
 	}
 }
 

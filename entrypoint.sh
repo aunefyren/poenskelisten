@@ -15,6 +15,7 @@ argCount=$#
 # Add the Pønskelisten environment variables if set
 [ -n "$port" ] && set -- "$@" --port "$port"
 [ -n "$externalurl" ] && set -- "$@" --externalurl "$externalurl"
+[ -n "$additionalurls" ] && set -- "$@" --additionalurls "$additionalurls"
 [ -n "$timezone" ] && set -- "$@" --timezone "$timezone"
 [ -n "$environment" ] && set -- "$@" --environment "$environment"
 [ -n "$testemail" ] && set -- "$@" --testemail "$testemail"

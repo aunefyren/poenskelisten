@@ -21,7 +21,7 @@ func TestOAuthAccessTokenRoundTrip(t *testing.T) {
 	setupOAuthTokenTest(t)
 	userID := uuid.New()
 
-	token, err := GenerateOAuthAccessToken(userID, "https://iss.example.com/api", "openid email", true, true)
+	token, err := GenerateOAuthAccessToken(userID, "test-client", "https://iss.example.com/api", "openid email", true, true)
 	if err != nil {
 		t.Fatalf("GenerateOAuthAccessToken error: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestOAuthAccessTokenRoundTrip(t *testing.T) {
 func TestOAuthAccessTokenWrongAudience(t *testing.T) {
 	setupOAuthTokenTest(t)
 
-	token, err := GenerateOAuthAccessToken(uuid.New(), "https://iss.example.com/api", "openid", false, true)
+	token, err := GenerateOAuthAccessToken(uuid.New(), "test-client", "https://iss.example.com/api", "openid", false, true)
 	if err != nil {
 		t.Fatalf("GenerateOAuthAccessToken error: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestOAuthAccessTokenWrongAudience(t *testing.T) {
 func TestOAuthAccessTokenBearerPrefix(t *testing.T) {
 	setupOAuthTokenTest(t)
 
-	token, err := GenerateOAuthAccessToken(uuid.New(), "https://iss.example.com/api", "openid", false, true)
+	token, err := GenerateOAuthAccessToken(uuid.New(), "test-client", "https://iss.example.com/api", "openid", false, true)
 	if err != nil {
 		t.Fatalf("GenerateOAuthAccessToken error: %v", err)
 	}
@@ -224,7 +224,7 @@ func TestOAuthTokenFunctionsFailWithoutSigningKey(t *testing.T) {
 	t.Cleanup(func() { config.ConfigFile.OAuthSigningKey = origKey })
 	config.ConfigFile.OAuthSigningKey = ""
 
-	if token, err := GenerateOAuthAccessToken(uuid.New(), "aud", "scope", false, true); err == nil || token != "" {
+	if token, err := GenerateOAuthAccessToken(uuid.New(), "test-client", "aud", "scope", false, true); err == nil || token != "" {
 		t.Errorf("GenerateOAuthAccessToken = (%q, %v), want empty token and an error", token, err)
 	}
 	if token, err := GenerateIDToken(uuid.New(), "client", "a@b.c", "Name"); err == nil || token != "" {

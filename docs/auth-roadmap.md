@@ -1,7 +1,9 @@
 # Auth Roadmap: MFA, OpenID Connect, Session Revocation & MCP / OAuth Server
 
-Status: **Phases 1–3 implemented. Phase 4 proposed** — awaiting approval before
-implementation.
+Status: **All four phases implemented, shipping in v2.4.0.** This document is now
+a design record. Where the shipped code differs from the plan, see
+[Where the implementation differs](#where-the-implementation-differs) and the
+open bugs in [`wip.md`](./wip.md).
 
 This document plans four phases that harden and modernize Pønskelisten's
 authentication:
@@ -12,7 +14,7 @@ authentication:
    revocation/logout. ✅ *shipped*
 4. **OAuth 2.1-native authentication + MCP** — make Pønskelisten's own OAuth 2.1
    authorization server the *core* login mechanism: the first-party web app and
-   MCP clients both authenticate through it. *in progress (4.0 shipped)*
+   MCP clients both authenticate through it. ✅ *shipped (4.0–4.4)*
 
 Each phase is independently shippable, but the phases are designed as one system:
 earlier phases lay groundwork the later ones reuse rather than rework. Read the
@@ -498,6 +500,8 @@ OAuth; 4.2–4.3 add DCR + the MCP resource server; 4.4 is polish.**
 > confirmed by the maintainer). Details and the resolved gate-flow fixes are in
 > [`phase-4.1-oauth-native.md`](./phase-4.1-oauth-native.md). Remaining: browser
 > verification of the SMTP-verify and MFA-enforced first-login paths.
+> The planned `APIResourceIdentifier` config option was not added: the API
+> resource is always `<issuer>/api` (`config.APIResource()`).
 
 This is the milestone that flips the whole app onto OAuth. It has two halves that
 must land together: **(a)** the authorization server, and **(b)** rewiring the
@@ -575,8 +579,8 @@ the only toggle (it gates 4.3).
 ### Sub-phase 4.2 — Dynamic Client Registration (RFC 7591) — ✅ implemented
 
 > **Status: shipped.** Decisions: **open + rate-limited** DCR (10 registrations per
-> IP/hour via a new `middlewares.RateLimit`), **on by default** (no toggle;
-> `registration_endpoint` always advertised). `POST /oauth/register` creates a
+> IP/hour via a new `middlewares.RateLimit`), available whenever `mcp_enabled` is on
+> (registration and its `registration_endpoint` are off with it). `POST /oauth/register` creates a
 > **public PKCE** client (no secret, `token_endpoint_auth_method=none`), enabled
 > immediately, non-first-party so it still hits the consent screen. Validates
 > redirect_uris (absolute http(s)), grant types, and scopes (defaults to all
@@ -650,6 +654,32 @@ the only toggle (it gates 4.3).
   sessions with per-app revoke (extends Phase 3's "Sign out of all devices").
   Admin: view/revoke clients and grants.
 
+### Where the implementation differs
+
+These parts of the plan below were built differently. Open gaps are tracked in
+[`wip.md`](./wip.md):
+
+- **API audience instead of API scopes.** The API has no per-route scope checks.
+  Instead it's reserved for the first-party web app: access tokens carry a
+  `client_id` claim (RFC 9068), and `middlewares` refuses API tokens issued to any
+  other client. `controllers.resolveResource` applies the same rule when tokens are
+  issued: at `/oauth/authorize`, at the consent form (which is re-validated, not
+  trusted), and on both token grants. A missing `resource` defaults to the API for
+  the first-party client and to MCP for everyone else. Third-party clients can only
+  ever get MCP tokens, whose tools enforce their own `mcp:*` scopes.
+- **Issuer guard (G2).** There's no hard startup guard. With `external_url` unset,
+  the issuer falls back to `http://localhost:<port>`, and startup logs a warning
+  instead. Extra login origins can be allowed with `poenskelisten_additional_urls`,
+  and logging in from an origin that isn't allowed shows an error page naming the
+  address to use.
+- **DCR toggle.** There's no separate toggle. Registration (and its
+  `registration_endpoint` metadata entry) follows `mcp_enabled`, since
+  third-party clients have nothing else to use.
+- **Rate limiting.** Only `/oauth/register` is rate-limited. `/oauth/token` and
+  `/oauth/authorize` aren't.
+- **Key storage.** The signing key lives in `config.json`, which is written `0644`,
+  not `0600`.
+
 ### Phase 4 security posture
 PKCE required (S256 only); exact `redirect_uri` matching; single-use ≤60s codes;
 rotating refresh with reuse detection (Phase 3); audience-restricted tokens; no
@@ -669,11 +699,11 @@ token passthrough; consent + scope minimization; HTTPS/issuer guard; rate-limit
   reuses Phase 3 rotation/revocation.
 - **Deployment:** same binary.
 
-**Still open (for 4.2 / 4.3):**
-- **DCR policy:** open + rate-limited (typical for MCP) vs admin-approved vs
-  initial-access-token.
-- **Initial MCP tool set + scopes** — which product capabilities to expose first.
-- **MCP transport:** hand-rolled JSON-RPC vs a Go MCP library.
+**Resolved during 4.2 / 4.3:**
+- **DCR policy:** open + rate-limited (10 registrations per IP per hour).
+- **Initial MCP tool set:** read-only `list_wishlists`, `list_wishes` and
+  `list_groups`.
+- **MCP transport:** the official Go MCP SDK (`github.com/modelcontextprotocol/go-sdk`).
 
 ---
 
@@ -716,7 +746,7 @@ Phases 1–3 (all resolved during implementation):
 3. Phase 2: which IdP to test against? → Authelia. `OIDCAutoCreateUsers`? → off.
 4. Phase 3: refresh token in an HttpOnly cookie? → yes.
 
-Phase 4: scope, signing, consent, refresh storage, and deployment are **resolved**
-(full OAuth-native; HS256 SSO cookie + ES256 OAuth tokens; first-party auto-consent;
-extend `Session`; same binary). Still open for 4.2/4.3: DCR policy, initial MCP tool
-set/scopes, and transport library. See [Phase 4 decisions](#phase-4-decisions).
+Phase 4: all decisions are **resolved** (full OAuth-native; HS256 SSO cookie + ES256
+OAuth tokens; first-party auto-consent; extend `Session`; same binary; open
+rate-limited DCR; read-only MCP tools on the official Go SDK). See
+[Phase 4 decisions](#phase-4-decisions).

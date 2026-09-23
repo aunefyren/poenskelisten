@@ -10,10 +10,15 @@ import (
 )
 
 // SeedFirstPartyClient ensures the built-in web app OAuth client exists and keeps
-// its redirect URI / scopes / name in sync with the current config. Idempotent;
+// its redirect URIs / scopes / name in sync with the current config. Idempotent;
 // run on every migration.
 func SeedFirstPartyClient() error {
-	redirectURI := config.OAuthIssuer() + "/oauth/callback"
+	// One callback per origin the web app may be opened on, since it sends
+	// window.location.origin + "/oauth/callback" and redirect URIs match exactly.
+	redirectURIs := []string{}
+	for _, origin := range config.AllowedOrigins() {
+		redirectURIs = append(redirectURIs, origin+"/oauth/callback")
+	}
 	scopes := []string{"openid", "profile", "email"}
 	enabled := true
 
@@ -29,7 +34,7 @@ func SeedFirstPartyClient() error {
 		client := models.OAuthClient{
 			ClientID:                models.FirstPartyClientID,
 			ClientName:              config.ConfigFile.PoenskelistenName,
-			RedirectURIs:            []string{redirectURI},
+			RedirectURIs:            redirectURIs,
 			Scopes:                  scopes,
 			GrantTypes:              []string{"authorization_code", "refresh_token"},
 			TokenEndpointAuthMethod: models.TokenEndpointAuthNone,
@@ -43,7 +48,7 @@ func SeedFirstPartyClient() error {
 	}
 
 	existing.ClientName = config.ConfigFile.PoenskelistenName
-	existing.RedirectURIs = []string{redirectURI}
+	existing.RedirectURIs = redirectURIs
 	existing.Scopes = scopes
 	existing.IsPublic = true
 	existing.IsFirstParty = true

@@ -9,10 +9,14 @@ type ServerInfoReply struct {
 	PoenskelistenVersion     string `json:"poenskelisten_version"`
 	PoenskelistenEnvironment string `json:"poenskelisten_environment"`
 	PoenskelistenExternalURL string `json:"poenskelisten_external_url"`
-	PoenskelistenPort        int    `json:"poenskelisten_port"`
-	Timezone                 string `json:"timezone"`
-	PoenskelistenLogLevel    string `json:"poenskelisten_log_level"`
-	PoenskelistenTestEmail   string `json:"poenskelisten_test_email"`
+	// The extra login origins in effect (invalid entries are already dropped),
+	// and the issuer, which is where login works when no external URL is set.
+	PoenskelistenAdditionalURLs []string `json:"poenskelisten_additional_urls"`
+	OAuthIssuer                 string   `json:"oauth_issuer"`
+	PoenskelistenPort           int      `json:"poenskelisten_port"`
+	Timezone                    string   `json:"timezone"`
+	PoenskelistenLogLevel       string   `json:"poenskelisten_log_level"`
+	PoenskelistenTestEmail      string   `json:"poenskelisten_test_email"`
 
 	// Database
 	DatabaseType     string `json:"database_type"`
@@ -40,4 +44,8 @@ type ServerInfoReply struct {
 	// Security (MFA)
 	MFAEnforced             bool `json:"mfa_enforced"`
 	MFARecoveryCodesEnabled bool `json:"mfa_recovery_codes_enabled"`
+
+	// AI assistants (MCP). Third-party app registration follows MCPEnabled.
+	MCPEnabled  bool   `json:"mcp_enabled"`
+	MCPEndpoint string `json:"mcp_endpoint"`
 }

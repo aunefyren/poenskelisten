@@ -170,7 +170,7 @@ function escapeServerInfo(value) {
         .replace(/"/g, "&quot;");
 }
 
-// Build one label + value chip. kind: "text" | "mono" | "bool".
+// Build one label + value chip. kind: "text" | "mono" | "bool" | "warn".
 function serverInfoRow(label, value, kind) {
     var chip;
 
@@ -182,6 +182,8 @@ function serverInfoRow(label, value, kind) {
         var text = (value === null || value === undefined) ? "" : String(value);
         if(text.trim() === "") {
             chip = '<div class="server-info-value is-muted">Not set</div>';
+        } else if(kind === "warn") {
+            chip = '<div class="server-info-value is-warn">' + escapeServerInfo(text) + '</div>';
         } else if(kind === "mono") {
             chip = '<div class="server-info-value is-mono">' + escapeServerInfo(text) + '</div>';
         } else {
@@ -205,7 +207,12 @@ function place_server_info(server_info) {
         serverInfoRow("Name", server_info.app_name, "text"),
         serverInfoRow("Version", server_info.poenskelisten_version, "text"),
         serverInfoRow("Environment", server_info.poenskelisten_environment, "text"),
-        serverInfoRow("External URL", server_info.poenskelisten_external_url, "mono"),
+        (server_info.poenskelisten_external_url || "").trim() === ""
+            ? serverInfoRow("External URL", ((server_info.poenskelisten_additional_urls || []).length === 0
+                ? "Not set: login only works from "
+                : "Not set: links and single sign-on use ") + server_info.oauth_issuer, "warn")
+            : serverInfoRow("External URL", server_info.poenskelisten_external_url, "mono"),
+        serverInfoRow("Additional URLs", (server_info.poenskelisten_additional_urls || []).join(", "), "mono"),
         serverInfoRow("Port", server_info.poenskelisten_port, "text"),
         serverInfoRow("Timezone", server_info.timezone, "text"),
         serverInfoRow("Log level", server_info.poenskelisten_log_level, "text")
@@ -253,6 +260,14 @@ function place_server_info(server_info) {
         serverInfoRow("Require MFA", server_info.mfa_enforced, "bool"),
         serverInfoRow("Recovery codes", server_info.mfa_recovery_codes_enabled, "bool")
     ]));
+
+    // AI assistants: registering third-party apps is only possible while MCP is on.
+    var mcp = [ serverInfoRow("Status", server_info.mcp_enabled, "bool") ];
+    if(server_info.mcp_enabled) {
+        mcp.push(serverInfoRow("Endpoint", server_info.mcp_endpoint, "mono"));
+    }
+    mcp.push(serverInfoRow("App registration", server_info.mcp_enabled, "bool"));
+    groups.push(serverInfoGroup("AI assistants (MCP)", mcp));
 
     document.getElementById("server-info-body").innerHTML = groups.join("");
 

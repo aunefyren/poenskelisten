@@ -1,15 +1,36 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 )
+
+// enableRegistration turns MCP on, since dynamic registration only exists while
+// it is (third-party clients can't target anything else).
+func enableRegistration(t *testing.T) {
+	t.Helper()
+	restoreConfig(t)
+	config.ConfigFile.MCPEnabled = true
+}
+
+func TestOAuthRegisterRefusedWhenMCPDisabled(t *testing.T) {
+	setupControllersDB(t)
+	restoreConfig(t)
+	config.ConfigFile.MCPEnabled = false
+
+	status, _ := postRegister(`{"redirect_uris":["https://client.example/cb"]}`)
+	if status != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 with MCP disabled", status)
+	}
+}
 
 func postRegister(body string) (int, map[string]interface{}) {
 	w := httptest.NewRecorder()
@@ -25,6 +46,7 @@ func postRegister(body string) (int, map[string]interface{}) {
 
 func TestOAuthRegisterSuccess(t *testing.T) {
 	setupControllersDB(t)
+	enableRegistration(t)
 
 	code, body := postRegister(`{"redirect_uris":["https://client.example/callback"],"client_name":"Test MCP","scope":"openid mcp:wishlists.read"}`)
 	if code != 201 {
@@ -46,6 +68,7 @@ func TestOAuthRegisterSuccess(t *testing.T) {
 
 func TestOAuthRegisterRequiresRedirectURI(t *testing.T) {
 	setupControllersDB(t)
+	enableRegistration(t)
 
 	if code, _ := postRegister(`{"client_name":"No Redirect"}`); code != 400 {
 		t.Errorf("status = %d, want 400 when redirect_uris missing", code)
@@ -54,6 +77,7 @@ func TestOAuthRegisterRequiresRedirectURI(t *testing.T) {
 
 func TestOAuthRegisterRejectsBadRedirectURI(t *testing.T) {
 	setupControllersDB(t)
+	enableRegistration(t)
 
 	if code, _ := postRegister(`{"redirect_uris":["not-a-url"]}`); code != 400 {
 		t.Errorf("status = %d, want 400 for a non-absolute redirect_uri", code)
@@ -62,6 +86,7 @@ func TestOAuthRegisterRejectsBadRedirectURI(t *testing.T) {
 
 func TestOAuthRegisterRejectsUnsupportedGrantType(t *testing.T) {
 	setupControllersDB(t)
+	enableRegistration(t)
 
 	code, body := postRegister(`{"redirect_uris":["https://client.example/cb"],"grant_types":["client_credentials"]}`)
 	if code != 400 {
@@ -74,6 +99,7 @@ func TestOAuthRegisterRejectsUnsupportedGrantType(t *testing.T) {
 
 func TestOAuthRegisterDefaultGrantTypes(t *testing.T) {
 	setupControllersDB(t)
+	enableRegistration(t)
 
 	code, body := postRegister(`{"redirect_uris":["https://client.example/cb"]}`)
 	if code != 201 {
@@ -87,6 +113,7 @@ func TestOAuthRegisterDefaultGrantTypes(t *testing.T) {
 
 func TestOAuthRegisterEmptyScopeDefaultsToAll(t *testing.T) {
 	setupControllersDB(t)
+	enableRegistration(t)
 
 	code, body := postRegister(`{"redirect_uris":["https://client.example/cb"]}`)
 	if code != 201 {
@@ -100,6 +127,7 @@ func TestOAuthRegisterEmptyScopeDefaultsToAll(t *testing.T) {
 
 func TestOAuthRegisterFiltersUnknownScopes(t *testing.T) {
 	setupControllersDB(t)
+	enableRegistration(t)
 
 	code, body := postRegister(`{"redirect_uris":["https://client.example/cb"],"scope":"openid not-a-real-scope"}`)
 	if code != 201 {
@@ -117,6 +145,7 @@ func TestOAuthRegisterFiltersUnknownScopes(t *testing.T) {
 func TestOAuthRegisterDatabaseFailure(t *testing.T) {
 	// Migrate without the OAuthClient table so database.CreateOAuthClient fails.
 	setupControllersDB(t, &models.User{})
+	enableRegistration(t)
 
 	code, body := postRegister(`{"redirect_uris":["https://client.example/cb"]}`)
 	if code != 400 {
@@ -129,6 +158,7 @@ func TestOAuthRegisterDatabaseFailure(t *testing.T) {
 
 func TestAdminListOAuthClients(t *testing.T) {
 	setupControllersDB(t)
+	enableRegistration(t)
 
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
@@ -178,6 +208,7 @@ func TestAdminListOAuthClients(t *testing.T) {
 
 func TestAdminRevokeOAuthClientSuccess(t *testing.T) {
 	setupControllersDB(t)
+	enableRegistration(t)
 	if _, err := database.CreateOAuthClient(models.OAuthClient{
 		ClientID:   "test-client",
 		ClientName: "Test Client",
@@ -207,6 +238,7 @@ func TestAdminRevokeOAuthClientSuccess(t *testing.T) {
 
 func TestAdminRevokeOAuthClientNotFound(t *testing.T) {
 	setupControllersDB(t)
+	enableRegistration(t)
 
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
@@ -221,6 +253,7 @@ func TestAdminRevokeOAuthClientNotFound(t *testing.T) {
 
 func TestAdminRevokeOAuthClientRejectsFirstParty(t *testing.T) {
 	setupControllersDB(t)
+	enableRegistration(t)
 	if _, err := database.CreateOAuthClient(models.OAuthClient{
 		ClientID:     models.FirstPartyClientID,
 		ClientName:   "Built-in web client",
@@ -260,6 +293,7 @@ func TestIsValidRedirectURI(t *testing.T) {
 
 func TestOAuthRegisterMalformedJSON(t *testing.T) {
 	setupControllersDB(t)
+	enableRegistration(t)
 
 	code, body := postRegister(`not-json`)
 	if code != 400 || body["error"] != "invalid_client_metadata" {
@@ -269,6 +303,7 @@ func TestOAuthRegisterMalformedJSON(t *testing.T) {
 
 func TestAdminListOAuthClientsDatabaseError(t *testing.T) {
 	setupControllersDB(t)
+	enableRegistration(t)
 	breakControllersDB(t)
 
 	status, body, _ := doRequest(APIAdminListOAuthClients, "GET", "/api/admin/oauth/clients", "", nil, nil)

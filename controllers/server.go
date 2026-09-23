@@ -15,10 +15,13 @@ func APIGetServerInfo(context *gin.Context) {
 		PoenskelistenVersion:     config.ConfigFile.PoenskelistenVersion,
 		PoenskelistenEnvironment: config.ConfigFile.PoenskelistenEnvironment,
 		PoenskelistenExternalURL: config.ConfigFile.PoenskelistenExternalURL,
-		PoenskelistenPort:        config.ConfigFile.PoenskelistenPort,
-		Timezone:                 config.ConfigFile.Timezone,
-		PoenskelistenLogLevel:    config.ConfigFile.PoenskelistenLogLevel,
-		PoenskelistenTestEmail:   config.ConfigFile.PoenskelistenTestEmail,
+		// AllowedOrigins always starts with the issuer.
+		PoenskelistenAdditionalURLs: config.AllowedOrigins()[1:],
+		OAuthIssuer:                 config.OAuthIssuer(),
+		PoenskelistenPort:           config.ConfigFile.PoenskelistenPort,
+		Timezone:                    config.ConfigFile.Timezone,
+		PoenskelistenLogLevel:       config.ConfigFile.PoenskelistenLogLevel,
+		PoenskelistenTestEmail:      config.ConfigFile.PoenskelistenTestEmail,
 
 		// Database (credentials intentionally omitted)
 		DatabaseType:     config.ConfigFile.DBType,
@@ -46,6 +49,10 @@ func APIGetServerInfo(context *gin.Context) {
 		// Security
 		MFAEnforced:             config.ConfigFile.MFAEnforced,
 		MFARecoveryCodesEnabled: config.ConfigFile.MFARecoveryCodesEnabled,
+
+		// AI assistants
+		MCPEnabled:  config.ConfigFile.MCPEnabled,
+		MCPEndpoint: config.MCPResource(),
 	}
 
 	// Reply

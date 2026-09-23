@@ -4,6 +4,7 @@ import (
 	"aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/logger"
+	"aunefyren/poenskelisten/models"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -52,7 +53,7 @@ func newContext(authHeader string) *gin.Context {
 
 func apiTokenForUser(t *testing.T, userID uuid.UUID, admin bool) string {
 	t.Helper()
-	token, err := auth.GenerateOAuthAccessToken(userID, testAPIResource, "openid", admin, true)
+	token, err := auth.GenerateOAuthAccessToken(userID, models.FirstPartyClientID, testAPIResource, "openid", admin, true)
 	if err != nil {
 		t.Fatalf("failed to generate access token: %v", err)
 	}
@@ -111,13 +112,36 @@ func TestAuthFunctionWrongAudience(t *testing.T) {
 	setupMiddlewareConfig(t)
 
 	// A token minted for the MCP resource must not authenticate the API.
-	token, err := auth.GenerateOAuthAccessToken(uuid.New(), testMCPResource, "mcp:wishlists.read", false, true)
+	token, err := auth.GenerateOAuthAccessToken(uuid.New(), "mcp-client", testMCPResource, "mcp:wishlists.read", false, true)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
 	success, _, status := AuthFunction(newContext(token), false)
 	if success || status != http.StatusUnauthorized {
 		t.Errorf("wrong-audience token accepted: success=%v status=%d", success, status)
+	}
+}
+
+// An API-audience token issued to any client other than the built-in web app
+// must be refused by every API entry point, even though its signature and
+// audience are valid.
+func TestAPITokenFromThirdPartyClientRejected(t *testing.T) {
+	setupMiddlewareConfig(t)
+
+	for _, clientID := range []string{"third-party-client", ""} {
+		token, err := auth.GenerateOAuthAccessToken(uuid.New(), clientID, testAPIResource, "openid profile", true, true)
+		if err != nil {
+			t.Fatalf("failed to generate token: %v", err)
+		}
+		if success, _, status := AuthFunction(newContext(token), true); success || status != http.StatusUnauthorized {
+			t.Errorf("client %q: AuthFunction success=%v status=%d, want false/401", clientID, success, status)
+		}
+		if _, err := GetAuthUsername(token); err == nil {
+			t.Errorf("client %q: GetAuthUsername accepted the token", clientID)
+		}
+		if _, err := GetTokenClaims(token); err == nil {
+			t.Errorf("client %q: GetTokenClaims accepted the token", clientID)
+		}
 	}
 }
 

@@ -28,22 +28,22 @@ const (
 
 func setRefreshCookie(ctx *gin.Context, token string) {
 	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie(refreshCookieName, token, refreshCookieMaxAge, refreshCookiePath, "", oidcCookieSecure(), true)
+	ctx.SetCookie(refreshCookieName, token, refreshCookieMaxAge, refreshCookiePath, "", cookieSecure(ctx), true)
 }
 
 func clearRefreshCookie(ctx *gin.Context) {
 	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie(refreshCookieName, "", -1, refreshCookiePath, "", oidcCookieSecure(), true)
+	ctx.SetCookie(refreshCookieName, "", -1, refreshCookiePath, "", cookieSecure(ctx), true)
 }
 
 func setSSOCookie(ctx *gin.Context, token string) {
 	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie(ssoCookieName, token, ssoCookieMaxAge, ssoCookiePath, "", oidcCookieSecure(), true)
+	ctx.SetCookie(ssoCookieName, token, ssoCookieMaxAge, ssoCookiePath, "", cookieSecure(ctx), true)
 }
 
 func clearSSOCookie(ctx *gin.Context) {
 	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie(ssoCookieName, "", -1, ssoCookiePath, "", oidcCookieSecure(), true)
+	ctx.SetCookie(ssoCookieName, "", -1, ssoCookiePath, "", cookieSecure(ctx), true)
 }
 
 // issueSSOSession records "this browser is logged in as this user" by setting the

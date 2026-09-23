@@ -26,6 +26,11 @@ Share gift ideas, see which ones are already taken, and avoid the awkward “oh�
 - Collaborate with friends & family on the shared wishlists
 - Create groups to share wishlists with multiple people
 - Claim wishes anonymously (others see it's taken - owner does not)
+- Organise wishes into categories, and sort or group them on a wishlist
+- Share a wishlist publicly with people who don't have an account
+- Sign in with a password, optionally with MFA (authenticator app), or through single sign-on (OpenID Connect)
+- Let an AI assistant read your wishlists through the built-in MCP server (optional)
+- Installable as a web app (PWA)
 
 ### Known Limitations
 - UI is not yet fully optimized for small screens
@@ -80,7 +85,8 @@ You can configure Pønskelisten in **three different ways**:
 | Config file entry | Startup flag | Environment variable |Type | Description |
 |-----|-----|-----|-------|--------------|
 | poenskelisten_port | port | port | int | Port to run on (default: `8080`) |
-| poenskelisten_external_url | externalurl | externalurl | string | Public URL of the instance |
+| poenskelisten_external_url | externalurl | externalurl | string | **Required.** The main URL users open in their browser, e.g. `https://wishlist.example.com`. Used for login, e-mail links, public wishlist links, single sign-on and as the OAuth issuer. If unset, only `http://localhost:<port>` can log in. |
+| poenskelisten_additional_urls | additionalurls | additionalurls | string | Comma-separated extra URLs users can log in from, e.g. `http://192.168.1.10:8080,http://wishlist.lan`. Each must be just scheme, host and port. Links and single sign-on still use `external_url`. |
 | poenskelisten_environment | environment | environment | string | `production` or `test` |
 | poenskelisten_test_email | testemail | testemail | string | E-mail destination when in `test` |
 | poenskelisten_name | name | name | string | Display name of the app |
@@ -114,8 +120,20 @@ You can configure Pønskelisten in **three different ways**:
 | oidc_redirect_url | oidcredirecturl | oidcredirecturl | string | OIDC callback URL; defaults to `<external_url>/api/open/oidc/callback` |
 | oidc_auto_create_users | oidcautocreateusers | oidcautocreateusers | bool | Auto-provision unknown OIDC users (default off) |
 | local_login_disabled | disablelocallogin | disablelocallogin | bool | OIDC-only mode: turn off password login, registration and password reset (default off; ignored unless OIDC is enabled and configured) |
-| mcp_enabled | mcpenabled | mcpenabled | bool | Enable the MCP resource server (the OAuth authorization server is always on) |
+| mcp_enabled | mcpenabled | mcpenabled | bool | Enable the MCP resource server, and with it registration of third-party apps (the OAuth authorization server is always on) |
 | oauth_signing_key | `N/A` | `N/A` | string | PEM signing key; auto-generated + persisted on first run (config.json only) |
+| oauth_signing_key_id | `N/A` | `N/A` | string | Key ID of `oauth_signing_key`; auto-generated alongside it (config.json only) |
+| private_key | `N/A` | `N/A` | string | Secret for the login-session cookie; auto-generated on first run (config.json only) |
+| poenskelisten_currency, poenskelisten_currency_left, poenskelisten_currency_pad | `N/A` | `N/A` | string / bool | Currency symbol and placement; set from the admin panel |
+
+### 📁 The `files/` folder and `config.json`
+
+Pønskelisten keeps its state in `files/` (config, log and, with SQLite, the database) and wishes/profile pictures in `images/`. Both must be on persistent storage (the Docker volumes below), and `files/` belongs in your backups.
+
+- `config.json` is created on the first run. Values given as startup flags or environment variables are **written back into it** whenever they differ from what's there, so it's always the full picture of your configuration.
+- It holds secrets: the auto-generated `oauth_signing_key` and `private_key`, plus any database, SMTP and OIDC passwords you configure, including ones passed as environment variables. Treat it as sensitive and restrict who can read it.
+- Keep the signing keys. If `config.json` is lost or replaced, new keys are generated: everyone is logged out, and connected apps (MCP clients) have to be authorised again.
+
 ---
 
 ## 🔐 Single sign-on (OpenID Connect)
@@ -163,7 +181,8 @@ Then configure Pønskelisten (env vars shown; flags/config.json equivalents exis
 ```
 
 The redirect URL registered with the IdP must match
-`<external_url>/api/open/oidc/callback`.
+`<external_url>/api/open/oidc/callback`. Single sign-on therefore only works when
+Pønskelisten is opened on `external_url`, not on one of the `additional_urls`.
 
 **OIDC-only mode**: set `disablelocallogin: true` to make SSO the only way in.
 Password login (including its MFA step), self-registration and password reset
@@ -186,11 +205,12 @@ Enable it with `mcp_enabled: true` (it's off by default). The endpoint lives at
 `<external_url>/mcp`; the client discovers everything else via
 `<external_url>/.well-known/oauth-protected-resource`, self-registers
 (`/oauth/register`), and runs the browser login + consent flow — no manual client
-setup. HTTPS (a real `external_url`) is required for the token cookies to work.
+setup. Set `external_url` to the public HTTPS address the client connects to, since the OAuth issuer and the MCP resource identifier are derived from it.
 
 Current tools are **read-only**: `list_wishlists`, `list_wishes`, `list_groups`
 (gated by the `mcp:wishlists.read` / `mcp:groups.read` scopes you approve on the
-consent screen). You can revoke a connected app any time from the admin panel.
+consent screen). Connected apps only ever get access to the MCP endpoint, never to
+the rest of Pønskelisten's API, and app registration is switched off along with MCP. Users can disconnect an app under "Connected apps" on their account page, and admins can revoke any registered client from the admin panel.
 
 ## 🐳 Docker Setup
 
@@ -207,6 +227,7 @@ services:
     environment:
       PUID: 1000
       PGID: 1000
+      externalurl: http://localhost:8080 # the URL you open Pønskelisten on
       dbtype: sqlite
       timezone: Europe/Oslo
       generateinvite: true
@@ -242,6 +263,7 @@ services:
     environment:
       PUID: 1000
       PGID: 1000
+      externalurl: http://localhost:8080 # the URL you open Pønskelisten on
       dbtype: postgres
       dbip: db
       dbport: 5432

@@ -1,8 +1,9 @@
 # Phase 4.1 — Implementation plan: OAuth-native authentication
 
-Status: **implemented (backend + frontend), pending browser verification.** All Go
-layers build/vet/test green. Two gate flows are known follow-ups (see
-[§14](#14-known-gaps--follow-ups)). This is the detailed design for the sub-phase
+Status: **implemented, shipping in v2.4.0.** Core browser login has been verified.
+The two gate flows are fixed (see [§14](#14-gate-flows--fixed)) but still need a
+browser check with SMTP verification and MFA enforcement turned on. This is the
+design record for the sub-phase
 that flips Pønskelisten's first-party login onto its own OAuth 2.1 authorization
 server. It expands the Phase 4.1 summary in [`auth-roadmap.md`](./auth-roadmap.md).
 
@@ -247,6 +248,10 @@ flow. Same origin, so it's not a jarring third-party bounce.
   token validity + scope.
 - New config `APIResourceIdentifier` (default `<issuer>/api`); the first-party
   client requests `resource=<API>` so its tokens carry `aud`=API.
+  *As shipped:* no config option (the resource is always `config.APIResource()`),
+  and no per-route scope check. Instead, API tokens are only valid when issued to
+  the first-party client (their `client_id` claim is checked). See "Where the
+  implementation differs" in [`auth-roadmap.md`](./auth-roadmap.md).
 - 4.3's MCP middleware is the same validator with `aud`=MCP resource.
 
 ---

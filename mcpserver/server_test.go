@@ -43,7 +43,7 @@ func TestVerifyTokenValid(t *testing.T) {
 	setupMCPConfig(t)
 	userID := uuid.New()
 
-	token, err := pauth.GenerateOAuthAccessToken(userID, config.MCPResource(), "mcp:wishlists.read mcp:groups.read", false, true)
+	token, err := pauth.GenerateOAuthAccessToken(userID, "mcp-client", config.MCPResource(), "mcp:wishlists.read mcp:groups.read", false, true)
 	if err != nil {
 		t.Fatalf("GenerateOAuthAccessToken error: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestVerifyTokenWrongAudience(t *testing.T) {
 	setupMCPConfig(t)
 
 	// A token for the API resource must not be accepted by the MCP resource server.
-	token, err := pauth.GenerateOAuthAccessToken(uuid.New(), config.APIResource(), "openid", false, true)
+	token, err := pauth.GenerateOAuthAccessToken(uuid.New(), "mcp-client", config.APIResource(), "openid", false, true)
 	if err != nil {
 		t.Fatalf("GenerateOAuthAccessToken error: %v", err)
 	}

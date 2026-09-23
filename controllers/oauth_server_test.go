@@ -4,7 +4,9 @@ import (
 	"aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -17,6 +19,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
+	logrusTest "github.com/sirupsen/logrus/hooks/test"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -213,6 +217,60 @@ func TestOAuthAuthorizeInvalidRedirectURI(t *testing.T) {
 	w := getAuthorize(q)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+	}
+}
+
+// A first-party redirect mismatch is almost always an operator opening the app
+// on an origin that isn't configured, so it's logged with a hint; a third-party
+// mismatch is the client's problem and isn't.
+func TestOAuthAuthorizeInvalidRedirectURIWarnsForFirstParty(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	hook := logrusTest.NewLocal(logger.Log)
+	t.Cleanup(func() { logger.Log.ReplaceHooks(make(logrus.LevelHooks)) })
+
+	firstParty := oauthServerTestNewClient(t, true, true, []string{"openid"}, "https://wish.example.com/oauth/callback")
+	thirdParty := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+
+	warned := func() bool {
+		for _, entry := range hook.AllEntries() {
+			if entry.Level == logrus.WarnLevel && strings.Contains(entry.Message, "additionalurls") {
+				return true
+			}
+		}
+		return false
+	}
+
+	getAuthorize(url.Values{"client_id": {thirdParty.ClientID}, "redirect_uri": {"https://evil.example/cb"}})
+	if warned() {
+		t.Error("third-party redirect mismatch logged the additionalurls hint")
+	}
+
+	w := getAuthorize(url.Values{"client_id": {firstParty.ClientID}, "redirect_uri": {"http://192.168.1.10:8080/oauth/callback"}})
+	if w.Code != http.StatusBadRequest || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
+		t.Errorf("status = %d content-type=%q, want a 400 HTML page", w.Code, w.Header().Get("Content-Type"))
+	}
+	for _, want := range []string{"http://192.168.1.10:8080", config.OAuthIssuer(), "additionalurls"} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Errorf("error page doesn't mention %q:\n%s", want, w.Body.String())
+		}
+	}
+	if !warned() {
+		t.Error("first-party redirect mismatch didn't log the additionalurls hint")
+	}
+}
+
+// The redirect URI on the error page comes straight from the query string.
+func TestOAuthAuthorizeOriginNotAllowedPageEscapes(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, true, true, []string{"openid"}, "https://wish.example.com/oauth/callback")
+
+	for _, redirectURI := range []string{`http://x"><script>alert(1)</script>/oauth/callback`, `"><script>alert(1)</script>`} {
+		w := getAuthorize(url.Values{"client_id": {client.ClientID}, "redirect_uri": {redirectURI}})
+		if strings.Contains(w.Body.String(), "<script>") {
+			t.Errorf("redirect URI %q rendered unescaped:\n%s", redirectURI, w.Body.String())
+		}
 	}
 }
 
@@ -1198,5 +1256,156 @@ func TestOAuthRevokeDatabaseFailureStillLogsOut(t *testing.T) {
 	}
 	if cleared := oauthServerTestCookie(w, ssoCookieName); cleared == nil || cleared.MaxAge >= 0 {
 		t.Errorf("SSO cookie = %v, want it cleared", cleared)
+	}
+}
+
+// --- Audience rule (resolveResource): the API is first-party only ---
+
+func TestResolveResource(t *testing.T) {
+	oauthServerTestSetup(t)
+	firstParty := models.OAuthClient{IsFirstParty: true}
+	thirdParty := models.OAuthClient{}
+	api, mcp := config.APIResource(), config.MCPResource()
+
+	cases := []struct {
+		name      string
+		client    models.OAuthClient
+		requested string
+		mcpOn     bool
+		want      string
+		wantOK    bool
+	}{
+		{"first-party defaults to the API", firstParty, "", true, api, true},
+		{"first-party may ask for the API", firstParty, api, false, api, true},
+		{"first-party may ask for MCP while it's on", firstParty, mcp, true, mcp, true},
+		{"third-party defaults to MCP", thirdParty, "", true, mcp, true},
+		{"third-party may not ask for the API", thirdParty, api, true, "", false},
+		{"third-party gets nothing with MCP off", thirdParty, "", false, "", false},
+		{"unknown resources are refused", firstParty, "https://elsewhere.example/api", true, "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			config.ConfigFile.MCPEnabled = c.mcpOn
+			got, ok := resolveResource(c.client, c.requested)
+			if ok != c.wantOK || (ok && got != c.want) {
+				t.Errorf("resolveResource = %q, %v; want %q, %v", got, ok, c.want, c.wantOK)
+			}
+		})
+	}
+}
+
+// The original bypass: a self-registered client asking only for "openid
+// profile" (no resource) must end up with an MCP token, not an API one.
+func TestOAuthThirdPartyWithoutResourceGetsMCPToken(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, false, true, []string{"openid", "profile"}, "https://client.example/cb")
+	user := createTestUser(t)
+
+	body, _ := oauthServerTestExchange(t, client, user)
+	accessToken, _ := body["access_token"].(string)
+	if _, err := auth.ValidateOAuthAccessToken(accessToken, config.APIResource()); err == nil {
+		t.Fatal("third-party token was accepted for the API audience")
+	}
+	claims, err := auth.ValidateOAuthAccessToken(accessToken, config.MCPResource())
+	if err != nil {
+		t.Fatalf("third-party token isn't a valid MCP token: %v", err)
+	}
+	if claims.ClientID != client.ClientID {
+		t.Errorf("client_id claim = %q, want %q", claims.ClientID, client.ClientID)
+	}
+}
+
+func TestOAuthAuthorizeThirdPartyAPIResourceRefused(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+	_, challenge := oauthServerTestPKCE()
+
+	w := getAuthorize(url.Values{
+		"client_id": {client.ClientID}, "redirect_uri": {client.RedirectURIs[0]}, "response_type": {"code"},
+		"scope": {"openid"}, "state": {"s"}, "code_challenge": {challenge}, "code_challenge_method": {"S256"},
+		"resource": {config.APIResource()},
+	})
+	if w.Code != http.StatusFound || !strings.Contains(w.Header().Get("Location"), "error=invalid_target") {
+		t.Errorf("status = %d location=%q, want a redirect with error=invalid_target", w.Code, w.Header().Get("Location"))
+	}
+}
+
+// The consent form round-trips through the browser, so a tampered resource
+// field must not widen the audience.
+func TestOAuthConsentRevalidatesResource(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+
+	for _, resource := range []string{config.APIResource(), "https://elsewhere.example/api"} {
+		form := url.Values{
+			"client_id": {client.ClientID}, "redirect_uri": {client.RedirectURIs[0]}, "scope": {"openid"},
+			"state": {"s"}, "code_challenge": {"c"}, "resource": {resource}, "action": {"allow"},
+		}
+		code, _, w := postForm(APIOAuthConsent, "/oauth/consent", form, oauthServerTestSSOCookie(t, user.ID))
+		if code != http.StatusFound || !strings.Contains(w.Header().Get("Location"), "error=invalid_target") {
+			t.Errorf("resource %q: status = %d location=%q, want error=invalid_target", resource, code, w.Header().Get("Location"))
+		}
+	}
+	if consents, err := database.GetUserConsents(user.ID); err == nil && len(consents) != 0 {
+		t.Errorf("a refused consent was still stored: %v", consents)
+	}
+}
+
+func TestOAuthTokenCodeGrantRefusesDisallowedResource(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+	verifier, challenge := oauthServerTestPKCE()
+
+	// A code minted before the audience rule existed, bound to the API.
+	if _, err := database.CreateAuthorizationCode(models.AuthorizationCode{
+		CodeHash: utilities.HashOpaqueToken("legacy-code"), ClientID: client.ClientID, UserID: user.ID,
+		RedirectURI: client.RedirectURIs[0], Scope: "openid", Resource: config.APIResource(),
+		CodeChallenge: challenge, CodeChallengeMethod: "S256", ExpiresAt: time.Now().Add(time.Minute),
+	}); err != nil {
+		t.Fatalf("failed to create code: %v", err)
+	}
+
+	code, body, _ := postForm(APIOAuthToken, "/oauth/token", url.Values{
+		"grant_type": {"authorization_code"}, "code": {"legacy-code"}, "redirect_uri": {client.RedirectURIs[0]},
+		"client_id": {client.ClientID}, "code_verifier": {verifier},
+	})
+	if code != http.StatusBadRequest || body["error"] != "invalid_target" {
+		t.Errorf("status = %d body=%v, want 400 invalid_target", code, body)
+	}
+}
+
+func TestOAuthTokenRefreshRefusesDisallowedSessions(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+	other := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://other.example/cb")
+	user := createTestUser(t)
+
+	cases := []struct {
+		name, sessionClient, resource string
+	}{
+		{"API session held by a third-party client", client.ClientID, config.APIResource()},
+		{"another client's session", other.ClientID, config.MCPResource()},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			plain := "refresh-" + uuid.NewString()
+			if _, err := database.CreateOAuthRefreshSession(user.ID, utilities.HashOpaqueToken(plain), c.sessionClient, "openid", c.resource, "ua", "127.0.0.1"); err != nil {
+				t.Fatalf("failed to create session: %v", err)
+			}
+
+			code, body, _ := postForm(APIOAuthToken, "/oauth/token", url.Values{
+				"grant_type": {"refresh_token"}, "refresh_token": {plain}, "client_id": {client.ClientID},
+			})
+			if code != http.StatusBadRequest || body["error"] != "invalid_grant" || body["access_token"] != nil {
+				t.Errorf("status = %d body=%v, want 400 invalid_grant and no token", code, body)
+			}
+		})
 	}
 }

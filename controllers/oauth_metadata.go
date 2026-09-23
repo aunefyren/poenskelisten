@@ -16,18 +16,22 @@ import (
 // sub-phase. Served only when the OAuth server is enabled.
 func APIOAuthAuthorizationServerMetadata(ctx *gin.Context) {
 	issuer := config.OAuthIssuer()
-	ctx.JSON(http.StatusOK, gin.H{
+	metadata := gin.H{
 		"issuer":                                issuer,
 		"authorization_endpoint":                issuer + "/oauth/authorize",
 		"token_endpoint":                        issuer + "/oauth/token",
-		"registration_endpoint":                 issuer + "/oauth/register",
 		"jwks_uri":                              issuer + "/.well-known/jwks.json",
 		"scopes_supported":                      oauth.AllNames(),
 		"response_types_supported":              []string{"code"},
 		"grant_types_supported":                 []string{"authorization_code", "refresh_token"},
 		"code_challenge_methods_supported":      []string{"S256"},
 		"token_endpoint_auth_methods_supported": []string{"none", "client_secret_basic", "client_secret_post"},
-	})
+	}
+	// Registration only exists while MCP is on; see APIOAuthRegister.
+	if config.ConfigFile.MCPEnabled {
+		metadata["registration_endpoint"] = issuer + "/oauth/register"
+	}
+	ctx.JSON(http.StatusOK, metadata)
 }
 
 // APIOAuthProtectedResourceMetadata serves RFC 9728 protected-resource metadata,

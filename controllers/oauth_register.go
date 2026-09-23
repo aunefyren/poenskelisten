@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
@@ -18,6 +19,13 @@ import (
 // is open (rate-limited at the route): it always creates a **public PKCE** client
 // (no secret), which still requires user consent at /oauth/authorize.
 func APIOAuthRegister(ctx *gin.Context) {
+	// Third-party clients can only ever get MCP tokens (see resolveResource), so
+	// with MCP off there is nothing for a registered client to do.
+	if !config.ConfigFile.MCPEnabled {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "MCP is not enabled."})
+		return
+	}
+
 	var request models.OAuthRegisterRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
 		registrationError(ctx, "invalid_client_metadata", "Failed to parse registration request.")

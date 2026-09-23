@@ -324,7 +324,7 @@ func boolPtr(b bool) *bool { return &b }
 func authHeader(t *testing.T, userID uuid.UUID, admin bool) string {
 	t.Helper()
 	enableOAuth(t)
-	token, err := auth.GenerateOAuthAccessToken(userID, config.APIResource(), "openid profile email", admin, true)
+	token, err := auth.GenerateOAuthAccessToken(userID, models.FirstPartyClientID, config.APIResource(), "openid profile email", admin, true)
 	if err != nil {
 		t.Fatalf("failed to generate access token: %v", err)
 	}

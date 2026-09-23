@@ -11,6 +11,7 @@ import (
 	"aunefyren/poenskelisten/utilities"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,6 +56,29 @@ func resolveGateUser(ctx *gin.Context) (models.User, bool) {
 	return resolveSSOUser(ctx)
 }
 
+// resolveResource applies the audience rule shared by /oauth/authorize, the
+// consent form and both token grants, returning the resource to issue for. The
+// JSON API is reserved for the first-party web app: it has no per-route scope
+// checks, so an API token held by a third-party client would be full account
+// (and admin) access whatever the user consented to. Third-party clients may
+// only target MCP, whose tools each enforce an mcp:* scope, and only while MCP is
+// enabled. An omitted resource defaults to the one the client is allowed.
+func resolveResource(client models.OAuthClient, requested string) (string, bool) {
+	if requested == "" {
+		requested = config.MCPResource()
+		if client.IsFirstParty {
+			requested = config.APIResource()
+		}
+	}
+	switch requested {
+	case config.APIResource():
+		return requested, client.IsFirstParty
+	case config.MCPResource():
+		return requested, config.ConfigFile.MCPEnabled
+	}
+	return "", false
+}
+
 // APIOAuthAuthorize is the authorization endpoint (RFC 6749 §4.1 + PKCE).
 func APIOAuthAuthorize(ctx *gin.Context) {
 	q := ctx.Request.URL.Query()
@@ -79,6 +103,11 @@ func APIOAuthAuthorize(ctx *gin.Context) {
 		return
 	}
 	if !client.HasRedirectURI(redirectURI) {
+		if client.IsFirstParty {
+			logger.Log.Warn("Login attempted from an origin that isn't allowed (redirect URI " + strconv.Quote(redirectURI) + "). Open Pønskelisten on " + config.OAuthIssuer() + ", or add the origin to additionalurls.")
+			renderOriginNotAllowedPage(ctx, redirectURI)
+			return
+		}
 		ctx.String(http.StatusBadRequest, "Invalid redirect URI.")
 		return
 	}
@@ -99,10 +128,8 @@ func APIOAuthAuthorize(ctx *gin.Context) {
 		return
 	}
 
-	if resource == "" {
-		resource = config.APIResource()
-	}
-	if resource != config.APIResource() && resource != config.MCPResource() {
+	resource, ok := resolveResource(client, resource)
+	if !ok {
 		redirectAuthError(ctx, redirectURI, state, "invalid_target")
 		return
 	}
@@ -166,6 +193,13 @@ func APIOAuthConsent(ctx *gin.Context) {
 	}
 	if len(requested) == 0 || !client.AllowsScopes(requested) {
 		redirectAuthError(ctx, redirectURI, state, "invalid_scope")
+		return
+	}
+	// The form round-trips through the browser, so its resource is re-checked
+	// rather than trusted from the consent page.
+	resource, ok := resolveResource(client, resource)
+	if !ok {
+		redirectAuthError(ctx, redirectURI, state, "invalid_target")
 		return
 	}
 
@@ -250,6 +284,10 @@ func handleAuthorizationCodeGrant(ctx *gin.Context) {
 		tokenError(ctx, http.StatusBadRequest, "invalid_grant", "PKCE verification failed")
 		return
 	}
+	if resource, ok := resolveResource(client, code.Resource); !ok || resource != code.Resource {
+		tokenError(ctx, http.StatusBadRequest, "invalid_target", "resource not allowed for this client")
+		return
+	}
 
 	user, err := database.GetAllUserInformation(code.UserID)
 	if err != nil {
@@ -292,13 +330,29 @@ func handleRefreshTokenGrant(ctx *gin.Context) {
 		return
 	}
 
+	// A refresh token only works for the client it was issued to, and only for
+	// an audience that client may still hold. Sessions minted before the
+	// audience rule existed are cut off here rather than refreshed forever.
+	if resource, ok := resolveResource(client, result.Resource); result.ClientID != client.ClientID || !ok || resource != result.Resource {
+		if result.Rotated {
+			if err := database.RevokeSessionByRefreshHash(utilities.HashOpaqueToken(newPlain)); err != nil {
+				logger.Log.Error("Failed to revoke rejected refresh session. Error: " + err.Error())
+			}
+		}
+		if client.IsFirstParty {
+			clearRefreshCookie(ctx)
+		}
+		tokenError(ctx, http.StatusBadRequest, "invalid_grant", "refresh token not valid for this client or resource")
+		return
+	}
+
 	user, err := database.GetAllUserInformation(result.UserID)
 	if err != nil {
 		tokenError(ctx, http.StatusBadRequest, "invalid_grant", "user not found")
 		return
 	}
 
-	accessToken, err := auth.GenerateOAuthAccessToken(user.ID, result.Resource, result.Scope, user.Admin, *user.Verified)
+	accessToken, err := auth.GenerateOAuthAccessToken(user.ID, client.ClientID, result.Resource, result.Scope, user.Admin, *user.Verified)
 	if err != nil {
 		tokenError(ctx, http.StatusInternalServerError, "server_error", "")
 		return
@@ -341,7 +395,7 @@ func issueTokenResponse(ctx *gin.Context, client models.OAuthClient, user models
 		return
 	}
 
-	accessToken, err := auth.GenerateOAuthAccessToken(user.ID, resource, scope, user.Admin, *user.Verified)
+	accessToken, err := auth.GenerateOAuthAccessToken(user.ID, client.ClientID, resource, scope, user.Admin, *user.Verified)
 	if err != nil {
 		tokenError(ctx, http.StatusInternalServerError, "server_error", "")
 		return
@@ -406,6 +460,28 @@ func authenticateClient(ctx *gin.Context, clientID string) (models.OAuthClient, 
 		}
 	}
 	return client, true
+}
+
+// renderOriginNotAllowedPage explains a first-party redirect mismatch to the
+// person in front of the browser. It is almost always an instance opened on an
+// address that isn't configured (a LAN IP, a new hostname, or no external URL
+// at all), so it says which address to use and what an admin can add.
+func renderOriginNotAllowedPage(ctx *gin.Context, redirectURI string) {
+	origin := strings.TrimSuffix(redirectURI, "/oauth/callback")
+	if parsed, err := url.Parse(redirectURI); err == nil && parsed.Scheme != "" && parsed.Host != "" {
+		origin = parsed.Scheme + "://" + parsed.Host
+	}
+	issuer := config.OAuthIssuer()
+
+	page := `<!doctype html><html><head><meta charset="utf-8"><title>Can't log in here</title></head><body>` +
+		`<h2>Can't log in from this address</h2>` +
+		`<p>This page was opened on <code>` + htmlEscape(origin) + `</code>, which isn't set up for logging in.</p>` +
+		`<p>Open <a href="` + htmlEscape(issuer) + `/">` + htmlEscape(issuer) + `</a> instead.</p>` +
+		`<p>Administrators: to allow this address, add it to <code>additionalurls</code>` +
+		` (or set <code>externalurl</code> if this is the main address) and restart.</p>` +
+		`</body></html>`
+
+	ctx.Data(http.StatusBadRequest, "text/html; charset=utf-8", []byte(page))
 }
 
 func renderConsentPage(ctx *gin.Context, client models.OAuthClient, scopes []string, redirectURI string, state string, challenge string, resource string) {

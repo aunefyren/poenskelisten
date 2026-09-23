@@ -268,7 +268,26 @@ func randomToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-func oidcCookieSecure() bool {
+// cookieSecure reports whether the auth cookies on this response should be
+// Secure. It follows the origin the browser is actually on, not only the external
+// URL: with an https external URL plus a plain-http LAN address in the additional
+// URLs, a Secure cookie set over http would be dropped by the browser and login
+// from the LAN address would silently fail. A configured origin matching the
+// Host header wins over X-Forwarded-Proto, so a proxy that mislabels the scheme
+// can't downgrade cookies on the external URL.
+func cookieSecure(ctx *gin.Context) bool {
+	if ctx.Request.TLS != nil {
+		return true
+	}
+	for _, origin := range config.AllowedOrigins() {
+		parsed, err := url.Parse(origin)
+		if err == nil && strings.EqualFold(parsed.Host, ctx.Request.Host) {
+			return parsed.Scheme == "https"
+		}
+	}
+	if proto := ctx.GetHeader("X-Forwarded-Proto"); proto != "" {
+		return strings.EqualFold(strings.TrimSpace(strings.Split(proto, ",")[0]), "https")
+	}
 	return strings.HasPrefix(strings.ToLower(config.ConfigFile.PoenskelistenExternalURL), "https")
 }
 
@@ -276,12 +295,12 @@ func setFlowCookie(ctx *gin.Context, name string, value string) {
 	// Lax so the cookie survives the top-level redirect back from the IdP, while
 	// still not being sent on cross-site subrequests. HttpOnly: JS never needs it.
 	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie(name, value, oidcFlowCookieMaxAge, "/", "", oidcCookieSecure(), true)
+	ctx.SetCookie(name, value, oidcFlowCookieMaxAge, "/", "", cookieSecure(ctx), true)
 }
 
 func clearFlowCookie(ctx *gin.Context, name string) {
 	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie(name, "", -1, "/", "", oidcCookieSecure(), true)
+	ctx.SetCookie(name, "", -1, "/", "", cookieSecure(ctx), true)
 }
 
 func redirectLoginError(ctx *gin.Context, message string) {

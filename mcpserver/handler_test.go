@@ -76,7 +76,7 @@ func startMCPTestServer(t *testing.T, userID uuid.UUID, scope string) *sdkmcp.Cl
 	httpServer := httptest.NewServer(router)
 	t.Cleanup(httpServer.Close)
 
-	token, err := pauth.GenerateOAuthAccessToken(userID, config.MCPResource(), scope, false, true)
+	token, err := pauth.GenerateOAuthAccessToken(userID, "mcp-client", config.MCPResource(), scope, false, true)
 	if err != nil {
 		t.Fatalf("failed to generate access token: %v", err)
 	}
