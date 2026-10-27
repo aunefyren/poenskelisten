@@ -294,7 +294,7 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 	}
 
 	// endpoint handler building for JS
-	router, err := registerTemplatedStaticFilesForDirectory(router, "/js", true, "./web/js", templateData)
+	router, err := registerTemplatedStaticFilesForDirectory(router, "/js", true, "./web/js", withAppText(templateData, escapeForJSHTML))
 	if err != nil {
 		logger.Log.Error("failed to build JS paths. error: " + err.Error())
 	}
@@ -315,7 +315,7 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 	})
 
 	// endpoint handler building for JSON
-	router, err = registerTemplatedStaticFilesForDirectory(router, "/json", true, "./web/json", templateData)
+	router, err = registerTemplatedStaticFilesForDirectory(router, "/json", true, "./web/json", withAppText(templateData, escapeForJSONString))
 	if err != nil {
 		logger.Log.Error("failed to build JSON paths. error: " + err.Error())
 	}
@@ -343,6 +343,51 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 	router.Any("/mcp", mcpserver.Handler())
 
 	return router
+}
+
+// withAppText copies templateData with the app name and description passed
+// through escape. JS, JSON and TXT files are text/template, which, unlike the
+// html/template pages, doesn't escape anything, and the name and description
+// are free text from the operator.
+func withAppText(templateData gin.H, escape func(string) string) gin.H {
+	escaped := gin.H{}
+	for key, value := range templateData {
+		escaped[key] = value
+	}
+	for _, key := range []string{"appName", "appDescription"} {
+		if value, ok := escaped[key].(string); ok {
+			escaped[key] = escape(value)
+		}
+	}
+	return escaped
+}
+
+// jsHTMLEscaper turns every character that is special in HTML or in a JS
+// template literal into an HTML entity. The JS files place {{.appName}} and
+// {{.appDescription}} inside backtick literals that end up as innerHTML, so
+// the entities render as the original characters, while no backtick, ${ or
+// backslash is left to end the literal or interpolate.
+var jsHTMLEscaper = strings.NewReplacer(
+	"&", "&amp;",
+	"<", "&lt;",
+	">", "&gt;",
+	`"`, "&#34;",
+	"'", "&#39;",
+	"`", "&#96;",
+	"$", "&#36;",
+	`\`, "&#92;",
+)
+
+func escapeForJSHTML(value string) string {
+	return jsHTMLEscaper.Replace(value)
+}
+
+// escapeForJSONString escapes value for use between the quotes of a JSON
+// string, e.g. "name": "{{.appName}}" in manifest.json.
+func escapeForJSONString(value string) string {
+	// Marshalling a plain string can't fail.
+	encoded, _ := json.Marshal(value)
+	return string(encoded[1 : len(encoded)-1])
 }
 
 // startupActions are one-off tasks requested with startup flags. They aren't
@@ -481,6 +526,10 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, startupAct
 
 	if provided["name"] {
 		configFile.PoenskelistenName = *name
+	}
+
+	if provided["name"] || provided["description"] {
+		config.CleanAppText(&configFile)
 	}
 
 	if provided["loglevel"] {
