@@ -5,7 +5,11 @@ import (
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"bufio"
+	"io"
+	"mime"
+	"mime/quotedprintable"
 	"net"
+	"net/mail"
 	"strconv"
 	"strings"
 	"sync"
@@ -302,5 +306,63 @@ func TestSMTPSendersUseTestAddressInTestEnvironment(t *testing.T) {
 	}
 	if msg := srv.lastMessage(); !strings.Contains(msg, "sink@example.com") || strings.Contains(msg, "recipient@example.com") {
 		t.Errorf("deleted-claim mail not redirected to the test address:\n%s", msg)
+	}
+}
+
+// decodeSentMail parses a raw DATA body into its decoded subject and body, so
+// assertions aren't thrown off by RFC 2047 header encoding or quoted-printable
+// line wrapping.
+func decodeSentMail(t *testing.T, raw string) (subject string, body string) {
+	t.Helper()
+
+	msg, err := mail.ReadMessage(strings.NewReader(raw))
+	if err != nil {
+		t.Fatalf("failed to parse sent mail: %v\n%s", err, raw)
+	}
+	subject, err = new(mime.WordDecoder).DecodeHeader(msg.Header.Get("Subject"))
+	if err != nil {
+		t.Fatalf("failed to decode subject: %v", err)
+	}
+
+	var reader io.Reader = msg.Body
+	if strings.EqualFold(msg.Header.Get("Content-Transfer-Encoding"), "quoted-printable") {
+		reader = quotedprintable.NewReader(msg.Body)
+	}
+	bodyBytes, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("failed to decode body: %v", err)
+	}
+	return subject, string(bodyBytes)
+}
+
+// TestSMTPSendersUseConfiguredAppName makes sure no mail falls back to the
+// default "Pønskelisten" branding when the admin has renamed the app.
+func TestSMTPSendersUseConfiguredAppName(t *testing.T) {
+	srv := startFakeSMTPServer(t)
+	configureTestSMTP(t, srv)
+	config.ConfigFile.PoenskelistenName = "Ønskeløs & Co"
+	user := testUserForSMTP()
+	wishlist := models.WishlistUser{Name: "List"}
+	wishlist.ID = uuid.New()
+
+	senders := map[string]func() error{
+		"verification":  func() error { return SendSMTPVerificationEmail(user) },
+		"reset":         func() error { return SendSMTPResetEmail(user) },
+		"deleted claim": func() error { return SendSMTPDeletedClaimedWish(user, models.WishObject{Name: "Gift"}, wishlist) },
+	}
+	for name, send := range senders {
+		if err := send(); err != nil {
+			t.Fatalf("%s: send returned error: %v", name, err)
+		}
+		subject, body := decodeSentMail(t, srv.lastMessage())
+		if !strings.Contains(subject, "Ønskeløs & Co") {
+			t.Errorf("%s: subject %q doesn't contain the app name", name, subject)
+		}
+		if !strings.Contains(body, "Ønskeløs &amp; Co") {
+			t.Errorf("%s: body doesn't contain the HTML-escaped app name:\n%s", name, body)
+		}
+		if strings.Contains(subject+body, "Pønske") {
+			t.Errorf("%s: mail still mentions the default app name:\n%s\n%s", name, subject, body)
+		}
 	}
 }

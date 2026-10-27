@@ -70,7 +70,7 @@ function load_verify_account() {
                     <div class="module">
                     
                         <div class="title">
-                            Pønskelisten
+                            {{.appName}}
                         </div>
 
                         <div class="text-body" style="text-align: center;">

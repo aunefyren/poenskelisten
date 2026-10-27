@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"aunefyren/poenskelisten/models"
+	"testing"
+)
 
 func TestGetPrivateKey(t *testing.T) {
 	original := ConfigFile.PrivateKey
@@ -130,6 +133,29 @@ func TestLocalLoginEnabled(t *testing.T) {
 		}
 		if got := OIDCConfigured(); got != c.wantOIDCConf {
 			t.Errorf("%s: OIDCConfigured() = %v, want %v", c.name, got, c.wantOIDCConf)
+		}
+	}
+}
+
+func TestCleanAppText(t *testing.T) {
+	cases := []struct {
+		name, description         string
+		wantName, wantDescription string
+		wantChanged               bool
+	}{
+		{"Wishes", "A list", "Wishes", "A list", false},
+		{"  Wishes \n", "\tA list ", "Wishes", "A list", true},
+		{"", "", defaultAppName, defaultAppDescription, true},
+		{"   ", " ", defaultAppName, defaultAppDescription, true},
+	}
+	for _, c := range cases {
+		configFile := models.ConfigStruct{PoenskelistenName: c.name, PoenskelistenDescription: c.description}
+		changed := CleanAppText(&configFile)
+		if configFile.PoenskelistenName != c.wantName || configFile.PoenskelistenDescription != c.wantDescription {
+			t.Errorf("CleanAppText(%q, %q) = %q, %q; want %q, %q", c.name, c.description, configFile.PoenskelistenName, configFile.PoenskelistenDescription, c.wantName, c.wantDescription)
+		}
+		if changed != c.wantChanged {
+			t.Errorf("CleanAppText(%q, %q) changed = %v, want %v", c.name, c.description, changed, c.wantChanged)
 		}
 	}
 }

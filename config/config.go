@@ -57,15 +57,7 @@ func LoadConfig() (err error) {
 		fmt.Println("new private key set.")
 	}
 
-	if ConfigFile.PoenskelistenName == "" {
-		// Set new value
-		ConfigFile.PoenskelistenName = "Pønskelisten"
-		anythingChanged = true
-	}
-
-	if ConfigFile.PoenskelistenDescription == "" {
-		// Set new value
-		ConfigFile.PoenskelistenDescription = "Share wishlists in a meaningful way."
+	if CleanAppText(&ConfigFile) {
 		anythingChanged = true
 	}
 
@@ -176,11 +168,44 @@ func LoadConfig() (err error) {
 	return nil
 }
 
+const (
+	defaultAppName        = "Pønskelisten"
+	defaultAppDescription = "Share wishlists in a meaningful way."
+)
+
+// CleanAppText trims the app name and description and falls back to the
+// defaults when nothing but whitespace is left. It runs on load and again after
+// flags/env vars are applied, since those can set either one to blank. Reports
+// whether anything changed.
+func CleanAppText(configFile *models.ConfigStruct) bool {
+	changed := false
+
+	name := strings.TrimSpace(configFile.PoenskelistenName)
+	if name == "" {
+		name = defaultAppName
+	}
+	if name != configFile.PoenskelistenName {
+		configFile.PoenskelistenName = name
+		changed = true
+	}
+
+	description := strings.TrimSpace(configFile.PoenskelistenDescription)
+	if description == "" {
+		description = defaultAppDescription
+	}
+	if description != configFile.PoenskelistenDescription {
+		configFile.PoenskelistenDescription = description
+		changed = true
+	}
+
+	return changed
+}
+
 // Creates empty config.json
 func CreateConfigFile() error {
 	ConfigFile = models.ConfigStruct{}
 	ConfigFile.PoenskelistenPort = 8080
-	ConfigFile.PoenskelistenName = "Pønskelisten"
+	ConfigFile.PoenskelistenName = defaultAppName
 	ConfigFile.DBPort = 3306
 	ConfigFile.DBType = "sqlite"
 	ConfigFile.DBLocation = "files/data.db"
