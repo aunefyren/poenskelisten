@@ -6,6 +6,7 @@ import (
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"net/http"
 	"net/http/httptest"
@@ -592,5 +593,52 @@ func TestRunAccountRecoveryActionsResetPassword(t *testing.T) {
 				t.Errorf("OIDC-only warning logged = %v, want %v", gotNote, c.wantOIDCNotes)
 			}
 		})
+	}
+}
+
+func TestParseFlagsCleansAppText(t *testing.T) {
+	withArgs(t, "-name", "   ", "-description", "  A wishlist app \n")
+
+	out, _, _, err := parseFlags(models.ConfigStruct{PoenskelistenName: "Wishes"})
+	if err != nil {
+		t.Fatalf("parseFlags returned error: %v", err)
+	}
+	if out.PoenskelistenName != "Pønskelisten" {
+		t.Errorf("PoenskelistenName = %q, want the default for a blank -name", out.PoenskelistenName)
+	}
+	if out.PoenskelistenDescription != "A wishlist app" {
+		t.Errorf("PoenskelistenDescription = %q, want it trimmed", out.PoenskelistenDescription)
+	}
+}
+
+// TestInitRouterEscapesAppText checks that an app name full of characters
+// special to HTML, JS template literals and JSON can't break out of the
+// text/template-rendered JS and JSON files.
+func TestInitRouterEscapesAppText(t *testing.T) {
+	name := "A`${alert(1)}\\ & <b>\"'"
+	router := initRouter(models.ConfigStruct{PoenskelistenName: name, PoenskelistenDescription: name})
+
+	w := serve(router, http.MethodGet, "/js/frontpage.js")
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /js/frontpage.js = %d, want 200", w.Code)
+	}
+	escaped := "A&#96;&#36;{alert(1)}&#92; &amp; &lt;b&gt;&#34;&#39;"
+	if !strings.Contains(w.Body.String(), escaped) {
+		t.Errorf("frontpage.js does not contain the escaped app name %q", escaped)
+	}
+	if strings.Contains(w.Body.String(), name) || strings.Contains(w.Body.String(), "${alert") {
+		t.Error("frontpage.js contains the raw app name")
+	}
+
+	w = serve(router, http.MethodGet, "/manifest.json")
+	var manifest struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &manifest); err != nil {
+		t.Fatalf("manifest.json is not valid JSON: %v\n%s", err, w.Body.String())
+	}
+	if manifest.Name != name || manifest.Description != name {
+		t.Errorf("manifest.json name/description = %q, %q; want %q", manifest.Name, manifest.Description, name)
 	}
 }
