@@ -2355,3 +2355,29 @@ func TestUpdateUserWithoutPasswordChangeKeepsSessions(t *testing.T) {
 		t.Errorf("session should still work after a change without a new password: %v", err)
 	}
 }
+
+// A request that can't create an account must not cost a bcrypt hash. With
+// a cost bcrypt refuses, any hashing would surface as a 500 instead of the
+// expected 400.
+func TestRegisterUserRejectsBeforeHashing(t *testing.T) {
+	setupControllersDB(t)
+	originalCost := models.BcryptCost
+	models.BcryptCost = 32
+	t.Cleanup(func() { models.BcryptCost = originalCost })
+	existing := createTestUser(t)
+	invite := createTestInvite(t)
+
+	cases := []struct{ name, email, invite, wantError string }{
+		{"invalid invite", "ada@example.com", "NOT-REAL", "Invitiation code is not valid."},
+		{"e-mail in use", *existing.Email, invite.Code, "E-mail is already in use."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			body := fmt.Sprintf(`{"first_name":"Ada","last_name":"Lovelace","email":"%s","password":"Sup3rSecret!","password_repeat":"Sup3rSecret!","invite_code":"%s"}`, c.email, c.invite)
+			code, resp, _ := doRequest(RegisterUser, "POST", "/api/open/users", body, nil, nil)
+			if code != 400 || resp["error"] != c.wantError {
+				t.Errorf("got %d %v, want 400 %q (no hashing)", code, resp, c.wantError)
+			}
+		})
+	}
+}

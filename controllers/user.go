@@ -88,14 +88,6 @@ func RegisterUser(context *gin.Context) {
 		user.Verified = &verifiedBool
 	}
 
-	// Hash the selected password
-	if err := user.HashPassword(*user.Password); err != nil {
-		logger.Log.Error("Failed to hash password. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password."})
-		context.Abort()
-		return
-	}
-
 	// Verify unsued invite code exists
 	unique_invitecode, err := database.VerifyUnusedUserInviteCode(userCreationRequest.InviteCode)
 	if err != nil {
@@ -118,6 +110,16 @@ func RegisterUser(context *gin.Context) {
 		return
 	} else if !unique_email {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "E-mail is already in use."})
+		context.Abort()
+		return
+	}
+
+	// Hash the selected password. Hashing is deliberately slow, so it only runs
+	// once the request is otherwise valid: before the invite check, it was free
+	// CPU load for anyone who could reach the registration endpoint.
+	if err := user.HashPassword(*user.Password); err != nil {
+		logger.Log.Error("Failed to hash password. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password."})
 		context.Abort()
 		return
 	}
