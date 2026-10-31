@@ -385,10 +385,15 @@ func DeleteWishlistMembership(WishlistMembershipID uuid.UUID) error {
 
 func InitializeSQLiteDB() error {
 	logger.Log.Info("initializing new SQLite file at: " + config.ConfigFile.DBLocation)
-	_, err := os.Create(config.ConfigFile.DBLocation)
+	file, err := os.Create(config.ConfigFile.DBLocation)
 	if err != nil {
 		logger.Log.Error("failed to create DB file. error: " + err.Error())
 		return errors.New("failed to create DB file")
+	}
+	err = file.Close()
+	if err != nil {
+		logger.Log.Error("failed to close DB file. error: " + err.Error())
+		return errors.New("failed to close DB file")
 	}
 	return nil
 }
