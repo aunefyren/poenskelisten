@@ -1566,3 +1566,21 @@ func TestOAuthTokenRefreshRefusesDisallowedSessions(t *testing.T) {
 		})
 	}
 }
+
+// JWT iat has second precision: a session issued right after a revocation, in
+// the same second, must not be mistaken for one issued before it.
+func TestResolveSSOUserAcceptsSessionFromTheRevocationSecond(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	user := createTestUser(t)
+	if err := database.SetUserSessionsInvalidatedAt(user.ID, time.Now()); err != nil {
+		t.Fatalf("failed to stamp logout marker: %v", err)
+	}
+
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest("GET", "/oauth/authorize", nil)
+	ctx.Request.AddCookie(oauthServerTestSSOCookie(t, user.ID))
+	if _, ok := resolveSSOUser(ctx); !ok {
+		t.Error("a session issued after the marker, in the same second, should be accepted")
+	}
+}
