@@ -327,6 +327,7 @@ func MigrateDBToV2() {
 	if err != nil {
 		panic(err)
 	}
+	defer fileContent.Close()
 
 	scanner := bufio.NewScanner(fileContent)
 
