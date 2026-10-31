@@ -8,6 +8,8 @@ jobs:
   releases-matrix:
     name: Release Go Binary
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # upload the binaries to the release
     strategy:
       matrix:
         # build and publish in parallel: linux/386, linux/amd64, linux/arm64, windows/386, windows/amd64, darwin/amd64, darwin/arm64
@@ -22,7 +24,7 @@ jobs:
     - uses: actions/checkout@v7
     - uses: wangyoucao577/go-release-action@v1.55
       with:
-        github_token: ${{ secrets.GIT_HUB_TOKEN }}
+        github_token: ${{ secrets.GITHUB_TOKEN }}
         goos: ${{ matrix.goos }}
         goarch: ${{ matrix.goarch }}
         goversion: "1.26"
