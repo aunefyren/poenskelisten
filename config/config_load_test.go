@@ -417,3 +417,102 @@ func TestLoadConfigSaveFailureAfterDefaults(t *testing.T) {
 		t.Errorf("config file changed to %q despite being read-only", raw)
 	}
 }
+
+func fileMode(t *testing.T, path string) os.FileMode {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("failed to stat %s: %v", path, err)
+	}
+	return info.Mode().Perm()
+}
+
+// os.WriteFile keeps the mode of an existing file, so a config.json written by
+// an older version as 0644 has to be tightened explicitly.
+func TestSaveConfigTightensExistingFile(t *testing.T) {
+	skipIfNoUnixModes(t)
+	path := withTempConfigFile(t)
+	if err := os.WriteFile(path, []byte("{}"), 0644); err != nil {
+		t.Fatalf("failed to seed file: %v", err)
+	}
+	if err := os.Chmod(path, 0644); err != nil {
+		t.Fatalf("failed to chmod: %v", err)
+	}
+
+	if err := SaveConfig(); err != nil {
+		t.Fatalf("SaveConfig returned error: %v", err)
+	}
+	if mode := fileMode(t, path); mode != 0600 {
+		t.Errorf("mode = %o, want 600", mode)
+	}
+}
+
+// Nothing has to change for LoadConfig to tighten the file: it happens on
+// every start.
+func TestLoadConfigTightensExistingFile(t *testing.T) {
+	skipIfNoUnixModes(t)
+	path := withTempConfigFile(t)
+	if err := CreateConfigFile(); err != nil {
+		t.Fatalf("failed to seed via CreateConfigFile: %v", err)
+	}
+	if err := os.Chmod(path, 0644); err != nil {
+		t.Fatalf("failed to chmod: %v", err)
+	}
+	ConfigFile = models.ConfigStruct{}
+
+	if err := LoadConfig(); err != nil {
+		t.Fatalf("LoadConfig returned error: %v", err)
+	}
+	if mode := fileMode(t, path); mode != 0600 {
+		t.Errorf("mode = %o, want 600", mode)
+	}
+}
+
+func TestRestrictPermissions(t *testing.T) {
+	skipIfNoUnixModes(t)
+	cases := []struct {
+		name        string
+		dir         bool
+		start, mode os.FileMode
+		want        os.FileMode
+		wantChanged bool
+	}{
+		{"world-readable file", false, 0644, 0600, 0600, true},
+		{"already owner-only file", false, 0600, 0600, 0600, false},
+		{"never adds bits", false, 0400, 0600, 0400, false},
+		{"group-writable file", false, 0660, 0600, 0600, true},
+		{"world-readable directory", true, 0755, 0700, 0700, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "target")
+			if c.dir {
+				if err := os.Mkdir(path, 0700); err != nil {
+					t.Fatalf("failed to create dir: %v", err)
+				}
+			} else if err := os.WriteFile(path, []byte("x"), 0600); err != nil {
+				t.Fatalf("failed to create file: %v", err)
+			}
+			if err := os.Chmod(path, c.start); err != nil {
+				t.Fatalf("failed to chmod: %v", err)
+			}
+
+			changed, err := RestrictPermissions(path, c.mode)
+			if err != nil {
+				t.Fatalf("RestrictPermissions returned error: %v", err)
+			}
+			if changed != c.wantChanged {
+				t.Errorf("changed = %v, want %v", changed, c.wantChanged)
+			}
+			if mode := fileMode(t, path); mode != c.want {
+				t.Errorf("mode = %o, want %o", mode, c.want)
+			}
+		})
+	}
+}
+
+func TestRestrictPermissionsMissingPath(t *testing.T) {
+	if _, err := RestrictPermissions(filepath.Join(t.TempDir(), "missing"), 0600); err == nil {
+		t.Error("expected an error for a missing path")
+	}
+}

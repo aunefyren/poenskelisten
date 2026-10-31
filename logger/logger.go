@@ -17,7 +17,7 @@ func InitLogger(configFile models.ConfigStruct) {
 	Log = logrus.New()
 
 	// Define log file
-	logFile, err := os.OpenFile("files/poenskelisten.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	logFile, err := os.OpenFile("files/poenskelisten.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		logrus.Fatalf("failed to load log file: %v", err)
 	}

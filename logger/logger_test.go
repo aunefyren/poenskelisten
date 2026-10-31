@@ -115,3 +115,19 @@ func TestFormatterLeavesEntryUntouched(t *testing.T) {
 		t.Errorf("entry.Message = %q, want it unchanged", entry.Message)
 	}
 }
+
+// The log can carry invite codes and the password reset links issued by
+// -resetpassword, so a new log file is readable by its owner only.
+func TestInitLoggerCreatesOwnerOnlyLogFile(t *testing.T) {
+	ensureLogFilesDir(t)
+
+	InitLogger(models.ConfigStruct{PoenskelistenLogLevel: "info"})
+
+	info, err := os.Stat("files/poenskelisten.log")
+	if err != nil {
+		t.Fatalf("failed to stat log file: %v", err)
+	}
+	if mode := info.Mode().Perm(); mode != 0600 {
+		t.Errorf("mode = %o, want 600", mode)
+	}
+}
