@@ -9,8 +9,12 @@ import (
 	"aunefyren/poenskelisten/utilities"
 	"net/http"
 	"net/url"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 )
@@ -40,28 +44,37 @@ func APIOAuthRegister(ctx *gin.Context) {
 		return
 	}
 
-	// redirect_uris: required, at least one, each an absolute http(s) URL.
+	// redirect_uris: required, at least one and at most a handful, each an
+	// absolute http(s) URL of bounded length.
 	if len(request.RedirectURIs) == 0 {
 		registrationError(ctx, "invalid_redirect_uri", "At least one redirect_uri is required.")
 		return
 	}
+	if len(request.RedirectURIs) > maxRegisteredRedirectURIs {
+		registrationError(ctx, "invalid_redirect_uri", "At most "+strconv.Itoa(maxRegisteredRedirectURIs)+" redirect_uris are allowed.")
+		return
+	}
 	for _, uri := range request.RedirectURIs {
 		if !isValidRedirectURI(uri) {
-			registrationError(ctx, "invalid_redirect_uri", "redirect_uri must be an absolute http(s) URL.")
+			registrationError(ctx, "invalid_redirect_uri", "redirect_uri must be an absolute http(s) URL without a fragment or credentials, at most "+strconv.Itoa(maxRedirectURILength)+" characters long.")
 			return
 		}
 	}
 
-	// grant_types: default to the supported set; reject anything else.
-	grantTypes := request.GrantTypes
-	if len(grantTypes) == 0 {
-		grantTypes = []string{"authorization_code", "refresh_token"}
-	}
-	for _, g := range grantTypes {
+	// grant_types: default to the supported set; reject anything else, and
+	// store each one once however often it was listed.
+	grantTypes := []string{}
+	for _, g := range request.GrantTypes {
 		if g != "authorization_code" && g != "refresh_token" {
 			registrationError(ctx, "invalid_client_metadata", "Unsupported grant_type: "+g)
 			return
 		}
+		if !slices.Contains(grantTypes, g) {
+			grantTypes = append(grantTypes, g)
+		}
+	}
+	if len(grantTypes) == 0 {
+		grantTypes = []string{"authorization_code", "refresh_token"}
 	}
 
 	// scope: filter to known scopes; default to all scopes when omitted (the user
@@ -69,6 +82,13 @@ func APIOAuthRegister(ctx *gin.Context) {
 	scopes := oauth.FilterValid(oauth.Parse(request.Scope))
 	if request.Scope == "" {
 		scopes = oauth.AllNames()
+	}
+
+	// client_name is shown on the consent page and in the admin's connected
+	// apps, so it is kept to a short, single line.
+	if utf8.RuneCountInString(request.ClientName) > maxClientNameLength || strings.ContainsFunc(request.ClientName, unicode.IsControl) {
+		registrationError(ctx, "invalid_client_metadata", "client_name must be a single line of at most "+strconv.Itoa(maxClientNameLength)+" characters.")
+		return
 	}
 
 	clientID, err := utilities.GenerateOpaqueToken()
@@ -112,12 +132,31 @@ func APIOAuthRegister(ctx *gin.Context) {
 	})
 }
 
+// Bounds on what a dynamically registered client may store. Registration is
+// open, so without them one request could store a megabyte of metadata, and
+// show it on consent pages and in the admin's connected apps.
+const (
+	maxRegisteredRedirectURIs = 10
+	maxRedirectURILength      = 2000
+	maxClientNameLength       = 100
+)
+
+// isValidRedirectURI accepts an absolute http(s) URL of bounded length. A
+// fragment is refused (RFC 6749 §3.1.2: the code is appended as a query, and
+// a fragment would swallow it), and so are credentials in the URL, which have
+// no business there and can disguise the real host on the consent page.
 func isValidRedirectURI(uri string) bool {
+	if len(uri) > maxRedirectURILength {
+		return false
+	}
 	parsed, err := url.Parse(uri)
 	if err != nil {
 		return false
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	if parsed.Fragment != "" || strings.Contains(uri, "#") || parsed.User != nil {
 		return false
 	}
 	return parsed.Host != ""

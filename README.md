@@ -234,7 +234,7 @@ Tools, each gated by a scope you approve on the consent screen:
 | `delete_wish` | `mcp:wishlists.write` | Deletes a wish; whoever claimed it is told by e-mail when SMTP is set up |
 
 The write tools follow the same rules as the web app: only a wishlist's owner and its collaborators can change its wishes, names must be at least five characters and unique on the wishlist (ignoring case), prices can't be negative, and links must be `http`/`https`. An app connected before the write tools existed may hold a token without `mcp:wishlists.write`; disconnect and reconnect it to approve the new scope. Connected apps only ever get access to the MCP endpoint, never to
-the rest of Pønskelisten's API, and app registration is switched off along with MCP. Users can disconnect an app under "Connected apps" on their account page, and admins can revoke any registered client from the admin panel.
+the rest of Pønskelisten's API, and app registration is switched off along with MCP. Registration is open while MCP is on, so it is bounded: at most 10 redirect URIs of up to 2000 characters each, without a fragment or credentials, and a single-line `client_name` of up to 100 characters. Users can disconnect an app under "Connected apps" on their account page, and admins can revoke any registered client from the admin panel.
 
 ## 🐳 Docker Setup
 
