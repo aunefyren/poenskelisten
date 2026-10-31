@@ -62,6 +62,10 @@ The workflows need no extra secrets on a fork:
 - **Release binaries** upload with `GITHUB_TOKEN` (`contents: write`).
 - GitHub disables scheduled workflows on forks until Actions is enabled there, so a fork's
   beta runs from manual dispatch until then.
+- The beta gate only ever builds `main`. A fork that wants an image per push from another
+  branch can add its own workflow (e.g. `on: push` to that branch) that calls
+  `docker-build.yml` with its own `ref`, `version` and `tags`. Forks build on those inputs
+  (`ref`, `version`, `tags`, `latest`), so keep them stable.
 
 The coverage badge step in `go.yml` still uses the maintainer's `GIT_HUB_TOKEN` secret (a
 gist write), and is skipped when it isn't set.
