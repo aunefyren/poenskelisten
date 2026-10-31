@@ -343,7 +343,7 @@ Yes - improvements planned.
 ## 🙌 Contributing
 
 Contributions, issues and feature requests are welcome.
-Feel free to open a Pull Request or Issue.
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a Pull Request.
 
 ## ☕️ Donate
 

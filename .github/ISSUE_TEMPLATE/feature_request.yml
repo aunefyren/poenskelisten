@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest an idea or propose a change
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like?
+      description: What's the use case, and what would you like Pønskelisten to do?
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Anything else?
+      description: Ideas on how it could work, alternatives you considered, screenshots.
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd like to implement this myself (see CONTRIBUTING.md)

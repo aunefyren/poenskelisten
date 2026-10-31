@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/aunefyren/poenskelisten/security/advisories/new
+    about: Please report security issues privately, not in a public issue.
