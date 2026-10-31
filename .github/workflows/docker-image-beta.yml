@@ -1,55 +1,124 @@
-name: Docker Image for Pushes
+name: Docker Image for Beta
 
+# Publishes the `beta` image at most once an hour, and only for a `main` commit
+# that changed something that matters and whose push-triggered workflows are all
+# green. See docs/ci.md.
 on:
-  push:
-    branches: [main]
-  
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+# Runs never overlap and are never cancelled: a queued run waits for the build in progress.
+concurrency:
+  group: beta-image
+  cancel-in-progress: false
+
 jobs:
-  build:
+  gate:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-
+      packages: read
+      actions: read
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+      sha: ${{ steps.decide.outputs.sha }}
+      short: ${{ steps.decide.outputs.short }}
     steps:
     - uses: actions/checkout@v7
-    - name: Set up Docker metadata
-      id: meta
-      uses: docker/metadata-action@v6
       with:
-        images: |
-          aunefyren/poenskelisten
-          ghcr.io/${{ github.repository }}
-        tags: |
-          type=raw,value=beta
-        flavor: |
-          latest=false
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v4
-    - name: Set up Docker Buildx
-      id: buildx
-      uses: docker/setup-buildx-action@v4
-    - name: Login to Docker Hub
-      uses: docker/login-action@v4
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+        ref: main
+        fetch-depth: 0
+    # Lets the inspect below read a private package (a fork's GHCR package is
+    # private by default); otherwise the label would read as missing and every
+    # green hour would rebuild.
     - name: Login to GHCR
       uses: docker/login-action@v4
       with:
         registry: ghcr.io
-        username: ${{ github.repository_owner }}
-        password: ${{ secrets.GIT_HUB_TOKEN }}
-    - name: Hash commit ID
-      run: echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-7)" >> $GITHUB_ENV
-    - name: Replace version variable
-      run:  sed -i 's/{{RELEASE_TAG}}/beta-${{ env.GITHUB_SHA_SHORT }}/g' config/config.go # Replace release variable with the name of this release
-    - name: Build and push
-      uses: docker/build-push-action@v7
-      with:
-        builder: ${{ steps.buildx.outputs.name }}
-        file: ./Dockerfile
-        platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/386
-        push: true
-        context: .
-        tags: ${{ steps.meta.outputs.tags }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Decide whether to build
+      id: decide
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPOSITORY: ${{ github.repository }}
+      run: |
+        set -uo pipefail
+
+        image="ghcr.io/${REPOSITORY,,}:beta"
+        head=$(git rev-parse HEAD)
+        {
+          echo "sha=$head"
+          echo "short=${head:0:7}"
+        } >> "$GITHUB_OUTPUT"
+
+        finish() { # finish <true|false> <reason>
+          echo "build=$1" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Beta image: $([ "$1" = true ] && echo build || echo skip)"
+            echo ""
+            echo "$2 (main at \`${head:0:7}\`)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "$2"
+          exit 0
+        }
+
+        # Revision label of the published beta. The inspect output is either the image
+        # config itself or a map of platform -> image config; handle both.
+        last=$(docker buildx imagetools inspect "$image" --format '{{json .Image}}' 2>/dev/null \
+          | jq -r '(if has("linux/amd64") then .["linux/amd64"] else . end)
+                   | .config.Labels["org.opencontainers.image.revision"] // empty' 2>/dev/null) || last=""
+
+        # Why main needs a new beta; every path that would build still has to pass the
+        # green check below.
+        if [ -z "$last" ]; then
+          reason="no revision label on the published beta (missing or unreadable)"
+        elif [ "$last" = "$head" ]; then
+          finish false "Skipped: beta is already published for this commit (unchanged)."
+        elif ! git cat-file -e "$last^{commit}" 2>/dev/null; then
+          reason="published revision \`${last:0:7}\` is not in history"
+        else
+          # Skip when only docs, Markdown files or issue templates changed.
+          relevant=$(git diff --name-only "$last" "$head" \
+            | grep -v -E '^docs/|\.md$|^\.github/ISSUE_TEMPLATE/' || true)
+          if [ -z "$relevant" ]; then
+            finish false "Skipped: only docs, Markdown or issue templates changed since \`${last:0:7}\`."
+          fi
+          reason="main moved from \`${last:0:7}\`"
+        fi
+
+        # Wait for green: every push-triggered workflow run for this exact commit (CI,
+        # CodeQL, ...) must have finished successfully, and go.yml must be among them.
+        # Docker workflows are left out so an old push-triggered beta run can't hold
+        # the gate.
+        runs=$(gh api "repos/$REPOSITORY/actions/runs?head_sha=$head&event=push&per_page=100" \
+          --jq '[.workflow_runs[] | select(.path | startswith(".github/workflows/docker-") | not)]') || runs="[]"
+        ci_ok=$(jq '[.[] | select(.path == ".github/workflows/go.yml" and .conclusion == "success")] | length' <<< "$runs")
+        not_green=$(jq -r '[.[] | select(.status != "completed" or (.conclusion | IN("success", "skipped", "neutral") | not))
+                            | "\(.name) (\(.conclusion // .status))"] | join(", ")' <<< "$runs")
+        if [ "${ci_ok:-0}" -lt 1 ]; then
+          finish false "Skipped: go.yml has no successful push run for this commit yet (still running, failed or missing). Re-checked next hour."
+        fi
+        if [ -n "$not_green" ]; then
+          finish false "Skipped: not every workflow for this commit is green: $not_green. Re-checked next hour."
+        fi
+
+        finish true "Building: $reason, and every workflow for this commit is green."
+
+  build:
+    needs: gate
+    if: needs.gate.outputs.build == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      ref: ${{ needs.gate.outputs.sha }}
+      version: beta-${{ needs.gate.outputs.short }}
+      # `beta` moves; `beta-<short sha>` is immutable (and matches the in-app
+      # version), so a bad beta can be rolled back by pinning the previous one.
+      tags: |
+        type=raw,value=beta
+        type=raw,value=beta-${{ needs.gate.outputs.short }}
+    secrets: inherit
