@@ -38,6 +38,8 @@ go run .                                                          # serves on :8
 ```
 First run creates `files/config.json`; flags/env vars override it and are persisted back only when something actually changed.
 
+CI, the Docker image builds (scheduled, gated beta; releases) and fork behavior are described in `docs/ci.md`.
+
 ## Architecture
 
 **Layering is strict and one-directional:** `main.go` (wiring + routes) → `controllers` (HTTP handlers, one file per resource) → `database` (GORM queries, one file per resource, filenames mirror `controllers`) → `models` (GORM structs; every persisted struct embeds `models.GormModel` for its UUID PK + timestamps). Controllers never import `gorm.io/*` or touch `database.Instance` directly.

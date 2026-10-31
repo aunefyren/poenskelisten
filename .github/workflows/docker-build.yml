@@ -1,0 +1,126 @@
+name: Docker Build
+
+# Reusable multi-arch image build, called by docker-image.yml (releases) and
+# docker-image-beta.yml (scheduled beta). Works on forks without extra secrets:
+# GHCR uses the built-in GITHUB_TOKEN, and Docker Hub is only used when its
+# credentials exist. See docs/ci.md.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit, branch or tag to build.
+        type: string
+        required: true
+      version:
+        description: Replaces the {{RELEASE_TAG}} placeholder in config/config.go.
+        type: string
+        required: true
+      tags:
+        description: docker/metadata-action tag rules, one per line.
+        type: string
+        required: true
+      latest:
+        description: Also tag the image as latest.
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    # Secrets can't be used in step `if:` conditions, so expose whether the
+    # Docker Hub credentials exist. Without them (e.g. on a fork) the image is
+    # only published to GHCR.
+    env:
+      HAS_DOCKERHUB: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
+
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ inputs.ref }}
+
+    - name: Resolve image names
+      id: images
+      env:
+        REPOSITORY: ${{ github.repository }}
+        DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+      run: |
+        # Registry names must be lowercase; a fork's owner may not be.
+        echo "ghcr=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+        # The Docker Hub repository defaults to aunefyren/poenskelisten only
+        # upstream, so a fork with its own Docker Hub secrets never tries to
+        # push there; it sets the DOCKERHUB_IMAGE repository variable instead.
+        dockerhub=""
+        if [ "$HAS_DOCKERHUB" = true ]; then
+          if [ -n "$DOCKERHUB_IMAGE" ]; then
+            dockerhub="${DOCKERHUB_IMAGE,,}"
+          elif [ "$REPOSITORY" = "aunefyren/poenskelisten" ]; then
+            dockerhub="aunefyren/poenskelisten"
+          else
+            echo "::notice::Docker Hub credentials are set but the DOCKERHUB_IMAGE repository variable isn't; publishing to GHCR only."
+          fi
+        fi
+        echo "dockerhub=$dockerhub" >> "$GITHUB_OUTPUT"
+
+    - name: Set up Docker metadata
+      id: meta
+      uses: docker/metadata-action@v6
+      with:
+        # metadata-action drops the empty line when Docker Hub is off.
+        images: |
+          ${{ steps.images.outputs.dockerhub }}
+          ${{ steps.images.outputs.ghcr }}
+        tags: ${{ inputs.tags }}
+        flavor: |
+          latest=${{ inputs.latest }}
+        # The action defaults the revision label to the triggering sha; pin it to
+        # the commit actually built. The beta gate reads this label back.
+        labels: |
+          org.opencontainers.image.revision=${{ steps.images.outputs.sha }}
+
+    # Go cross-compiles natively in the Dockerfile's builder stage; QEMU only
+    # runs the runtime stage's single `RUN apk add`. 386 runs natively on amd64.
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v4
+      with:
+        platforms: arm64,arm
+    - name: Set up Docker Buildx
+      id: buildx
+      uses: docker/setup-buildx-action@v4
+
+    - name: Login to Docker Hub
+      if: steps.images.outputs.dockerhub != ''
+      uses: docker/login-action@v4
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    - name: Login to GHCR
+      uses: docker/login-action@v4
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Replace version variable
+      env:
+        VERSION: ${{ inputs.version }}
+      run: sed -i "s/{{RELEASE_TAG}}/${VERSION}/g" config/config.go
+
+    - name: Build and push
+      uses: docker/build-push-action@v7
+      with:
+        builder: ${{ steps.buildx.outputs.name }}
+        file: ./Dockerfile
+        platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/386
+        push: true
+        context: .
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        # Layer cache (mainly the `go mod download` layer) shared by beta and
+        # release builds; tag runs can read caches saved from the default branch.
+        cache-from: type=gha,scope=docker-image
+        cache-to: type=gha,mode=max,scope=docker-image
