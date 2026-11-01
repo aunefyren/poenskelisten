@@ -2,7 +2,6 @@ package database
 
 import (
 	"aunefyren/poenskelisten/models"
-	"aunefyren/poenskelisten/utilities"
 	"errors"
 
 	"github.com/google/uuid"
@@ -13,7 +12,7 @@ func GetAllEnabledInvites() ([]models.Invite, error) {
 	var inviteStruct []models.Invite
 
 	inviteRecords := Instance.
-		Where(&models.Invite{Enabled: &utilities.DBTrue}).
+		Where("enabled = ?", true).
 		Find(&inviteStruct)
 
 	if inviteRecords.Error != nil {
@@ -34,8 +33,7 @@ func GetInviteByID(inviteID uuid.UUID) (models.Invite, error) {
 	var inviteStruct models.Invite
 
 	inviteRecords := Instance.
-		Where(&models.Invite{Enabled: &utilities.DBTrue}).
-		Where(&models.GormModel{ID: inviteID}).
+		Where("id = ? AND enabled = ?", inviteID, true).
 		Find(&inviteStruct)
 
 	if inviteRecords.Error != nil {
@@ -53,7 +51,7 @@ func DeleteInviteByID(inviteID uuid.UUID) error {
 
 	inviteRecords := Instance.
 		Model(inviteStruct).
-		Where(&models.GormModel{ID: inviteID}).
+		Where("id = ?", inviteID).
 		Update("enabled", false)
 
 	if inviteRecords.Error != nil {

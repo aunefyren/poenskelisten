@@ -95,6 +95,18 @@ func TestSSOTokenRoundTripAndRejectedAsSession(t *testing.T) {
 	}
 }
 
+func TestSSOTokenWithoutUserRejected(t *testing.T) {
+	setupAuthTestConfig(t)
+
+	token, err := GenerateSSOToken(uuid.Nil)
+	if err != nil {
+		t.Fatalf("GenerateSSOToken error: %v", err)
+	}
+	if _, err := ValidateSSOToken(token); err == nil {
+		t.Error("ValidateSSOToken accepted a token for the nil UUID")
+	}
+}
+
 func TestVerifyPKCE(t *testing.T) {
 	verifier := "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
 	sum := sha256.Sum256([]byte(verifier))

@@ -55,7 +55,7 @@ func imageFilePath(dir string, id uuid.UUID, thumbnail bool) string {
 func APIGetUserProfileImage(context *gin.Context) {
 	thumbnail := context.Query("thumbnail") == "true"
 
-	userID, err := uuid.Parse(context.Param("user_id"))
+	userID, err := utilities.ParseID(context.Param("user_id"))
 	if err != nil {
 		logger.Log.Error("Failed to parse user ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse user ID."})
@@ -101,7 +101,7 @@ func APIGetUserProfileImage(context *gin.Context) {
 func APIGetWishImage(context *gin.Context) {
 	thumbnail := context.Query("thumbnail") == "true"
 
-	wishID, err := uuid.Parse(context.Param("wish_id"))
+	wishID, err := utilities.ParseID(context.Param("wish_id"))
 	if err != nil {
 		logger.Log.Error("Failed to parse wish ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})

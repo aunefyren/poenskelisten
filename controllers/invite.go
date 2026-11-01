@@ -4,12 +4,12 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
 	"errors"
 	"net/http"
 	"sort"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 func RegisterInvite(context *gin.Context) {
@@ -47,7 +47,7 @@ func APIDeleteInvite(context *gin.Context) {
 	var inviteID = context.Param("invite_id")
 
 	// Parse group id
-	inviteIDInt, err := uuid.Parse(inviteID)
+	inviteIDInt, err := utilities.ParseID(inviteID)
 	if err != nil {
 		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})

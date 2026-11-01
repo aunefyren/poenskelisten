@@ -343,7 +343,7 @@ func TestDeleteNewsPostNotFound(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
-	missingID := "00000000-0000-0000-0000-000000000000"
+	missingID := uuid.NewString()
 	ctx.Request = httptest.NewRequest("DELETE", "/api/news/"+missingID, nil)
 	ctx.Params = gin.Params{{Key: "news_id", Value: missingID}}
 	DeleteNewsPost(ctx)
@@ -394,7 +394,7 @@ func TestEditNewsPostInvalidID(t *testing.T) {
 func TestEditNewsPostNotFound(t *testing.T) {
 	setupControllersDB(t)
 
-	missingID := "00000000-0000-0000-0000-000000000000"
+	missingID := uuid.NewString()
 	code, _ := putNewsPost(t, missingID, `{"title":"Hello world","body":"Some news body"}`)
 	if code != 400 {
 		t.Errorf("status = %d, want 400 for a news post that doesn't exist", code)

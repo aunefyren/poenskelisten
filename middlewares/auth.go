@@ -5,6 +5,7 @@ import (
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
 	"errors"
 	"net/http"
 
@@ -59,7 +60,7 @@ func GetAuthUsername(tokenString string) (uuid.UUID, error) {
 	if err != nil {
 		return uuid.UUID{}, err
 	}
-	return uuid.Parse(claims.Subject)
+	return utilities.ParseID(claims.Subject)
 }
 
 // GetTokenClaims returns the validated OAuth claims from an access token.

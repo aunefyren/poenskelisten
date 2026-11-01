@@ -4,7 +4,6 @@ import (
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
-	"aunefyren/poenskelisten/utilities"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -180,8 +179,7 @@ func GenerateRandomVerificationCodeForUser(userID uuid.UUID) (string, error) {
 	var user models.User
 	userRecord := Instance.
 		Model(user).
-		Where(&models.User{Enabled: &utilities.DBTrue}).
-		Where(&models.GormModel{ID: userID}).
+		Where("id = ? AND enabled = ?", userID, true).
 		Update("verification_code", verificationCode)
 
 	if userRecord.Error != nil {
@@ -199,7 +197,7 @@ func GenerateRandomVerificationCodeForUser(userID uuid.UUID) (string, error) {
 func VerifyUniqueUserEmail(providedEmail string) (bool, error) {
 	var user models.User
 	userRecords := Instance.
-		Where(&models.User{Enabled: &utilities.DBTrue, Email: &providedEmail}).
+		Where("enabled = ? AND email = ?", true, providedEmail).
 		Find(&user)
 
 	if userRecords.Error != nil {
@@ -215,8 +213,7 @@ func VerifyUniqueUserEmail(providedEmail string) (bool, error) {
 func VerifyUserHasVerificationCode(userID uuid.UUID) (bool, error) {
 	var user models.User
 	userRecords := Instance.
-		Where(&models.User{Enabled: &utilities.DBTrue}).
-		Where(&models.GormModel{ID: userID}).
+		Where("id = ? AND enabled = ?", userID, true).
 		Find(&user)
 
 	if userRecords.Error != nil {
@@ -238,8 +235,7 @@ func VerifyUserVerificationCodeMatches(userID uuid.UUID, verificationCode string
 	var user models.User
 
 	userRecords := Instance.
-		Where(&models.User{Enabled: &utilities.DBTrue, VerificationCode: &verificationCode}).
-		Where(&models.GormModel{ID: userID}).
+		Where("id = ? AND enabled = ? AND verification_code = ?", userID, true, verificationCode).
 		Find(&user)
 
 	if userRecords.Error != nil {
@@ -259,7 +255,7 @@ func VerifyUserIsVerified(userID uuid.UUID) (bool, error) {
 	var user models.User
 
 	userRecords := Instance.
-		Where(&models.GormModel{ID: userID}).
+		Where("id = ?", userID).
 		Find(&user)
 
 	if userRecords.Error != nil {
@@ -276,12 +272,8 @@ func VerifyUserIsVerified(userID uuid.UUID) (bool, error) {
 func VerifyUnusedUserInviteCode(providedCode string) (bool, error) {
 	var inviteStruct models.Invite
 
-	// Used is a bool, so it must be matched with an explicit clause: GORM drops
-	// zero-value (false) fields from struct-based Where conditions, which would
-	// otherwise let an already-used invite pass this check.
 	inviteRecords := Instance.
-		Where(&models.Invite{Code: providedCode, Enabled: &utilities.DBTrue}).
-		Where("used = ?", false).
+		Where("code = ? AND enabled = ? AND used = ?", providedCode, true, false).
 		Find(&inviteStruct)
 
 	if inviteRecords.Error != nil {
@@ -298,8 +290,7 @@ func SetUserVerification(userID uuid.UUID, verified bool) error {
 	var user models.User
 
 	userRecords := Instance.
-		Model(user).Where(models.GormModel{ID: userID}).
-		Where(&models.User{Enabled: &utilities.DBTrue}).
+		Model(user).Where("id = ? AND enabled = ?", userID, true).
 		Update("verified", verified)
 
 	if userRecords.Error != nil {
@@ -317,7 +308,7 @@ func DeleteGroup(GroupID uuid.UUID) error {
 	var group models.Group
 
 	groupRecords := Instance.
-		Model(group).Where(&models.GormModel{ID: GroupID}).
+		Model(group).Where("id = ?", GroupID).
 		Update("enabled", false)
 
 	if groupRecords.Error != nil {
@@ -335,7 +326,7 @@ func DeleteGroupMembership(GroupMembershipID uuid.UUID) error {
 
 	groupRecords := Instance.
 		Model(groupMembership).
-		Where(&models.GormModel{ID: GroupMembershipID}).
+		Where("id = ?", GroupMembershipID).
 		Update("enabled", false)
 
 	if groupRecords.Error != nil {
@@ -353,7 +344,7 @@ func DeleteWishlist(WishlistID uuid.UUID) error {
 
 	wishlistRecords := Instance.
 		Model(wishlist).
-		Where(&models.GormModel{ID: WishlistID}).
+		Where("id = ?", WishlistID).
 		Update("enabled", false)
 
 	if wishlistRecords.Error != nil {
@@ -371,7 +362,7 @@ func DeleteWishlistMembership(WishlistMembershipID uuid.UUID) error {
 
 	wishlistMembershipRecords := Instance.
 		Model(wishlistMembership).
-		Where(&models.GormModel{ID: WishlistMembershipID}).
+		Where("id = ?", WishlistMembershipID).
 		Update("enabled", false)
 
 	if wishlistMembershipRecords.Error != nil {

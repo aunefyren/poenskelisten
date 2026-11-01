@@ -190,6 +190,9 @@ func ValidateSSOToken(signedToken string) (*JWTClaim, error) {
 	if claims.Purpose != PurposeSSO {
 		return nil, errors.New("token is not an sso token")
 	}
+	if claims.UserID == uuid.Nil {
+		return nil, errors.New("sso token has no user")
+	}
 	return claims, nil
 }
 

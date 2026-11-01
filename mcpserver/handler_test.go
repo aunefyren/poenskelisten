@@ -228,6 +228,40 @@ func TestListWishesToolInvalidWishlistID(t *testing.T) {
 	}
 }
 
+// The caller owns a wishlist, so with the nil UUID an ownership check that
+// ignored the ID would pass and return other accounts' wishes.
+func TestListWishesToolNilWishlistID(t *testing.T) {
+	setupMCPDB(t)
+	owner := createMCPTestUser(t, "Ada")
+	other := createMCPTestUser(t, "Bob")
+	now := time.Now()
+	for _, user := range []models.User{owner, other} {
+		wishlist := models.Wishlist{Name: user.FirstName + " list", Enabled: true, OwnerID: user.ID, Date: &now}
+		wishlist.ID = uuid.New()
+		if r := database.Instance.Create(&wishlist); r.Error != nil {
+			t.Fatalf("failed to create wishlist: %v", r.Error)
+		}
+		wish := models.Wish{Name: user.FirstName + " wish", Enabled: true, OwnerID: user.ID, WishlistID: wishlist.ID}
+		wish.ID = uuid.New()
+		if r := database.Instance.Create(&wish); r.Error != nil {
+			t.Fatalf("failed to create wish: %v", r.Error)
+		}
+	}
+
+	session := startMCPTestServer(t, owner.ID, "mcp:wishlists.read")
+
+	result, err := session.CallTool(context.Background(), &sdkmcp.CallToolParams{
+		Name:      "list_wishes",
+		Arguments: map[string]any{"wishlist_id": uuid.Nil.String()},
+	})
+	if err != nil {
+		t.Fatalf("CallTool transport-level error: %v", err)
+	}
+	if !result.IsError {
+		t.Errorf("expected an error result for the nil wishlist_id, got %s", firstText(t, result))
+	}
+}
+
 func TestListWishesToolNotOwner(t *testing.T) {
 	setupMCPDB(t)
 	owner := createMCPTestUser(t, "Ada")

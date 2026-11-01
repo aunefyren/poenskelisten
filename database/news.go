@@ -17,7 +17,7 @@ func DeleteNewsPost(newsID uuid.UUID) error {
 
 	newsRecords := Instance.
 		Model(news).
-		Where(&models.GormModel{ID: newsID}).
+		Where("id = ?", newsID).
 		Update("enabled", false)
 
 	if newsRecords.Error != nil {
@@ -35,7 +35,7 @@ func GetNewsPosts() ([]models.News, error) {
 	var newsPosts []models.News
 
 	newsPostsRecords := Instance.
-		Where(&models.News{Enabled: true}).
+		Where("enabled = ?", true).
 		Order("news.date desc").Find(&newsPosts)
 
 	if newsPostsRecords.Error != nil {
@@ -55,8 +55,7 @@ func GetNewsPostByNewsID(newsID uuid.UUID) (models.News, error) {
 	var newsPost models.News
 
 	newsPostRecords := Instance.
-		Where(&models.GormModel{ID: newsID}).
-		Where(&models.News{Enabled: true}).
+		Where("id = ? AND enabled = ?", newsID, true).
 		Find(&newsPost)
 
 	if newsPostRecords.Error != nil {

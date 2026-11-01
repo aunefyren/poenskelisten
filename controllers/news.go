@@ -75,7 +75,7 @@ func visibleNewsPosts(newsPosts []models.News, admin bool, now time.Time) []mode
 func GetNewsPost(context *gin.Context) {
 	var newsIDString = context.Param("news_id")
 
-	newsID, err := uuid.Parse(newsIDString)
+	newsID, err := utilities.ParseID(newsIDString)
 	if err != nil {
 		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed parse request."})
@@ -210,7 +210,7 @@ func DeleteNewsPost(context *gin.Context) {
 	newsIDString := context.Param("news_id")
 
 	// Parse news ID
-	newsID, err := uuid.Parse(newsIDString)
+	newsID, err := utilities.ParseID(newsIDString)
 	if err != nil {
 		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
@@ -259,7 +259,7 @@ func APIEditNewsPost(context *gin.Context) {
 	newsIDString := context.Param("news_id")
 
 	// Parse news ID
-	newsID, err := uuid.Parse(newsIDString)
+	newsID, err := utilities.ParseID(newsIDString)
 	if err != nil {
 		logger.Log.Error("Failed to parse request. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})

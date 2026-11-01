@@ -2,7 +2,6 @@ package database
 
 import (
 	"aunefyren/poenskelisten/models"
-	"aunefyren/poenskelisten/utilities"
 	"errors"
 
 	"github.com/google/uuid"
@@ -47,8 +46,7 @@ func GetWishlistByWishlistID(wishlistID uuid.UUID) (bool, models.Wishlist, error
 	var wishlist models.Wishlist
 
 	wishlistRecord := Instance.
-		Where(&models.Wishlist{Enabled: true}).
-		Where(&models.GormModel{ID: wishlistID}).
+		Where("id = ? AND enabled = ?", wishlistID, true).
 		Find(&wishlist)
 
 	if wishlistRecord.Error != nil {
@@ -66,7 +64,7 @@ func GetWishlistCollaboratorsFromWishlist(WishlistID uuid.UUID) (WishlistCollabo
 	WishlistCollaborator = []models.WishlistCollaborator{}
 
 	userRecords := Instance.
-		Where(&models.WishlistCollaborator{Enabled: true}).
+		Where("wishlist_collaborators.enabled = ?", true).
 		Joins("JOIN users ON wishlist_collaborators.user_id = users.id").
 		Where("users.enabled = ?", true).
 		Joins("JOIN wishlists ON wishlist_collaborators.wishlist_id = wishlists.id").
@@ -85,7 +83,7 @@ func GetWishlistCollaboratorByUserIDAndWishlistID(WishlistID uuid.UUID, UserID u
 	WishlistCollaborator = models.WishlistCollaborator{}
 
 	userRecords := Instance.
-		Where(&models.WishlistCollaborator{Enabled: true}).
+		Where("wishlist_collaborators.enabled = ?", true).
 		Joins("JOIN users ON wishlist_collaborators.user_id = users.id").
 		Where("users.enabled = ? AND users.id = ?", true, UserID).
 		Joins("JOIN wishlists ON wishlist_collaborators.wishlist_id = wishlists.id").
@@ -121,7 +119,7 @@ func VerifyWishlistCollaboratorToWishlist(WishlistID uuid.UUID, UserID uuid.UUID
 	WishlistCollaborator := models.WishlistCollaborator{}
 
 	wishlistMembershipRecord := Instance.
-		Where(&models.WishlistCollaborator{Enabled: true, WishlistID: WishlistID, UserID: UserID}).
+		Where("wishlist_collaborators.enabled = ? AND wishlist_collaborators.wishlist_id = ? AND wishlist_collaborators.user_id = ?", true, WishlistID, UserID).
 		Joins("JOIN users ON wishlist_collaborators.user_id = users.id").
 		Where("users.enabled = ?", true).
 		Find(&WishlistCollaborator)
@@ -141,7 +139,7 @@ func DeleteWishlistCollaboratorByWishlistCollaboratorID(WishlistCollaboratorID u
 
 	wishlistMembershipRecords := Instance.
 		Model(wishlistCollaborator).
-		Where(&models.GormModel{ID: WishlistCollaboratorID}).
+		Where("id = ?", WishlistCollaboratorID).
 		Update("enabled", false)
 
 	if wishlistMembershipRecords.Error != nil {
@@ -161,7 +159,7 @@ func GetWishlistsByUserIDThroughWishlistCollaborations(UserID uuid.UUID) (wishli
 
 	// Order("wishlists.date desc, wishlists.name").
 	wishlistRecords := Instance.
-		Where(&models.Wishlist{Enabled: true}).
+		Where("wishlists.enabled = ?", true).
 		Joins("JOIN wishlist_collaborators ON wishlists.id = wishlist_collaborators.wishlist_id").
 		Where("wishlist_collaborators.enabled = ? AND wishlist_collaborators.user_id = ?", true, UserID).
 		Joins("JOIN users ON wishlist_collaborators.user_id = users.id").
@@ -181,7 +179,7 @@ func GetWishlistsByUserIDThroughWishlistMemberships(UserID uuid.UUID) (wishlists
 
 	wishlistRecords := Instance.
 		Distinct().
-		Where(&models.Wishlist{Enabled: true}).
+		Where("wishlists.enabled = ?", true).
 		Joins("JOIN wishlist_memberships ON wishlists.id = wishlist_memberships.wishlist_id").
 		Where("wishlist_memberships.enabled = ?", true).
 		Joins("JOIN groups ON wishlist_memberships.group_id = groups.id").
@@ -205,7 +203,7 @@ func GetWishlistsFromGroup(GroupID uuid.UUID) ([]models.Wishlist, error) {
 	var wishlists []models.Wishlist
 
 	wishlistRecords := Instance.
-		Where(&models.Wishlist{Enabled: true}).
+		Where("wishlists.enabled = ?", true).
 		Joins("JOIN wishlist_memberships ON wishlist_memberships.wishlist_id = wishlists.id").
 		Where("wishlist_memberships.enabled = ? AND wishlist_memberships.group_id = ?", true, GroupID).
 		Joins("JOIN groups ON wishlist_memberships.group_id = groups.ID").
@@ -229,7 +227,7 @@ func GetOwnedWishlists(UserID uuid.UUID) (wishlists []models.Wishlist, err error
 
 	wishlistRecords := Instance.
 		Distinct().
-		Where(&models.Wishlist{Enabled: true, OwnerID: UserID}).
+		Where("wishlists.enabled = ? AND wishlists.owner_id = ?", true, UserID).
 		Joins("JOIN users ON users.id = wishlists.owner_id").
 		Where("users.enabled = ?", true).
 		Order("wishlists.date desc, wishlists.name").
@@ -247,8 +245,7 @@ func GetWishlist(WishlistID uuid.UUID) (models.Wishlist, error) {
 	var wishlist models.Wishlist
 
 	wishlistRecords := Instance.
-		Where(&models.Wishlist{Enabled: true}).
-		Where(&models.GormModel{ID: WishlistID}).
+		Where("id = ? AND enabled = ?", WishlistID, true).
 		Find(&wishlist)
 
 	if wishlistRecords.Error != nil {
@@ -265,7 +262,7 @@ func VerifyUniqueWishNameInWishlist(WishName string, WishlistID uuid.UUID) (bool
 	var wish models.Wish
 
 	wishesRecord := Instance.
-		Where(&models.Wish{Enabled: true, WishlistID: WishlistID, Name: WishName}).
+		Where("enabled = ? AND wishlist_id = ? AND name = ?", true, WishlistID, WishName).
 		Find(&wish)
 
 	if wishesRecord.Error != nil {
@@ -281,8 +278,7 @@ func VerifyUniqueWishNameInWishlistExcludingWish(WishName string, WishlistID uui
 	var wish models.Wish
 
 	wishesRecord := Instance.
-		Where(&models.Wish{Enabled: true, WishlistID: WishlistID, Name: WishName}).
-		Not(&models.Wish{GormModel: models.GormModel{ID: WishID}}).
+		Where("enabled = ? AND wishlist_id = ? AND name = ? AND id <> ?", true, WishlistID, WishName, WishID).
 		Find(&wish)
 
 	if wishesRecord.Error != nil {
@@ -298,7 +294,7 @@ func VerifyUniqueWishlistNameForUser(WishlistName string, UserID uuid.UUID) (boo
 	var wishlist models.Wishlist
 
 	wishlistRecord := Instance.
-		Where(&models.Wishlist{Enabled: true, OwnerID: UserID, Name: WishlistName}).
+		Where("enabled = ? AND owner_id = ? AND name = ?", true, UserID, WishlistName).
 		Find(&wishlist)
 
 	if wishlistRecord.Error != nil {
@@ -314,8 +310,7 @@ func GetWishlistOwner(WishlistID uuid.UUID) (uuid.UUID, error) {
 	var wishlist models.Wishlist
 
 	wishlistRecord := Instance.
-		Where(&models.Wishlist{Enabled: true}).
-		Where(&models.GormModel{ID: WishlistID}).
+		Where("id = ? AND enabled = ?", WishlistID, true).
 		Find(&wishlist)
 
 	if wishlistRecord.Error != nil {
@@ -332,7 +327,7 @@ func VerifyUserMembershipToGroupMembershipToWishlist(UserID uuid.UUID, WishlistI
 	var wishlistMembership models.WishlistMembership
 
 	wishlistMembershipRecord := Instance.
-		Where(&models.WishlistMembership{WishlistID: WishlistID, Enabled: true}).
+		Where("wishlist_memberships.wishlist_id = ? AND wishlist_memberships.enabled = ?", WishlistID, true).
 		Joins("JOIN groups ON groups.id = wishlist_memberships.group_id").
 		Where("groups.enabled = ?", true).
 		Joins("JOIN group_memberships ON group_memberships.group_id = groups.id").
@@ -352,8 +347,7 @@ func VerifyUserOwnershipToWishlist(UserID uuid.UUID, WishlistID uuid.UUID) (bool
 	var wishlist models.Wishlist
 
 	wishlistRecord := Instance.
-		Where(&models.Wishlist{Enabled: true, OwnerID: UserID}).
-		Where(&models.GormModel{ID: WishlistID}).
+		Where("id = ? AND enabled = ? AND owner_id = ?", WishlistID, true, UserID).
 		Find(&wishlist)
 
 	if wishlistRecord.Error != nil {
@@ -369,7 +363,7 @@ func GetMembershipIDForGroupToWishlist(WishlistID uuid.UUID, GroupID uuid.UUID) 
 	wishlistMembership = models.WishlistMembership{}
 
 	wishlistMembershipRecord := Instance.
-		Where(&models.WishlistMembership{WishlistID: WishlistID, Enabled: true, GroupID: GroupID}).
+		Where("wishlist_id = ? AND group_id = ? AND enabled = ?", WishlistID, GroupID, true).
 		Find(&wishlistMembership)
 
 	if wishlistMembershipRecord.Error != nil {
@@ -386,7 +380,7 @@ func GetPublicWishListByWishlistHash(wishlistHash uuid.UUID) (bool, models.Wishl
 	var wishlist models.Wishlist
 
 	wishlistRecord := Instance.
-		Where(&models.Wishlist{Enabled: true, PublicHash: wishlistHash, Public: &utilities.DBTrue}).
+		Where("public_hash = ? AND enabled = ? AND public = ?", wishlistHash, true, true).
 		Find(&wishlist)
 
 	if wishlistRecord.Error != nil {

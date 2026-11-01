@@ -24,7 +24,7 @@ func SeedFirstPartyClient() error {
 
 	var existing models.OAuthClient
 	record := Instance.
-		Where(&models.OAuthClient{ClientID: models.FirstPartyClientID}).
+		Where("client_id = ?", models.FirstPartyClientID).
 		Find(&existing)
 	if record.Error != nil {
 		return record.Error
@@ -97,7 +97,7 @@ func DisableOAuthClient(clientID string) error {
 	disabled := false
 	record := Instance.
 		Model(&models.OAuthClient{}).
-		Where(&models.OAuthClient{ClientID: clientID}).
+		Where("client_id = ?", clientID).
 		Update("enabled", &disabled)
 	if record.Error != nil {
 		return record.Error
@@ -112,7 +112,7 @@ func DisableOAuthClient(clientID string) error {
 func GetOAuthClient(clientID string) (models.OAuthClient, bool, error) {
 	var client models.OAuthClient
 	record := Instance.
-		Where(&models.OAuthClient{ClientID: clientID}).
+		Where("client_id = ?", clientID).
 		Find(&client)
 	if record.Error != nil {
 		return models.OAuthClient{}, false, record.Error
@@ -169,7 +169,7 @@ func ConsumeAuthorizationCode(codeHash string) (models.AuthorizationCode, error)
 func GetConsent(userID uuid.UUID, clientID string) (models.OAuthConsent, bool, error) {
 	var consent models.OAuthConsent
 	record := Instance.
-		Where(&models.OAuthConsent{UserID: userID, ClientID: clientID}).
+		Where("user_id = ? AND client_id = ?", userID, clientID).
 		Find(&consent)
 	if record.Error != nil {
 		return models.OAuthConsent{}, false, record.Error
@@ -185,7 +185,7 @@ func GetConsent(userID uuid.UUID, clientID string) (models.OAuthConsent, bool, e
 func GetUserConsents(userID uuid.UUID) ([]models.OAuthConsent, error) {
 	consents := []models.OAuthConsent{}
 	record := Instance.
-		Where(&models.OAuthConsent{UserID: userID}).
+		Where("user_id = ?", userID).
 		Find(&consents)
 	if record.Error != nil {
 		return nil, record.Error
@@ -211,7 +211,7 @@ func UpsertConsent(userID uuid.UUID, clientID string, scopes []string) error {
 // RevokeConsent removes a user's consent for a client.
 func RevokeConsent(userID uuid.UUID, clientID string) error {
 	return Instance.
-		Where(&models.OAuthConsent{UserID: userID, ClientID: clientID}).
+		Where("user_id = ? AND client_id = ?", userID, clientID).
 		Delete(&models.OAuthConsent{}).Error
 }
 
@@ -220,7 +220,7 @@ func RevokeConsent(userID uuid.UUID, clientID string) error {
 func SetUserSessionsInvalidatedAt(userID uuid.UUID, at time.Time) error {
 	record := Instance.
 		Model(&models.User{}).
-		Where(&models.GormModel{ID: userID}).
+		Where("id = ?", userID).
 		Update("sessions_invalidated_at", at)
 	return record.Error
 }

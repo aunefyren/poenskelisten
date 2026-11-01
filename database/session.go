@@ -86,7 +86,7 @@ func createSession(session models.Session) (models.Session, error) {
 func getSessionByRefreshHash(hash string) (models.Session, bool, error) {
 	var session models.Session
 	record := Instance.
-		Where(&models.Session{RefreshTokenHash: hash}).
+		Where("refresh_token_hash = ?", hash).
 		Find(&session)
 	if record.Error != nil {
 		return models.Session{}, false, record.Error
@@ -166,8 +166,7 @@ func RevokeSessionByRefreshHash(hash string) error {
 	now := time.Now()
 	record := Instance.
 		Model(&models.Session{}).
-		Where(&models.Session{RefreshTokenHash: hash}).
-		Where("revoked_at IS NULL").
+		Where("refresh_token_hash = ? AND revoked_at IS NULL", hash).
 		Update("revoked_at", now)
 	return record.Error
 }
@@ -178,8 +177,7 @@ func RevokeUserClientSessions(userID uuid.UUID, clientID string) error {
 	now := time.Now()
 	record := Instance.
 		Model(&models.Session{}).
-		Where(&models.Session{UserID: userID, ClientID: clientID}).
-		Where("revoked_at IS NULL").
+		Where("user_id = ? AND client_id = ? AND revoked_at IS NULL", userID, clientID).
 		Update("revoked_at", now)
 	return record.Error
 }
@@ -190,8 +188,7 @@ func RevokeAllUserSessions(userID uuid.UUID) error {
 	now := time.Now()
 	record := Instance.
 		Model(&models.Session{}).
-		Where(&models.Session{UserID: userID}).
-		Where("revoked_at IS NULL").
+		Where("user_id = ? AND revoked_at IS NULL", userID).
 		Update("revoked_at", now)
 	return record.Error
 }

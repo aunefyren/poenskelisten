@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"net/mail"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
+
+	"github.com/google/uuid"
 )
 
 var DBTrue = true
@@ -91,4 +94,27 @@ func CleanConsoleEmail(input string) (string, error) {
 		return "", errors.New("not a valid e-mail address")
 	}
 	return email, nil
+}
+
+// ErrNilID refuses the nil UUID (all zeros) where a request names a record:
+// no record has it, and GORM takes it for an unset field in a struct
+// condition, which drops the condition.
+var ErrNilID = errors.New("the nil UUID is not a valid ID")
+
+// ParseID parses an ID taken from a request, refusing the nil UUID.
+func ParseID(value string) (uuid.UUID, error) {
+	id, err := uuid.Parse(value)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if id == uuid.Nil {
+		return uuid.Nil, ErrNilID
+	}
+	return id, nil
+}
+
+// HasNilID reports whether ids holds the nil UUID, which decoding JSON also
+// leaves in place of a missing ID.
+func HasNilID(ids ...uuid.UUID) bool {
+	return slices.Contains(ids, uuid.Nil)
 }

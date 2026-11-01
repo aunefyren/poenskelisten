@@ -1,8 +1,11 @@
 package utilities
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestPrintASCII(t *testing.T) {
@@ -102,5 +105,47 @@ func TestCleanConsoleEmail(t *testing.T) {
 				t.Errorf("CleanConsoleEmail(%q) = %q, want %q", c.input, got, c.want)
 			}
 		})
+	}
+}
+
+func TestParseID(t *testing.T) {
+	id := uuid.New()
+	cases := []struct {
+		name    string
+		input   string
+		want    uuid.UUID
+		wantErr error
+	}{
+		{"valid", id.String(), id, nil},
+		{"nil", "00000000-0000-0000-0000-000000000000", uuid.Nil, ErrNilID},
+		{"nil without dashes", "00000000000000000000000000000000", uuid.Nil, ErrNilID},
+		{"nil in braces", "{00000000-0000-0000-0000-000000000000}", uuid.Nil, ErrNilID},
+		{"nil as URN", "urn:uuid:00000000-0000-0000-0000-000000000000", uuid.Nil, ErrNilID},
+		{"empty", "", uuid.Nil, nil},
+		{"garbage", "not-a-uuid", uuid.Nil, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := ParseID(c.input)
+			if got != c.want {
+				t.Errorf("ParseID(%q) = %v, want %v", c.input, got, c.want)
+			}
+			if c.want != uuid.Nil {
+				if err != nil {
+					t.Errorf("ParseID(%q) error = %v", c.input, err)
+				}
+			} else if err == nil || (c.wantErr != nil && !errors.Is(err, c.wantErr)) {
+				t.Errorf("ParseID(%q) error = %v, want %v", c.input, err, c.wantErr)
+			}
+		})
+	}
+}
+
+func TestHasNilID(t *testing.T) {
+	if HasNilID() || HasNilID(uuid.New(), uuid.New()) {
+		t.Error("HasNilID reported a nil UUID among real IDs")
+	}
+	if !HasNilID(uuid.New(), uuid.Nil) {
+		t.Error("HasNilID missed the nil UUID")
 	}
 }
