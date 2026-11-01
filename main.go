@@ -50,7 +50,23 @@ func main() {
 // serveRouter is how run serves in production; it blocks until the server
 // fails.
 func serveRouter(router *gin.Engine, address string) error {
-	return router.Run(address)
+	return newServer(address, router).ListenAndServe()
+}
+
+// newServer bounds how long a client may take over each part of a request,
+// which router.Run doesn't: a client sending or reading slowly, or not at
+// all, would keep its connection open for as long as it likes. The read
+// limit leaves time to upload the largest image request, 15 MiB, at about
+// 0.7 Mbit/s; the write limit runs from the same start.
+func newServer(address string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              address,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       3 * time.Minute,
+		WriteTimeout:      4 * time.Minute,
+		IdleTimeout:       2 * time.Minute,
+	}
 }
 
 // run starts Pønskelisten: config, logger, flags, database, startup actions,
