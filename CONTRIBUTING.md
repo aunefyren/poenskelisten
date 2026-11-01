@@ -6,7 +6,7 @@ Thanks for wanting to help. Bug reports, feature ideas and pull requests are all
 
 - **Small fixes** (a bug, a typo, a missing test): just open a pull request.
 - **Bigger changes** (a new feature, a new endpoint or MCP tool, a schema change, anything touching auth or claims): open an issue first and describe the shape of the change. It's easier to agree on the approach before code exists than to rework a finished PR.
-- Check [`docs/wip.md`](docs/wip.md). It lists known bugs, intentional coverage gaps and planned features, so you can see whether something is already known or planned differently.
+- Check the [open issues](https://github.com/aunefyren/poenskelisten/issues). They list known bugs, intentional coverage gaps and planned features, so you can see whether something is already known or planned differently.
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ Thanks for wanting to help. Bug reports, feature ideas and pull requests are all
   - `ci:` GitHub Actions workflows and the Docker build
   - `maintenance:` dependencies, refactors, anything else
 - Link the issue the PR addresses, if there is one.
-- Update the docs your change affects: `README.md` for anything users or admins see (config options, MCP tools, features), and `docs/wip.md` if your change fixes or adds an entry there.
+- Update the docs your change affects: `README.md` for anything users or admins see (config options, MCP tools, features).
 
 ## Code
 

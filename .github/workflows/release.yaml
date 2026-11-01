@@ -27,7 +27,7 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         goos: ${{ matrix.goos }}
         goarch: ${{ matrix.goarch }}
-        goversion: "1.26"
+        goversion: "go.mod"
         binary_name: "poenskelisten"
         ldflags: "-s -w"
         # Only web/ (templates + static assets) is read at runtime; the Go

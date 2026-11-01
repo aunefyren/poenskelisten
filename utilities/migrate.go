@@ -235,7 +235,7 @@ func ReplaceValues(line string, currentTable string, IDMaps []IDMap, secondRun b
 	} else {
 
 		// The column indices below encode the exact column order of the old,
-		// pre-UUID schema (undocumented anywhere else - see docs/wip.md). If a
+		// pre-UUID schema (undocumented anywhere else - see GitHub issue #138). If a
 		// real dump's column count doesn't match what's assumed here, mapColumn
 		// fails loudly instead of letting a stale index either panic or, worse,
 		// silently substitute the wrong column's value.

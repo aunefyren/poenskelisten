@@ -97,7 +97,7 @@ func TestMatchIDToUUID(t *testing.T) {
 // special cases in ChangeColumns/ReplaceValues (groups, wishes, ...). That
 // sidesteps the one part of this legacy parser that depends on knowing the
 // exact old-schema column order for those specific tables (undocumented,
-// and risky to guess at - see docs/wip.md) while still genuinely covering
+// and risky to guess at - see GitHub issue #138) while still genuinely covering
 // the generic line-by-line scan, the two-pass ID->UUID substitution, and the
 // trailing ALTER TABLE synthesis, which is the bulk of what this file does.
 func TestMigrateSQLGenericTable(t *testing.T) {
@@ -164,7 +164,7 @@ func TestMigrateSQLStopsAtAlterTable(t *testing.T) {
 // TestMigrateSQLColumnMappingOutOfRange covers the defensive guard in
 // mapColumn: the per-table column-index mapping in ReplaceValues (e.g.
 // "groups" expects an owner ID at column index 7) encodes an undocumented,
-// unverified legacy schema (see docs/wip.md). If a real dump's row for one of
+// unverified legacy schema (see GitHub issue #138). If a real dump's row for one of
 // those special-cased tables has fewer columns than assumed, MigrateSQL must
 // return a clear error identifying the mismatch instead of panicking with an
 // unhelpful out-of-range index or silently rewriting the wrong column.
@@ -286,7 +286,7 @@ func TestMigrateSQLUnterminatedQuotedValue(t *testing.T) {
 }
 
 // TestMapColumn exercises mapColumn directly, independently of the legacy
-// per-table indices in ReplaceValues (which stay unverified, see docs/wip.md).
+// per-table indices in ReplaceValues (which stay unverified, see GitHub issue #138).
 func TestMapColumn(t *testing.T) {
 	idMaps := []IDMap{{TableName: "users", ID: "5", UUID: "user-uuid"}}
 

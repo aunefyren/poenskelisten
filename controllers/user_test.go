@@ -980,9 +980,9 @@ func TestUpdateUserWeakNewPassword(t *testing.T) {
 	}
 }
 
-// TestUpdateUserEmailChangeActuallyUnverifies covers a regression (see
-// docs/wip.md history): UpdateUser calls database.SetUserVerification(userID,
-// false) directly against the DB after an e-mail change, and must also update
+// TestUpdateUserEmailChangeActuallyUnverifies covers a regression: UpdateUser
+// calls database.SetUserVerification(userID, false) directly against the DB
+// after an e-mail change, and must also update
 // the in-memory userOriginal.Verified field to match before saving it back
 // with database.UpdateUserInDB, or that save would silently revert the
 // unverify.
