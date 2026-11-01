@@ -561,6 +561,67 @@ func TestOAuthTokenUnsupportedGrantType(t *testing.T) {
 	}
 }
 
+// The ID token carries the e-mail address only with the email scope and the
+// name only with the profile scope, on the code and the refresh grants alike.
+func TestOAuthTokenIDTokenClaimsFollowScopes(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	user := createTestUser(t)
+
+	idTokenClaims := func(body map[string]interface{}) map[string]interface{} {
+		t.Helper()
+		raw, _ := body["id_token"].(string)
+		parts := strings.Split(raw, ".")
+		if len(parts) != 3 {
+			t.Fatalf("id_token = %q, want a JWT", raw)
+		}
+		payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		claims := map[string]interface{}{}
+		if err := json.Unmarshal(payload, &claims); err != nil {
+			t.Fatal(err)
+		}
+		return claims
+	}
+
+	for _, c := range []struct {
+		scopes          []string
+		wantEmail, name bool
+	}{
+		{[]string{"openid"}, false, false},
+		{[]string{"openid", "email"}, true, false},
+		{[]string{"openid", "profile"}, false, true},
+	} {
+		client := oauthServerTestNewClient(t, false, true, c.scopes, "https://client.example/cb")
+		authCode, verifier := oauthServerTestIssueCode(t, client, user)
+		code, body, _ := postForm(APIOAuthToken, "/oauth/token", url.Values{
+			"grant_type": {"authorization_code"}, "code": {authCode},
+			"redirect_uri": {client.RedirectURIs[0]}, "client_id": {client.ClientID},
+			"code_verifier": {verifier},
+		})
+		if code != http.StatusOK {
+			t.Fatalf("%v: status = %d; body=%v", c.scopes, code, body)
+		}
+		refreshCode, refreshed, _ := postForm(APIOAuthToken, "/oauth/token", url.Values{
+			"grant_type": {"refresh_token"}, "refresh_token": {body["refresh_token"].(string)}, "client_id": {client.ClientID},
+		})
+		if refreshCode != http.StatusOK {
+			t.Fatalf("%v: refresh status = %d; body=%v", c.scopes, refreshCode, refreshed)
+		}
+		for grant, response := range map[string]map[string]interface{}{"code": body, "refresh": refreshed} {
+			claims := idTokenClaims(response)
+			if _, has := claims["email"]; has != c.wantEmail {
+				t.Errorf("%v %s grant: email present = %v, want %v", c.scopes, grant, has, c.wantEmail)
+			}
+			if _, has := claims["name"]; has != c.name {
+				t.Errorf("%v %s grant: name present = %v, want %v", c.scopes, grant, has, c.name)
+			}
+		}
+	}
+}
+
 func TestOAuthTokenAuthorizationCodeSuccessPublicClient(t *testing.T) {
 	setupControllersDB(t)
 	oauthServerTestSetup(t)

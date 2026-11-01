@@ -375,7 +375,7 @@ func handleRefreshTokenGrant(ctx *gin.Context) {
 		"scope":        result.Scope,
 	}
 	if scopeContains(result.Scope, "openid") {
-		if idToken, err := auth.GenerateIDToken(user.ID, client.ClientID, derefString(user.Email), displayName(user)); err == nil {
+		if idToken, err := idTokenFor(user, client.ClientID, result.Scope); err == nil {
 			resp["id_token"] = idToken
 		}
 	}
@@ -418,7 +418,7 @@ func issueTokenResponse(ctx *gin.Context, client models.OAuthClient, user models
 		"scope":        scope,
 	}
 	if scopeContains(scope, "openid") {
-		if idToken, err := auth.GenerateIDToken(user.ID, client.ClientID, derefString(user.Email), displayName(user)); err == nil {
+		if idToken, err := idTokenFor(user, client.ClientID, scope); err == nil {
 			resp["id_token"] = idToken
 		}
 	}
@@ -551,6 +551,20 @@ func scopeContains(scope string, name string) bool {
 		}
 	}
 	return false
+}
+
+// idTokenFor carries the e-mail address only with the email scope and the
+// name only with the profile scope, as OpenID Connect has it and as the
+// consent page tells the user.
+func idTokenFor(user models.User, clientID string, scope string) (string, error) {
+	email, name := "", ""
+	if scopeContains(scope, "email") {
+		email = derefString(user.Email)
+	}
+	if scopeContains(scope, "profile") {
+		name = displayName(user)
+	}
+	return auth.GenerateIDToken(user.ID, clientID, email, name)
 }
 
 func derefString(s *string) string {
