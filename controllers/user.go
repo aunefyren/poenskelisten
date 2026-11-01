@@ -11,6 +11,7 @@ import (
 	"image"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -725,48 +726,49 @@ func APIResetPassword(context *gin.Context) {
 		return
 	}
 
-	user, err := database.GetUserInformationByEmail(resetRequestVar.Email)
-	if err != nil {
-		logger.Log.Error("Failed to find user using email during password reset. Replied with okay 200. Error: " + err.Error())
-		context.JSON(http.StatusOK, gin.H{"message": "If the user exists, an email with a password reset has been sent."})
-		context.Abort()
-		return
-	}
+	// Whether the address has an account shows neither in the answer nor in
+	// how long it takes: the account is looked up, and the e-mail sent, after
+	// replying.
+	passwordResets.Add(1)
+	go func() {
+		defer passwordResets.Done()
+		sendPasswordReset(resetRequestVar.Email)
+	}()
 
-	user, err = database.GetAllUserInformation(user.ID)
-	if err != nil {
-		logger.Log.Error("Failed to get all user information. Replied with okay 200. Error: " + err.Error())
-		context.JSON(http.StatusOK, gin.H{"message": "If the user exists, an email with a password reset has been sent."})
-		context.Abort()
+	context.JSON(http.StatusOK, gin.H{"message": "If the user exists, an email with a password reset has been sent."})
+
+}
+
+// passwordResets counts the reset e-mails still being sent; tests wait on it.
+var passwordResets sync.WaitGroup
+
+// sendPasswordReset gives the account with this address a new reset code and
+// e-mails it. Its failures can only be logged: the request was answered.
+func sendPasswordReset(email string) {
+	user, err := database.GetUserInformationByEmail(email)
+	if errors.Is(err, database.ErrUserNotFound) {
+		return
+	} else if err != nil {
+		logger.Log.Error("Failed to find user using email during password reset. Error: " + err.Error())
 		return
 	}
 
 	_, err = database.GenerateRandomResetCodeForUser(user.ID, true)
 	if err != nil {
 		logger.Log.Error("Failed to generate reset code for user during password reset. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})
-		context.Abort()
 		return
 	}
 
 	user, err = database.GetAllUserInformation(user.ID)
 	if err != nil {
 		logger.Log.Error("Failed to retrieve data for user during password reset. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})
-		context.Abort()
 		return
 	}
 
 	err = utilities.SendSMTPResetEmail(user)
 	if err != nil {
-		logger.Log.Error("Failed to send email to user during password reset. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error. Failed to send e-mail."})
-		context.Abort()
-		return
+		logger.Log.Error("Failed to send email to user " + user.ID.String() + " during password reset. Error: " + err.Error())
 	}
-
-	context.JSON(http.StatusOK, gin.H{"message": "If the user exists, an email with a password reset has been sent."})
-
 }
 
 func APIVerifyResetCode(context *gin.Context) {
