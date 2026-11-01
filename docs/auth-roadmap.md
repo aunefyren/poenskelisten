@@ -3,7 +3,7 @@
 Status: **All four phases implemented, shipping in v2.4.0.** This document is now
 a design record. Where the shipped code differs from the plan, see
 [Where the implementation differs](#where-the-implementation-differs) and the
-open bugs in [`wip.md`](./wip.md).
+open bugs in the [GitHub issues](https://github.com/aunefyren/poenskelisten/issues).
 
 This document plans four phases that harden and modernize Pønskelisten's
 authentication:
@@ -657,7 +657,7 @@ the only toggle (it gates 4.3).
 ### Where the implementation differs
 
 These parts of the plan below were built differently. Open gaps are tracked in
-[`wip.md`](./wip.md):
+[GitHub issues](https://github.com/aunefyren/poenskelisten/issues):
 
 - **API audience instead of API scopes.** The API has no per-route scope checks.
   Instead it's reserved for the first-party web app: access tokens carry a
@@ -676,7 +676,7 @@ These parts of the plan below were built differently. Open gaps are tracked in
   `registration_endpoint` metadata entry) follows `mcp_enabled`, since
   third-party clients have nothing else to use.
 - **Rate limiting.** Only `/oauth/register` is rate-limited. `/oauth/token` and
-  `/oauth/authorize` aren't.
+  `/oauth/authorize` aren't (#135).
 - **Key storage.** The signing key lives in `config.json`. Since v2.5.0 it's written
   `0600`, and an older world-readable file is tightened on load.
 
