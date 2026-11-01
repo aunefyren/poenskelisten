@@ -13,4 +13,3 @@ Closes #
 - [ ] Tests added or updated for the change
 - [ ] `gofmt -l .`, `go build ./...`, `go vet ./...` and `go test -race ./...` pass locally
 - [ ] `README.md` updated if users or admins see the change
-- [ ] `docs/wip.md` updated if this fixes or adds an entry there
