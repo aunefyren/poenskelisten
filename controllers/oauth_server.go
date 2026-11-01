@@ -79,6 +79,22 @@ func resolveResource(client models.OAuthClient, requested string) (string, bool)
 	return "", false
 }
 
+// loginGate is the page a signed-in user must go through before any client
+// gets tokens for them, or "" when there is none: verifying their e-mail,
+// then enrolling in MFA where it is enforced. Authorize, consent and both
+// token grants check it, so none of them is a way around it.
+func loginGate(user models.User) string {
+	if config.ConfigFile.SMTPEnabled && (user.Verified == nil || !*user.Verified) {
+		return "/verify"
+	}
+	// Local MFA only guards password login; with that disabled, a linked local
+	// account signs in via the IdP (which owns MFA), so enrollment would be moot.
+	if config.ConfigFile.MFAEnforced && config.LocalLoginEnabled() && user.IsLocalAuth() && !user.IsMFAEnabled() {
+		return "/enroll"
+	}
+	return ""
+}
+
 // APIOAuthAuthorize is the authorization endpoint (RFC 6749 §4.1 + PKCE).
 func APIOAuthAuthorize(ctx *gin.Context) {
 	q := ctx.Request.URL.Query()
@@ -152,15 +168,8 @@ func APIOAuthAuthorize(ctx *gin.Context) {
 		return
 	}
 
-	// Login-time gates (moved here from the API middleware).
-	if config.ConfigFile.SMTPEnabled && (user.Verified == nil || !*user.Verified) {
-		ctx.Redirect(http.StatusFound, "/verify")
-		return
-	}
-	// Local MFA only guards password login; with that disabled, a linked local
-	// account signs in via the IdP (which owns MFA), so enrollment would be moot.
-	if config.ConfigFile.MFAEnforced && config.LocalLoginEnabled() && user.IsLocalAuth() && !user.IsMFAEnabled() {
-		ctx.Redirect(http.StatusFound, "/enroll")
+	if gate := loginGate(user); gate != "" {
+		ctx.Redirect(http.StatusFound, gate)
 		return
 	}
 
@@ -191,9 +200,15 @@ func APIOAuthConsent(ctx *gin.Context) {
 	resource := ctx.PostForm("resource")
 	requested := oauth.FilterValid(oauth.Parse(ctx.PostForm("scope")))
 
+	// The web app never asks for consent: a consent posted for it would only
+	// be a way to a code that skips authorize.
 	client, found, err := database.GetOAuthClient(clientID)
-	if err != nil || !found || !client.IsEnabled() || !client.HasRedirectURI(redirectURI) {
+	if err != nil || !found || !client.IsEnabled() || client.IsFirstParty || !client.HasRedirectURI(redirectURI) {
 		ctx.String(http.StatusBadRequest, "Invalid consent request.")
+		return
+	}
+	if gate := loginGate(user); gate != "" {
+		ctx.Redirect(http.StatusFound, gate)
 		return
 	}
 
@@ -304,6 +319,10 @@ func handleAuthorizationCodeGrant(ctx *gin.Context) {
 		tokenError(ctx, http.StatusBadRequest, "invalid_grant", "user not found")
 		return
 	}
+	if loginGate(user) != "" {
+		tokenError(ctx, http.StatusBadRequest, "invalid_grant", "the account must finish signing in first")
+		return
+	}
 
 	issueTokenResponse(ctx, client, user, code.Scope, code.Resource)
 }
@@ -359,6 +378,20 @@ func handleRefreshTokenGrant(ctx *gin.Context) {
 	user, err := database.GetAllUserInformation(result.UserID)
 	if err != nil {
 		tokenError(ctx, http.StatusBadRequest, "invalid_grant", "user not found")
+		return
+	}
+	// An account may have to verify a new e-mail address or enroll in MFA
+	// since its session began; it gets no new token until it has.
+	if loginGate(user) != "" {
+		if result.Rotated {
+			if err := database.RevokeSessionByRefreshHash(utilities.HashOpaqueToken(newPlain)); err != nil {
+				logger.Log.Error("Failed to revoke refused refresh session. Error: " + err.Error())
+			}
+		}
+		if client.IsFirstParty {
+			clearRefreshCookie(ctx)
+		}
+		tokenError(ctx, http.StatusBadRequest, "invalid_grant", "the account must finish signing in first")
 		return
 	}
 

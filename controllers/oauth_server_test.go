@@ -537,6 +537,52 @@ func TestOAuthConsentAllowIssuesCode(t *testing.T) {
 	}
 }
 
+// Verifying one's e-mail and enrolling in MFA where it is enforced were only
+// checked by /oauth/authorize. The consent form and both token grants could
+// still hand out tokens to an account that hadn't, and the consent form
+// accepted the web app, which never asks for consent.
+func TestLoginGatesHoldOutsideAuthorize(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	firstParty := oauthServerTestNewClient(t, true, true, []string{"openid"}, "https://wishlist.example.com/oauth/callback")
+	app := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+	_, exchange := oauthServerTestExchange(t, firstParty, user)
+	refreshCookie := oauthServerTestCookie(exchange, refreshCookieName)
+	appCode, appVerifier := oauthServerTestIssueCode(t, app, user)
+
+	// MFA becomes enforced after the account signed in.
+	config.ConfigFile.MFAEnforced = true
+
+	consent := func(client models.OAuthClient) (int, string) {
+		form := url.Values{"client_id": {client.ClientID}, "redirect_uri": {client.RedirectURIs[0]}, "scope": {"openid"},
+			"state": {"s"}, "code_challenge": {"challenge"}, "action": {"allow"}}
+		code, _, w := postForm(APIOAuthConsent, "/oauth/consent", form, oauthServerTestSSOCookie(t, user.ID))
+		return code, w.Header().Get("Location")
+	}
+	if code, location := consent(firstParty); code != http.StatusBadRequest {
+		t.Errorf("consent for the web app = %d (%s), want 400", code, location)
+	}
+	if code, location := consent(app); code != http.StatusFound || location != "/enroll" {
+		t.Errorf("consent for an app = %d %q, want a redirect to /enroll", code, location)
+	}
+
+	if code, body, _ := postForm(APIOAuthToken, "/oauth/token", url.Values{
+		"grant_type": {"authorization_code"}, "code": {appCode},
+		"redirect_uri": {app.RedirectURIs[0]}, "client_id": {app.ClientID}, "code_verifier": {appVerifier},
+	}); code != http.StatusBadRequest || body["error"] != "invalid_grant" {
+		t.Errorf("code grant = %d %v, want invalid_grant", code, body)
+	}
+	code, body, w := postForm(APIOAuthToken, "/oauth/token", url.Values{"grant_type": {"refresh_token"}, "client_id": {firstParty.ClientID}},
+		&http.Cookie{Name: refreshCookieName, Value: refreshCookie.Value})
+	if code != http.StatusBadRequest || body["error"] != "invalid_grant" {
+		t.Errorf("refresh grant = %d %v, want invalid_grant", code, body)
+	}
+	if cleared := oauthServerTestCookie(w, refreshCookieName); cleared == nil || cleared.Value != "" {
+		t.Error("the refused refresh left the web app's refresh cookie in place")
+	}
+}
+
 func TestOAuthConsentInvalidClient(t *testing.T) {
 	setupControllersDB(t)
 	oauthServerTestSetup(t)
