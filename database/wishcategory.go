@@ -28,7 +28,7 @@ func GetWishCategoriesFromWishlist(wishlistID uuid.UUID) ([]models.WishCategory,
 	record := Instance.
 		Order("wish_categories.sort_order ASC").
 		Order("wish_categories.created_at ASC").
-		Where(&models.WishCategory{Enabled: true, WishlistID: wishlistID}).
+		Where("enabled = ? AND wishlist_id = ?", true, wishlistID).
 		Find(&categories)
 
 	if record.Error != nil {
@@ -43,8 +43,7 @@ func GetWishCategoryByID(categoryID uuid.UUID) (*models.WishCategory, error) {
 	var category models.WishCategory
 
 	record := Instance.
-		Where(&models.WishCategory{Enabled: true}).
-		Where(&models.GormModel{ID: categoryID}).
+		Where("id = ? AND enabled = ?", categoryID, true).
 		Find(&category)
 
 	if record.Error != nil {
@@ -63,7 +62,7 @@ func GetWishCategoryByNameInWishlist(name string, wishlistID uuid.UUID) (*models
 	var category models.WishCategory
 
 	record := Instance.
-		Where(&models.WishCategory{Enabled: true, WishlistID: wishlistID, Name: name}).
+		Where("enabled = ? AND wishlist_id = ? AND name = ?", true, wishlistID, name).
 		Limit(1).
 		Find(&category)
 
@@ -83,7 +82,7 @@ func GetNextWishCategorySortOrder(wishlistID uuid.UUID) (int, error) {
 
 	record := Instance.
 		Model(&models.WishCategory{}).
-		Where(&models.WishCategory{Enabled: true, WishlistID: wishlistID}).
+		Where("enabled = ? AND wishlist_id = ?", true, wishlistID).
 		Select("MAX(sort_order)").
 		Scan(&maxOrder)
 
@@ -104,7 +103,7 @@ func CountEnabledWishesInCategory(categoryID uuid.UUID) (int64, error) {
 
 	record := Instance.
 		Model(&models.Wish{}).
-		Where(&models.Wish{Enabled: true, CategoryID: &categoryID}).
+		Where("enabled = ? AND category_id = ?", true, categoryID).
 		Count(&count)
 
 	if record.Error != nil {
@@ -136,7 +135,7 @@ func DeleteWishCategory(categoryID uuid.UUID) error {
 
 	record := Instance.
 		Model(category).
-		Where(&models.GormModel{ID: categoryID}).
+		Where("id = ?", categoryID).
 		Update("enabled", false)
 
 	if record.Error != nil {

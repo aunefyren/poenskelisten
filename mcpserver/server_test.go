@@ -111,6 +111,7 @@ func TestRequireScope(t *testing.T) {
 		{"no token info", context.Background(), "not authenticated"},
 		{"missing scope", contextWithTokenInfo(t, &mcpauth.TokenInfo{UserID: userID.String(), Scopes: []string{scopeGroupsRead}, Expiration: expiry}), "missing required scope"},
 		{"subject not a UUID", contextWithTokenInfo(t, &mcpauth.TokenInfo{UserID: "not-a-uuid", Scopes: []string{scopeWishlistsRead}, Expiration: expiry}), "invalid token subject"},
+		{"nil subject", contextWithTokenInfo(t, &mcpauth.TokenInfo{UserID: uuid.Nil.String(), Scopes: []string{scopeWishlistsRead}, Expiration: expiry}), "invalid token subject"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

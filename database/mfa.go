@@ -2,7 +2,6 @@ package database
 
 import (
 	"aunefyren/poenskelisten/models"
-	"aunefyren/poenskelisten/utilities"
 	"errors"
 	"time"
 
@@ -20,8 +19,7 @@ import (
 func SetUserPendingMFASecret(userID uuid.UUID, encryptedSecret string) error {
 	record := Instance.
 		Model(&models.User{}).
-		Where(&models.User{Enabled: &utilities.DBTrue}).
-		Where(&models.GormModel{ID: userID}).
+		Where("id = ? AND enabled = ?", userID, true).
 		Updates(map[string]interface{}{
 			"mfa_secret":      encryptedSecret,
 			"mfa_enabled":     false,
@@ -42,8 +40,7 @@ func ActivateUserMFA(userID uuid.UUID) error {
 	now := time.Now()
 	record := Instance.
 		Model(&models.User{}).
-		Where(&models.User{Enabled: &utilities.DBTrue}).
-		Where(&models.GormModel{ID: userID}).
+		Where("id = ? AND enabled = ?", userID, true).
 		Updates(map[string]interface{}{
 			"mfa_enabled":     true,
 			"mfa_enrolled_at": now,
@@ -64,8 +61,7 @@ func ActivateUserMFA(userID uuid.UUID) error {
 func DisableUserMFA(userID uuid.UUID) error {
 	record := Instance.
 		Model(&models.User{}).
-		Where(&models.User{Enabled: &utilities.DBTrue}).
-		Where(&models.GormModel{ID: userID}).
+		Where("id = ? AND enabled = ?", userID, true).
 		Updates(map[string]interface{}{
 			"mfa_secret":      nil,
 			"mfa_enabled":     false,
@@ -77,7 +73,7 @@ func DisableUserMFA(userID uuid.UUID) error {
 
 	// Remove any recovery codes (soft-deleted via GormModel).
 	deleteRecord := Instance.
-		Where(&models.MFARecoveryCode{UserID: userID}).
+		Where("user_id = ?", userID).
 		Delete(&models.MFARecoveryCode{})
 	if deleteRecord.Error != nil {
 		return deleteRecord.Error
@@ -116,7 +112,7 @@ func StoreRecoveryCodes(userID uuid.UUID, hashes []string) error {
 // touching other MFA state. Used when regenerating codes during (re)enrollment.
 func ClearUserRecoveryCodes(userID uuid.UUID) error {
 	record := Instance.
-		Where(&models.MFARecoveryCode{UserID: userID}).
+		Where("user_id = ?", userID).
 		Delete(&models.MFARecoveryCode{})
 	return record.Error
 }
@@ -125,8 +121,7 @@ func ClearUserRecoveryCodes(userID uuid.UUID) error {
 func GetActiveRecoveryCodes(userID uuid.UUID) ([]models.MFARecoveryCode, error) {
 	codes := []models.MFARecoveryCode{}
 	record := Instance.
-		Where(&models.MFARecoveryCode{UserID: userID}).
-		Where("used_at IS NULL").
+		Where("user_id = ? AND used_at IS NULL", userID).
 		Find(&codes)
 	if record.Error != nil {
 		return nil, record.Error
@@ -139,7 +134,7 @@ func MarkRecoveryCodeUsed(codeID uuid.UUID) error {
 	now := time.Now()
 	record := Instance.
 		Model(&models.MFARecoveryCode{}).
-		Where(&models.GormModel{ID: codeID}).
+		Where("id = ?", codeID).
 		Update("used_at", now)
 	if record.Error != nil {
 		return record.Error
@@ -157,8 +152,7 @@ func GetUserMFAEnrollmentState(userID uuid.UUID) (enabled bool, isLocal bool, er
 	var user models.User
 	record := Instance.
 		Select("mfa_enabled", "auth_source").
-		Where(&models.User{Enabled: &utilities.DBTrue}).
-		Where(&models.GormModel{ID: userID}).
+		Where("id = ? AND enabled = ?", userID, true).
 		Find(&user)
 	if record.Error != nil {
 		return false, false, record.Error

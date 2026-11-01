@@ -1,6 +1,7 @@
 package main
 
 import (
+	"aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
@@ -8,12 +9,15 @@ import (
 	"database/sql"
 	"encoding/json"
 	"flag"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
 	textTemplate "text/template"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -640,5 +644,288 @@ func TestInitRouterEscapesAppText(t *testing.T) {
 	}
 	if manifest.Name != name || manifest.Description != name {
 		t.Errorf("manifest.json name/description = %q, %q; want %q", manifest.Name, manifest.Description, name)
+	}
+}
+
+// routerTestModels is the full schema, for tests that run requests through
+// the real router.
+var routerTestModels = []interface{}{
+	&models.User{}, &models.Invite{}, &models.Group{}, &models.GroupMembership{},
+	&models.Wishlist{}, &models.WishlistMembership{}, &models.WishlistCollaborator{},
+	&models.WishCategory{}, &models.Wish{}, &models.WishClaim{}, &models.News{},
+	&models.MFARecoveryCode{}, &models.Session{}, &models.OAuthClient{},
+	&models.AuthorizationCode{}, &models.OAuthConsent{},
+}
+
+// setupRouterTest gives the real router a fresh database and an OAuth signing
+// key, and returns a function minting first-party access tokens.
+func setupRouterTest(t *testing.T) (*gin.Engine, func(userID uuid.UUID, admin bool) string) {
+	t.Helper()
+	dbSQL, err := sql.Open("sqlite", "file:"+uuid.NewString()+"?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatalf("failed to open in-memory sqlite: %v", err)
+	}
+	t.Cleanup(func() { dbSQL.Close() })
+	dbSQL.SetMaxOpenConns(1)
+	instance, err := gorm.Open(sqlite.Dialector{Conn: dbSQL}, &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open gorm: %v", err)
+	}
+	if err := instance.AutoMigrate(routerTestModels...); err != nil {
+		t.Fatalf("failed to migrate: %v", err)
+	}
+	origInstance, origConfig := database.Instance, config.ConfigFile
+	t.Cleanup(func() { database.Instance, config.ConfigFile = origInstance, origConfig })
+	database.Instance = instance
+
+	keyPEM, kid, err := config.GenerateOAuthSigningKey(config.OAuthAlgES256)
+	if err != nil {
+		t.Fatalf("failed to generate signing key: %v", err)
+	}
+	config.ConfigFile.PoenskelistenExternalURL = "https://wishlist.example.com"
+	config.ConfigFile.OAuthSigningKey = keyPEM
+	config.ConfigFile.OAuthSigningKeyID = kid
+
+	token := func(userID uuid.UUID, admin bool) string {
+		signed, err := auth.GenerateOAuthAccessToken(userID, models.FirstPartyClientID, config.APIResource(), "openid profile email", admin, true)
+		if err != nil {
+			t.Fatalf("failed to sign access token: %v", err)
+		}
+		return "Bearer " + signed
+	}
+	return initRouter(config.ConfigFile), token
+}
+
+// snapshotRouterTables dumps every row of every table, deleted ones included,
+// so a test can check that nothing at all was written.
+func snapshotRouterTables(t *testing.T) string {
+	t.Helper()
+	dump := map[string][]map[string]interface{}{}
+	for _, model := range routerTestModels {
+		statement := &gorm.Statement{DB: database.Instance}
+		if err := statement.Parse(model); err != nil {
+			t.Fatalf("failed to parse model: %v", err)
+		}
+		rows := []map[string]interface{}{}
+		if err := database.Instance.Table(statement.Schema.Table).Order("id").Find(&rows).Error; err != nil {
+			t.Fatalf("failed to read %s: %v", statement.Schema.Table, err)
+		}
+		dump[statement.Schema.Table] = rows
+	}
+	raw, err := json.Marshal(dump)
+	if err != nil {
+		t.Fatalf("failed to encode snapshot: %v", err)
+	}
+	return string(raw)
+}
+
+func createRouterRecord(t *testing.T, record interface{}) {
+	t.Helper()
+	if err := database.Instance.Create(record).Error; err != nil {
+		t.Fatalf("failed to create %T: %v", record, err)
+	}
+}
+
+func createRouterUser(t *testing.T, name string, admin bool) models.User {
+	t.Helper()
+	email := strings.ToLower(name) + "-" + uuid.NewString() + "@example.com"
+	enabled, mfa := true, true
+	user := models.User{FirstName: name, LastName: "Test", Email: &email, Enabled: &enabled, Verified: &enabled, MFAEnabled: &mfa, Admin: admin}
+	user.ID = uuid.New()
+	createRouterRecord(t, &user)
+	return user
+}
+
+// Every route that takes an ID must refuse the nil UUID, wherever the request
+// carries it, without answering with anyone's data and without writing
+// anything.
+func TestRoutesRefuseNilID(t *testing.T) {
+	router, token := setupRouterTest(t)
+	now := time.Now()
+	truth := true
+
+	admin := createRouterUser(t, "Admin", true)
+	other := createRouterUser(t, "Other", false)
+	claimer := createRouterUser(t, "Claimer", false)
+	caller := createRouterUser(t, "Caller", false)
+
+	otherGroup := models.Group{Name: "Other group", Description: "Other group", Enabled: true, OwnerID: other.ID}
+	otherGroup.ID = uuid.New()
+	createRouterRecord(t, &otherGroup)
+	otherList := models.Wishlist{Name: "Other list", Enabled: true, OwnerID: other.ID, Date: &now, Claimable: &truth}
+	otherList.ID = uuid.New()
+	createRouterRecord(t, &otherList)
+	publicList := models.Wishlist{Name: "Other public list", Enabled: true, OwnerID: other.ID, Date: &now, Public: &truth, PublicHash: uuid.New()}
+	publicList.ID = uuid.New()
+	createRouterRecord(t, &publicList)
+	otherWish := models.Wish{Name: "Other wish", Enabled: true, OwnerID: other.ID, WishlistID: otherList.ID}
+	otherWish.ID = uuid.New()
+	createRouterRecord(t, &otherWish)
+	otherCategory := models.WishCategory{Name: "Other category", Enabled: true, OwnerID: other.ID, WishlistID: otherList.ID}
+	otherCategory.ID = uuid.New()
+	createRouterRecord(t, &otherCategory)
+	for _, memberID := range []uuid.UUID{other.ID, claimer.ID} {
+		membership := models.GroupMembership{GroupID: otherGroup.ID, MemberID: memberID, Enabled: true}
+		membership.ID = uuid.New()
+		createRouterRecord(t, &membership)
+	}
+	share := models.WishlistMembership{GroupID: otherGroup.ID, WishlistID: otherList.ID, Enabled: true}
+	share.ID = uuid.New()
+	createRouterRecord(t, &share)
+	claim := models.WishClaim{WishID: otherWish.ID, UserID: claimer.ID, Enabled: true}
+	claim.ID = uuid.New()
+	createRouterRecord(t, &claim)
+	collaborator := models.WishlistCollaborator{WishlistID: otherList.ID, UserID: claimer.ID, Enabled: true}
+	collaborator.ID = uuid.New()
+	createRouterRecord(t, &collaborator)
+	for _, user := range []models.User{other, claimer} {
+		code := models.MFARecoveryCode{UserID: user.ID, CodeHash: "hash"}
+		code.ID = uuid.New()
+		createRouterRecord(t, &code)
+		session := models.Session{UserID: user.ID, RefreshTokenHash: uuid.NewString(), Kind: models.SessionKindWebRefresh, IssuedAt: now, ExpiresAt: now.Add(time.Hour)}
+		session.ID = uuid.New()
+		createRouterRecord(t, &session)
+	}
+	invite := models.Invite{Code: "INVITECODE", Enabled: &truth}
+	invite.ID = uuid.New()
+	createRouterRecord(t, &invite)
+	news := models.News{Title: "News", Body: "Body", Enabled: true, Date: now}
+	news.ID = uuid.New()
+	createRouterRecord(t, &news)
+
+	// The caller owns a wishlist, a wish and a group, so ownership and
+	// membership checks have records of theirs to match.
+	callerGroup := models.Group{Name: "Caller group", Enabled: true, OwnerID: caller.ID}
+	callerGroup.ID = uuid.New()
+	createRouterRecord(t, &callerGroup)
+	callerMembership := models.GroupMembership{GroupID: callerGroup.ID, MemberID: caller.ID, Enabled: true}
+	callerMembership.ID = uuid.New()
+	createRouterRecord(t, &callerMembership)
+	callerList := models.Wishlist{Name: "Caller list", Enabled: true, OwnerID: caller.ID, Date: &now, Claimable: &truth}
+	callerList.ID = uuid.New()
+	createRouterRecord(t, &callerList)
+	callerWish := models.Wish{Name: "Caller wish", Enabled: true, OwnerID: caller.ID, WishlistID: callerList.ID}
+	callerWish.ID = uuid.New()
+	createRouterRecord(t, &callerWish)
+
+	nilID := uuid.Nil.String()
+	future := now.AddDate(1, 0, 0).Format("2006-01-02")
+	callerToken, adminToken := token(caller.ID, false), token(admin.ID, true)
+	ownList, ownGroup, ownWish := callerList.ID.String(), callerGroup.ID.String(), callerWish.ID.String()
+
+	cases := []struct {
+		token, method, path, body string
+	}{
+		{callerToken, "GET", "/api/auth/wishes?wishlist=" + nilID, ""},
+		{callerToken, "GET", "/api/auth/wishes?wishlist=00000000000000000000000000000000", ""},
+		{callerToken, "GET", "/api/auth/wishes?wishlist=" + url.QueryEscape("{"+nilID+"}"), ""},
+		{callerToken, "GET", "/api/auth/wishes?wishlist=" + url.QueryEscape("urn:uuid:"+nilID), ""},
+		{callerToken, "POST", "/api/auth/wishes?wishlist=" + nilID, `{"name":"Nil wish name"}`},
+		{callerToken, "POST", "/api/auth/wishes?wishlist=" + ownList, `{"name":"Nil category wish","category_id":"` + nilID + `"}`},
+		{callerToken, "GET", "/api/auth/wishes/" + nilID, ""},
+		{callerToken, "POST", "/api/auth/wishes/" + nilID, `{"name":"Renamed wish"}`},
+		{callerToken, "POST", "/api/auth/wishes/" + ownWish, `{"name":"Caller wish","category_id":"` + nilID + `"}`},
+		{callerToken, "DELETE", "/api/auth/wishes/" + nilID, ""},
+		{callerToken, "POST", "/api/auth/wishes/" + nilID + "/claim", `{}`},
+		{callerToken, "POST", "/api/auth/wishes/" + nilID + "/unclaim", `{}`},
+		{callerToken, "POST", "/api/auth/wishes/" + otherWish.ID.String() + "/claim", `{"wishlist_id":"` + nilID + `"}`},
+		{callerToken, "GET", "/api/both/wishes/" + nilID + "/image", ""},
+		{"", "GET", "/api/both/wishes/" + nilID + "/image", ""},
+		{"", "GET", "/api/open/wishlists/public/" + nilID, ""},
+		{callerToken, "GET", "/api/auth/wishlists/" + nilID, ""},
+		{callerToken, "POST", "/api/auth/wishlists/" + nilID, `{"name":"Renamed list","date":"` + future + `"}`},
+		{callerToken, "DELETE", "/api/auth/wishlists/" + nilID, ""},
+		{callerToken, "DELETE", "/api/auth/wishlists/" + ownList + "?group=" + nilID, ""},
+		{callerToken, "POST", "/api/auth/wishlists/" + nilID + "/join", `{"groups":["` + ownGroup + `"]}`},
+		{callerToken, "POST", "/api/auth/wishlists/" + ownList + "/join", `{"groups":["` + nilID + `"]}`},
+		{callerToken, "POST", "/api/auth/wishlists/" + nilID + "/remove", `{"group_id":"` + otherGroup.ID.String() + `"}`},
+		{callerToken, "POST", "/api/auth/wishlists/" + ownList + "/remove", `{"group_id":"` + nilID + `"}`},
+		{callerToken, "POST", "/api/auth/wishlists/" + ownList + "/remove", `{}`},
+		{callerToken, "POST", "/api/auth/wishlists/" + nilID + "/collaborate", `{"users":["` + admin.ID.String() + `"]}`},
+		{callerToken, "POST", "/api/auth/wishlists/" + ownList + "/collaborate", `{"users":["` + nilID + `"]}`},
+		{callerToken, "POST", "/api/auth/wishlists/" + nilID + "/un-collaborate", `{"user_id":"` + claimer.ID.String() + `"}`},
+		{callerToken, "POST", "/api/auth/wishlists/" + ownList + "/un-collaborate", `{"user_id":"` + nilID + `"}`},
+		{callerToken, "GET", "/api/auth/wishlists/" + nilID + "/categories", ""},
+		{callerToken, "GET", "/api/auth/wishlists?group=" + nilID, ""},
+		{callerToken, "GET", "/api/auth/wishlists?notAMemberOfGroupID=" + nilID, ""},
+		{callerToken, "POST", "/api/auth/wishlists", `{"name":"Nil group list","date":"` + future + `","groups":["` + nilID + `"]}`},
+		{callerToken, "POST", "/api/auth/wishlists?groupContextID=" + nilID, `{"name":"Nil context list","date":"` + future + `"}`},
+		{callerToken, "GET", "/api/auth/groups/" + nilID, ""},
+		{callerToken, "GET", "/api/auth/groups/" + nilID + "/members", ""},
+		{callerToken, "POST", "/api/auth/groups/" + nilID, `{"name":"Renamed group","description":"Renamed"}`},
+		{callerToken, "DELETE", "/api/auth/groups/" + nilID, ""},
+		{callerToken, "POST", "/api/auth/groups/" + nilID + "/join", `{"members":["` + admin.ID.String() + `"]}`},
+		{callerToken, "POST", "/api/auth/groups/" + ownGroup + "/join", `{"members":["` + nilID + `"]}`},
+		{callerToken, "POST", "/api/auth/groups/" + nilID + "/leave", ""},
+		{callerToken, "POST", "/api/auth/groups/" + nilID + "/remove", `{"member_id":"` + claimer.ID.String() + `"}`},
+		{callerToken, "POST", "/api/auth/groups/" + ownGroup + "/remove", `{"member_id":"` + nilID + `"}`},
+		{callerToken, "POST", "/api/auth/groups/" + nilID + "/add", `{"wishlists":["` + ownList + `"]}`},
+		{callerToken, "POST", "/api/auth/groups/" + ownGroup + "/add", `{"wishlists":["` + nilID + `"]}`},
+		{callerToken, "POST", "/api/auth/groups", `{"name":"Nil member group","members":["` + nilID + `"]}`},
+		{callerToken, "GET", "/api/auth/groups?memberOfWishlistID=" + nilID, ""},
+		{callerToken, "GET", "/api/auth/groups?notAMemberOfWishlistID=" + nilID, ""},
+		{callerToken, "GET", "/api/auth/news/" + nilID, ""},
+		{callerToken, "GET", "/api/auth/users/" + nilID, ""},
+		{callerToken, "GET", "/api/auth/users/" + nilID + "/image", ""},
+		{callerToken, "GET", "/api/auth/users?notAMemberOfGroupID=" + nilID, ""},
+		{callerToken, "GET", "/api/auth/users?notACollaboratorOfWishlistID=" + nilID, ""},
+		{adminToken, "DELETE", "/api/admin/users/" + nilID, ""},
+		{adminToken, "DELETE", "/api/admin/users/" + nilID + "/mfa", ""},
+		{adminToken, "DELETE", "/api/admin/users/" + nilID + "/sessions", ""},
+		{adminToken, "DELETE", "/api/admin/invites/" + nilID, ""},
+		{adminToken, "DELETE", "/api/admin/news/" + nilID, ""},
+		{adminToken, "POST", "/api/admin/news/" + nilID, `{"title":"Renamed news","body":"Renamed"}`},
+		// A token for the nil UUID can't be forged without the signing key,
+		// but it must not stand for every account either.
+		{token(uuid.Nil, false), "GET", "/api/auth/wishlists", ""},
+		{token(uuid.Nil, false), "GET", "/api/auth/wishes?wishlist=" + otherList.ID.String(), ""},
+		{token(uuid.Nil, false), "GET", "/api/auth/groups", ""},
+	}
+
+	send := func(token, method, path, body string) *httptest.ResponseRecorder {
+		var reader io.Reader
+		if body != "" {
+			reader = strings.NewReader(body)
+		}
+		req := httptest.NewRequest(method, path, reader)
+		req.Header.Set("Content-Type", "application/json")
+		if token != "" {
+			req.Header.Set("Authorization", token)
+		}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+
+	// The same requests with real IDs work, so the refusals below come from
+	// the nil UUID and not from a broken setup.
+	for _, control := range []struct{ token, path, want string }{
+		{callerToken, "/api/auth/wishes?wishlist=" + ownList, "Caller wish"},
+		{callerToken, "/api/auth/groups/" + ownGroup, "Caller group"},
+		{adminToken, "/api/admin/invites", "INVITECODE"},
+		{"", "/api/open/wishlists/public/" + publicList.PublicHash.String(), "Other public list"},
+	} {
+		if w := send(control.token, "GET", control.path, ""); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), control.want) {
+			t.Fatalf("GET %s = %d %s, want 200 with %q", control.path, w.Code, w.Body.String(), control.want)
+		}
+	}
+
+	secrets := []string{*other.Email, *claimer.Email, "Other", otherList.ID.String(), publicList.PublicHash.String()}
+	before := snapshotRouterTables(t)
+	for _, c := range cases {
+		w := send(c.token, c.method, c.path, c.body)
+		switch w.Code {
+		case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+		default:
+			t.Errorf("%s %s = %d, want 400 or 404: %s", c.method, c.path, w.Code, w.Body.String())
+		}
+		for _, secret := range secrets {
+			if strings.Contains(w.Body.String(), secret) {
+				t.Errorf("%s %s leaked %q: %s", c.method, c.path, secret, w.Body.String())
+			}
+		}
+	}
+	if after := snapshotRouterTables(t); after != before {
+		t.Errorf("requests naming the nil UUID changed the database:\nbefore %s\nafter  %s", before, after)
 	}
 }

@@ -378,6 +378,18 @@ func TestMFAChallengeTokenRoundTrip(t *testing.T) {
 	}
 }
 
+func TestMFAChallengeTokenWithoutUserRejected(t *testing.T) {
+	setupAuthTestConfig(t)
+
+	tokenString, err := GenerateMFAChallengeToken(uuid.Nil)
+	if err != nil {
+		t.Fatalf("GenerateMFAChallengeToken returned error: %v", err)
+	}
+	if _, err := ValidateMFAChallengeToken(tokenString); err == nil {
+		t.Error("ValidateMFAChallengeToken accepted a token for the nil UUID")
+	}
+}
+
 func TestMFAChallengeTokenRejectedAsSession(t *testing.T) {
 	setupAuthTestConfig(t)
 

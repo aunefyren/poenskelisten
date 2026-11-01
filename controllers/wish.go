@@ -41,7 +41,7 @@ func GetWishesFromWishlist(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wishlist_id_int, err := uuid.Parse(wishlist_id)
+	wishlist_id_int, err := utilities.ParseID(wishlist_id)
 	if err != nil {
 		logger.Log.Error("Failed to parse wishlist ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
@@ -284,6 +284,10 @@ func RegisterWish(context *gin.Context) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
+	} else if wish.CategoryID != nil && utilities.HasNilID(*wish.CategoryID) {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
+		context.Abort()
+		return
 	}
 
 	// Trim request input
@@ -301,7 +305,7 @@ func RegisterWish(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wishlist_id_int, err := uuid.Parse(wishlist_id)
+	wishlist_id_int, err := utilities.ParseID(wishlist_id)
 	if err != nil {
 		logger.Log.Error("Failed to parse wishlist ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
@@ -482,7 +486,7 @@ func DeleteWish(context *gin.Context) {
 	}
 
 	// Parse wish id
-	wish_id_int, err := uuid.Parse(wish_id)
+	wish_id_int, err := utilities.ParseID(wish_id)
 	if err != nil {
 		logger.Log.Error("Failed to parse wish ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})
@@ -634,6 +638,10 @@ func RegisterWishClaim(context *gin.Context) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
+	} else if wishclaim.WishlistID != nil && utilities.HasNilID(*wishclaim.WishlistID) {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
+		context.Abort()
+		return
 	}
 
 	// Get user ID
@@ -646,7 +654,7 @@ func RegisterWishClaim(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wish_id_int, err := uuid.Parse(wish_id)
+	wish_id_int, err := utilities.ParseID(wish_id)
 	if err != nil {
 		logger.Log.Error("Failed to parse wish ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})
@@ -798,6 +806,10 @@ func RemoveWishClaim(context *gin.Context) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
+	} else if wishclaim.WishlistID != nil && utilities.HasNilID(*wishclaim.WishlistID) {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
+		context.Abort()
+		return
 	}
 
 	// Get user ID
@@ -810,7 +822,7 @@ func RemoveWishClaim(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wish_id_int, err := uuid.Parse(wish_id)
+	wish_id_int, err := utilities.ParseID(wish_id)
 	if err != nil {
 		logger.Log.Error("Failed to parse wish ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})
@@ -948,6 +960,10 @@ func APIUpdateWish(context *gin.Context) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
+	} else if wish.CategoryID != nil && utilities.HasNilID(*wish.CategoryID) {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
+		context.Abort()
+		return
 	}
 
 	// Trim request input
@@ -965,7 +981,7 @@ func APIUpdateWish(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wishID, err := uuid.Parse(wishIDString)
+	wishID, err := utilities.ParseID(wishIDString)
 	if err != nil {
 		logger.Log.Error("Failed to parse wish ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})
@@ -1190,7 +1206,7 @@ func APIGetWish(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wishIDInt, err := uuid.Parse(wishID)
+	wishIDInt, err := utilities.ParseID(wishID)
 	if err != nil {
 		logger.Log.Error("Failed to parse wish ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wish ID."})

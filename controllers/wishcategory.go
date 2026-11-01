@@ -118,7 +118,7 @@ func APIGetWishlistCategories(context *gin.Context) {
 	}
 
 	// Parse wishlist id
-	wishlistID, err := uuid.Parse(wishlistIDString)
+	wishlistID, err := utilities.ParseID(wishlistIDString)
 	if err != nil {
 		logger.Log.Error("Failed to parse wishlist ID. Error: " + err.Error())
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})

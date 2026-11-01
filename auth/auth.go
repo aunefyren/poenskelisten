@@ -175,6 +175,9 @@ func ValidateMFAChallengeToken(signedToken string) (uuid.UUID, error) {
 	if claims.Purpose != PurposeMFAChallenge {
 		return uuid.UUID{}, errors.New("token is not an MFA challenge token")
 	}
+	if claims.UserID == uuid.Nil {
+		return uuid.UUID{}, errors.New("challenge token has no user")
+	}
 	return claims.UserID, nil
 }
 

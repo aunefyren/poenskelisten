@@ -3,7 +3,6 @@ package database
 import (
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
-	"aunefyren/poenskelisten/utilities"
 	"errors"
 	"strings"
 	"time"
@@ -27,8 +26,7 @@ func GetUserInformation(UserID uuid.UUID) (models.User, error) {
 	var user models.User
 
 	userRecord := Instance.
-		Where(&models.GormModel{ID: UserID}).
-		Where(&models.User{Enabled: &utilities.DBTrue}).
+		Where("id = ? AND enabled = ?", UserID, true).
 		Find(&user)
 
 	if userRecord.Error != nil {
@@ -48,7 +46,7 @@ func GetUserInformationAnyState(UserID uuid.UUID) (models.User, error) {
 	var user models.User
 
 	userRecord := Instance.
-		Where(&models.GormModel{ID: UserID}).
+		Where("id = ?", UserID).
 		Find(&user)
 
 	if userRecord.Error != nil {
@@ -68,8 +66,7 @@ func GetAllUserInformation(UserID uuid.UUID) (models.User, error) {
 	var user models.User
 
 	userRecord := Instance.
-		Where(&models.GormModel{ID: UserID}).
-		Where(&models.User{Enabled: &utilities.DBTrue}).
+		Where("id = ? AND enabled = ?", UserID, true).
 		Find(&user)
 
 	if userRecord.Error != nil {
@@ -86,7 +83,7 @@ func GetAllUserInformationAnyState(UserID uuid.UUID) (models.User, error) {
 	var user models.User
 
 	userRecord := Instance.
-		Where(&models.GormModel{ID: UserID}).
+		Where("id = ?", UserID).
 		Find(&user)
 
 	if userRecord.Error != nil {
@@ -103,7 +100,7 @@ func GetUserInformationByEmail(email string) (models.User, error) {
 	var user models.User
 
 	userRecord := Instance.
-		Where(&models.User{Enabled: &utilities.DBTrue, Email: &email}).
+		Where("enabled = ? AND email = ?", true, email).
 		Find(&user)
 
 	if userRecord.Error != nil {
@@ -123,7 +120,7 @@ func GetAllUserInformationByEmail(email string) (models.User, error) {
 	var user models.User
 
 	userRecord := Instance.
-		Where(&models.User{Enabled: &utilities.DBTrue, Email: &email}).
+		Where("enabled = ? AND email = ?", true, email).
 		Find(&user)
 
 	if userRecord.Error != nil {
@@ -143,8 +140,7 @@ func GetAllUserInformationByEmailCaseInsensitive(email string) (models.User, err
 	var users []models.User
 
 	userRecords := Instance.
-		Where(&models.User{Enabled: &utilities.DBTrue}).
-		Where("LOWER(email) = LOWER(?)", email).
+		Where("enabled = ? AND LOWER(email) = LOWER(?)", true, email).
 		Limit(2).
 		Find(&users)
 
@@ -172,8 +168,7 @@ func GenerateRandomResetCodeForUser(userID uuid.UUID, valid bool) (string, error
 
 	var user models.User
 	userRecord := Instance.
-		Model(user).Where(&models.GormModel{ID: userID}).
-		Where(&models.User{Enabled: &utilities.DBTrue}).
+		Model(user).Where("id = ? AND enabled = ?", userID, true).
 		Update("reset_code", resetCode)
 
 	if userRecord.Error != nil {
@@ -183,7 +178,7 @@ func GenerateRandomResetCodeForUser(userID uuid.UUID, valid bool) (string, error
 		return "", errors.New("Reset code not changed in database.")
 	}
 
-	userRecord = Instance.Model(user).Where(&models.GormModel{ID: userID}).Where(&models.User{Enabled: &utilities.DBTrue}).Update("reset_expiration", expirationDate)
+	userRecord = Instance.Model(user).Where("id = ? AND enabled = ?", userID, true).Update("reset_expiration", expirationDate)
 	if userRecord.Error != nil {
 		return "", userRecord.Error
 	}
@@ -199,7 +194,7 @@ func GetAllUserInformationByResetCode(resetCode string) (models.User, error) {
 	var user models.User
 
 	userRecord := Instance.
-		Where(&models.User{Enabled: &utilities.DBTrue, ResetCode: &resetCode}).
+		Where("enabled = ? AND reset_code = ?", true, resetCode).
 		Find(&user)
 
 	if userRecord.Error != nil {
@@ -216,7 +211,7 @@ func GetAmountOfEnabledUsers() (int, error) {
 	var users []models.User
 
 	userRecords := Instance.
-		Where(&models.User{Enabled: &utilities.DBTrue}).
+		Where("enabled = ?", true).
 		Find(&users)
 
 	if userRecords.Error != nil {
@@ -248,7 +243,7 @@ func GetEnabledUsers() (usersRedacted []models.User, err error) {
 	err = nil
 
 	userRecord := Instance.
-		Where(&models.User{Enabled: &utilities.DBTrue}).
+		Where("enabled = ?", true).
 		Find(&users)
 
 	if userRecord.Error != nil {

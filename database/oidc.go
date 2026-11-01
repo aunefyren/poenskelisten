@@ -2,7 +2,6 @@ package database
 
 import (
 	"aunefyren/poenskelisten/models"
-	"aunefyren/poenskelisten/utilities"
 	"errors"
 	"strings"
 
@@ -25,8 +24,9 @@ var (
 // issuer + subject.
 func GetUserByOIDCSubject(issuer string, subject string) (models.User, bool, error) {
 	var user models.User
+	// GORM's naming turns OIDCIssuer and OIDCSubject into these column names.
 	record := Instance.
-		Where(&models.User{Enabled: &utilities.DBTrue, OIDCIssuer: &issuer, OIDCSubject: &subject}).
+		Where("enabled = ? AND o_id_c_issuer = ? AND o_id_c_subject = ?", true, issuer, subject).
 		Find(&user)
 	if record.Error != nil {
 		return models.User{}, false, record.Error
@@ -45,7 +45,7 @@ func GetUserByOIDCSubject(issuer string, subject string) (models.User, bool, err
 func getEnabledUserByEmail(email string) (models.User, bool, error) {
 	var user models.User
 	record := Instance.
-		Where(&models.User{Enabled: &utilities.DBTrue, Email: &email}).
+		Where("enabled = ? AND email = ?", true, email).
 		Find(&user)
 	if record.Error != nil {
 		return models.User{}, false, record.Error
@@ -67,8 +67,7 @@ func linkUserOIDC(userID uuid.UUID, issuer string, subject string) error {
 	// the OIDC fields; only the non-zero pointer fields are updated.
 	record := Instance.
 		Model(&models.User{}).
-		Where(&models.User{Enabled: &utilities.DBTrue}).
-		Where(&models.GormModel{ID: userID}).
+		Where("id = ? AND enabled = ?", userID, true).
 		Updates(models.User{OIDCIssuer: &issuer, OIDCSubject: &subject})
 	if record.Error != nil {
 		return record.Error

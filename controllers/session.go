@@ -6,6 +6,7 @@ import (
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
 	"net/http"
 	"time"
 
@@ -83,7 +84,7 @@ func APILogoutAll(ctx *gin.Context) {
 
 // APIAdminRevokeUserSessions lets an admin force-log-out a user everywhere.
 func APIAdminRevokeUserSessions(ctx *gin.Context) {
-	targetID, err := uuid.Parse(ctx.Param("user_id"))
+	targetID, err := utilities.ParseID(ctx.Param("user_id"))
 	if err != nil {
 		logger.Log.Error("Failed to parse user ID. Error: " + err.Error())
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse user ID."})

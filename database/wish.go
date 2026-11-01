@@ -12,8 +12,7 @@ func GetWishlistIDFromWish(WishID uuid.UUID) (*uuid.UUID, error) {
 	var wish models.Wish
 
 	wishRecord := Instance.
-		Where(&models.Wish{Enabled: true}).
-		Where(&models.GormModel{ID: WishID}).
+		Where("id = ? AND enabled = ?", WishID, true).
 		Find(&wish)
 
 	if wishRecord.Error != nil {
@@ -30,8 +29,7 @@ func GetWishByWishID(wishID uuid.UUID) (*models.Wish, error) {
 	var wish models.Wish
 
 	wishRecord := Instance.
-		Where(&models.Wish{Enabled: true}).
-		Where(&models.GormModel{ID: wishID}).
+		Where("id = ? AND enabled = ?", wishID, true).
 		Find(&wish)
 
 	if wishRecord.Error != nil {
@@ -63,7 +61,7 @@ func GetWishIDsFromWishlist(wishlistID uuid.UUID) ([]uuid.UUID, error) {
 	var wishIDs []uuid.UUID
 	err := Instance.
 		Model(&models.Wish{}).
-		Where(&models.Wish{WishlistID: wishlistID}).
+		Where("wishlist_id = ?", wishlistID).
 		Pluck("id", &wishIDs).Error
 	return wishIDs, err
 }
@@ -72,7 +70,7 @@ func GetWishesFromWishlist(WishlistID uuid.UUID) (bool, []models.Wish, error) {
 	var wishes []models.Wish
 	wishRecords := Instance.
 		Order("wishes.created_at ASC").
-		Where(&models.Wish{Enabled: true, WishlistID: WishlistID}).
+		Where("wishes.enabled = ? AND wishes.wishlist_id = ?", true, WishlistID).
 		Joins("JOIN users ON users.id = wishes.owner_id").
 		Where("users.enabled = ?", true).
 		Find(&wishes)
@@ -93,7 +91,7 @@ func GetWishClaimFromWish(WishID uuid.UUID) ([]models.WishClaimObject, error) {
 	var wishArrayWithUser []models.WishClaimObject
 
 	wishClaimRecords := Instance.
-		Where(&models.WishClaim{Enabled: true, WishID: WishID}).
+		Where("wish_claims.enabled = ? AND wish_claims.wish_id = ?", true, WishID).
 		Joins("JOIN users ON users.id = wish_claims.user_id").
 		Where("users.enabled = ?", true).
 		Find(&wishClaim)
@@ -134,8 +132,7 @@ func VerifyUserOwnershipToWish(UserID uuid.UUID, WishID uuid.UUID) (bool, error)
 	var wish models.Wish
 
 	wishRecord := Instance.
-		Where(&models.Wish{Enabled: true, OwnerID: UserID}).
-		Where(&models.GormModel{ID: WishID}).
+		Where("id = ? AND enabled = ? AND owner_id = ?", WishID, true, UserID).
 		Find(&wish)
 
 	if wishRecord.Error != nil {
@@ -151,7 +148,7 @@ func VerifyUserOwnershipToWishClaimByWish(UserID uuid.UUID, WishID uuid.UUID) (b
 	var wishClaim models.WishClaim
 
 	wishClaimRecord := Instance.
-		Where(&models.WishClaim{Enabled: true, WishID: WishID, UserID: UserID}).
+		Where("enabled = ? AND wish_id = ? AND user_id = ?", true, WishID, UserID).
 		Find(&wishClaim)
 
 	if wishClaimRecord.Error != nil {
@@ -167,7 +164,7 @@ func VerifyWishIsClaimed(WishID uuid.UUID) (bool, error) {
 	var wishClaim models.WishClaim
 
 	wishClaimRecord := Instance.
-		Where(&models.WishClaim{Enabled: true, WishID: WishID}).
+		Where("wish_claims.enabled = ? AND wish_claims.wish_id = ?", true, WishID).
 		Joins("JOIN users ON users.id = wish_claims.user_id").
 		Where("users.enabled = ?", true).
 		Find(&wishClaim)
@@ -186,7 +183,7 @@ func DeleteWishClaimByUserAndWish(WishID uuid.UUID, UserID uuid.UUID) error {
 
 	wishClaimRecords := Instance.
 		Model(wishClaim).
-		Where(&models.WishClaim{WishID: WishID, UserID: UserID, Enabled: true}).
+		Where("wish_id = ? AND user_id = ? AND enabled = ?", WishID, UserID, true).
 		Update("enabled", false)
 
 	if wishClaimRecords.Error != nil {
@@ -203,7 +200,7 @@ func GetWishlistByWishID(wishID uuid.UUID) (bool, models.Wishlist, error) {
 	var wishlist models.Wishlist
 
 	wishlistRecords := Instance.
-		Where(&models.Wishlist{Enabled: true}).
+		Where("wishlists.enabled = ?", true).
 		Joins("JOIN wishes ON wishlists.id = wishes.wishlist_id").
 		Where("wishes.enabled = ? AND wishes.id = ?", true, wishID).
 		Find(&wishlist)

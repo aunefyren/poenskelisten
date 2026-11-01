@@ -5,10 +5,14 @@ import (
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -338,5 +342,259 @@ func TestClientMissingRowsReturnErrors(t *testing.T) {
 	}
 	if err := DeleteWishlistMembership(missing); err == nil {
 		t.Error("DeleteWishlistMembership: expected error for an unknown membership")
+	}
+}
+
+// snapshotTables dumps every row of every table, deleted ones included, so a
+// test can check that nothing at all was written.
+func snapshotTables(t *testing.T) string {
+	t.Helper()
+	dump := map[string][]map[string]interface{}{}
+	for _, model := range allModels() {
+		statement := &gorm.Statement{DB: Instance}
+		if err := statement.Parse(model); err != nil {
+			t.Fatalf("failed to parse model: %v", err)
+		}
+		rows := []map[string]interface{}{}
+		if err := Instance.Table(statement.Schema.Table).Order("id").Find(&rows).Error; err != nil {
+			t.Fatalf("failed to read %s: %v", statement.Schema.Table, err)
+		}
+		dump[statement.Schema.Table] = rows
+	}
+	raw, err := json.Marshal(dump)
+	if err != nil {
+		t.Fatalf("failed to encode snapshot: %v", err)
+	}
+	return string(raw)
+}
+
+// GORM leaves zero values out of struct conditions. With the nil UUID or an
+// empty string, every lookup must find nothing and every write change nothing.
+func TestNilIDMatchesNothing(t *testing.T) {
+	setupTestDB(t)
+	nilID := uuid.Nil
+
+	// The caller owns a wishlist and a group, so ownership and membership
+	// checks have records of theirs to match.
+	caller := createTestUser(t)
+	callerWishlist := createTestWishlist(t, caller.ID)
+	callerGroup := createTestGroup(t, caller.ID)
+	callerWish := models.Wish{Name: "Caller wish", Enabled: true, OwnerID: caller.ID, WishlistID: callerWishlist.ID}
+	callerWish.ID = uuid.New()
+	if _, err := CreateWishInDB(callerWish); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateGroupMembershipInDB(models.GroupMembership{GormModel: models.GormModel{ID: uuid.New()}, GroupID: callerGroup.ID, MemberID: caller.ID, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	other := createTestUser(t)
+	claimer := createTestUser(t)
+	for _, user := range []models.User{other, claimer} {
+		if err := SetUserPendingMFASecret(user.ID, "secret"); err != nil {
+			t.Fatal(err)
+		}
+		if err := ActivateUserMFA(user.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err := StoreRecoveryCodes(user.ID, []string{"hash"}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := CreateSession(user.ID, "refresh-"+user.ID.String(), "agent", "127.0.0.1"); err != nil {
+			t.Fatal(err)
+		}
+		if err := UpsertConsent(user.ID, "client-"+user.ID.String(), []string{"openid"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	otherGroup := createTestGroup(t, other.ID)
+	if _, err := CreateGroupMembershipInDB(models.GroupMembership{GormModel: models.GormModel{ID: uuid.New()}, GroupID: otherGroup.ID, MemberID: claimer.ID, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	otherWishlist := createTestWishlist(t, other.ID)
+	addWishlistMembership(t, otherWishlist.ID, otherGroup.ID)
+	publicWishlist := createTestWishlist(t, other.ID)
+	publicWishlist.Public = boolPtr(true)
+	publicWishlist.PublicHash = uuid.New()
+	if _, err := UpdateWishlistInDB(publicWishlist); err != nil {
+		t.Fatal(err)
+	}
+	otherWish := models.Wish{Name: "Other wish", Enabled: true, OwnerID: other.ID, WishlistID: otherWishlist.ID}
+	otherWish.ID = uuid.New()
+	if _, err := CreateWishInDB(otherWish); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateWishClaimInDB(models.WishClaim{GormModel: models.GormModel{ID: uuid.New()}, WishID: otherWish.ID, UserID: claimer.ID, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateWishCategoryInDB(models.WishCategory{GormModel: models.GormModel{ID: uuid.New()}, Name: "Other category", WishlistID: otherWishlist.ID, OwnerID: other.ID, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateWishlistCollaboratorInDB(models.WishlistCollaborator{GormModel: models.GormModel{ID: uuid.New()}, WishlistID: otherWishlist.ID, UserID: claimer.ID, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := GenerateRandomInvite(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateNewsPostInDB(models.News{GormModel: models.GormModel{ID: uuid.New()}, Title: "News", Enabled: true, Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+
+	before := snapshotTables(t)
+
+	t.Run("lookups", func(t *testing.T) {
+		mustNot := func(name string, found bool, err error) {
+			t.Helper()
+			if err != nil || found {
+				t.Errorf("%s: found=%v err=%v, want nothing found and no error", name, found, err)
+			}
+		}
+		mustFail := func(name string, err error) {
+			t.Helper()
+			if err == nil {
+				t.Errorf("%s: no error, want not found", name)
+			}
+		}
+
+		found, _, err := GetWishlistByWishlistID(nilID)
+		mustNot("GetWishlistByWishlistID", found, err)
+		_, err = GetWishlist(nilID)
+		mustFail("GetWishlist", err)
+		_, err = GetWishlistOwner(nilID)
+		mustFail("GetWishlistOwner", err)
+		owns, err := VerifyUserOwnershipToWishlist(caller.ID, nilID)
+		mustNot("VerifyUserOwnershipToWishlist(caller, nil)", owns, err)
+		owns, err = VerifyUserOwnershipToWishlist(nilID, otherWishlist.ID)
+		mustNot("VerifyUserOwnershipToWishlist(nil, wishlist)", owns, err)
+		member, err := VerifyUserMembershipToGroupMembershipToWishlist(caller.ID, nilID)
+		mustNot("VerifyUserMembershipToGroupMembershipToWishlist", member, err)
+		collaborates, err := VerifyWishlistCollaboratorToWishlist(nilID, claimer.ID)
+		mustNot("VerifyWishlistCollaboratorToWishlist", collaborates, err)
+		found, wishes, err := GetWishesFromWishlist(nilID)
+		mustNot("GetWishesFromWishlist", found || len(wishes) > 0, err)
+		wishIDs, err := GetWishIDsFromWishlist(nilID)
+		mustNot("GetWishIDsFromWishlist", len(wishIDs) > 0, err)
+		wish, err := GetWishByWishID(nilID)
+		mustNot("GetWishByWishID", wish != nil, err)
+		wishlistID, err := GetWishlistIDFromWish(nilID)
+		mustNot("GetWishlistIDFromWish", wishlistID != nil, err)
+		owns, err = VerifyUserOwnershipToWish(caller.ID, nilID)
+		mustNot("VerifyUserOwnershipToWish", owns, err)
+		claims, err := GetWishClaimFromWish(nilID)
+		mustNot("GetWishClaimFromWish", len(claims) > 0, err)
+		claimed, err := VerifyWishIsClaimed(nilID)
+		mustNot("VerifyWishIsClaimed", claimed, err)
+		found, _, err = GetPublicWishListByWishlistHash(nilID)
+		mustNot("GetPublicWishListByWishlistHash", found, err)
+		wishlists, err := GetOwnedWishlists(nilID)
+		mustNot("GetOwnedWishlists", len(wishlists) > 0, err)
+		wishlists, err = GetWishlistsByUserIDThroughWishlistMemberships(nilID)
+		mustNot("GetWishlistsByUserIDThroughWishlistMemberships", len(wishlists) > 0, err)
+		wishlists, err = GetWishlistsByUserIDThroughWishlistCollaborations(nilID)
+		mustNot("GetWishlistsByUserIDThroughWishlistCollaborations", len(wishlists) > 0, err)
+		collaborators, err := GetWishlistCollaboratorsFromWishlist(nilID)
+		mustNot("GetWishlistCollaboratorsFromWishlist", len(collaborators) > 0, err)
+		found, _, err = GetMembershipIDForGroupToWishlist(nilID, otherGroup.ID)
+		mustNot("GetMembershipIDForGroupToWishlist", found, err)
+		shared, err := VerifyGroupMembershipToWishlist(nilID, otherGroup.ID)
+		mustNot("VerifyGroupMembershipToWishlist", shared, err)
+		unique, err := VerifyUniqueWishNameInWishlist("", nilID)
+		mustNot("VerifyUniqueWishNameInWishlist (taken)", !unique, err)
+
+		_, err = GetGroupInformation(nilID)
+		mustFail("GetGroupInformation", err)
+		owns, err = VerifyUserOwnershipToGroup(caller.ID, nilID)
+		mustNot("VerifyUserOwnershipToGroup", owns, err)
+		member, err = VerifyUserMembershipToGroup(caller.ID, nilID)
+		mustNot("VerifyUserMembershipToGroup", member, err)
+		memberships, err := GetGroupMembershipsFromGroup(nilID)
+		mustNot("GetGroupMembershipsFromGroup", len(memberships) > 0, err)
+		_, err = GetGroupUsingGroupIDAndUserIDAsOwner(caller.ID, nilID)
+		mustFail("GetGroupUsingGroupIDAndUserIDAsOwner", err)
+		_, err = GetGroupUsingGroupIDAndMembershipUsingUserID(caller.ID, nilID)
+		mustFail("GetGroupUsingGroupIDAndMembershipUsingUserID", err)
+		_, err = GetGroupMembershipByGroupIDAndMemberID(nilID, claimer.ID)
+		mustFail("GetGroupMembershipByGroupIDAndMemberID", err)
+		groups, err := GetGroupsAUserIsAMemberOf(nilID)
+		mustNot("GetGroupsAUserIsAMemberOf", len(groups) > 0, err)
+		wishlists, err = GetWishlistsFromGroup(nilID)
+		mustNot("GetWishlistsFromGroup", len(wishlists) > 0, err)
+
+		_, err = GetUserInformation(nilID)
+		mustFail("GetUserInformation", err)
+		_, err = GetAllUserInformationAnyState(nilID)
+		mustFail("GetAllUserInformationAnyState", err)
+		_, _, err = GetUserMFAEnrollmentState(nilID)
+		mustFail("GetUserMFAEnrollmentState", err)
+		codes, err := GetActiveRecoveryCodes(nilID)
+		mustNot("GetActiveRecoveryCodes", len(codes) > 0, err)
+		consents, err := GetUserConsents(nilID)
+		mustNot("GetUserConsents", len(consents) > 0, err)
+		category, err := GetWishCategoryByID(nilID)
+		mustNot("GetWishCategoryByID", category != nil, err)
+		categories, err := GetWishCategoriesFromWishlist(nilID)
+		mustNot("GetWishCategoriesFromWishlist", len(categories) > 0, err)
+		_, err = GetInviteByID(nilID)
+		mustFail("GetInviteByID", err)
+		_, err = GetNewsPostByNewsID(nilID)
+		mustFail("GetNewsPostByNewsID", err)
+		valid, err := VerifyUnusedUserInviteCode("")
+		mustNot("VerifyUnusedUserInviteCode", valid, err)
+		_, found, err = GetOAuthClient("")
+		mustNot("GetOAuthClient", found, err)
+	})
+
+	t.Run("writes", func(t *testing.T) {
+		// Refusing with an error or quietly doing nothing are both fine;
+		// what matters is the snapshot below.
+		_ = UpdateGroupValuesByID(nilID, "Renamed group", "Renamed")
+		_ = DisableUserMFA(nilID)
+		_ = ClearUserRecoveryCodes(nilID)
+		_ = SetUserPendingMFASecret(nilID, "secret")
+		_ = ActivateUserMFA(nilID)
+		_ = MarkRecoveryCodeUsed(nilID)
+		_ = RevokeAllUserSessions(nilID)
+		_ = RevokeSessionByRefreshHash("")
+		_ = RevokeConsent(other.ID, "")
+		_ = SetUserSessionsInvalidatedAt(nilID, time.Now())
+		_ = SetUserVerification(nilID, false)
+		_, _ = GenerateRandomVerificationCodeForUser(nilID)
+		_, _ = GenerateRandomResetCodeForUser(nilID, true)
+		_ = DeleteGroup(nilID)
+		_ = DeleteGroupMembership(nilID)
+		_ = DeleteWishlist(nilID)
+		_ = DeleteWishlistMembership(nilID)
+		_ = DeleteWishlistCollaboratorByWishlistCollaboratorID(nilID)
+		_ = DeleteWishClaimByUserAndWish(nilID, claimer.ID)
+		_ = DeleteWishClaimByUserAndWish(otherWish.ID, nilID)
+		_ = DeleteWishCategory(nilID)
+		_ = DeleteInviteByID(nilID)
+		_ = DeleteNewsPost(nilID)
+		_ = DisableOAuthClient("")
+
+		if after := snapshotTables(t); after != before {
+			t.Errorf("writes for the nil UUID changed the database:\nbefore %s\nafter  %s", before, after)
+		}
+	})
+}
+
+// Struct conditions drop zero-valued fields, so queries name their columns.
+func TestQueriesNameTheirColumns(t *testing.T) {
+	structCondition := regexp.MustCompile(`\b(Where|Not|Or|First|Find|Take|Last|Delete)\(\s*&?models\.[A-Za-z]+\{[^}]`)
+	files, err := filepath.Glob("*.go")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no database sources found: %v", err)
+	}
+	for _, file := range files {
+		if strings.HasSuffix(file, "_test.go") {
+			continue
+		}
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, match := range structCondition.FindAllString(string(raw), -1) {
+			t.Errorf("%s uses a struct condition: %s", file, match)
+		}
 	}
 }
