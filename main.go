@@ -174,7 +174,10 @@ func run(serve func(router *gin.Engine, address string) error) error {
 }
 
 func initRouter(configFile models.ConfigStruct) *gin.Engine {
-	router := gin.Default()
+	// Not gin.Default(): its logger writes whole URLs, codes included.
+	router := gin.New()
+	router.Use(middlewares.AccessLog(gin.DefaultWriter), gin.Recovery())
+
 	// Gin trusts X-Forwarded-For from every peer by default, which would let any
 	// client choose its own IP and dodge the per-IP rate limits. Only the
 	// configured reverse proxies may vouch for a client's address.

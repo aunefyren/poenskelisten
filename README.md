@@ -325,6 +325,11 @@ Without it, `X-Forwarded-For` is ignored and all visitors share one rate limit,
 and the log warns about this once after startup. Only list proxies you run:
 any address in the list can claim to be any visitor.
 
+Pønskelisten's access log, on its standard output, leaves out query strings and
+the codes some URLs carry: password reset and e-mail verification codes, and
+public wishlist links. Your proxy's access log, if you keep one, may record
+whole URLs, so reset links: keep it as private as the app's data.
+
 ### HTTPS
 
 Pønskelisten serves plain HTTP. When it's reachable from the internet, put a
