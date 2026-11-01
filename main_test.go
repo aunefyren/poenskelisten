@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -320,6 +321,63 @@ func TestParseFlagsOutOfRangeMaxImagePixelsFails(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "maximagepixels") {
 			t.Errorf("parseFlags with -maximagepixels %s error = %v, want an invalid -maximagepixels error", value, err)
 		}
+	}
+}
+
+// The secrets come from the environment, which entrypoint.sh no longer
+// copies into the process's arguments; a flag given explicitly wins.
+func TestParseFlagsReadsSecretsFromTheEnvironment(t *testing.T) {
+	t.Setenv("dbpassword", "db-from-env")
+	t.Setenv("smtppassword", "smtp-from-env")
+	t.Setenv("oidcclientsecret", "oidc-from-env")
+
+	withArgs(t)
+	out, _, provided, err := parseFlags(models.ConfigStruct{DBPassword: "db-from-config"})
+	if err != nil {
+		t.Fatalf("parseFlags returned error: %v", err)
+	}
+	if out.DBPassword != "db-from-env" || out.SMTPPassword != "smtp-from-env" || out.OIDCClientSecret != "oidc-from-env" || !provided {
+		t.Errorf("secrets = %q %q %q (provided %v), want the environment's, to be saved", out.DBPassword, out.SMTPPassword, out.OIDCClientSecret, provided)
+	}
+
+	withArgs(t, "-dbpassword", "db-from-flag")
+	out, _, _, err = parseFlags(models.ConfigStruct{})
+	if err != nil {
+		t.Fatalf("parseFlags returned error: %v", err)
+	}
+	if out.DBPassword != "db-from-flag" || out.SMTPPassword != "smtp-from-env" {
+		t.Errorf("secrets = %q %q, want the flag's, then the environment's", out.DBPassword, out.SMTPPassword)
+	}
+}
+
+// Any user who can see a process can read its arguments, so entrypoint.sh
+// must leave the secrets in the environment.
+func TestEntrypointKeepsSecretsOutOfArguments(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("as root, entrypoint.sh changes file owners and switches user")
+	}
+	script, err := os.ReadFile("entrypoint.sh")
+	if err != nil {
+		t.Fatalf("failed to read entrypoint.sh: %v", err)
+	}
+	printsArguments := strings.Replace(string(script), "set -- /app/poenskelisten", "set -- echo", 1)
+	path := filepath.Join(t.TempDir(), "entrypoint.sh")
+	if err := os.WriteFile(path, []byte(printsArguments), 0o700); err != nil {
+		t.Fatalf("failed to write the script: %v", err)
+	}
+
+	cmd := exec.Command("sh", path, "--port", "9000")
+	cmd.Env = append(os.Environ(), "dbusername=wishlist", "dbpassword=db-secret", "smtppassword=smtp-secret", "oidcclientsecret=oidc-secret")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("entrypoint.sh failed: %v", err)
+	}
+	arguments := string(out)
+	if !strings.Contains(arguments, "--dbusername wishlist") || !strings.HasSuffix(strings.TrimSpace(arguments), "--port 9000") {
+		t.Fatalf("arguments = %q, want the environment as flags, then the container's", arguments)
+	}
+	if strings.Contains(arguments, "secret") {
+		t.Errorf("arguments = %q, want no secret", arguments)
 	}
 }
 

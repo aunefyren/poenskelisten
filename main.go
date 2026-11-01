@@ -555,6 +555,18 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, startupAct
 		}
 	})
 
+	// entrypoint.sh turns the other environment variables into flags, but
+	// not the secrets: any user who can see a process can read its arguments,
+	// while its environment is readable only by its own user and root. A flag
+	// given explicitly still wins.
+	for name, value := range map[string]*string{"dbpassword": dbPassword, "smtppassword": smtpPassword, "oidcclientsecret": oidcClientSecret} {
+		if secret := os.Getenv(name); secret != "" && !provided[name] {
+			*value = secret
+			provided[name] = true
+			flagsProvided = true
+		}
+	}
+
 	if provided["port"] {
 		configFile.PoenskelistenPort = *port
 	}
