@@ -756,6 +756,45 @@ func TestGetUserAdminCanViewOthers(t *testing.T) {
 	}
 }
 
+// Self and admin views use the any-state lookup, which once skipped redaction
+// and returned the password hash and reset/verification codes.
+func TestGetUserSelfAndAdminResponsesAreRedacted(t *testing.T) {
+	setupControllersDB(t)
+	admin := createTestUser(t)
+	target := createTestUser(t)
+
+	cases := []struct {
+		name     string
+		callerID uuid.UUID
+		admin    bool
+	}{
+		{name: "self", callerID: target.ID},
+		{name: "admin", callerID: admin.ID, admin: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			header := map[string]string{"Authorization": authHeader(t, tc.callerID, tc.admin)}
+			params := gin.Params{{Key: "user_id", Value: target.ID.String()}}
+			code, resp, _ := doRequest(GetUser, "GET", "/api/auth/users/"+target.ID.String(), "", header, params)
+			if code != 200 {
+				t.Fatalf("status = %d, want 200; body=%v", code, resp)
+			}
+			user, ok := resp["user"].(map[string]interface{})
+			if !ok {
+				t.Fatalf("expected a user object, got %v", resp)
+			}
+			if user["email"] != *target.Email {
+				t.Errorf("email = %v, want %v", user["email"], *target.Email)
+			}
+			for _, field := range []string{"password", "verification_code", "reset_code", "reset_expiration"} {
+				if user[field] != nil {
+					t.Errorf("%s = %v, want it redacted", field, user[field])
+				}
+			}
+		})
+	}
+}
+
 func TestGetUserNonAdminViewingOtherUser(t *testing.T) {
 	setupControllersDB(t)
 	requester := createTestUser(t)

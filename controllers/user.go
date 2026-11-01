@@ -238,18 +238,20 @@ func GetUser(context *gin.Context) {
 		return
 	}
 
-	// Parse group id
-	user_id_int, err := utilities.ParseID(user)
+	targetUserID, err := utilities.ParseID(user)
 	if err != nil {
-		logger.Log.Error("Failed to parse group ID. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse group ID."})
+		logger.Log.Error("Failed to parse user ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse user ID."})
 		context.Abort()
 		return
 	}
 
+	// Self and admins may see disabled accounts, but the response is still
+	// redacted: secrets like the password hash and reset codes never leave the
+	// server, whoever is asking.
 	userObject := models.User{}
-	if userID == user_id_int || (requestingUserObject.Admin) {
-		userObject, err = database.GetAllUserInformationAnyState(user_id_int)
+	if userID == targetUserID || requestingUserObject.Admin {
+		userObject, err = database.GetUserInformationAnyState(targetUserID)
 		if err != nil {
 			logger.Log.Error("Failed to get user. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user (all)."})
@@ -257,7 +259,7 @@ func GetUser(context *gin.Context) {
 			return
 		}
 	} else {
-		userObject, err = database.GetUserInformation(user_id_int)
+		userObject, err = database.GetUserInformation(targetUserID)
 		if err != nil {
 			logger.Log.Error("Failed to get user. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
