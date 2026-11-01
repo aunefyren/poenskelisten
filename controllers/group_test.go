@@ -1268,6 +1268,22 @@ func TestRegisterGroupOwnerMembershipCreateFailure(t *testing.T) {
 	}
 }
 
+func TestRegisterGroupWishlistLookupFailure(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	failDBOperation(t, "query", "wishlists", 0)
+
+	reqBody := `{"name":"Team Group","description":"desc","wishlists":["` + wishlist.ID.String() + `"]}`
+	ctx, w := groupTestContext("POST", "/api/groups", reqBody)
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RegisterGroup(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when the wishlist lookup fails; body=%s", w.Code, w.Body.String())
+	}
+}
+
 func TestRegisterGroupWishlistMembershipCreateFailure(t *testing.T) {
 	// Everything needed for the group + owner membership + wishlist ownership
 	// check to succeed is present, but WishlistMembership is missing so the
