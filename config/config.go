@@ -31,6 +31,8 @@ func LoadConfig() (err error) {
 		}
 	}
 
+	restrictConfigFilePermissions()
+
 	file, err := os.Open(configFilePath)
 	if err != nil {
 		fmt.Println("load config file threw error trying to open the file")
@@ -230,6 +232,29 @@ func CreateConfigFile() error {
 }
 
 // Saves the given config struct as config.json
+// configFileMode is owner read/write only. os.WriteFile applies it to new
+// files only, so restrictConfigFilePermissions handles files written as 0644
+// by versions before 2.5.0.
+const configFileMode os.FileMode = 0600
+
+// restrictConfigFilePermissions removes group and other access from an existing
+// config file. Owner bits are left alone, so an operator's read-only file stays
+// read-only. A failure is only reported: the file is still usable, and refusing
+// to start over its permissions would be worse.
+func restrictConfigFilePermissions() {
+	info, err := os.Stat(configFilePath)
+	if err != nil {
+		return
+	}
+	mode := info.Mode().Perm()
+	if mode&0077 == 0 {
+		return
+	}
+	if err := os.Chmod(configFilePath, mode&^0077); err != nil {
+		fmt.Println("failed to restrict config file permissions. error: " + err.Error())
+	}
+}
+
 func SaveConfig() error {
 	file, err := json.MarshalIndent(ConfigFile, "", "	")
 	if err != nil {
@@ -237,7 +262,8 @@ func SaveConfig() error {
 		return errors.New("failed to marshal config file")
 	}
 
-	err = os.WriteFile(configFilePath, file, 0644)
+	// 0600: the file holds the token signing keys and any DB/SMTP/OIDC secrets.
+	err = os.WriteFile(configFilePath, file, configFileMode)
 	if err != nil {
 		fmt.Println("failed to save config file to disk. error: " + err.Error())
 		return errors.New("failed to save config file to disk")

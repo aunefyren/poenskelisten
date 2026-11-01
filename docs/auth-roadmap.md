@@ -677,8 +677,8 @@ These parts of the plan below were built differently. Open gaps are tracked in
   third-party clients have nothing else to use.
 - **Rate limiting.** Only `/oauth/register` is rate-limited. `/oauth/token` and
   `/oauth/authorize` aren't.
-- **Key storage.** The signing key lives in `config.json`, which is written `0644`,
-  not `0600`.
+- **Key storage.** The signing key lives in `config.json`. Since v2.5.0 it's written
+  `0600`, and an older world-readable file is tightened on load.
 
 ### Phase 4 security posture
 PKCE required (S256 only); exact `redirect_uri` matching; single-use ≤60s codes;

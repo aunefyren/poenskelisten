@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -71,6 +72,73 @@ func TestSaveConfig(t *testing.T) {
 	}
 	if saved["poenskelisten_name"] != "Saved Name" {
 		t.Errorf("poenskelisten_name = %v, want 'Saved Name'", saved["poenskelisten_name"])
+	}
+}
+
+// skipIfNoUnixModes skips mode-bit assertions on Windows, where Go maps file
+// modes onto a single read-only flag.
+func skipIfNoUnixModes(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits don't apply on Windows")
+	}
+}
+
+func assertFileMode(t *testing.T, path string, want os.FileMode) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("failed to stat config file: %v", err)
+	}
+	if got := info.Mode().Perm(); got != want {
+		t.Errorf("config file mode = %#o, want %#o", got, want)
+	}
+}
+
+func TestSaveConfigWritesOwnerOnlyFile(t *testing.T) {
+	skipIfNoUnixModes(t)
+	path := withTempConfigFile(t)
+
+	if err := SaveConfig(); err != nil {
+		t.Fatalf("SaveConfig returned error: %v", err)
+	}
+	assertFileMode(t, path, 0600)
+}
+
+func TestRestrictConfigFilePermissions(t *testing.T) {
+	skipIfNoUnixModes(t)
+	cases := []struct {
+		name string
+		mode os.FileMode
+		want os.FileMode
+	}{
+		{name: "world-readable file from an older version", mode: 0644, want: 0600},
+		{name: "already owner-only", mode: 0600, want: 0600},
+		{name: "read-only stays read-only", mode: 0444, want: 0400},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := withTempConfigFile(t)
+			if err := os.WriteFile(path, []byte(`{}`), 0600); err != nil {
+				t.Fatalf("failed to seed config file: %v", err)
+			}
+			// Chmod explicitly: WriteFile's mode is masked by the umask.
+			if err := os.Chmod(path, tc.mode); err != nil {
+				t.Fatalf("failed to chmod config file: %v", err)
+			}
+
+			restrictConfigFilePermissions()
+			assertFileMode(t, path, tc.want)
+		})
+	}
+}
+
+func TestRestrictConfigFilePermissionsMissingFile(t *testing.T) {
+	withTempConfigFile(t)
+	// Nothing to restrict and nothing to report: must not panic or create it.
+	restrictConfigFilePermissions()
+	if _, err := os.Stat(configFilePath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("config file stat error = %v, want it to still not exist", err)
 	}
 }
 
