@@ -5,6 +5,7 @@ import (
 	"aunefyren/poenskelisten/models"
 	"encoding/json"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -214,16 +215,64 @@ func TestGetNewsPostInvalidID(t *testing.T) {
 
 func TestGetNewsPostSuccess(t *testing.T) {
 	setupControllersDB(t)
+	user := createTestUser(t)
 	news := createTestNews(t)
 
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
 	ctx.Request = httptest.NewRequest("GET", "/api/news/"+news.ID.String(), nil)
+	ctx.Request.Header.Set("Authorization", authHeader(t, user.ID, false))
 	ctx.Params = gin.Params{{Key: "news_id", Value: news.ID.String()}}
 	GetNewsPost(ctx)
 
 	if w.Code != 201 {
 		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
+}
+
+// One post is shown to whoever the list shows it to: a scheduled post only
+// to admins, an expired one to no one, and either is answered like a post
+// that doesn't exist.
+func TestGetNewsPostHidesWhatTheListHides(t *testing.T) {
+	setupControllersDB(t)
+	member := createTestUser(t)
+	admin := createTestUser(t)
+	if err := database.Instance.Model(&admin).Update("admin", true).Error; err != nil {
+		t.Fatalf("failed to make the admin: %v", err)
+	}
+	now := time.Now()
+	past := now.Add(-time.Hour)
+	live := newsCreatePost(t, "Live post", now.Add(-2*time.Hour), nil)
+	scheduled := newsCreatePost(t, "Scheduled post", now.Add(time.Hour), nil)
+	expired := newsCreatePost(t, "Expired post", now.Add(-2*time.Hour), &past)
+
+	get := func(userID uuid.UUID, newsID string) (int, map[string]interface{}) {
+		header := map[string]string{"Authorization": authHeader(t, userID, false)}
+		code, body, _ := doRequest(GetNewsPost, "GET", "/api/auth/news/"+newsID, "", header, gin.Params{{Key: "news_id", Value: newsID}})
+		return code, body
+	}
+
+	cases := []struct {
+		name   string
+		userID uuid.UUID
+		post   string
+		shown  bool
+	}{
+		{"live post to a member", member.ID, live.ID.String(), true},
+		{"scheduled post to a member", member.ID, scheduled.ID.String(), false},
+		{"expired post to a member", member.ID, expired.ID.String(), false},
+		{"scheduled post to an admin", admin.ID, scheduled.ID.String(), true},
+		{"expired post to an admin", admin.ID, expired.ID.String(), false},
+	}
+	_, unknown := get(member.ID, uuid.NewString())
+	for _, c := range cases {
+		code, body := get(c.userID, c.post)
+		if c.shown && code != 201 {
+			t.Errorf("%s = %d %v, want 201", c.name, code, body)
+		}
+		if !c.shown && (code != 404 || !reflect.DeepEqual(body, unknown)) {
+			t.Errorf("%s = %d %v, want 404 like an unknown post (%v)", c.name, code, body, unknown)
+		}
 	}
 }
 
