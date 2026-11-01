@@ -160,9 +160,13 @@ func RegisterGroup(context *gin.Context) {
 		var wishlistMembership models.WishlistMembership
 
 		wishlist, err := database.GetWishlist(wishlistID)
-		if err != nil {
+		if errors.Is(err, database.ErrWishlistNotFound) {
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
+			context.Abort()
+			return
+		} else if err != nil {
 			logger.Log.Error("Failed to get wishlist. Error: " + err.Error())
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get wishlist."})
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist."})
 			context.Abort()
 			return
 		}
