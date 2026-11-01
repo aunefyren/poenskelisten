@@ -227,6 +227,66 @@ func TestGetWishlistAsGroupMember(t *testing.T) {
 	}
 }
 
+// A collaborator who is in none of the list's groups can read the list and
+// its wishes, as they can edit them, but not its claims, nor any other list,
+// nor this one once removed or once the list is deleted.
+func TestCollaboratorsCanReadTheirWishlist(t *testing.T) {
+	setupControllersDB(t)
+	owner, collaborator, member := createTestUser(t), createTestUser(t), createTestUser(t)
+	wishlist := makeClaimable(t, createTestWishlist(t, owner.ID))
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, member.ID)
+	addWishlistMembership(t, wishlist.ID, group.ID)
+	addWishCollaborator(t, wishlist.ID, collaborator.ID)
+	wish := createTestWish(t, owner.ID, wishlist.ID)
+	wishTestSeedClaim(t, wish.ID, member.ID)
+	other := createTestWishlist(t, owner.ID)
+
+	read := func(userID uuid.UUID, wishlistID uuid.UUID, wishID uuid.UUID) []int {
+		header := authHeader(t, userID, false)
+		listCode, list := wlDo(GetWishlist, "GET", "/api/auth/wishlists/"+wishlistID.String(), "", header, wishlistTestParams(wishlistID))
+		wishesCode, wishes := wlDo(GetWishesFromWishlist, "GET", "/api/auth/wishes?wishlist="+wishlistID.String(), "", header, nil)
+		wishCode, one := wlDo(APIGetWish, "GET", "/api/auth/wishes/"+wishID.String(), "", header, gin.Params{{Key: "wish_id", Value: wishID.String()}})
+		for _, resp := range []map[string]interface{}{list, wishes, one} {
+			if raw, _ := json.Marshal(resp); strings.Contains(string(raw), member.ID.String()) {
+				t.Errorf("a collaborator saw the claim: %s", raw)
+			}
+		}
+		return []int{listCode, wishesCode, wishCode}
+	}
+
+	if codes := read(collaborator.ID, wishlist.ID, wish.ID); codes[0] != 200 || codes[1] != 200 || codes[2] != 200 {
+		t.Errorf("collaborator reading their list = %v, want 200 each", codes)
+	}
+	otherWish := createTestWish(t, owner.ID, other.ID)
+	if codes := read(collaborator.ID, other.ID, otherWish.ID); codes[0] != 400 || codes[1] != 400 || codes[2] != 400 {
+		t.Errorf("collaborator reading another list = %v, want 400 each", codes)
+	}
+
+	removed := createTestUser(t)
+	addWishCollaborator(t, wishlist.ID, removed.ID)
+	collaboration, err := database.GetWishlistCollaboratorByUserIDAndWishlistID(wishlist.ID, removed.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.DeleteWishlistCollaboratorByWishlistCollaboratorID(collaboration.ID); err != nil {
+		t.Fatal(err)
+	}
+	if codes := read(removed.ID, wishlist.ID, wish.ID); codes[0] != 400 || codes[1] != 400 || codes[2] != 400 {
+		t.Errorf("removed collaborator = %v, want 400 each", codes)
+	}
+
+	if err := database.DeleteWishlist(wishlist.ID); err != nil {
+		t.Fatal(err)
+	}
+	if codes := read(collaborator.ID, wishlist.ID, wish.ID); codes[0] != 400 || codes[1] != 400 || codes[2] != 400 {
+		t.Errorf("collaborator reading a deleted list = %v, want 400 each", codes)
+	}
+	if codes := read(member.ID, wishlist.ID, wish.ID); codes[0] != 400 || codes[1] != 400 || codes[2] != 400 {
+		t.Errorf("group member reading a deleted list = %v, want 400 each", codes)
+	}
+}
+
 func TestGetWishlistForbidden(t *testing.T) {
 	setupControllersDB(t)
 	owner := createTestUser(t)
@@ -1567,11 +1627,14 @@ func TestDeleteWishlistImageCleanupFailuresAreNotFatal(t *testing.T) {
 
 func TestGetWishlistGroupMembershipCheckDBFailure(t *testing.T) {
 	setupControllersDB(t)
-	owner := createTestUser(t)
+	owner, member := createTestUser(t), createTestUser(t)
 	wishlist := createTestWishlist(t, owner.ID)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, member.ID)
+	addWishlistMembership(t, wishlist.ID, group.ID)
 	failDBOperation(t, "query", "wishlist_memberships", 0)
 
-	code, resp := wlDo(GetWishlist, "GET", "/api/auth/wishlists/"+wishlist.ID.String(), "", authHeader(t, owner.ID, false), wishlistTestParams(wishlist.ID))
+	code, resp := wlDo(GetWishlist, "GET", "/api/auth/wishlists/"+wishlist.ID.String(), "", authHeader(t, member.ID, false), wishlistTestParams(wishlist.ID))
 	if code != 500 {
 		t.Fatalf("status = %d, want 500; body=%v", code, resp)
 	}

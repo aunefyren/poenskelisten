@@ -311,23 +311,13 @@ func GetWishlist(context *gin.Context) {
 		return
 	}
 
-	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(UserID, wishlist_id_int)
+	canView, err := userCanViewWishlist(UserID, wishlist_id_int)
 	if err != nil {
-		logger.Log.Error("Failed to verify ownership of group. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of group."})
+		logger.Log.Error("Failed to verify access to wishlist. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify access to wishlist."})
 		context.Abort()
 		return
-	}
-
-	WishlistMembership, err := database.VerifyUserMembershipToGroupMembershipToWishlist(UserID, wishlist_id_int)
-	if err != nil {
-		logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
-		context.Abort()
-		return
-	}
-
-	if !WishlistOwnership && !WishlistMembership {
+	} else if !canView {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not a member of, or an owner of this group."})
 		context.Abort()
 		return

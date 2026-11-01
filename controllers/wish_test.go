@@ -1664,9 +1664,9 @@ func TestGetWishesFromWishlist_InjectedFailures(t *testing.T) {
 		return wishTestReq{handler: GetWishesFromWishlist, method: "GET", path: "/api/wishes?wishlist=" + wishlist.ID.String(), userID: owner.ID}
 	}
 	wishTestRunFailures(t, []wishTestFailCase{
-		{name: "membership check", fixture: fixture, op: "query", table: "wishlist_memberships", want: 500, wantErr: "Failed to verify membership of group."},
-		// First wishlists query is the ownership check, the second the owner lookup.
-		{name: "owner lookup", fixture: fixture, op: "query", table: "wishlists", skip: 1, want: 500, wantErr: "Failed to get wishlist owner."},
+		{name: "access check", fixture: fixture, op: "query", table: "wishlists", want: 500, wantErr: "Failed to verify access to wishlist."},
+		// The access check reads wishlists twice (the list, then its owner).
+		{name: "owner lookup", fixture: fixture, op: "query", table: "wishlists", skip: 2, want: 500, wantErr: "Failed to get wishlist owner."},
 	})
 }
 
@@ -2113,7 +2113,7 @@ func TestAPIGetWish_InjectedFailures(t *testing.T) {
 		return wishTestReq{handler: APIGetWish, method: "GET", params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}, userID: owner.ID}
 	}
 	wishTestRunFailures(t, []wishTestFailCase{
-		{name: "ownership check", fixture: fixture, op: "query", table: "wishlists", want: 500, wantErr: "Failed to verify wishlist ownership."},
+		{name: "access check", fixture: fixture, op: "query", table: "wishlists", want: 500, wantErr: "Failed to verify access to wishlist."},
 		// The first wishes query resolves the wishlist ID.
 		{name: "wish lookup", fixture: fixture, op: "query", table: "wishes", skip: 1, want: 500, wantErr: "Failed to get wish from database."},
 		{name: "convert wish", fixture: fixture, op: "query", table: "users", want: 500, wantErr: "Failed to convert wish to wish object."},

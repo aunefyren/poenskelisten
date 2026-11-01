@@ -49,23 +49,13 @@ func GetWishesFromWishlist(context *gin.Context) {
 		return
 	}
 
-	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(UserID, wishlist_id_int)
+	canView, err := userCanViewWishlist(UserID, wishlist_id_int)
 	if err != nil {
-		logger.Log.Error("Failed to verify ownership of wishlist. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of wishlist."})
+		logger.Log.Error("Failed to verify access to wishlist. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify access to wishlist."})
 		context.Abort()
 		return
-	}
-
-	WishlistMembership, err := database.VerifyUserMembershipToGroupMembershipToWishlist(UserID, wishlist_id_int)
-	if err != nil {
-		logger.Log.Error("Failed to verify membership of group. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership of group."})
-		context.Abort()
-		return
-	}
-
-	if !WishlistOwnership && !WishlistMembership {
+	} else if !canView {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not a member of, or an owner of this group."})
 		context.Abort()
 		return
@@ -1127,23 +1117,13 @@ func APIGetWish(context *gin.Context) {
 		return
 	}
 
-	WishlistOwnership, err := database.VerifyUserOwnershipToWishlist(userID, *wishlistID)
+	canView, err := userCanViewWishlist(userID, *wishlistID)
 	if err != nil {
-		logger.Log.Error("Failed to verify wishlist ownership. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wishlist ownership."})
+		logger.Log.Error("Failed to verify access to wishlist. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify access to wishlist."})
 		context.Abort()
 		return
-	}
-
-	WishlistMembership, err := database.VerifyUserMembershipToGroupMembershipToWishlist(userID, *wishlistID)
-	if err != nil {
-		logger.Log.Error("Failed to verify wishlist membership. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wishlist membership."})
-		context.Abort()
-		return
-	}
-
-	if !WishlistOwnership && !WishlistMembership {
+	} else if !canView {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not a member of, or an owner of this group."})
 		context.Abort()
 		return
