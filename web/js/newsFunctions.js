@@ -4,7 +4,7 @@ function createNewsPost(adminStatus) {
     nowDate = now.toISOString().split('T')[0]
 
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); createNewsPostTwo(${adminStatus});">
+        <form action="" class="" ${onSubmit('createNewsPostTwo', adminStatus)}>
             <label for="news_title">Create post:</label><br>
             <input type="text" name="news_title" id="news_title" placeholder="Post title" autocomplete="off" required />
             
@@ -159,7 +159,7 @@ function editNewsPostTwo(newsObject, newsPostID) {
     }
 
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); editNewsPostThree('${newsPostID}');">
+        <form action="" class="" ${onSubmit('editNewsPostThree', String(newsPostID))}>
             <label for="news_title">Create post:</label><br>
             <input type="text" name="news_title" id="news_title" placeholder="Post title" autocomplete="off" value="${newsObject.title}" required />
             
@@ -236,3 +236,12 @@ function editNewsPostThree(newsPostID) {
     xhttp.send(form_data);
     return false;
 }
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    createNewsPost,
+    createNewsPostTwo,
+    deleteNewsPost,
+    editNewsPost,
+    editNewsPostThree,
+});

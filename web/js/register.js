@@ -1,7 +1,7 @@
 function load_page(result) {
 
-    // Reset cookie
-    set_cookie("poenskelisten", "", 1);
+    // Drop any in-memory access token: these pages render the logged-out view.
+    clearAccessToken();
 
     if(!LOCAL_LOGIN_ENABLED) {
         load_page_oidc_only();
@@ -28,7 +28,7 @@ function load_page(result) {
                         <br>
 
                         <div class="action-block">
-                            <form action="" class="icon-border" onsubmit="event.preventDefault(); send_registration();">
+                            <form action="" class="icon-border" data-on-submit="send_registration">
 
                                 <label id="form-input-icon" for="email"></label>
                                 <input type="email" name="email" id="email" placeholder="Email" required/>
@@ -88,7 +88,7 @@ function load_page_oidc_only() {
                         <br>
 
                         <div class="action-block">
-                            <button type="button" onclick="window.location.href='/login';">Go to login</button>
+                            <button type="button" data-on-click="navigateTo" data-click-args="[&quot;/login&quot;]">Go to login</button>
                         </div>
 
                     </div>
@@ -164,3 +164,8 @@ function clear_data() {
 function disable_register_button() {
     document.getElementById("register-button").disabled = true;
 }
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    send_registration,
+});

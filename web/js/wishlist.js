@@ -41,7 +41,7 @@ function load_page(result) {
     var html = `
                 <!-- The Modal -->
                 <div id="myModal" class="modal closed">
-                    <span class="close clickable" onclick="toggleModal()">&times;</span>
+                    <span class="close clickable" data-on-click="toggleModal">&times;</span>
                     <div class="modalContent" id="modalContent">
                     </div>
                     <div id="caption"></div>
@@ -71,15 +71,15 @@ function load_page(result) {
                                 </div>
                                 <div class="wishlist-url" id="wishlist-url">
                                     <span class="wishlist-url-span" id="wishlist-url-span"></span>
-                                    <img id="share-wishlist-url-button" class="share-wishlist-url-button clickable hover" src="/assets/copy.svg" style="" title="Click to copy the URL" onclick="copyPublicLink();">
+                                    <img id="share-wishlist-url-button" class="share-wishlist-url-button clickable hover" src="/assets/copy.svg" style="" title="Click to copy the URL" data-on-click="copyPublicLink">
                                 </div>
                             </div>
 
                             <div class="bottom-right-button" id="" style="">
-                                <img class="icon-img  clickable" id="collaborators-wishlist" src="/assets/smile.svg" onclick="showWishlistCollaboratorsInWishlist('${wishlist_id}', '${user_id}')" title="Wishlist collaborators" style="margin: 0.25em;">
-                                <img class="icon-img  clickable" id="groups-wishlist" src="/assets/users.svg" onclick="showGroupsInWishlist('${wishlist_id}', '${user_id}')" title="Wishlist groups" style="margin: 0.25em; display: none;">
-                                <img class="icon-img  clickable" id="edit-wishlist" src="/assets/edit.svg" onclick="editWishlist('${user_id}', '${wishlist_id}')" title="Edit wishlist" style="margin: 0.25em; display: none;">
-                                <img class="icon-img  clickable" id="delete-wishlist" src="/assets/trash-2.svg" onclick="deleteWishlist('${wishlist_id}', '${user_id}')" title="Delete wishlist" style="margin: 0.25em; display: none;">
+                                <img class="icon-img  clickable" id="collaborators-wishlist" src="/assets/smile.svg" ${onClick('showWishlistCollaboratorsInWishlist', String(wishlist_id), String(user_id))} title="Wishlist collaborators" style="margin: 0.25em;">
+                                <img class="icon-img  clickable" id="groups-wishlist" src="/assets/users.svg" ${onClick('showGroupsInWishlist', String(wishlist_id), String(user_id))} title="Wishlist groups" style="margin: 0.25em; display: none;">
+                                <img class="icon-img  clickable" id="edit-wishlist" src="/assets/edit.svg" ${onClick('editWishlist', String(user_id), String(wishlist_id))} title="Edit wishlist" style="margin: 0.25em; display: none;">
+                                <img class="icon-img  clickable" id="delete-wishlist" src="/assets/trash-2.svg" ${onClick('deleteWishlist', String(wishlist_id), String(user_id))} title="Delete wishlist" style="margin: 0.25em; display: none;">
                             </div>
 
                         </div>
@@ -101,7 +101,7 @@ function load_page(result) {
                         </div>
 
                         <div id="wish-input" class="wish-input">
-                            <button id="register-button" onClick="createWish('${wishlist_id}', '${user_id}', '{{.currency}}');" type="" href="/">Create new wish</button>
+                            <button id="register-button" ${onClick('createWish', String(wishlist_id), String(user_id), '{{.currency}}')} type="" href="/">Create new wish</button>
                         </div>
 
                     </div>
@@ -410,7 +410,7 @@ function generateWishHtml(wish_object, wishlist_id, user_id) {
     html += '<div class="profile">'
 
     if(wish_object.note !== "" || wish_object.image) {
-        html += `<div class="profile-icon clickable" onclick="toggle_wish('${wish_object.id}')" title="Expandable">`;
+        html += `<div class="profile-icon clickable" ${onClick('toggle_wish', String(wish_object.id))} title="Expandable">`;
 
         if(wish_object.image) {
             html += '<img id="wish_' + wish_object.id + '_arrow" class="icon-img " src="/assets/chevron-down.svg">'
@@ -422,33 +422,34 @@ function generateWishHtml(wish_object, wishlist_id, user_id) {
     }
 
     if(wish_object.url !== "") {
-        html += `<div class="profile-icon clickable" onclick="openURLModal('${wish_object.url}');" title="Go to webpage">`
+        html += `<div class="profile-icon clickable" ${onClick('openURLModal', wish_object.url)} title="Go to webpage">`
         html += '<img class="icon-img " src="/assets/link.svg">'
         html += '</div>'
     }
 
     if(user_id == owner_id || collaborator || user_id == wishlist_ownerID) {
-        html += `<div class="profile-icon clickable" title="Edit wish" onclick="editWish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}')">`;
+        html += `<div class="profile-icon clickable" title="Edit wish" ${onClick('editWish', String(wish_object.id), String(wishlist_id), String(group_id), String(user_id))}>`;
         html += '<img class="icon-img " src="/assets/edit.svg">'
         html += '</div>'
 
-        html += `<div class="profile-icon clickable" title="Delete wish" onclick="deleteWish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}')">`;
+        html += `<div class="profile-icon clickable" title="Delete wish" ${onClick('deleteWish', String(wish_object.id), String(wishlist_id), String(group_id), String(user_id))}>`;
         html += '<img class="icon-img " src="/assets/trash-2.svg">'
         html += '</div>'
     } else if(wish_object.wishclaim.length > 0 && wish_object.wish_claimable) {
         for(var j = 0; j < wish_object.wishclaim.length; j++) {
             if(user_id !== wish_object.wishclaim[j].user.id) {
-                html += `<div class="profile-icon clickable" title="Wish is claimed by ${wish_object.wishclaim[j].user.first_name} ${wish_object.wishclaim[j].user.last_name}." onclick="alert('Wish is claimed by ${wish_object.wishclaim[j].user.first_name} ${wish_object.wishclaim[j].user.last_name}.')">`
+                var claimedByMessage = "Wish is claimed by " + wish_object.wishclaim[j].user.first_name + " " + wish_object.wishclaim[j].user.last_name + ".";
+                html += `<div class="profile-icon clickable" title="${escapeHTML(claimedByMessage)}" ${onClick('showAlert', claimedByMessage)}>`
                 html += '<img class="icon-img " src="/assets/lock.svg">'
                 html += '</div>'
             } else {
                 html += '<div class="profile-icon clickable" title="Claimed by you, click to unclaim.">'
-                html += `<img class="icon-img " src="/assets/unlock.svg" onclick="unclaim_wish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}')")>`;
+                html += `<img class="icon-img " src="/assets/unlock.svg" ${onClick('unclaim_wish', String(wish_object.id), String(wishlist_id), String(group_id), String(user_id))})>`;
                 html += '</div>'
             }
         }
     } else if(wish_object.wish_claimable) {
-        html += `<div class="profile-icon clickable" title="Claim this gift" onclick="claim_wish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}')">`;
+        html += `<div class="profile-icon clickable" title="Claim this gift" ${onClick('claim_wish', String(wish_object.id), String(wishlist_id), String(group_id), String(user_id))}>`;
         html += '<img class="icon-img " src="/assets/check.svg">'
         html += '</div>'
     }
@@ -464,7 +465,7 @@ function generateWishHtml(wish_object, wishlist_id, user_id) {
     }
 
     if(wish_object.image) {
-        html += `<div class="wish-image-thumbnail clickable" onclick="toggle_wish_modal('${wish_object.id}')">`;
+        html += `<div class="wish-image-thumbnail clickable" ${onClick('toggle_wish_modal', String(wish_object.id))}>`;
         html += '<img style="width: 100%; height: 100%;" class="wish-image-thumbnail-img" id="wish-image-thumbnail-img-' + wish_object.id  + '" src="/assets/loading.svg">'
         html += '</div>'
 
@@ -633,12 +634,12 @@ function reset_wishlist_info_box(user_id, wishlist_id) {
         </div>
         <div class="wishlist-url" id="wishlist-url">
             <span class="wishlist-url-span" id="wishlist-url-span"></span>
-            <img id="share-wishlist-url-button" class="share-wishlist-url-button clickable hover" src="/assets/copy.svg" style="" title="Click to copy the URL" onclick="copyPublicLink();">
+            <img id="share-wishlist-url-button" class="share-wishlist-url-button clickable hover" src="/assets/copy.svg" style="" title="Click to copy the URL" data-on-click="copyPublicLink">
         </div>
     </div>
 
     <div class="bottom-right-button" id="edit-wishlist" style="display: none;">
-        <img class="icon-img  clickable" src="/assets/edit.svg" onclick="wishlist_edit('${user_id}', '${wishlist_id}', '{wishlist_expiration_date}', {wishlist_claimable}, {wishlist_expires}, {wishlist_public});">
+        <img class="icon-img  clickable" src="/assets/edit.svg">
     </div>
     `;
 
@@ -715,3 +716,12 @@ function copyPublicLink() {
 function removeWishlist(wishlistID, userID) {
     window.location.href = "/wishlists";
 }
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    toggle_wish,
+    claim_wish,
+    unclaim_wish,
+    toggle_wish_modal,
+    copyPublicLink,
+});

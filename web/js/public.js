@@ -300,7 +300,7 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     html += '<div class="profile">'
 
     if(wish_object.note !== "" || wish_object.image) {
-        html += `<div class="profile-icon clickable" onclick="toggle_wish('${wish_object.id}')" title="Expandable">`;
+        html += `<div class="profile-icon clickable" ${onClick('toggle_wish', String(wish_object.id))} title="Expandable">`;
 
         if(wish_object.image) {
             html += '<img id="wish_' + wish_object.id + '_arrow" class="icon-img " src="/assets/chevron-down.svg">'
@@ -312,25 +312,14 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     }
 
     if(wish_object.url !== "") {
-        html += `<div class="profile-icon clickable" onclick="window.open('${wish_object.url}', \'_blank\')" title="Go to webpage">`
+        html += `<div class="profile-icon clickable" ${onClick('openExternalURL', wish_object.url)} title="Go to webpage">`
         html += '<img class="icon-img " src="/assets/link.svg">'
         html += '</div>'
     }
 
     if(user_id == owner_id || collaborator || user_id == wishlist_ownerID) {
-
-        var b64_wish_name = toBASE64(wish_object.name)
-        var b64_wish_note = toBASE64(wish_object.note)
-        var b64_wish_url = toBASE64(wish_object.url)
-        var b64_wish_price = toBASE64(wish_object.price.toString())
-
-        html += `<div class="profile-icon clickable" title="Edit wish" onclick="edit_wish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}', '${b64_wish_name}', '${b64_wish_note}', '${b64_wish_url}', '${b64_wish_price}', '${owner_id}')">`;
-        html += '<img class="icon-img " src="/assets/edit.svg">'
-        html += '</div>'
-
-        html += `<div class="profile-icon clickable" title="Delete wish" onclick="delete_wish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}')">`;
-        html += '<img class="icon-img " src="/assets/trash-2.svg">'
-        html += '</div>'
+        // Owners and collaborators edit wishes from the wishlist page; the
+        // public view has no edit/delete actions.
     } else if(wish_object.wishclaim.length > 0 && wish_object.wish_claimable) {
         for(var j = 0; j < wish_object.wishclaim.length; j++) {
             if(user_id !== wish_object.wishclaim[j].user.id) {
@@ -339,12 +328,12 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
                 html += '</div>'
             } else {
                 html += '<div class="profile-icon clickable" title="Claimed by you, click to unclaim.">'
-                html += `<img class="icon-img " src="/assets/unlock.svg" onclick="unclaim_wish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}')")>`;
+                html += `<img class="icon-img " src="/assets/unlock.svg" ${onClick('unclaim_wish', String(wish_object.id), String(wishlist_id), String(group_id), String(user_id))})>`;
                 html += '</div>'
             }
         }
     } else if(wish_object.wish_claimable) {
-        html += `<div class="profile-icon clickable" title="Claim this gift" onclick="claim_wish('${wish_object.id}', '${wishlist_id}', '${group_id}', '${user_id}')">`;
+        html += `<div class="profile-icon clickable" title="Claim this gift" ${onClick('claim_wish', String(wish_object.id), String(wishlist_id), String(group_id), String(user_id))}>`;
         html += '<img class="icon-img " src="/assets/check.svg">'
         html += '</div>'
     }
@@ -360,7 +349,7 @@ function generate_wish_html(wish_object, wishlist_id, group_id, user_id) {
     }
 
     if(wish_object.image) {
-        html += `<div class="wish-image-thumbnail clickable" onclick="toggle_wish_modal('${wish_object.id}')">`;
+        html += `<div class="wish-image-thumbnail clickable" ${onClick('toggle_wish_modal', String(wish_object.id))}>`;
         html += '<img style="width: 100%; height: 100%;" class="wish-image-thumbnail-img" id="wish-image-thumbnail-img-' + wish_object.id  + '" src="/assets/loading.gif">'
         html += '</div>'
 
@@ -495,3 +484,9 @@ function PlaceWishImageThumbail(imageBase64, wishID) {
     document.getElementById("wish-image-thumbnail-img-" + wishID).src = imageBase64
 
 }
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    toggle_wish,
+    toggle_wish_modal,
+});

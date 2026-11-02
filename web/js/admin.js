@@ -39,7 +39,7 @@ function load_page(result) {
    var html = `
         <!-- The Modal -->
         <div id="myModal" class="modal closed">
-            <span class="close clickable" style="padding: 0 0.25em;" onclick="toggleModal()">&times;</span>
+            <span class="close clickable" style="padding: 0 0.25em;" data-on-click="toggleModal">&times;</span>
             <div class="modalContent" id="modalContent">
             </div>
             <div id="caption"></div>
@@ -58,7 +58,7 @@ function load_page(result) {
                 <h3 id="invitation-module-title">Invites:</h3>
                 <div class="invite-list" id="invite-list">
                 </div>
-                <button type="submit" onclick="generate_invite();" id="generate_invite_button" style=""><img src="assets/plus.svg" class="btn_logo"><p2>Generate</p2></button>
+                <button type="submit" data-on-click="generate_invite" id="generate_invite_button" style=""><img src="assets/plus.svg" class="btn_logo"><p2>Generate</p2></button>
             
             </div>
 
@@ -68,13 +68,13 @@ function load_page(result) {
 
                 <input type="text" name="currency" id="currency" placeholder="What currency can wishes be listed in?" value="" autocomplete="off" required />
 
-                <input class="clickable" onclick="" style="margin-top: 0.5em;" type="checkbox" id="currency-padding" name="currency-padding" value="confirm" >
+                <input class="clickable" style="margin-top: 0.5em;" type="checkbox" id="currency-padding" name="currency-padding" value="confirm" >
                 <label for="currency-padding" class="clickable">Pad the currency string</label><br>
 
-                <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="currency-left" name="currency-left" value="confirm" >
+                <input class="clickable" style="margin-top: 1em;" type="checkbox" id="currency-left" name="currency-left" value="confirm" >
                 <label for="currency-left" class="clickable">Currency on the left side</label><br>
 
-                <button type="submit" onclick="update_currency();" id="update_currency_button" style=""><img src="assets/check.svg" class="btn_logo"><p2>Update</p2></button>
+                <button type="submit" data-on-click="update_currency" id="update_currency_button" style=""><img src="assets/check.svg" class="btn_logo"><p2>Update</p2></button>
 
             </div>
 
@@ -88,7 +88,7 @@ function load_page(result) {
                 <input class="clickable" style="margin-top: 1em;" type="checkbox" id="mfa-recovery-codes" name="mfa-recovery-codes" value="confirm" >
                 <label for="mfa-recovery-codes" class="clickable">Issue recovery codes when users enroll</label><br>
 
-                <button type="submit" onclick="update_server_settings();" id="update_security_button" style=""><img src="assets/check.svg" class="btn_logo"><p2>Update</p2></button>
+                <button type="submit" data-on-click="update_server_settings" id="update_security_button" style=""><img src="assets/check.svg" class="btn_logo"><p2>Update</p2></button>
 
             </div>
 
@@ -368,7 +368,7 @@ function place_invites(invites_array) {
 
             if(invites_array[i].invite_used) {
                 html += `
-                        <div class="leaderboard-object-user clickable" onclick="GetUserData('${invites_array[i].user.id}')">
+                        <div class="leaderboard-object-user clickable" ${onClick('GetUserData', String(invites_array[i].user.id))}>
                             Used by: ` + invites_array[i].user.first_name + ` ` + invites_array[i].user.last_name + `
                         </div>
                     `;
@@ -377,7 +377,7 @@ function place_invites(invites_array) {
                         <div class="leaderboard-object-user">
                             Not used
                         </div>
-                        <img class="icon-img clickable" onclick="delete_invite('${invites_array[i].id}')" src="/assets/trash-2.svg"></img>
+                        <img class="icon-img clickable" ${onClick('delete_invite', String(invites_array[i].id))} src="/assets/trash-2.svg"></img>
                     `;
             }
 
@@ -588,7 +588,7 @@ function place_oauth_clients(clients) {
             if(c.is_first_party) {
                 html += `<div class="leaderboard-object-user">Built-in</div>`;
             } else if(c.enabled) {
-                html += `<img class="icon-img clickable" onclick="revoke_oauth_client('${escapeServerInfo(c.client_id)}')" src="/assets/trash-2.svg" title="Revoke"></img>`;
+                html += `<img class="icon-img clickable" ${onClick('revoke_oauth_client', String(escapeServerInfo(c.client_id)))} src="/assets/trash-2.svg" title="Revoke"></img>`;
             } else {
                 html += `<div class="leaderboard-object-user">Revoked</div>`;
             }
@@ -689,7 +689,7 @@ function PlaceUserDataInModal(user_object) {
 
     var mfaButton = ""
     if(user_object.mfa_enabled) {
-        mfaButton = `<button id="delete-mfa-button" onClick="adminDeleteUserMFA('${user_object.id}');" type="button" style="margin-top: 0.5em; padding: 0.75em 1em;">Delete two-factor authentication</button>`
+        mfaButton = `<button id="delete-mfa-button" ${onClick('adminDeleteUserMFA', String(user_object.id))} type="button" style="margin-top: 0.5em; padding: 0.75em 1em;">Delete two-factor authentication</button>`
     }
 
     html = `
@@ -707,9 +707,9 @@ function PlaceUserDataInModal(user_object) {
         </div>
 
         <div id="user-input" class="user-input" style="width: 100%;">
-            <button id="register-button" onClick="deleteUser('${user_object.id}');" type="" href="/">Delete user</button>
+            <button id="register-button" ${onClick('deleteUser', String(user_object.id))} type="" href="/">Delete user</button>
             ${mfaButton}
-            <button id="revoke-sessions-button" onClick="adminRevokeUserSessions('${user_object.id}');" type="button" style="margin-top: 0.5em; padding: 0.75em 1em;">Sign out everywhere</button>
+            <button id="revoke-sessions-button" ${onClick('adminRevokeUserSessions', String(user_object.id))} type="button" style="margin-top: 0.5em; padding: 0.75em 1em;">Sign out everywhere</button>
         </div>
     `;
 
@@ -849,3 +849,16 @@ function deleteUser(userID) {
     xhttp.send();
     return;
 }
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    update_server_settings,
+    generate_invite,
+    delete_invite,
+    update_currency,
+    revoke_oauth_client,
+    GetUserData,
+    adminDeleteUserMFA,
+    adminRevokeUserSessions,
+    deleteUser,
+});

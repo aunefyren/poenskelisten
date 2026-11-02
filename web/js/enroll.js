@@ -42,7 +42,7 @@ function renderActivate(secret, otpauthURL, qrCode) {
             <p style="font-family: monospace; word-break: break-all; font-size: 1.1em;">${secret}</p>
             <p style="word-break: break-all; font-size: 0.8em;"><a href="${otpauthURL}">Open in authenticator app</a></p>
 
-            <form action="" class="icon-border" style="margin-top: 1em;" onsubmit="event.preventDefault(); enrollActivate();">
+            <form action="" class="icon-border" style="margin-top: 1em;" data-on-submit="enrollActivate">
                 <p style="margin-bottom: 0.5em;">Enter the 6-digit code to confirm:</p>
                 <input type="text" id="enroll_code" placeholder="6-digit code" autocomplete="one-time-code" inputmode="numeric" required/>
                 <button type="submit" style="padding: 0.75em 1em;">Confirm and enable</button>
@@ -98,7 +98,12 @@ function showRecoveryCodes(codes) {
                 ${codesHTML}
             </div>
             <br>
-            <button type="button" style="padding: 0.75em 1em;" onclick="window.location.href='/';">I've saved my codes</button>
+            <button type="button" style="padding: 0.75em 1em;" data-on-click="navigateTo" data-click-args="[&quot;/&quot;]">I've saved my codes</button>
         </div>
     `;
 }
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    enrollActivate,
+});
