@@ -69,6 +69,10 @@ var OAUTH_CLIENT_ID = "poenskelisten-web";
 // are refused by the API.
 var LOCAL_LOGIN_ENABLED = {{.localLoginEnabled}};
 var OIDC_PROVIDER_NAME = {{.oidcProviderNameJSON}};
+// Absolute and on external_url even when this page was opened on one of the
+// additional URLs: the IdP only ever returns to external_url, and the flow's
+// state cookie has to be set on that same origin.
+var OIDC_LOGIN_URL = {{.oidcLoginURLJSON}};
 var oauth_base = window.location.origin + "/oauth/";
 var sessionRefreshTimer = null;
 

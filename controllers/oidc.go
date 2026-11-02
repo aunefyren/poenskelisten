@@ -32,7 +32,7 @@ func APIGetOIDCConfig(context *gin.Context) {
 	context.JSON(http.StatusOK, gin.H{
 		"enabled":             config.ConfigFile.OIDCEnabled,
 		"provider_name":       config.OIDCDisplayName(),
-		"login_url":           "/api/open/oidc/login",
+		"login_url":           config.OIDCLoginURL(),
 		"local_login_enabled": config.LocalLoginEnabled(),
 	})
 }
