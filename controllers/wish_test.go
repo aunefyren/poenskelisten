@@ -283,16 +283,62 @@ func TestRegisterWish_DuplicateName(t *testing.T) {
 	}
 }
 
+// rejectedWishURLs are wish links the API must refuse: script-bearing schemes
+// (GHSA-vcq4-qpww-7pc5 — the frontend hands the stored value to window.open),
+// values that would resolve against the app's own origin, and malformed URLs.
+var rejectedWishURLs = []string{
+	"http://",
+	"javascript:alert(1)",
+	"JavaScript://x/%0aalert(1)",
+	"data:text/html,<script>alert(1)</script>",
+	"vbscript:msgbox(1)",
+	"example.com/path",
+	"//example.com/path",
+	"/relative/path",
+	"ftp://example.com/file",
+	"https://exa mple.com",
+	"https://example.com/\nalert(1)",
+}
+
+func wishURLBody(t *testing.T, name, rawURL string) string {
+	t.Helper()
+	body, err := json.Marshal(map[string]string{"name": name, "url": rawURL})
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
+	return string(body)
+}
+
 func TestRegisterWish_InvalidURL(t *testing.T) {
+	for _, rawURL := range rejectedWishURLs {
+		t.Run(rawURL, func(t *testing.T) {
+			setupControllersDB(t)
+			owner := createTestUser(t)
+			wishlist := createTestWishlist(t, owner.ID)
+
+			w, ctx := wishCtx("POST", "/api/wishes?wishlist="+wishlist.ID.String(), wishURLBody(t, "A nice gift", rawURL))
+			ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+			RegisterWish(ctx)
+			if w.Code != 400 {
+				t.Fatalf("status = %d, want 400 for URL %q; body=%s", w.Code, rawURL, w.Body.String())
+			}
+		})
+	}
+}
+
+// The advisory's proof-of-concept URL is a well-formed http URL; it is stored
+// as-is and made harmless by the frontend never splicing it into inline script.
+func TestRegisterWish_URLWithQuotesIsStoredVerbatim(t *testing.T) {
 	setupControllersDB(t)
 	owner := createTestUser(t)
 	wishlist := createTestWishlist(t, owner.ID)
+	rawURL := "http://localhost:8080/');alert('XSS_TEST');//"
 
-	w, ctx := wishCtx("POST", "/api/wishes?wishlist="+wishlist.ID.String(), `{"name":"A nice gift","url":"http://"}`)
+	w, ctx := wishCtx("POST", "/api/wishes?wishlist="+wishlist.ID.String(), wishURLBody(t, "A nice gift", rawURL))
 	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
 	RegisterWish(ctx)
-	if w.Code != 400 {
-		t.Fatalf("status = %d, want 400 for an invalid URL; body=%s", w.Code, w.Body.String())
+	if w.Code != 201 && w.Code != 200 {
+		t.Fatalf("status = %d, want success; body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -774,17 +820,21 @@ func TestAPIUpdateWish_DuplicateName(t *testing.T) {
 }
 
 func TestAPIUpdateWish_InvalidURL(t *testing.T) {
-	setupControllersDB(t)
-	owner := createTestUser(t)
-	wishlist := createTestWishlist(t, owner.ID)
-	wish := createTestWish(t, owner.ID, wishlist.ID)
+	for _, rawURL := range rejectedWishURLs {
+		t.Run(rawURL, func(t *testing.T) {
+			setupControllersDB(t)
+			owner := createTestUser(t)
+			wishlist := createTestWishlist(t, owner.ID)
+			wish := createTestWish(t, owner.ID, wishlist.ID)
 
-	w, ctx := wishCtx("PUT", "/api/wishes/"+wish.ID.String(), `{"name":"`+wish.Name+`","url":"http://"}`)
-	ctx.Params = gin.Params{{Key: "wish_id", Value: wish.ID.String()}}
-	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
-	APIUpdateWish(ctx)
-	if w.Code != 400 {
-		t.Fatalf("status = %d, want 400 for an invalid URL; body=%s", w.Code, w.Body.String())
+			w, ctx := wishCtx("PUT", "/api/wishes/"+wish.ID.String(), wishURLBody(t, wish.Name, rawURL))
+			ctx.Params = gin.Params{{Key: "wish_id", Value: wish.ID.String()}}
+			ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+			APIUpdateWish(ctx)
+			if w.Code != 400 {
+				t.Fatalf("status = %d, want 400 for URL %q; body=%s", w.Code, rawURL, w.Body.String())
+			}
+		})
 	}
 }
 
@@ -867,32 +917,35 @@ func TestAPIGetWish_MembershipCheckDBFailure(t *testing.T) {
 	}
 }
 
-// --- parseRawURLFunction ---
+// --- isValidWishURL ---
 
-func TestParseRawURLFunction(t *testing.T) {
+func TestIsValidWishURL(t *testing.T) {
 	cases := []struct {
-		name          string
-		raw           string
-		wantDomain    string
-		wantSchemeSet bool
-		wantDomainSet bool
+		raw  string
+		want bool
 	}{
-		{"full URL with scheme", "https://example.com/path", "example.com", true, true},
-		{"URL without scheme gets https prepended", "example.com/path", "example.com", false, true},
-		{"bare word still resolves as a host", "notarealurl", "notarealurl", false, true},
+		{"https://example.com/path", true},
+		{"http://example.com", true},
+		{"HTTPS://EXAMPLE.COM/x?y=1#z", true},
+		{"https://example.com:8443/a'b", true},
+		{"http://localhost:8080/');alert('XSS_TEST');//", true},
+		{"", false},
+		{"%zz", false},
+		{"notarealurl", false},
+		{"http://:8080/", false},
+		{"https://example.com/\tpath", false},
+	}
+	for _, rawURL := range rejectedWishURLs {
+		cases = append(cases, struct {
+			raw  string
+			want bool
+		}{rawURL, false})
 	}
 
 	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			domain, scheme, err := parseRawURLFunction(c.raw)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if c.wantDomainSet && domain != c.wantDomain {
-				t.Errorf("domain = %q, want %q", domain, c.wantDomain)
-			}
-			if c.wantSchemeSet && scheme == "" {
-				t.Error("expected a non-empty scheme")
+		t.Run(c.raw, func(t *testing.T) {
+			if got := isValidWishURL(c.raw); got != c.want {
+				t.Errorf("isValidWishURL(%q) = %v, want %v", c.raw, got, c.want)
 			}
 		})
 	}
@@ -1841,13 +1894,6 @@ func TestDeleteWish_ClaimNotificationFailuresAreNotFatal(t *testing.T) {
 				t.Errorf("message = %v, want %q", msg, "Wish deleted.")
 			}
 		})
-	}
-}
-
-func TestParseRawURLFunction_Unparseable(t *testing.T) {
-	domain, scheme, _ := parseRawURLFunction("%zz")
-	if domain != "" || scheme != "" {
-		t.Errorf("parseRawURLFunction(%%zz) = (%q, %q), want empty domain and scheme", domain, scheme)
 	}
 }
 

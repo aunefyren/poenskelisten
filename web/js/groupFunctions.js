@@ -29,7 +29,7 @@ function editGroupTwo(user_id, group_id, groupObject) {
     var html = '';
 
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); updateGroup('${group_id}', '${user_id}');">
+        <form action="" class="" ${onSubmit('updateGroup', String(group_id), String(user_id))}>
                                 
             <label for="group_name" style="">Edit group:</label><br>
             <input type="text" name="group_name" id="group_name" placeholder="Group name" value="${groupObject.name}" autocomplete="off" required />
@@ -141,11 +141,11 @@ function groupMembersTwo(groupObject, userID) {
         html += '</div>'
 
         if(ownerID == userID && groupObject.members[j].id !== userID) {
-            html += `<div class="profile-icon clickable" onclick="removeGroupMember('${groupObject.id}','${groupObject.members[j].id}', '${userID}')" title="Remove member">`
+            html += `<div class="profile-icon clickable" ${onClick('removeGroupMember', String(groupObject.id), String(groupObject.members[j].id), String(userID))} title="Remove member">`
             html += '<img class="icon-img " src="/assets/x.svg">'
             html += '</div>'
         } else if(groupObject.members[j].id == userID && ownerID !== userID){
-            html += `<div class="profile-icon clickable" onclick="leaveGroup('${groupObject.id}','${userID}')" title="Leave group">`;
+            html += `<div class="profile-icon clickable" ${onClick('leaveGroup', String(groupObject.id), String(userID))} title="Leave group">`;
             html += '<img class="icon-img " src="/assets/log-out.svg">'
             html += '</div>'
         } else if(groupObject.members[j].id == ownerID) {
@@ -160,7 +160,7 @@ function groupMembersTwo(groupObject, userID) {
 
     if(ownerID == userID) {
         html += '<div id="wishlist-input" class="wishlist-input">';
-        html += `<button id="register-button" onClick="getUsersForGroupMembers('${groupObject.id}', '${userID}');" type="" href="/">Add members</button>`;
+        html += `<button id="register-button" ${onClick('getUsersForGroupMembers', String(groupObject.id), String(userID))} type="" href="/">Add members</button>`;
         html += '</div>';
     }
 
@@ -218,14 +218,14 @@ function getUsersForGroupMembersTwo(usersArray, groupID, userID) {
     userListIDHTML += '</datalist>'
 
     var html = `
-        <div class="profile-icon clickable top-left-button" onclick="groupMembers('${groupID}', '${userID}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('groupMembers', String(groupID), String(userID))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
         <label for="newMemberMail" style="">Add members:</label><br>
         <div class="addNewMemberButtons">
             <input type="text" name="newMemberMail" id="newMemberMail" list="userList" placeholder="Ola Nordmann" value="" autocomplete="off" style="margin: 1em 0.5em 1em 1em;" />
-            <div class="profile-icon clickable" onclick="addUserToSelection()" title="Add member" style="margin: 0 1em 0 0;">
+            <div class="profile-icon clickable" data-on-click="addUserToSelection" title="Add member" style="margin: 0 1em 0 0;">
                 <img class="icon-img" src="/assets/plus.svg">
             </div>
         </div>
@@ -236,7 +236,7 @@ function getUsersForGroupMembersTwo(usersArray, groupID, userID) {
         <div id="newMembers" class="newMembers">
         </div>
 
-        <form action="" class="" onsubmit="event.preventDefault(); addGroupMembers('${groupID}', '${userID}');">   
+        <form action="" class="" ${onSubmit('addGroupMembers', String(groupID), String(userID))}>   
             <button id="register-button" type="submit" href="/">Save</button>
         </form>
     `;
@@ -408,7 +408,7 @@ function createGroup(userID, groupObjectBase64) {
     }
 
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); createGroupTwo('${userID}', '${groupObjectBase64}');">  
+        <form action="" class="" ${onSubmit('createGroupTwo', String(userID), String(groupObjectBase64))}>  
             <label for="group_name" style="">Create a new group:</label><br>
 
             <input type="text" name="group_name" id="group_name" placeholder="Group name" autocomplete="off" min="5" value="${groupObject.name}" required />
@@ -493,14 +493,14 @@ function createGroupThree(usersArray, userID, groupObjectBase64) {
     var html = '';
 
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="createGroup('${userID}', '${groupObjectBase64}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('createGroup', String(userID), String(groupObjectBase64))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
         <label for="newMemberMail" style="">Add group members:</label><br>
         <div class="addNewMemberButtons">
             <input type="text" name="newMemberMail" id="newMemberMail" list="userList" placeholder="Ola Nordmann" value="" autocomplete="off" style="margin: 1em 0.5em 1em 1em;" />
-            <div class="profile-icon clickable" onclick="addUserToSelection()" title="Add member" style="margin: 0 1em 0 0;">
+            <div class="profile-icon clickable" data-on-click="addUserToSelection" title="Add member" style="margin: 0 1em 0 0;">
                 <img class="icon-img" src="/assets/plus.svg">
             </div>
         </div>
@@ -511,7 +511,7 @@ function createGroupThree(usersArray, userID, groupObjectBase64) {
         <div id="newMembers" class="newMembers">
         </div>
 
-        <form action="" class="" onsubmit="event.preventDefault(); createGroupFour('${userID}', '${groupObjectBase64}');">
+        <form action="" class="" ${onSubmit('createGroupFour', String(userID), String(groupObjectBase64))}>
             <button id="register-button" type="submit" href="/">Next</button>
         </form>
     `;
@@ -598,14 +598,14 @@ function createGroupFive(wishlistArray, userID, groupObjectBase64) {
     var html = '';
 
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="createGroupTwo('${userID}', '${groupObjectBase64}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('createGroupTwo', String(userID), String(groupObjectBase64))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
         <label for="newMemberID" style="">Add your wishlists to your new group:</label><br>
         <div class="addNewMemberButtons">
             <input type="text" name="newMemberID" id="newMemberID" list="userList" placeholder="My cool wishlist" value="" autocomplete="off" style="margin: 1em 0.5em 1em 1em;" />
-            <div class="profile-icon clickable" onclick="addWishlistToSelection()" title="Add member" style="margin: 0 1em 0 0;">
+            <div class="profile-icon clickable" data-on-click="addWishlistToSelection" title="Add member" style="margin: 0 1em 0 0;">
                 <img class="icon-img" src="/assets/plus.svg">
             </div>
         </div>
@@ -616,7 +616,7 @@ function createGroupFive(wishlistArray, userID, groupObjectBase64) {
         <div id="newMembers" class="newMembers">
         </div>
 
-        <form action="" class="" onsubmit="event.preventDefault(); createGroupSix('${userID}', '${groupObjectBase64}');">
+        <form action="" class="" ${onSubmit('createGroupSix', String(userID), String(groupObjectBase64))}>
             <button id="register-button" type="submit" href="/">Create group</button>
         </form>
     `;
@@ -725,7 +725,7 @@ function addWishlistToSelection() {
                 </div>
             </div>
 
-            <div class="profile-icon clickable" onclick="removeUserFromSelection('${newMemberID}')" title="Remove wishlist">
+            <div class="profile-icon clickable" ${onClick('removeUserFromSelection', String(newMemberID))} title="Remove wishlist">
                 <img class="icon-img " src="/assets/x.svg">
             </div>
         </div>
@@ -779,7 +779,7 @@ function showWishlistsInGroupTwo(wishlistArray, userID, groupID) {
                             ${wishlistArray[j].name}
                         </div>
                     </div>
-                    <div class="profile-icon clickable" onclick="removeWishlistFromGroup('${wishlistArray[j].id}', '${groupID}', '${userID}')" title="Remove wishlist from group">
+                    <div class="profile-icon clickable" ${onClick('removeWishlistFromGroup', String(wishlistArray[j].id), String(groupID), String(userID))} title="Remove wishlist from group">
                         <img class="icon-img " src="/assets/x.svg">
                     </div>
                 </div>
@@ -790,7 +790,7 @@ function showWishlistsInGroupTwo(wishlistArray, userID, groupID) {
     }
     html += `
         <div id="wishlist-input" class="wishlist-input">
-            <button id="register-button" onClick="addWishlistToGroup('${groupID}', '${userID}');" type="" href="/">Add wishlist to group</button>
+            <button id="register-button" ${onClick('addWishlistToGroup', String(groupID), String(userID))} type="" href="/">Add wishlist to group</button>
         </div>
     `;
 
@@ -840,14 +840,14 @@ function addWishlistToGroupTwo(wishlistArray, userID, groupID) {
     var html = '';
 
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="showWishlistsInGroup('${groupID}', '${userID}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('showWishlistsInGroup', String(groupID), String(userID))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
         <label for="newMemberID" style="">Add your wishlists to the group:</label><br>
         <div class="addNewMemberButtons">
             <input type="text" name="newMemberID" id="newMemberID" list="userList" placeholder="My cool wishlist" value="" autocomplete="off" style="margin: 1em 0.5em 1em 1em;" />
-            <div class="profile-icon clickable" onclick="addWishlistToSelection()" title="Add member" style="margin: 0 1em 0 0;">
+            <div class="profile-icon clickable" data-on-click="addWishlistToSelection" title="Add member" style="margin: 0 1em 0 0;">
                 <img class="icon-img" src="/assets/plus.svg">
             </div>
         </div>
@@ -858,7 +858,7 @@ function addWishlistToGroupTwo(wishlistArray, userID, groupID) {
         <div id="newMembers" class="newMembers">
         </div>
 
-        <form action="" class="" onsubmit="event.preventDefault(); addWishlistToGroupThree('${groupID}', '${userID}');">
+        <form action="" class="" ${onSubmit('addWishlistToGroupThree', String(groupID), String(userID))}>
             <button id="register-button" type="submit" href="/">Add to group</button>
         </form>
     `;
@@ -946,3 +946,24 @@ function removeWishlistFromGroup(wishlistID, groupID, userID) {
     xhttp.send(form_data);
     return false;
 }
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    editGroup,
+    updateGroup,
+    groupMembers,
+    getUsersForGroupMembers,
+    addGroupMembers,
+    removeGroupMember,
+    leaveGroup,
+    deleteGroup,
+    createGroup,
+    createGroupTwo,
+    createGroupFour,
+    createGroupSix,
+    addWishlistToSelection,
+    showWishlistsInGroup,
+    addWishlistToGroup,
+    addWishlistToGroupThree,
+    removeWishlistFromGroup,
+});

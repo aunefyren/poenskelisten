@@ -81,7 +81,7 @@ function load_verify_account() {
 
                     <div class="module">
 
-                        <form action="" class="icon-border" onsubmit="event.preventDefault(); verify_account();">
+                        <form action="" class="icon-border" data-on-submit="verify_account">
                             <label for="email_code">Code:</label><br>
                             <input type="text" name="email_code" id="email_code" placeholder="Code" autocomplete="off" required />
                             <button id="verify-button" type="submit" href="/">Verify</button>
@@ -90,7 +90,7 @@ function load_verify_account() {
                     </div>
 
                     <div class="module">
-                        <a style="font-size:0.75em;cursor:pointer;" onclick="new_code();">Send me a new code!</i>
+                        <a style="font-size:0.75em;cursor:pointer;" data-on-click="new_code">Send me a new code!</i>
                     </div>
 
                 </div>
@@ -185,3 +185,9 @@ function frontPageRedirect() {
     window.location = '/'
 
 }
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    verify_account,
+    new_code,
+});

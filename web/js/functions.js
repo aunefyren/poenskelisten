@@ -46,23 +46,19 @@ function set_cookie(cname, cvalue, exdays) {
     document.cookie = cname + '=' + cvalue + "; " + expires + "; path=/; samesite=strict;";
 }
 
-// Get cookie from browser
-function get_cookie(cname) {
-    var name = cname + '=';
-    var decodedCookie = decodeURIComponent(document.cookie);
-    var ca = decodedCookie.split(';');
-    for(var i = 0; i <ca.length; i++) {
-        var c = ca[i];
-        while (c.charAt(0) == ' '){
-            c = c.substring(1);
-        }
+// The API access token is kept only in this page's memory (the jwt global) and
+// re-minted from the HttpOnly refresh cookie on each page load. It used to be
+// stored in a JS-readable "poenskelisten" cookie, which let any injected script
+// read a token that stayed on disk for days; expire that cookie wherever an old
+// browser still holds one.
+var LEGACY_ACCESS_TOKEN_COOKIE = "poenskelisten";
 
-        if (c.indexOf(name) == 0) {
-            return c.substring(name.length, c.length);
-        }
-    }
-    return "";
+function clearAccessToken() {
+    jwt = "";
+    set_cookie(LEGACY_ACCESS_TOKEN_COOKIE, "", -1);
 }
+
+set_cookie(LEGACY_ACCESS_TOKEN_COOKIE, "", -1);
 
 // OAuth 2.1 first-party client config. The web app is a public PKCE client of
 // Pønskelisten's own authorization server.
@@ -231,8 +227,9 @@ function handleOAuthCallback() {
             if(this.status >= 200 && this.status < 300) {
                 try { result = JSON.parse(this.responseText); } catch(e) { result = null; }
             }
+            // The token response also set the HttpOnly refresh cookie; the
+            // destination page mints its own access token from it on load.
             if(result && result.access_token) {
-                set_cookie("poenskelisten", result.access_token, 7);
                 var dest = sessionStorage.getItem("post_login_redirect") || "/";
                 sessionStorage.removeItem("pkce_verifier");
                 sessionStorage.removeItem("oauth_state");
@@ -263,7 +260,6 @@ function refreshAccessToken(onSuccess, onFailure) {
                 var result;
                 try { result = JSON.parse(this.responseText); } catch(e) { result = null; }
                 if(result && result.access_token) {
-                    set_cookie("poenskelisten", result.access_token, 7);
                     jwt = result.access_token;
                     if(onSuccess) onSuccess();
                     return;
@@ -294,17 +290,26 @@ function startSessionRefreshTimer() {
 
 // Bootstrap the page: ensure a valid access token (refresh, or start the OAuth
 // flow), then load the current user. triedRefresh guards against a refresh loop.
+// A fresh page has no token in memory, so it always starts with a refresh; on
+// the public/auth pages a failed refresh just means "logged out".
 function get_login(cookie, triedRefresh) {
     triedRefresh = triedRefresh === true;
     jwt = cookie ? cookie : "";
 
-    var recover = function() {
+    var giveUp = function() {
         if(isPublicAuthPage()) {
             load_page(false);
-        } else if(!triedRefresh) {
-            refreshAccessToken(function() { get_login(jwt, true); }, function() { startAuthorizeFlow(); });
         } else {
             startAuthorizeFlow();
+        }
+    };
+
+    var recover = function() {
+        // The callback page is mid-exchange; refreshing there would race it.
+        if(!triedRefresh && window.location.pathname !== "/oauth/callback") {
+            refreshAccessToken(function() { get_login(jwt, true); }, giveUp);
+        } else {
+            giveUp();
         }
     };
 
@@ -322,8 +327,7 @@ function get_login(cookie, triedRefresh) {
                 return;
             }
             // Token missing/expired/invalid — try to recover.
-            set_cookie("poenskelisten", "", 7);
-            jwt = "";
+            clearAccessToken();
             recover();
         }
     };
@@ -449,6 +453,29 @@ function escapeHTML(value) {
         .replace(/'/g, "&#39;");
 }
 
+// Open a user-supplied link in a new tab, but only if it is an absolute http(s)
+// URL. Wish links are attacker-controlled, so a javascript:/data: URL (e.g. one
+// stored before the API restricted schemes) must never reach window.open.
+// Callers pass the URL via a data- attribute rather than splicing it into an
+// inline handler's JS string, where a quote in the URL would break out of it.
+function openExternalURL(url) {
+    var parsed;
+    try {
+        parsed = new URL(String(url));
+    } catch(e) {
+        error("Invalid link.");
+        return false;
+    }
+
+    if(parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        error("Invalid link.");
+        return false;
+    }
+
+    window.open(parsed.href, '_blank', 'noopener,noreferrer');
+    return true;
+}
+
 function showAdminMenu(admin) {
     if(admin) {
         document.getElementById('admin').classList.add('enabled');
@@ -536,7 +563,7 @@ function logout() {
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
-            set_cookie("poenskelisten", "", 1);
+            clearAccessToken();
             window.location.href = '/login';
         }
     };
@@ -875,7 +902,7 @@ function addUserToSelection() {
                 </div>
             </div>
 
-            <div class="profile-icon clickable" onclick="removeUserFromSelection('${newMemberID}')" title="Remove user">
+            <div class="profile-icon clickable" ${onClick('removeUserFromSelection', String(newMemberID))} title="Remove user">
                 <img class="icon-img " src="/assets/x.svg">
             </div>
         </div>
@@ -939,3 +966,13 @@ function accountPageRedirect() {
     }
     return false
 }
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    openExternalURL,
+    toggle_navbar,
+    logout,
+    toggleModal,
+    addUserToSelection,
+    removeUserFromSelection,
+});

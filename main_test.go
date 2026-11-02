@@ -5,6 +5,7 @@ import (
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
+	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"database/sql"
 	"encoding/json"
@@ -14,6 +15,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	textTemplate "text/template"
@@ -356,6 +359,22 @@ func TestInitRouterProtectsAuthAndAdminGroups(t *testing.T) {
 		w := serve(router, http.MethodGet, path)
 		if w.Code != http.StatusUnauthorized {
 			t.Errorf("GET %s without a token = %d, want 401", path, w.Code)
+		}
+	}
+}
+
+// Every response, including API errors and 404s, carries the security headers,
+// so the CSP also covers pages that render untrusted wish data.
+func TestInitRouterSetsSecurityHeaders(t *testing.T) {
+	router := initRouter(models.ConfigStruct{})
+
+	for _, path := range []string{"/", "/wishlists/public/abc", "/api/auth/me", "/does-not-exist"} {
+		w := serve(router, http.MethodGet, path)
+		if got := w.Header().Get("Content-Security-Policy"); got != middlewares.ContentSecurityPolicy {
+			t.Errorf("GET %s Content-Security-Policy = %q, want the shared policy", path, got)
+		}
+		if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Errorf("GET %s X-Content-Type-Options = %q, want nosniff", path, got)
 		}
 	}
 }
@@ -927,5 +946,75 @@ func TestRoutesRefuseNilID(t *testing.T) {
 	}
 	if after := snapshotRouterTables(t); after != before {
 		t.Errorf("requests naming the nil UUID changed the database:\nbefore %s\nafter  %s", before, after)
+	}
+}
+
+// The Content-Security-Policy's script-src is 'self' only, so any inline script
+// in the frontend is silently refused by the browser: the button simply does
+// nothing. This keeps the markup in the shape the CSP needs (and that keeps
+// API data out of code): no inline handlers, inline <script> blocks or
+// javascript: URLs, and every action named in markup registered via
+// registerActions (web/js/actions.js).
+func TestFrontendHasNoInlineScript(t *testing.T) {
+	files, err := filepath.Glob("./web/html/*.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsFiles, err := filepath.Glob("./web/js/*.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files = append(files, jsFiles...)
+
+	inlineHandler := regexp.MustCompile(`(?i)[\s"'](on[a-z]+)\s*=\s*["'\\]`)
+	inlineScript := regexp.MustCompile(`(?i)<script(\s[^>]*)?>`)
+	scriptURL := regexp.MustCompile(`(?i)(href|src|action|formaction)\s*=\s*["']\s*javascript:`)
+	actionAttr := regexp.MustCompile(`data-on-[a-z]+="([A-Za-z_$][\w$]*)"`)
+	actionHelper := regexp.MustCompile(`\bon(?:Click|Submit|Change)\(\s*['"]([A-Za-z_$][\w$]*)['"]`)
+	registration := regexp.MustCompile(`(?s)registerActions\(\{(.*?)\}\);`)
+	registeredName := regexp.MustCompile(`([A-Za-z_$][\w$]*)\s*[,:]`)
+
+	used := map[string]string{}
+	registered := map[string]bool{}
+	for _, file := range files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := string(content)
+
+		for _, m := range inlineHandler.FindAllStringSubmatch(src, -1) {
+			t.Errorf("%s: inline %s handler; use data-on-* / onClick() and registerActions instead", file, m[1])
+		}
+		for _, m := range scriptURL.FindAllString(src, -1) {
+			t.Errorf("%s: javascript: URL %q", file, m)
+		}
+		if strings.HasSuffix(file, ".html") {
+			for _, m := range inlineScript.FindAllStringSubmatch(src, -1) {
+				if !strings.Contains(strings.ToLower(m[1]), "src=") {
+					t.Errorf("%s: inline <script> block; move it to a web/js file", file)
+				}
+			}
+		}
+
+		for _, re := range []*regexp.Regexp{actionAttr, actionHelper} {
+			for _, m := range re.FindAllStringSubmatch(src, -1) {
+				used[m[1]] = file
+			}
+		}
+		for _, block := range registration.FindAllStringSubmatch(src, -1) {
+			for _, m := range registeredName.FindAllStringSubmatch(block[1]+",", -1) {
+				registered[m[1]] = true
+			}
+		}
+	}
+
+	if len(used) == 0 {
+		t.Fatal("found no actions in markup; the scan patterns no longer match the frontend")
+	}
+	for name, file := range used {
+		if !registered[name] {
+			t.Errorf("%s: action %q is used in markup but never passed to registerActions", file, name)
+		}
 	}
 }

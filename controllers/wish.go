@@ -8,12 +8,12 @@ import (
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -397,8 +397,7 @@ func RegisterWish(context *gin.Context) {
 	}
 
 	// Validate valid URL
-	domain, scheme, err := parseRawURLFunction(wish.URL)
-	if (err != nil || domain == "" || scheme == "") && wish.URL != "" {
+	if wish.URL != "" && !isValidWishURL(wish.URL) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL given."})
 		context.Abort()
 		return
@@ -609,22 +608,23 @@ func DeleteWish(context *gin.Context) {
 	}
 }
 
-func parseRawURLFunction(rawurl string) (domain string, scheme string, err error) {
-	u, err := url.ParseRequestURI(rawurl)
-	if err != nil || u.Host == "" {
-		u, repErr := url.ParseRequestURI("https://" + rawurl)
-		if repErr != nil {
-			fmt.Printf("Could not parse raw url: %s, error: %v", rawurl, err)
-			return
-		}
-		domain = u.Host
-		err = nil
-		return
+// isValidWishURL reports whether rawURL is safe to store as a wish link. The
+// frontend hands the stored value to window.open, so anything other than an
+// absolute http(s) URL with a host is refused: a javascript: (or data:, vbscript:,
+// ...) URL would execute in the viewer's session when the link is clicked, and
+// a value without a scheme would be resolved relative to the app's own origin.
+func isValidWishURL(rawURL string) bool {
+	if strings.ContainsFunc(rawURL, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
+		return false
 	}
 
-	domain = u.Host
-	scheme = u.Scheme
-	return
+	parsed, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		return false
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	return (scheme == "http" || scheme == "https") && parsed.Host != "" && parsed.Hostname() != ""
 }
 
 func RegisterWishClaim(context *gin.Context) {
@@ -1076,8 +1076,7 @@ func APIUpdateWish(context *gin.Context) {
 			return
 		}
 
-		domain, scheme, err := parseRawURLFunction(wish.URL)
-		if (err != nil || domain == "" || scheme == "") && wish.URL != "" {
+		if wish.URL != "" && !isValidWishURL(wish.URL) {
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL given."})
 			context.Abort()
 			return

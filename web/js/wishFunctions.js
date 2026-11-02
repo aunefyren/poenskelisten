@@ -2,11 +2,11 @@ function openURLModal(url) {
     var html = '';
 
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); openURLModalTwo('${url}');">  
+        <form action="" class="" ${onSubmit('openURLModalTwo', url)}>
             <label for="" style="margin-top: 0.5em;">Are you sure you want to open this link?</label><br>
 
             <div class="urlWrapper unselectable">
-                ${url}
+                ${escapeHTML(url)}
             </div>
             
             <button id="go-button" type="submit" href="/">Go</button>
@@ -17,7 +17,7 @@ function openURLModal(url) {
 }
 
 function openURLModalTwo(url) {
-    window.open(url, '_blank')
+    openExternalURL(url)
     toggleModal(false)
 }
 
@@ -87,7 +87,7 @@ function editWishTwo(wishID, wishlistID, groupID, userID, wishObjectBase64) {
     var html = '';
     
     html += `
-        <form action="" onsubmit="event.preventDefault(); editWishThree('${wishID}', '${wishlistID}', '${groupID}', '${userID}', '${wishObjectBase64}');">
+        <form action="" ${onSubmit('editWishThree', String(wishID), String(wishlistID), String(groupID), String(userID), String(wishObjectBase64))}>
             <label for="wish_name">Edit wish:</label><br>
             <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" value="${wishObject.name}" autocomplete="off" required />
             <button id="register-button" type="submit" href="/">Next</button>
@@ -120,16 +120,16 @@ function editWishThree(wishID, wishlistID, groupID, userID, wishObjectBase64) {
     var html = '';
 
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="editWishTwo('${wishID}', '${wishlistID}', '${groupID}', '${userID}', '${wishObjectBase64}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('editWishTwo', String(wishID), String(wishlistID), String(groupID), String(userID), String(wishObjectBase64))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
-        <form action="" onsubmit="event.preventDefault(); editWishFour('${wishID}', '${wishlistID}', '${groupID}', '${userID}', '${wishObjectBase64}');">
+        <form action="" ${onSubmit('editWishFour', String(wishID), String(wishlistID), String(groupID), String(userID), String(wishObjectBase64))}>
             <label for="wish_note" style="">Optional details:</label><br>
 
-            <textarea name="wish_note" id="wish_note" placeholder="Wish note" value="" autocomplete="off" rows="3" />${wishObject.note}</textarea>
+            <textarea name="wish_note" id="wish_note" placeholder="Wish note" value="" autocomplete="off" rows="3" />${escapeHTML(wishObject.note)}</textarea>
 
-            <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" value="${wishObject.url}" autocomplete="off" />
+            <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" value="${escapeHTML(wishObject.url)}" autocomplete="off" />
 
             <input type="number" name="wish_price" id="wish_price" step="0.01" min="0" placeholder="Wish price in ${wishObject.currency}" value="${wishObject.price}" autocomplete="off" />
 
@@ -175,7 +175,7 @@ function editWishFour(wishID, wishlistID, groupID, userID, wishObjectBase64) {
 
     var html = '';
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="editWishThree('${wishID}', '${wishlistID}', '${groupID}', '${userID}', '${wishObjectBase64}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('editWishThree', String(wishID), String(wishlistID), String(groupID), String(userID), String(wishObjectBase64))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
@@ -183,13 +183,13 @@ function editWishFour(wishID, wishlistID, groupID, userID, wishObjectBase64) {
             Image:
         </div>
 
-        <form action="" onsubmit="event.preventDefault(); editWishFive('${wishID}', '${userID}', '${wishlistID}', '${groupID}', '${wishObjectBase64}');">
+        <form action="" ${onSubmit('editWishFive', String(wishID), String(userID), String(wishlistID), String(groupID), String(wishObjectBase64))}>
             ${imageHTML}
 
             <div class="button-grouping" id="image-button-grouping">
-                <div id="button-grouping-part-leave" class="clickable button-grouping-part button-grouping-part-border button-grouping-part-selected" onclick="toggleEditWishImage('leave')">Leave</div>
-                <div id="button-grouping-part-replace" class="clickable button-grouping-part button-grouping-part-border" onclick="toggleEditWishImage('replace')">Replace</div>
-                <div id="button-grouping-part-delete" class="${deleteButtonHTML}" onclick="toggleEditWishImage('${deleteButtonInputHTML}')">Delete</div>
+                <div id="button-grouping-part-leave" class="clickable button-grouping-part button-grouping-part-border button-grouping-part-selected" data-on-click="toggleEditWishImage" data-click-args="[&quot;leave&quot;]">Leave</div>
+                <div id="button-grouping-part-replace" class="clickable button-grouping-part button-grouping-part-border" data-on-click="toggleEditWishImage" data-click-args="[&quot;replace&quot;]">Replace</div>
+                <div id="button-grouping-part-delete" class="${deleteButtonHTML}" ${onClick('toggleEditWishImage', String(deleteButtonInputHTML))}>Delete</div>
             </div>
 
             <div class="form-input-wrapper" id="edit-wish-replace-image" style="display: none;">
@@ -365,7 +365,7 @@ function createWish(wishlistID, userID, currency, wishObjectBase64) {
     var html = '';
     
     html += `
-        <form action="" onsubmit="event.preventDefault(); createWishTwo('${wishlistID}', '${userID}', '${currency}', '${wishObjectBase64}');">        
+        <form action="" ${onSubmit('createWishTwo', String(wishlistID), String(userID), String(currency), String(wishObjectBase64))}>        
             <label for="wish_name">Create wish:</label><br>
             <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" autocomplete="off" value="${wishObject.name}" required />
 
@@ -398,16 +398,16 @@ function createWishTwo(wishlistID, userID, currency, wishObjectBase64) {
     var html = '';
 
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="createWish('${wishlistID}', '${userID}', '${currency}', '${wishObjectBase64}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('createWish', String(wishlistID), String(userID), String(currency), String(wishObjectBase64))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
-        <form action="" onsubmit="event.preventDefault(); createWishThree('${wishlistID}', '${userID}', '${wishObjectBase64}');">
+        <form action="" ${onSubmit('createWishThree', String(wishlistID), String(userID), String(wishObjectBase64))}>
             <label for="wish_note" style="">Optional details:</label><br>
 
-            <textarea name="wish_note" id="wish_note" placeholder="Wish note" autocomplete="off" rows="3" />${wishObject.note}</textarea>
+            <textarea name="wish_note" id="wish_note" placeholder="Wish note" autocomplete="off" rows="3" />${escapeHTML(wishObject.note)}</textarea>
 
-            <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" autocomplete="off" value="${wishObject.url}" />
+            <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" autocomplete="off" value="${escapeHTML(wishObject.url)}" />
 
             <input type="number" name="wish_price" id="wish_price" step="0.01" min="0" placeholder="Wish price in ${currency}" value="${wishObject.price}" autocomplete="off" />
 
@@ -439,11 +439,11 @@ function createWishThree(wishlistID, userID, wishObjectBase64) {
     var html = '';
 
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="createWishTwo('${wishlistID}', '${userID}', '${currency}', '${wishObjectBase64}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('createWishTwo', String(wishlistID), String(userID), String(currency), String(wishObjectBase64))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
-        <form action="" onsubmit="event.preventDefault(); createWishFour('${wishlistID}', '${userID}', '${wishObjectBase64}');">
+        <form action="" ${onSubmit('createWishFour', String(wishlistID), String(userID), String(wishObjectBase64))}>
             <label id="form-input-icon" for="wish_image" style="">Add optional image:</label>
             <input type="file" name="wish_image" id="wish_image" placeholder="" value="${wishObject.image}" accept="image/png, image/jpeg" />
             
@@ -564,3 +564,20 @@ function GetWishImage(wishID) {
 function PlaceWishImageInModal(imageBase64) {
     document.getElementById("modal-img").src = imageBase64
 }
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    openURLModal,
+    openURLModalTwo,
+    deleteWish,
+    editWish,
+    editWishTwo,
+    editWishThree,
+    editWishFour,
+    toggleEditWishImage,
+    editWishFive,
+    createWish,
+    createWishTwo,
+    createWishThree,
+    createWishFour,
+});

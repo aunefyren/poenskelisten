@@ -1,7 +1,7 @@
 function load_page(result) {
 
-    // Reset cookie
-    set_cookie("poenskelisten", "", 1);
+    // Drop any in-memory access token: these pages render the logged-out view.
+    clearAccessToken();
 
     var html = `
         <div class="" id="forside">
@@ -110,7 +110,7 @@ function action_login() {
     <br>
 
     <div class="action-block">
-        <form action="" class="icon-border" onsubmit="event.preventDefault(); send_log_in();">
+        <form action="" class="icon-border" data-on-submit="send_log_in">
 
             <label id="form-input-icon" for="email"></label>
             <input type="email" name="email" id="email" value="` + email + `" placeholder="Email" required/>
@@ -127,7 +127,7 @@ function action_login() {
     `;
 
     var html2 = `
-    <a style="font-size:0.75em;cursor:pointer;" onclick="action_newpassword();">I forgot my password!</i>
+    <a style="font-size:0.75em;cursor:pointer;" data-on-click="action_newpassword">I forgot my password!</i>
     `;
 
     document.getElementById("action").innerHTML = html;
@@ -155,7 +155,7 @@ function action_login_oidc_only() {
     <br>
 
     <div class="action-block">
-        <button type="button" id="log-in-button" onclick="window.location.href='/api/open/oidc/login';">Log in with ` + providerName + `</button>
+        <button type="button" id="log-in-button" data-on-click="navigateTo" data-click-args="[&quot;/api/open/oidc/login&quot;]">Log in with ` + providerName + `</button>
     </div>
     `;
     document.getElementById("change_action").innerHTML = "";
@@ -183,7 +183,7 @@ function renderOIDCLoginOption() {
             var providerName = escapeHTML(result.provider_name || "single sign-on");
             container.innerHTML = `
                 <div class="text-body" style="font-size: 0.8em; margin-bottom: 0.5em;">or</div>
-                <button type="button" style="padding: 0.75em 1em;" onclick="window.location.href='${result.login_url}';">Log in with ${providerName}</button>
+                <button type="button" style="padding: 0.75em 1em;" ${onClick('navigateTo', result.login_url)}>Log in with ${providerName}</button>
             `;
         }
     };
@@ -215,7 +215,7 @@ function action_newpassword() {
     <br>
 
     <div class="action-block">
-        <form action="" class="icon-border" onsubmit="event.preventDefault(); reset_password_request();">
+        <form action="" class="icon-border" data-on-submit="reset_password_request">
 
             <label id="form-input-icon" for="email"></label>
             <input type="email" name="email" id="email" value="` + email + `" placeholder="Email" required/>
@@ -227,7 +227,7 @@ function action_newpassword() {
     `;
 
     var html2 = `
-    <a style="font-size:0.75em;cursor:pointer;" onclick="action_login();">Log in!</i>
+    <a style="font-size:0.75em;cursor:pointer;" data-on-click="action_login">Log in!</i>
     `;
 
     document.getElementById("action").innerHTML = html;
@@ -252,7 +252,7 @@ function action_resetpassword(reset_code) {
     <br>
 
     <div class="action-block">
-        <form action="" class="icon-border" onsubmit="event.preventDefault(); reset_password();">
+        <form action="" class="icon-border" data-on-submit="reset_password">
 
             <label id="form-input-icon" for="password"></label>
             <input type="password" name="password" id="password" placeholder="New password" />
@@ -269,7 +269,7 @@ function action_resetpassword(reset_code) {
     `;
 
     var html2 = `
-    <a style="font-size:0.75em;cursor:pointer;" onclick="action_login();">Log in!</i>
+    <a style="font-size:0.75em;cursor:pointer;" data-on-click="action_login">Log in!</i>
     `;
 
     document.getElementById("action").innerHTML = html;
@@ -386,7 +386,7 @@ function action_mfa(mfaToken) {
     <br>
 
     <div class="action-block">
-        <form action="" class="icon-border" onsubmit="event.preventDefault(); send_mfa_code();">
+        <form action="" class="icon-border" data-on-submit="send_mfa_code">
 
             <label id="form-input-icon" for="mfa_code"></label>
             <input type="text" name="totp" id="mfa_code" placeholder="Authenticator or recovery code" autocomplete="one-time-code" inputmode="text" aria-label="Authentication code" required autofocus/>
@@ -400,7 +400,7 @@ function action_mfa(mfaToken) {
     `;
 
     var html2 = `
-    <a style="font-size:0.75em;cursor:pointer;" onclick="backToLogin();">Back to log in</i>
+    <a style="font-size:0.75em;cursor:pointer;" data-on-click="backToLogin">Back to log in</i>
     `;
 
     document.getElementById("action").innerHTML = html;
@@ -635,3 +635,14 @@ function checkResetCode(resetCode){
     xhttp.send();
     return false;
 }
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    action_login,
+    action_newpassword,
+    send_log_in,
+    backToLogin,
+    send_mfa_code,
+    reset_password_request,
+    reset_password,
+});

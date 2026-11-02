@@ -147,14 +147,14 @@ function sortControlsHTML(effectiveLayout, showLayoutToggle) {
     // The layout toggle is only offered when the list has categories to group by.
     var layout = '';
     if(showLayoutToggle) {
-        layout += '<select class="wish-sort-select" id="wish-layout-select" onchange="onWishLayoutChange(this.value)" title="Layout">';
+        layout += '<select class="wish-sort-select" id="wish-layout-select" data-on-change="onWishLayoutChangeFromSelect" title="Layout">';
         layout += opt("grouped", "Grouped by category", effectiveLayout);
         layout += opt("flat", "Flat list", effectiveLayout);
         layout += '</select>';
     }
 
     var sort = '';
-    sort += '<select class="wish-sort-select" id="wish-sort-select" onchange="onWishSortChange(this.value)" title="Sort by">';
+    sort += '<select class="wish-sort-select" id="wish-sort-select" data-on-change="onWishSortChangeFromSelect" title="Sort by">';
     sort += opt("date_desc", "Date updated (newest)", currentWishSort);
     sort += opt("date_asc", "Date updated (oldest)", currentWishSort);
     sort += opt("price_asc", "Price (low → high)", currentWishSort);
@@ -273,7 +273,7 @@ function bucketWishesByCategory(wishes_array) {
 function categorySectionHTML(catID, name, innerHTML, count) {
     var html = '';
     html += '<div class="wish-category" id="wish_category_' + catID + '">';
-    html += '<div class="wish-category-header clickable unselectable" onclick="toggle_category(\'' + catID + '\')" title="Collapse/expand">';
+    html += '<div class="wish-category-header clickable unselectable" ' + onClick('toggle_category', String(catID)) + ' title="Collapse/expand">';
     html += '<img id="wish_category_' + catID + '_arrow" class="icon-img wish-category-arrow" src="/assets/chevron-down.svg">';
     html += '<span class="wish-category-name">' + name + '</span>';
     html += '<span class="wish-category-count">(' + count + ')</span>';
@@ -352,7 +352,7 @@ function categoryPickerHTML(selectedID) {
 
     var html = '';
     html += '<label for="wish_category" style="margin-top: 0.5em;">Category (optional):</label><br>';
-    html += '<select name="wish_category" id="wish_category" onchange="toggleNewCategoryInput()">' + options + '</select>';
+    html += '<select name="wish_category" id="wish_category" data-on-change="toggleNewCategoryInput">' + options + '</select>';
     html += '<input type="text" name="wish_category_new" id="wish_category_new" placeholder="New category name" autocomplete="off" style="display: none;" />';
     return html;
 }
@@ -391,3 +391,21 @@ function readCategorySelection(wishObject) {
         console.log("Failed to read category selection. Error: " + e)
     }
 }
+
+// <select> change actions receive the element as `this` (see
+// dispatchDeclarativeEvent); these forward its value.
+function onWishSortChangeFromSelect() {
+    onWishSortChange(this.value);
+}
+
+function onWishLayoutChangeFromSelect() {
+    onWishLayoutChange(this.value);
+}
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    toggle_category,
+    toggleNewCategoryInput,
+    onWishSortChangeFromSelect,
+    onWishLayoutChangeFromSelect,
+});

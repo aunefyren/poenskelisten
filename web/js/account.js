@@ -61,13 +61,13 @@ function load_page(result) {
                     
                         <div id="oidc-account-note" class="alert alert-info" style="display:none; margin: 0 1em 1em 1em;"></div>
 
-                        <form action="" class="icon-border" style="margin: 0 1em;" onsubmit="event.preventDefault(); send_update();">
+                        <form action="" class="icon-border" style="margin: 0 1em;" data-on-submit="send_update">
 
                             <label id="form-input-icon" for="email"></label>
                             <input type="email" name="email" id="email" placeholder="Email" value="" required/>
 
                             <div id="credential-section">
-                                <input class="clickable" onclick="change_password_toggle();" style="margin-top: 2em;" type="checkbox" id="password-toggle" name="password-toggle" value="confirm" >
+                                <input class="clickable" data-on-click="change_password_toggle" style="margin-top: 2em;" type="checkbox" id="password-toggle" name="password-toggle" value="confirm" >
                                 <label for="password-toggle" class="clickable">Change my password.</label><br>
 
                                 <div id="change-password-box" style="display:none;">
@@ -118,7 +118,7 @@ function load_page(result) {
                         <p style="margin: 0 1em;">Signed in on another device you no longer use? Sign out everywhere.</p>
 
                         <div style="margin: 1em;">
-                            <button type="button" style="padding: 0.75em 1em;" onclick="logoutAllDevices();">Sign out of all devices</button>
+                            <button type="button" style="padding: 0.75em 1em;" data-on-click="logoutAllDevices">Sign out of all devices</button>
                         </div>
 
                     </div>
@@ -219,7 +219,7 @@ function placeConnectedApps(apps) {
             <div style="border: 1px solid; border-radius: 0.5em; padding: 0.75em; margin-bottom: 0.5em; text-align: left;">
                 <b>${escapeAccount(app.client_name)}</b>
                 <ul style="margin: 0.4em 0; padding-left: 1.2em; font-size: 0.85em;">${scopeItems}</ul>
-                <button type="button" style="padding: 0.5em 1em;" onclick="revokeConnectedApp('${escapeAccount(app.client_id)}')">Disconnect</button>
+                <button type="button" style="padding: 0.5em 1em;" ${onClick('revokeConnectedApp', String(escapeAccount(app.client_id)))}>Disconnect</button>
             </div>
         `;
     }
@@ -267,12 +267,12 @@ function renderMFASection(enabled) {
     if(enabled) {
         statusEl.innerHTML = "Enabled. Your account is protected by an authenticator app.";
         actionEl.innerHTML = `
-            <button id="mfa-disable-button" onclick="renderMFADisable();" type="button" style="padding: 0.75em 1em;">Disable two-factor authentication</button>
+            <button id="mfa-disable-button" data-on-click="renderMFADisable" type="button" style="padding: 0.75em 1em;">Disable two-factor authentication</button>
         `;
     } else {
         statusEl.innerHTML = "Disabled. Add an authenticator app for extra protection.";
         actionEl.innerHTML = `
-            <button id="mfa-enable-button" onclick="mfaEnroll();" type="button" style="padding: 0.75em 1em;">Enable two-factor authentication</button>
+            <button id="mfa-enable-button" data-on-click="mfaEnroll" type="button" style="padding: 0.75em 1em;">Enable two-factor authentication</button>
         `;
     }
 }
@@ -324,14 +324,14 @@ function renderMFAActivate(secret, otpauthURL, qrCode) {
         <p style="font-family: monospace; word-break: break-all; font-size: 1.1em;" id="mfa-secret">${secret}</p>
         <p style="word-break: break-all; font-size: 0.8em;"><a href="${otpauthURL}">Open in authenticator app</a></p>
 
-        <form action="" class="icon-border" style="margin-top: 1em;" onsubmit="event.preventDefault(); mfaActivate();">
+        <form action="" class="icon-border" style="margin-top: 1em;" data-on-submit="mfaActivate">
             <p style="margin-bottom: 0.5em;">2. Enter the 6-digit code to confirm:</p>
             <label id="form-input-icon" for="mfa_activate_code"></label>
             <input type="text" name="mfa_activate_code" id="mfa_activate_code" placeholder="6-digit code" autocomplete="one-time-code" inputmode="numeric" required/>
             <button id="mfa-activate-button" type="submit" style="padding: 0.75em 1em;">Confirm and enable</button>
         </form>
 
-        <p style="margin-top: 0.5em; font-size: 0.8em; cursor: pointer;"><a onclick="renderMFASection(false);">Cancel</a></p>
+        <p style="margin-top: 0.5em; font-size: 0.8em; cursor: pointer;"><a data-on-click="renderMFASection" data-click-args="[false]">Cancel</a></p>
     `;
 }
 
@@ -401,7 +401,7 @@ function showRecoveryCodes(codes) {
             ${codesHTML}
         </div>
         <br>
-        <button type="button" onclick="renderMFASection(true);" style="padding: 0.75em 1em;">I've saved my codes</button>
+        <button type="button" data-on-click="renderMFASection" data-click-args="[true]" style="padding: 0.75em 1em;">I've saved my codes</button>
     `;
 }
 
@@ -413,7 +413,7 @@ function renderMFADisable() {
     }
 
     actionEl.innerHTML = `
-        <form action="" class="icon-border" onsubmit="event.preventDefault(); mfaDisable();">
+        <form action="" class="icon-border" data-on-submit="mfaDisable">
             <p style="margin-bottom: 0.5em;">Confirm your password and a current code to disable two-factor authentication.</p>
 
             <label id="form-input-icon" for="mfa_disable_password"></label>
@@ -425,7 +425,7 @@ function renderMFADisable() {
             <button id="mfa-disable-confirm-button" type="submit" style="padding: 0.75em 1em;">Disable</button>
         </form>
 
-        <p style="margin-top: 0.5em; font-size: 0.8em; cursor: pointer;"><a onclick="renderMFASection(true);">Cancel</a></p>
+        <p style="margin-top: 0.5em; font-size: 0.8em; cursor: pointer;"><a data-on-click="renderMFASection" data-click-args="[true]">Cancel</a></p>
     `;
 }
 
@@ -474,7 +474,7 @@ function logoutAllDevices() {
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
-            set_cookie("poenskelisten", "", 1);
+            clearAccessToken();
             window.location.href = '/login';
         }
     };
@@ -772,3 +772,17 @@ function showMFAManagedByProvider() {
         mfaAction.innerHTML = "";
     }
 }
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    revokeConnectedApp,
+    renderMFASection,
+    mfaEnroll,
+    mfaActivate,
+    renderMFADisable,
+    mfaDisable,
+    logoutAllDevices,
+    change_password_toggle,
+    send_update,
+    GetUserData,
+});

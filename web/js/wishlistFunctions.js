@@ -20,7 +20,7 @@ function createNewWishlist(groupContextID, userID, wishlistObjectBase64) {
     }
 
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); createNewWishlistTwo('${groupContextID}', '${userID}', '${wishlistObjectBase64}');">      
+        <form action="" class="" ${onSubmit('createNewWishlistTwo', String(groupContextID), String(userID), String(wishlistObjectBase64))}>      
             <label for="wishlist_name" style="">Create a new wishlist:</label><br>
             <input type="text" name="wishlist_name" id="wishlist_name" placeholder="Wishlist name" autocomplete="off" required value="${wishlistObject.name}" />
             
@@ -70,12 +70,12 @@ function createNewWishlistTwo(groupContextID, userID, wishlistObjectBase64) {
     var html = '';
 
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="createNewWishlist('${groupContextID}', '${userID}', '${wishlistObjectBase64}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('createNewWishlist', String(groupContextID), String(userID), String(wishlistObjectBase64))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
-        <form action="" class="" onsubmit="event.preventDefault(); createNewWishlistThree('${groupContextID}', '${userID}', '${wishlistObjectBase64}');">
-            <input class="clickable" onclick="toggleWishListDate('wishlist_date_wrapper_new')" style="" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" ${checkedHTML}>
+        <form action="" class="" ${onSubmit('createNewWishlistThree', String(groupContextID), String(userID), String(wishlistObjectBase64))}>
+            <input class="clickable" data-on-click="toggleWishListDate" data-click-args="[&quot;wishlist_date_wrapper_new&quot;]" style="" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" ${checkedHTML}>
             <label for="wishlist_expires" style="" class="clickable">Does the wishlist expire?</label><br>
             
             <div id="wishlist_date_wrapper_new" class="wishlist-date-wrapper ${extendedHTML}" style="margin-top: 1em;">
@@ -136,18 +136,18 @@ function createNewWishlistThree(groupContextID, userID, wishlistObjectBase64) {
     var html = '';
 
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="createNewWishlistTwo('${groupContextID}', '${userID}', '${wishlistObjectBase64}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('createNewWishlistTwo', String(groupContextID), String(userID), String(wishlistObjectBase64))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
-        <form action="" class="" onsubmit="event.preventDefault(); createNewWishlistFour('${groupContextID}', '${userID}', '${wishlistObjectBase64}');">
-            <input class="clickable" onclick="ToggleHideClaimersOption();" style="" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" ${checkedHTML}>
+        <form action="" class="" ${onSubmit('createNewWishlistFour', String(groupContextID), String(userID), String(wishlistObjectBase64))}>
+            <input class="clickable" data-on-click="ToggleHideClaimersOption" style="" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" ${checkedHTML}>
             <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
 
-            <input class="clickable" onclick="" style="display: ${checkedDisplay};" type="checkbox" id="wishlist_hide_claimers" name="wishlist_hide_claimers" value="confirm" ${checkedThreeHTML}>
+            <input class="clickable" style="display: ${checkedDisplay};" type="checkbox" id="wishlist_hide_claimers" name="wishlist_hide_claimers" value="confirm" ${checkedThreeHTML}>
             <label for="wishlist_hide_claimers" id="wishlist_hide_claimers_label" style="margin-bottom: 1em; display: ${checkedDisplay};" class="clickable">Hide claimers from other claimers.</label><br>
 
-            <input class="clickable" onclick="publicWishlistCheck();" style="" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${checkedTwoHTML}>
+            <input class="clickable" data-on-click="publicWishlistCheck" style="" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${checkedTwoHTML}>
             <label for="wishlist_public" style="margin-bottom: 1em;" class="clickable">Make this wishlist public and shareable.</label><br>
             
             <button id="register-button" type="submit" href="/">Next</button>
@@ -175,11 +175,11 @@ function createNewWishlistFour(groupContextID, userID, wishlistObjectBase64) {
     var html = '';
 
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="createNewWishlistThree('${groupContextID}', '${userID}', '${wishlistObjectBase64}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('createNewWishlistThree', String(groupContextID), String(userID), String(wishlistObjectBase64))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
-        <form action="" class="" onsubmit="event.preventDefault(); createWishlist('${groupContextID}', '${userID}', '${wishlistObjectBase64}');">
+        <form action="" class="" ${onSubmit('createWishlist', String(groupContextID), String(userID), String(wishlistObjectBase64))}>
             <label for="addToGroups" style="" class="">Add the wishlist to any groups?</label><br>
             <div id="addToGroups">
             </div>
@@ -234,7 +234,7 @@ function placeGroupCheckboxes(groupArray, groupContextID) {
         }
 
         html = `
-            <input class="clickable" onclick="" style="margin-top: 1em;" type="checkbox" id="addGroup-${group.id}" name="addGroup-${group.id}" value="confirm" ${groupHTML}>
+            <input class="clickable" style="margin-top: 1em;" type="checkbox" id="addGroup-${group.id}" name="addGroup-${group.id}" value="confirm" ${groupHTML}>
             <label for="addGroup-${group.id}" style="margin-bottom: 1em;" class="clickable">${group.name}</label><br>
         `;
         groupOfCheckboxes.innerHTML += html;
@@ -443,7 +443,7 @@ function editWishlistTwo(userID, wishlistID, wishlistObjectBase64) {
     var html = '';
 
     html += `
-        <form action="" class="" onsubmit="event.preventDefault(); editWishlistThree('${wishlistID}', '${userID}', '${wishlistObjectBase64}');">      
+        <form action="" class="" ${onSubmit('editWishlistThree', String(wishlistID), String(userID), String(wishlistObjectBase64))}>      
             <label for="wishlist_name" style="">Edit wishlist:</label><br>
             <input type="text" name="wishlist_name" id="wishlist_name" placeholder="Wishlist name" autocomplete="off" required value="${wishlistObject.name}" />
             
@@ -493,12 +493,12 @@ function editWishlistThree(wishlistID, userID, wishlistObjectBase64) {
     var html = '';
 
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="editWishlistTwo('${userID}', '${wishlistID}', '${wishlistObjectBase64}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('editWishlistTwo', String(userID), String(wishlistID), String(wishlistObjectBase64))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
-        <form action="" class="" onsubmit="event.preventDefault(); editWishlistFour('${wishlistID}', '${userID}', '${wishlistObjectBase64}');">
-            <input class="clickable" onclick="toggleWishListDate('wishlist_date_wrapper_new')" style="" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" ${checkedHTML}>
+        <form action="" class="" ${onSubmit('editWishlistFour', String(wishlistID), String(userID), String(wishlistObjectBase64))}>
+            <input class="clickable" data-on-click="toggleWishListDate" data-click-args="[&quot;wishlist_date_wrapper_new&quot;]" style="" type="checkbox" id="wishlist_expires" name="wishlist_expires" value="confirm" ${checkedHTML}>
             <label for="wishlist_expires" style="" class="clickable">Does the wishlist expire?</label><br>
             
             <div id="wishlist_date_wrapper_new" class="wishlist-date-wrapper ${extendedHTML}" style="margin-top: 1em;">
@@ -558,18 +558,18 @@ function editWishlistFour(wishlistID, userID, wishlistObjectBase64) {
     var html = '';
 
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="editWishlistThree('${wishlistID}', '${userID}', '${wishlistObjectBase64}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('editWishlistThree', String(wishlistID), String(userID), String(wishlistObjectBase64))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
-        <form action="" class="" onsubmit="event.preventDefault(); editWishlistFive('${wishlistID}', '${userID}', '${wishlistObjectBase64}');">
-            <input class="clickable" onclick="ToggleHideClaimersOption();" style="" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" ${claimableHTML}>
+        <form action="" class="" ${onSubmit('editWishlistFive', String(wishlistID), String(userID), String(wishlistObjectBase64))}>
+            <input class="clickable" data-on-click="ToggleHideClaimersOption" style="" type="checkbox" id="wishlist_claimable" name="wishlist_claimable" value="confirm" ${claimableHTML}>
             <label for="wishlist_claimable" style="margin-bottom: 1em;" class="clickable">Allow users to claim wishes.</label><br>
 
-            <input class="clickable" onclick="" style="display: ${checkedDisplay};" type="checkbox" id="wishlist_hide_claimers" name="wishlist_hide_claimers" value="confirm" ${hideClaimersHTML}>
+            <input class="clickable" style="display: ${checkedDisplay};" type="checkbox" id="wishlist_hide_claimers" name="wishlist_hide_claimers" value="confirm" ${hideClaimersHTML}>
             <label for="wishlist_hide_claimers" id="wishlist_hide_claimers_label" style="margin-bottom: 1em; display: ${checkedDisplay};" class="clickable">Hide claimers from other claimers.</label><br>
 
-            <input class="clickable" onclick="publicWishlistCheck();" style="" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${publicHTML}>
+            <input class="clickable" data-on-click="publicWishlistCheck" style="" type="checkbox" id="wishlist_public" name="wishlist_public" value="confirm" ${publicHTML}>
             <label for="wishlist_public" style="margin-bottom: 1em;" class="clickable">Make this wishlist public and shareable.</label><br>
             
             <button id="register-button" type="submit" href="/">Update wishlist</button>
@@ -677,7 +677,7 @@ function showGroupsInWishlistTwo(groupArray, userID, wishlistID, groupContextID)
                         </div>
                     </div>
 
-                    <div class="profile-icon clickable" onclick="removeWishlistFromGroup('${wishlistID}', '${groupArray[j].id}', '${userID}', '${groupContextID}')" title="Remove wishlist from group">
+                    <div class="profile-icon clickable" ${onClick('removeWishlistFromGroup', String(wishlistID), String(groupArray[j].id), String(userID), String(groupContextID))} title="Remove wishlist from group">
                         <img class="icon-img " src="/assets/x.svg">
                     </div>
                 </div>
@@ -688,7 +688,7 @@ function showGroupsInWishlistTwo(groupArray, userID, wishlistID, groupContextID)
     }
     html += `
         <div id="wishlist-input" class="wishlist-input">
-            <button id="register-button" onClick="addGroupsToWishlist('${wishlistID}', '${userID}');" type="" href="/">Add wishlist to group</button>
+            <button id="register-button" ${onClick('addGroupsToWishlist', String(wishlistID), String(userID))} type="" href="/">Add wishlist to group</button>
         </div>
     `;
 
@@ -781,14 +781,14 @@ function addGroupsToWishlistTwo(groupArray, userID, wishlistID) {
     var html = '';
 
     html += `
-        <div class="profile-icon clickable top-left-button" onclick="showGroupsInWishlist('${wishlistID}', '${userID}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('showGroupsInWishlist', String(wishlistID), String(userID))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
         <label for="newMemberID" style="">Add the wishlist to groups:</label><br>
         <div class="addNewMemberButtons">
             <input type="text" name="newMemberID" id="newMemberID" list="userList" placeholder="My cool group" value="" autocomplete="off" style="margin: 1em 0.5em 1em 1em;" />
-            <div class="profile-icon clickable" onclick="addGroupToSelection()" title="Add member" style="margin: 0 1em 0 0;">
+            <div class="profile-icon clickable" data-on-click="addGroupToSelection" title="Add member" style="margin: 0 1em 0 0;">
                 <img class="icon-img" src="/assets/plus.svg">
             </div>
         </div>
@@ -799,7 +799,7 @@ function addGroupsToWishlistTwo(groupArray, userID, wishlistID) {
         <div id="newMembers" class="newMembers">
         </div>
 
-        <form action="" class="" onsubmit="event.preventDefault(); addGroupsToWishlistThree('${wishlistID}', '${userID}');">
+        <form action="" class="" ${onSubmit('addGroupsToWishlistThree', String(wishlistID), String(userID))}>
             <button id="register-button" type="submit" href="/">Add to group</button>
         </form>
     `;
@@ -860,7 +860,7 @@ function addGroupToSelection() {
                 </div>
             </div>
 
-            <div class="profile-icon clickable" onclick="removeUserFromSelection('${newMemberID}')" title="Remove group">
+            <div class="profile-icon clickable" ${onClick('removeUserFromSelection', String(newMemberID))} title="Remove group">
                 <img class="icon-img " src="/assets/x.svg">
             </div>
         </div>
@@ -967,7 +967,7 @@ function showWishlistCollaboratorsInWishlistTwo(wishlistObject, userID, wishlist
             html += '</div>'
 
             if(ownerID == userID && wishlistObject.collaborators[j].id !== userID) {
-                html += `<div class="profile-icon clickable" onclick="removeWishlistCollaborator('${wishlistID}','${wishlistObject.collaborators[j].user.id}', '${userID}')" title="Remove collaborator">`
+                html += `<div class="profile-icon clickable" ${onClick('removeWishlistCollaborator', String(wishlistID), String(wishlistObject.collaborators[j].user.id), String(userID))} title="Remove collaborator">`
                 html += '<img class="icon-img " src="/assets/x.svg">'
                 html += '</div>'
             }
@@ -981,7 +981,7 @@ function showWishlistCollaboratorsInWishlistTwo(wishlistObject, userID, wishlist
 
     if(ownerID == userID) {
         html += '<div id="wishlist-input" class="wishlist-input">';
-        html += `<button id="register-button" onClick="addWishlistCollaborator('${wishlistID}', '${userID}');" type="" href="/">Add collaborators</button>`;
+        html += `<button id="register-button" ${onClick('addWishlistCollaborator', String(wishlistID), String(userID))} type="" href="/">Add collaborators</button>`;
         html += '</div>';
     }
 
@@ -1076,14 +1076,14 @@ function addWishlistCollaboratorTwo(usersArray, wishlistID, userID) {
     userListIDHTML += '</datalist>'
 
     var html = `
-        <div class="profile-icon clickable top-left-button" onclick="showWishlistCollaboratorsInWishlist('${wishlistID}', '${userID}');" title="Go back" style="">
+        <div class="profile-icon clickable top-left-button" ${onClick('showWishlistCollaboratorsInWishlist', String(wishlistID), String(userID))} title="Go back" style="">
             <img class="icon-img" src="/assets/arrow-left.svg">
         </div>
 
         <label for="newMemberMail" style="">Add collaborators:</label><br>
         <div class="addNewMemberButtons">
-            <input type="text" name="newMemberMail" id="newMemberMail" list="userList" placeholder="Ola Nordmann" value="" autocomplete="off" style="margin: 1em 0.5em 1em 1em;" onkeydown="console.log('...')"/>
-            <div class="profile-icon clickable" onclick="addUserToSelection()" title="Add member" style="margin: 0 1em 0 0;">
+            <input type="text" name="newMemberMail" id="newMemberMail" list="userList" placeholder="Ola Nordmann" value="" autocomplete="off" style="margin: 1em 0.5em 1em 1em;"/>
+            <div class="profile-icon clickable" data-on-click="addUserToSelection" title="Add member" style="margin: 0 1em 0 0;">
                 <img class="icon-img" src="/assets/plus.svg">
             </div>
         </div>
@@ -1094,7 +1094,7 @@ function addWishlistCollaboratorTwo(usersArray, wishlistID, userID) {
         <div id="newMembers" class="newMembers">
         </div>
 
-        <form action="" class="" onsubmit="event.preventDefault(); addWishlistCollaboratorThree('${wishlistID}', '${userID}');">   
+        <form action="" class="" ${onSubmit('addWishlistCollaboratorThree', String(wishlistID), String(userID))}>   
             <button id="register-button" type="submit" href="/">Save</button>
         </form>
     `;
@@ -1177,3 +1177,30 @@ function publicWishlistCheck() {
         console.log("Failed to validate public wishlist conditions.")
     }
 }
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    createNewWishlist,
+    createNewWishlistTwo,
+    createNewWishlistThree,
+    createNewWishlistFour,
+    createWishlist,
+    toggleWishListDate,
+    deleteWishlist,
+    editWishlist,
+    editWishlistTwo,
+    editWishlistThree,
+    editWishlistFour,
+    editWishlistFive,
+    showGroupsInWishlist,
+    removeWishlistFromGroup,
+    addGroupsToWishlist,
+    addGroupToSelection,
+    addGroupsToWishlistThree,
+    showWishlistCollaboratorsInWishlist,
+    removeWishlistCollaborator,
+    addWishlistCollaborator,
+    addWishlistCollaboratorThree,
+    ToggleHideClaimersOption,
+    publicWishlistCheck,
+});

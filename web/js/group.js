@@ -42,7 +42,7 @@ function load_page(result) {
     var html = `
                 <!-- The Modal -->
                 <div id="myModal" class="modal closed">
-                    <span class="close clickable" style="padding: 0 0.25em;" onclick="toggleModal()">&times;</span>
+                    <span class="close clickable" style="padding: 0 0.25em;" data-on-click="toggleModal">&times;</span>
                     <div class="modalContent" id="modalContent">
                     </div>
                     <div id="caption"></div>
@@ -68,10 +68,10 @@ function load_page(result) {
                             </div>
 
                             <div class="bottom-right-button" id="" style="">
-                                <img class="icon-img clickable" src="/assets/user.svg" onclick="groupMembers('${group_id}', '${user_id}')" title="Configure members" style="margin: 0.25em;">
-                                <img class="icon-img clickable" src="/assets/list.svg" onclick="showWishlistsInGroup('${group_id}', '${user_id}')" title="Configure wishlists" style="margin: 0.25em;">
-                                <img class="icon-img clickable" id="edit-group" src="/assets/edit.svg" onclick="editGroup('${user_id}', '${group_id}');" title="Edit group" style="margin: 0.25em; display: none;">
-                                <img class="icon-img clickable" id="delete-group" src="/assets/trash-2.svg" onclick="deleteGroup('${group_id}');" title="Delete group" style="margin: 0.25em; display: none;"></img>
+                                <img class="icon-img clickable" src="/assets/user.svg" ${onClick('groupMembers', String(group_id), String(user_id))} title="Configure members" style="margin: 0.25em;">
+                                <img class="icon-img clickable" src="/assets/list.svg" ${onClick('showWishlistsInGroup', String(group_id), String(user_id))} title="Configure wishlists" style="margin: 0.25em;">
+                                <img class="icon-img clickable" id="edit-group" src="/assets/edit.svg" ${onClick('editGroup', String(user_id), String(group_id))} title="Edit group" style="margin: 0.25em; display: none;">
+                                <img class="icon-img clickable" id="delete-group" src="/assets/trash-2.svg" ${onClick('deleteGroup', String(group_id))} title="Delete group" style="margin: 0.25em; display: none;"></img>
                             </div>
 
                         </div>
@@ -85,7 +85,7 @@ function load_page(result) {
                         </div>
 
                         <div class="profile-icon top-left-button" style="">
-                            <input class="clickable" onclick="toggleExpiredWishlists()" title="Toggle showing expired wishlists" style="" type="checkbox" id="toggle_expired_wishlists" name="toggle_expired_wishlists" value="confirm">
+                            <input class="clickable" data-on-click="toggleExpiredWishlists" title="Toggle showing expired wishlists" style="" type="checkbox" id="toggle_expired_wishlists" name="toggle_expired_wishlists" value="confirm">
                             <label for="toggle_expired_wishlists" style="" class="clickable">Show expired wishlists</label><br>
                         </div>
 
@@ -96,7 +96,7 @@ function load_page(result) {
                         </div>
 
                         <div id="wishlist-input" class="wishlist-input">
-                            <button id="register-button" onClick="createNewWishlist('${group_id}', '${user_id}');" type="" href="/">Create new wishlist</button>
+                            <button id="register-button" ${onClick('createNewWishlist', String(group_id), String(user_id))} type="" href="/">Create new wishlist</button>
                         </div>
       
                     </div>
@@ -267,7 +267,7 @@ function placeWishlists(wishlists_array, user_id, group_id, showExpired) {
             `;
         }
         
-        html += `<div class="wishlist-title clickable underline" onclick="location.href = '/wishlists/${wishlists_array[i].id}'" title="Go to wishlist">`;
+        html += `<div class="wishlist-title clickable underline" ${onClick('navigateTo', `/wishlists/${wishlists_array[i].id}`)} title="Go to wishlist">`;
         html += `<div class="profile-icon">`
         html += '<img class="icon-img " src="/assets/list.svg">'
         html += `</div><b id="wishlistName-${wishlists_array[i].id}">`
@@ -290,14 +290,14 @@ function placeWishlists(wishlists_array, user_id, group_id, showExpired) {
         html += '<div class="icons-wrapper">'
 
         html += `
-            <div class="profile-icon clickable" onclick="showWishlistCollaboratorsInWishlist('${wishlists_array[i].id}', '${user_id}')" title="Wishlist collaborators">
+            <div class="profile-icon clickable" ${onClick('showWishlistCollaboratorsInWishlist', String(wishlists_array[i].id), String(user_id))} title="Wishlist collaborators">
                 <img class="icon-img " src="/assets/smile.svg">
             </div>
         `;
 
         if(wishlists_array[i].owner.id == user_id) {
             html += `
-                <div class="profile-icon clickable" onclick="showGroupsInWishlist('${wishlists_array[i].id}', '${user_id}', '${group_id}')" title="Wishlist groups">
+                <div class="profile-icon clickable" ${onClick('showGroupsInWishlist', String(wishlists_array[i].id), String(user_id), String(group_id))} title="Wishlist groups">
                     <img class="icon-img " src="/assets/users.svg">
                 </div>
             `;
@@ -305,12 +305,12 @@ function placeWishlists(wishlists_array, user_id, group_id, showExpired) {
 
         if(wishlists_array[i].owner.id == user_id) {
             html += `
-                <div class="profile-icon clickable" onclick="editWishlist('${user_id}', '${wishlists_array[i].id}')" title="Edit wishlist">
+                <div class="profile-icon clickable" ${onClick('editWishlist', String(user_id), String(wishlists_array[i].id))} title="Edit wishlist">
                     <img class="icon-img " src="/assets/edit.svg">
                 </div>
             `;
 
-            html += `<div class="profile-icon clickable" onclick="deleteWishlist('${wishlists_array[i].id}', '${user_id}')" title="Delete wishlist">`;
+            html += `<div class="profile-icon clickable" ${onClick('deleteWishlist', String(wishlists_array[i].id), String(user_id))} title="Delete wishlist">`;
             html += '<img class="icon-img " src="/assets/trash-2.svg">'
             html += '</div>'
         }
@@ -489,3 +489,8 @@ function toggleExpiredWishlists() {
         }
     }
 }
+
+// Functions this file's markup may invoke (see registerActions in actions.js).
+registerActions({
+    toggleExpiredWishlists,
+});

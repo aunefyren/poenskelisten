@@ -35,7 +35,7 @@ function load_page(result) {
     var html = `
                 <!-- The Modal -->
                 <div id="myModal" class="modal closed">
-                    <span class="close clickable" onclick="toggleModal()">&times;</span>
+                    <span class="close clickable" data-on-click="toggleModal">&times;</span>
                     <div class="modalContent" id="modalContent">
                     </div>
                     <div id="caption"></div>
@@ -58,8 +58,8 @@ function load_page(result) {
                             Welcome to the front page. Use to navigation bar and head to Wishlists to manage your wishlists. Head to Groups to manage and view wishlists in groups.
 
                             <div class="labels">
-                                <div class="blue-label clickable" onclick="location.href='/wishlists'">My Wishlists</div>
-                                <div class="blue-label clickable" onclick="location.href='/groups'">Groups</div>
+                                <div class="blue-label clickable" data-on-click="navigateTo" data-click-args="[&quot;/wishlists&quot;]">My Wishlists</div>
+                                <div class="blue-label clickable" data-on-click="navigateTo" data-click-args="[&quot;/groups&quot;]">Groups</div>
                             </div>
 
                             <div id="wishlists-front-page">
@@ -77,7 +77,7 @@ function load_page(result) {
                         </div>
 
                         <div id="log-in-button" style="margin-top: 2em; display: none; width: 10em;">
-                            <button id="update-button" type="submit" href="#" onclick="window.location = './login';">Log in</button>
+                            <button id="update-button" type="submit" href="#" data-on-click="navigateTo" data-click-args="[&quot;/login&quot;]">Log in</button>
                         </div>
 
                     </div>
@@ -100,7 +100,7 @@ function load_page(result) {
                     </div>
 
                     <div class="module" id="new-news" style="display: none;">
-                        <button id="register-button" onClick="createNewsPost(${admin});" type="" href="/">Create news post</button>
+                        <button id="register-button" ${onClick('createNewsPost', admin)} type="" href="/">Create news post</button>
                     </div>
 
                 </div>
@@ -250,8 +250,8 @@ function buildNewsPostHTML(newsPostObject, adminStatus) {
     if(adminStatus) {
         html += `
             <div class="profile-icon top-right-button" style="padding-top: 0;">
-                <img class="icon-img clickable" src="/assets/edit.svg" title="Edit news post" onclick="editNewsPost('${newsPostObject.id}');">
-                <img class="icon-img clickable" src="/assets/trash-2.svg" title="Delete news post" onclick="deleteNewsPost('${newsPostObject.id}');">
+                <img class="icon-img clickable" src="/assets/edit.svg" title="Edit news post" ${onClick('editNewsPost', String(newsPostObject.id))}>
+                <img class="icon-img clickable" src="/assets/trash-2.svg" title="Delete news post" ${onClick('deleteNewsPost', String(newsPostObject.id))}>
             </div>
         `
     }
@@ -347,7 +347,7 @@ function placeWishlists(wishlistArray) {
 
 function createWishlistHTML(wishlistObject) {
     return `
-        <div class="wishlist-minimal clickable" title="Go to wishlist" onclick="location.href='/wishlists/${wishlistObject.id}'">
+        <div class="wishlist-minimal clickable" title="Go to wishlist" ${onClick('navigateTo', `/wishlists/${wishlistObject.id}`)}>
             <img class="icon-img" src="/assets/list.svg" style="margin-right: 0.25em;">
             <p id="wishlistName-${wishlistObject.id}">
             ${wishlistObject.name}

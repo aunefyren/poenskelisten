@@ -35,7 +35,7 @@ function load_page(result) {
     var html = `
                 <!-- The Modal -->
                 <div id="myModal" class="modal closed">
-                    <span class="close clickable" style="padding: 0 0.25em;" onclick="toggleModal()">&times;</span>
+                    <span class="close clickable" style="padding: 0 0.25em;" data-on-click="toggleModal">&times;</span>
                     <div class="modalContent" id="modalContent">
                     </div>
                     <div id="caption"></div>
@@ -68,7 +68,7 @@ function load_page(result) {
                         </div>
 
                         <div id="group-input" class="group-input">
-                            <button id="register-button" onClick="createGroup('${user_id}');" type="" href="/">Create new group</button>
+                            <button id="register-button" ${onClick('createGroup', String(user_id))} type="" href="/">Create new group</button>
                         </div>
                     </div>
                 </div>
@@ -146,7 +146,7 @@ function placeGroups(group_array, user_id) {
 
         html += '<div class="group">'
         
-        html += `<div class="group-title clickable underline" style="" onclick="location.href = '/groups/${group_array[i].id}'" title="Go to group">`;
+        html += `<div class="group-title clickable underline" style="" ${onClick('navigateTo', `/groups/${group_array[i].id}`)} title="Go to group">`;
         html += '<div class="profile-icon">'
         html += '<img class="icon-img " src="/assets/users.svg">'
         html += `</div>`
@@ -168,20 +168,20 @@ function placeGroups(group_array, user_id) {
         }
         members_string += ']'
 
-        html += `<div class="profile-icon clickable" onclick="groupMembers('${group_array[i].id}', '${user_id}')" title="Configure members">`;
+        html += `<div class="profile-icon clickable" ${onClick('groupMembers', String(group_array[i].id), String(user_id))} title="Configure members">`;
         html += '<img class="icon-img " src="/assets/user.svg">'
         html += '</div>'
 
-        html += `<div class="profile-icon clickable" onclick="showWishlistsInGroup('${group_array[i].id}', '${user_id}')" title="Configure wishlists">`;
+        html += `<div class="profile-icon clickable" ${onClick('showWishlistsInGroup', String(group_array[i].id), String(user_id))} title="Configure wishlists">`;
         html += '<img class="icon-img " src="/assets/list.svg">'
         html += '</div>'
 
         if(owner_id == user_id) {
-            html += `<div class="profile-icon clickable" onclick="editGroup('${user_id}', '${group_array[i].id}')" title="Edit group">`;
+            html += `<div class="profile-icon clickable" ${onClick('editGroup', String(user_id), String(group_array[i].id))} title="Edit group">`;
             html += '<img class="icon-img " src="/assets/edit.svg">'
             html += '</div>'
 
-            html += `<div class="profile-icon clickable" onclick="deleteGroup('${group_array[i].id}', '${user_id}')" title="Delete group">`;
+            html += `<div class="profile-icon clickable" ${onClick('deleteGroup', String(group_array[i].id), String(user_id))} title="Delete group">`;
             html += '<img class="icon-img " src="/assets/trash-2.svg">'
             html += '</div>'
         }
