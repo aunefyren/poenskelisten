@@ -86,7 +86,7 @@ You can configure Pønskelisten in **three different ways**:
 |-----|-----|-----|-------|--------------|
 | poenskelisten_port | port | port | int | Port to run on (default: `8080`) |
 | poenskelisten_external_url | externalurl | externalurl | string | **Required.** The main URL users open in their browser, e.g. `https://wishlist.example.com`. Used for login, e-mail links, public wishlist links, single sign-on and as the OAuth issuer. If unset, only `http://localhost:<port>` can log in. |
-| poenskelisten_additional_urls | additionalurls | additionalurls | string | Comma-separated extra URLs users can log in from, e.g. `http://192.168.1.10:8080,http://wishlist.lan`. Each must be just scheme, host and port. Links and single sign-on still use `external_url`. |
+| poenskelisten_additional_urls | additionalurls | additionalurls | string | Comma-separated extra URLs users can log in from, e.g. `http://192.168.1.10:8080,http://wishlist.lan`. Each must be just scheme, host and port. Links and single sign-on still use `external_url` (the SSO button switches to it). |
 | poenskelisten_environment | environment | environment | string | `production` or `test` |
 | poenskelisten_test_email | testemail | testemail | string | E-mail destination when in `test` |
 | poenskelisten_name | name | name | string | Display name of the app |
@@ -181,8 +181,9 @@ Then configure Pønskelisten (env vars shown; flags/config.json equivalents exis
 ```
 
 The redirect URL registered with the IdP must match
-`<external_url>/api/open/oidc/callback`. Single sign-on therefore only works when
-Pønskelisten is opened on `external_url`, not on one of the `additional_urls`.
+`<external_url>/api/open/oidc/callback`. Single sign-on therefore always runs on
+`external_url`: the SSO button on a page opened from one of the `additional_urls`
+sends the browser to `external_url` first, and the user ends up logged in there.
 
 **OIDC-only mode**: set `disablelocallogin: true` to make SSO the only way in.
 Password login (including its MFA step), self-registration and password reset

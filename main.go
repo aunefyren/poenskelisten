@@ -282,6 +282,7 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 	// JSON-encoded so it's a safe JS string literal: JS templates are text/template
 	// and don't escape. Marshalling a plain string can't fail.
 	oidcProviderNameJSON, _ := json.Marshal(config.OIDCDisplayName())
+	oidcLoginURLJSON, _ := json.Marshal(config.OIDCLoginURL())
 
 	// Create template for HTML variables
 	templateData := gin.H{
@@ -292,6 +293,7 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 		// password form on an OIDC-only instance.
 		"localLoginEnabled":    config.LocalLoginEnabled(),
 		"oidcProviderNameJSON": string(oidcProviderNameJSON),
+		"oidcLoginURLJSON":     string(oidcLoginURLJSON),
 	}
 
 	// endpoint handler building for JS

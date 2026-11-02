@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -309,6 +310,8 @@ const (
 	defaultOIDCProviderName = "Single sign-on"
 	// oidcCallbackPath is where the IdP sends the browser back to (controllers.OIDCCallback).
 	oidcCallbackPath = "/api/open/oidc/callback"
+	// oidcLoginPath starts the flow (controllers.OIDCLogin).
+	oidcLoginPath = "/api/open/oidc/login"
 )
 
 // OIDCDisplayName is the SSO login button label: the configured provider name,
@@ -333,6 +336,24 @@ func OIDCCallbackURL() string {
 
 func derivedOIDCCallbackURL() string {
 	return OAuthIssuer() + oidcCallbackPath
+}
+
+// OIDCLoginURL is where the SSO button sends the browser: the login endpoint
+// beside the callback, not on whatever origin the page was opened on. The login
+// endpoint sets the state and nonce cookies and the callback reads them back,
+// so starting from an additional URL would set them on an origin the callback
+// never sees. A path prefix on an explicit redirect URL (a reverse proxy
+// serving the app under a subpath) is kept.
+func OIDCLoginURL() string {
+	callback, err := url.Parse(OIDCCallbackURL())
+	if err != nil || callback.Scheme == "" || callback.Host == "" {
+		return oidcLoginPath
+	}
+	prefix := ""
+	if strings.HasSuffix(callback.Path, oidcCallbackPath) {
+		prefix = strings.TrimSuffix(callback.Path, oidcCallbackPath)
+	}
+	return callback.Scheme + "://" + callback.Host + prefix + oidcLoginPath
 }
 
 // LocalLoginEnabled reports whether password login, self-registration and

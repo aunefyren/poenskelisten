@@ -352,6 +352,26 @@ func TestInitRouterInjectsTemplateData(t *testing.T) {
 	}
 }
 
+// The SSO button has to start the flow on external_url even when the page was
+// opened on an additional URL, since that's the only origin the IdP returns to.
+func TestInitRouterRendersOIDCLoginURL(t *testing.T) {
+	origConfig := config.ConfigFile
+	t.Cleanup(func() { config.ConfigFile = origConfig })
+	config.ConfigFile.PoenskelistenExternalURL = "https://wishes.example.com"
+	config.ConfigFile.PoenskelistenAdditionalURLs = "http://192.168.1.10:8080"
+	config.ConfigFile.OIDCRedirectURL = ""
+
+	router := initRouter(models.ConfigStruct{})
+	w := serve(router, http.MethodGet, "/js/functions.js")
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /js/functions.js = %d, want 200", w.Code)
+	}
+	want := `var OIDC_LOGIN_URL = "https://wishes.example.com/api/open/oidc/login";`
+	if !strings.Contains(w.Body.String(), want) {
+		t.Errorf("functions.js does not contain %s", want)
+	}
+}
+
 func TestInitRouterProtectsAuthAndAdminGroups(t *testing.T) {
 	router := initRouter(models.ConfigStruct{})
 

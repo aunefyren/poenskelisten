@@ -103,6 +103,44 @@ func TestOIDCCallbackURL(t *testing.T) {
 	}
 }
 
+func TestOIDCLoginURL(t *testing.T) {
+	origRedirect := ConfigFile.OIDCRedirectURL
+	origURL := ConfigFile.PoenskelistenExternalURL
+	origAdditional := ConfigFile.PoenskelistenAdditionalURLs
+	origPort := ConfigFile.PoenskelistenPort
+	t.Cleanup(func() {
+		ConfigFile.OIDCRedirectURL = origRedirect
+		ConfigFile.PoenskelistenExternalURL = origURL
+		ConfigFile.PoenskelistenAdditionalURLs = origAdditional
+		ConfigFile.PoenskelistenPort = origPort
+	})
+
+	cases := []struct {
+		name        string
+		redirect    string
+		externalURL string
+		want        string
+	}{
+		{"external URL", "", "https://wishlist.example.com/", "https://wishlist.example.com/api/open/oidc/login"},
+		{"localhost fallback", "", "", "http://localhost:9090/api/open/oidc/login"},
+		{"explicit redirect on the external URL", "https://wishlist.example.com/api/open/oidc/callback", "https://wishlist.example.com", "https://wishlist.example.com/api/open/oidc/login"},
+		{"explicit redirect keeps a path prefix", "https://example.com/wishes/api/open/oidc/callback", "https://example.com/wishes", "https://example.com/wishes/api/open/oidc/login"},
+		{"explicit redirect on another origin", "https://sso-return.example.com/cb", "https://wishlist.example.com", "https://sso-return.example.com/api/open/oidc/login"},
+		{"unparseable redirect", "://bad", "https://wishlist.example.com", "/api/open/oidc/login"},
+		{"redirect without a host", "/api/open/oidc/callback", "https://wishlist.example.com", "/api/open/oidc/login"},
+	}
+	for _, c := range cases {
+		ConfigFile.OIDCRedirectURL = c.redirect
+		ConfigFile.PoenskelistenExternalURL = c.externalURL
+		// Additional URLs mustn't influence where SSO starts.
+		ConfigFile.PoenskelistenAdditionalURLs = "http://192.168.1.10:8080"
+		ConfigFile.PoenskelistenPort = 9090
+		if got := OIDCLoginURL(); got != c.want {
+			t.Errorf("%s: OIDCLoginURL() = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
 func TestLocalLoginEnabled(t *testing.T) {
 	original := ConfigFile
 	t.Cleanup(func() { ConfigFile = original })

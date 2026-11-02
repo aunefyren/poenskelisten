@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -114,6 +115,11 @@ func TestGetOIDCConfigEnabled(t *testing.T) {
 	}
 	if body["local_login_enabled"] != true {
 		t.Errorf("local_login_enabled = %v, want true by default", body["local_login_enabled"])
+	}
+	// Absolute, on the callback's origin, so a page opened on an additional URL
+	// still starts the flow where the callback can read its cookies.
+	if body["login_url"] != config.OIDCLoginURL() || !strings.HasPrefix(body["login_url"].(string), "http") {
+		t.Errorf("login_url = %v, want the absolute %q", body["login_url"], config.OIDCLoginURL())
 	}
 }
 

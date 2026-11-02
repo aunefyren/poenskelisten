@@ -155,10 +155,18 @@ function action_login_oidc_only() {
     <br>
 
     <div class="action-block">
-        <button type="button" id="log-in-button" data-on-click="navigateTo" data-click-args="[&quot;/api/open/oidc/login&quot;]">Log in with ` + providerName + `</button>
+        <button type="button" id="log-in-button" ${onClick('startOIDCLogin')}>Log in with ` + providerName + `</button>
     </div>
     `;
     document.getElementById("change_action").innerHTML = "";
+}
+
+// Start single sign-on on external_url (see OIDC_LOGIN_URL). navigateTo only
+// takes same-origin paths, which is right for values from the API but not for
+// this one, so the server-rendered URL gets its own action instead of a
+// loosened navigateTo.
+function startOIDCLogin() {
+    window.location.href = OIDC_LOGIN_URL;
 }
 
 // Fetch the public OIDC config and, if single sign-on is enabled, show a button
@@ -183,7 +191,7 @@ function renderOIDCLoginOption() {
             var providerName = escapeHTML(result.provider_name || "single sign-on");
             container.innerHTML = `
                 <div class="text-body" style="font-size: 0.8em; margin-bottom: 0.5em;">or</div>
-                <button type="button" style="padding: 0.75em 1em;" ${onClick('navigateTo', result.login_url)}>Log in with ${providerName}</button>
+                <button type="button" style="padding: 0.75em 1em;" ${onClick('startOIDCLogin')}>Log in with ${providerName}</button>
             `;
         }
     };
@@ -639,6 +647,7 @@ function checkResetCode(resetCode){
 // Functions this file's markup may invoke (see registerActions in actions.js).
 registerActions({
     action_login,
+    startOIDCLogin,
     action_newpassword,
     send_log_in,
     backToLogin,
