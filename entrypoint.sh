@@ -16,6 +16,7 @@ argCount=$#
 [ -n "$port" ] && set -- "$@" --port "$port"
 [ -n "$externalurl" ] && set -- "$@" --externalurl "$externalurl"
 [ -n "$additionalurls" ] && set -- "$@" --additionalurls "$additionalurls"
+[ -n "$trustedproxies" ] && set -- "$@" --trustedproxies "$trustedproxies"
 [ -n "$timezone" ] && set -- "$@" --timezone "$timezone"
 [ -n "$environment" ] && set -- "$@" --environment "$environment"
 [ -n "$testemail" ] && set -- "$@" --testemail "$testemail"
