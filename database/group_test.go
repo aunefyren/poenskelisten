@@ -472,3 +472,96 @@ func TestGroupCreatesRejectWrongRowCount(t *testing.T) {
 		t.Errorf("CreateGroupMembershipInDB error = %v, want \"Group membership not added to database.\"", err)
 	}
 }
+
+func TestCreateGroupWithMemberships(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	member := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+
+	group := models.Group{Name: "Team", OwnerID: owner.ID}
+	group.ID = uuid.New()
+	created, err := CreateGroupWithMemberships(group, []uuid.UUID{owner.ID, member.ID}, []uuid.UUID{wishlist.ID})
+	if err != nil {
+		t.Fatalf("CreateGroupWithMemberships: %v", err)
+	}
+	if created.ID != group.ID {
+		t.Errorf("created.ID = %v, want %v", created.ID, group.ID)
+	}
+
+	for _, userID := range []uuid.UUID{owner.ID, member.ID} {
+		if isMember, err := VerifyUserMembershipToGroup(userID, group.ID); err != nil || !isMember {
+			t.Errorf("VerifyUserMembershipToGroup(%v) = (%v, %v), want (true, nil)", userID, isMember, err)
+		}
+	}
+	groups, err := GetGroupMembersFromWishlist(wishlist.ID, owner.ID)
+	if err != nil || len(groups) != 1 || groups[0].ID != group.ID {
+		t.Errorf("wishlist groups = (%v, %v), want just the new group", groups, err)
+	}
+}
+
+// countGroupRows returns how many groups, group memberships and wishlist
+// memberships exist, so a rollback test can assert nothing was left behind.
+func countGroupRows(t *testing.T) (groups, groupMemberships, wishlistMemberships int64) {
+	t.Helper()
+	for _, c := range []struct {
+		model interface{}
+		count *int64
+	}{
+		{&models.Group{}, &groups},
+		{&models.GroupMembership{}, &groupMemberships},
+		{&models.WishlistMembership{}, &wishlistMemberships},
+	} {
+		if err := Instance.Model(c.model).Count(c.count).Error; err != nil {
+			t.Fatalf("failed to count rows: %v", err)
+		}
+	}
+	return
+}
+
+func TestCreateGroupWithMembershipsRollsBack(t *testing.T) {
+	cases := []struct {
+		name  string
+		table string
+		skip  int
+	}{
+		{name: "group", table: "groups", skip: 0},
+		{name: "second member", table: "group_memberships", skip: 1},
+		{name: "wishlist", table: "wishlist_memberships", skip: 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupTestDB(t)
+			owner := createTestUser(t)
+			member := createTestUser(t)
+			wishlist := createTestWishlist(t, owner.ID)
+			injectFault(t, "create", c.table, c.skip)
+
+			group := models.Group{Name: "Team", OwnerID: owner.ID}
+			group.ID = uuid.New()
+			_, err := CreateGroupWithMemberships(group, []uuid.UUID{owner.ID, member.ID}, []uuid.UUID{wishlist.ID})
+			if !errors.Is(err, errInjected) {
+				t.Fatalf("error = %v, want the injected fault", err)
+			}
+
+			if g, gm, wm := countGroupRows(t); g != 0 || gm != 0 || wm != 0 {
+				t.Errorf("rows left behind: %d groups, %d group memberships, %d wishlist memberships", g, gm, wm)
+			}
+		})
+	}
+}
+
+func TestCreateGroupWithMembershipsRejectsWrongRowCount(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	forceRowsAffected(t, "create", "group_memberships", 0)
+
+	group := models.Group{Name: "Team", OwnerID: owner.ID}
+	group.ID = uuid.New()
+	if _, err := CreateGroupWithMemberships(group, []uuid.UUID{owner.ID}, nil); err == nil {
+		t.Fatal("expected an error when the membership insert reports no affected row")
+	}
+	if g, gm, _ := countGroupRows(t); g != 0 || gm != 0 {
+		t.Errorf("rows left behind: %d groups, %d group memberships", g, gm)
+	}
+}

@@ -100,38 +100,10 @@ func RegisterGroup(context *gin.Context) {
 		return
 	}
 
-	// Create the group in the database
-	_, err = database.CreateGroupInDB(group)
-	if err != nil {
-		logger.Log.Error("Failed to create group in database. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group in database."})
-		context.Abort()
-		return
-	}
-
-	// Create a new instance of the GroupMembership model
-	var groupMembership models.GroupMembership
-
-	// Set the member and group ID for the new group membership
-	groupMembership.MemberID = userID
-	groupMembership.GroupID = group.ID
-	groupMembership.ID = uuid.New()
-
-	// Create the group membership in the database
-	_, err = database.CreateGroupMembershipInDB(groupMembership)
-	if err != nil {
-		// If there is an error creating the group membership, return an Internal Server Error response
-		logger.Log.Error("Failed to create membership. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create membership."})
-		context.Abort()
-		return
-	}
-
-	// Create group memberships for all members in the group_creation_request.Members slice
+	// Resolve every requested member and wishlist before writing anything, so
+	// a bad ID is rejected without leaving a half-created group behind.
+	memberIDs := []uuid.UUID{userID}
 	for _, memberID := range groupCreationRequest.Members {
-		// Create a new instance of the GroupMembership model
-		var groupMembership models.GroupMembership
-
 		newMember, err := database.GetUserInformation(memberID)
 		if errors.Is(err, database.ErrUserNotFound) {
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find user."})
@@ -143,26 +115,10 @@ func RegisterGroup(context *gin.Context) {
 			context.Abort()
 			return
 		}
-
-		// Set the member and group ID for the new group membership
-		groupMembership.MemberID = newMember.ID
-		groupMembership.GroupID = group.ID
-		groupMembership.ID = uuid.New()
-
-		// Create the group membership in the database
-		_, err = database.CreateGroupMembershipInDB(groupMembership)
-		if err != nil {
-			logger.Log.Error("Failed to create group memberships. Error: " + err.Error())
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group memberships."})
-			context.Abort()
-			return
-		}
+		memberIDs = append(memberIDs, newMember.ID)
 	}
 
 	for _, wishlistID := range groupCreationRequest.Wishlists {
-		// Create a new instance of the GroupMembership model
-		var wishlistMembership models.WishlistMembership
-
 		wishlist, err := database.GetWishlist(wishlistID)
 		if errors.Is(err, database.ErrWishlistNotFound) {
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
@@ -180,20 +136,14 @@ func RegisterGroup(context *gin.Context) {
 			context.Abort()
 			return
 		}
+	}
 
-		// Set the member and group ID for the new group membership
-		wishlistMembership.GroupID = group.ID
-		wishlistMembership.WishlistID = wishlistID
-		wishlistMembership.ID = uuid.New()
-
-		// Create the group membership in the database
-		_, err = database.CreateWishlistMembershipInDB(wishlistMembership)
-		if err != nil {
-			logger.Log.Error("Failed to create wishlist membership. Error: " + err.Error())
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create wishlist membership."})
-			context.Abort()
-			return
-		}
+	_, err = database.CreateGroupWithMemberships(group, memberIDs, groupCreationRequest.Wishlists)
+	if err != nil {
+		logger.Log.Error("Failed to create group in database. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group in database."})
+		context.Abort()
+		return
 	}
 
 	// Get a list of groups with the current user as the owner
