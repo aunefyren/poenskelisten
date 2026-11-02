@@ -3,8 +3,10 @@ package database
 import (
 	"aunefyren/poenskelisten/models"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // ErrGroupNotFound means the lookup ran but matched no enabled group (or, for
@@ -277,6 +279,54 @@ func CreateGroupInDB(groupDB models.Group) (group models.Group, err error) {
 	}
 
 	return groupDB, nil
+}
+
+// CreateGroupWithMemberships creates the group, a membership for each of
+// memberIDs (the owner included) and a link to each of wishlistIDs in one
+// transaction. Creating them one by one left the group behind whenever a later
+// insert failed, and the owner's retry then tripped the duplicate-name check.
+// The caller resolves the members and wishlists beforehand; this only writes.
+func CreateGroupWithMemberships(group models.Group, memberIDs []uuid.UUID, wishlistIDs []uuid.UUID) (models.Group, error) {
+	err := Instance.Transaction(func(tx *gorm.DB) error {
+		if err := createOne(tx, &group); err != nil {
+			return fmt.Errorf("create group: %w", err)
+		}
+
+		for _, memberID := range memberIDs {
+			membership := models.GroupMembership{GroupID: group.ID, MemberID: memberID}
+			membership.ID = uuid.New()
+			if err := createOne(tx, &membership); err != nil {
+				return fmt.Errorf("create group membership: %w", err)
+			}
+		}
+
+		for _, wishlistID := range wishlistIDs {
+			membership := models.WishlistMembership{GroupID: group.ID, WishlistID: wishlistID}
+			membership.ID = uuid.New()
+			if err := createOne(tx, &membership); err != nil {
+				return fmt.Errorf("create wishlist membership: %w", err)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return models.Group{}, err
+	}
+
+	return group, nil
+}
+
+// createOne inserts a single record, treating anything but exactly one
+// affected row as a failure so the surrounding transaction rolls back.
+func createOne(tx *gorm.DB, value interface{}) error {
+	record := tx.Create(value)
+	if record.Error != nil {
+		return record.Error
+	} else if record.RowsAffected != 1 {
+		return errors.New("Record not added to database.")
+	}
+	return nil
 }
 
 func CreateGroupMembershipInDB(groupMembershipDB models.GroupMembership) (groupMembership models.GroupMembership, err error) {

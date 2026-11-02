@@ -36,6 +36,19 @@ func groupJSONBody(t *testing.T, w *httptest.ResponseRecorder) map[string]interf
 	return body
 }
 
+// assertNoGroupNamed fails the test if ownerID has a group called name, for
+// checking that a rejected RegisterGroup didn't leave a partial group behind.
+func assertNoGroupNamed(t *testing.T, ownerID uuid.UUID, name string) {
+	t.Helper()
+	exists, err := database.VerifyIfGroupWithSameNameAndOwnerDoesNotExist(name, ownerID)
+	if err != nil {
+		t.Fatalf("failed to look up group %q: %v", name, err)
+	}
+	if exists {
+		t.Errorf("group %q was left behind after a failed registration", name)
+	}
+}
+
 // --- RegisterGroup ---
 
 func TestRegisterGroupSuccess(t *testing.T) {
@@ -211,6 +224,15 @@ func TestRegisterGroupUnknownMember(t *testing.T) {
 	if w.Code != 400 {
 		t.Fatalf("status = %d, want 400 for an unknown member", w.Code)
 	}
+	assertNoGroupNamed(t, owner.ID, "Team Group")
+
+	// The rejected attempt mustn't block a corrected retry with the same name.
+	ctx, w = groupTestContext("POST", "/api/groups", `{"name":"Team Group","description":"desc"}`)
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RegisterGroup(ctx)
+	if w.Code != 201 {
+		t.Fatalf("retry status = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
 }
 
 func TestRegisterGroupNameInvalidCharacters(t *testing.T) {
@@ -251,6 +273,7 @@ func TestRegisterGroupWishlistNotFound(t *testing.T) {
 	if w.Code != 400 {
 		t.Fatalf("status = %d, want 400 for a nonexistent wishlist ID", w.Code)
 	}
+	assertNoGroupNamed(t, owner.ID, "Team Group")
 }
 
 func TestRegisterGroupWishlistNotOwned(t *testing.T) {
@@ -267,6 +290,7 @@ func TestRegisterGroupWishlistNotOwned(t *testing.T) {
 	if w.Code != 401 {
 		t.Fatalf("status = %d, want 401 when the wishlist isn't owned by the caller", w.Code)
 	}
+	assertNoGroupNamed(t, owner.ID, "Team Group")
 }
 
 // --- JoinGroup ---
@@ -1266,6 +1290,7 @@ func TestRegisterGroupOwnerMembershipCreateFailure(t *testing.T) {
 	if w.Code != 500 {
 		t.Fatalf("status = %d, want 500 when the group_memberships table is unavailable; body=%s", w.Code, w.Body.String())
 	}
+	assertNoGroupNamed(t, owner.ID, "My Group")
 }
 
 func TestRegisterGroupWishlistLookupFailure(t *testing.T) {
@@ -1282,6 +1307,7 @@ func TestRegisterGroupWishlistLookupFailure(t *testing.T) {
 	if w.Code != 500 {
 		t.Fatalf("status = %d, want 500 when the wishlist lookup fails; body=%s", w.Code, w.Body.String())
 	}
+	assertNoGroupNamed(t, owner.ID, "Team Group")
 }
 
 func TestRegisterGroupWishlistMembershipCreateFailure(t *testing.T) {
@@ -1299,6 +1325,41 @@ func TestRegisterGroupWishlistMembershipCreateFailure(t *testing.T) {
 
 	if w.Code != 500 {
 		t.Fatalf("status = %d, want 500 when the wishlist_memberships table is unavailable; body=%s", w.Code, w.Body.String())
+	}
+	assertNoGroupNamed(t, owner.ID, "Team Group")
+}
+
+func TestRegisterGroupWriteFailureRollsBack(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	member := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	// The group and both memberships are written before the wishlist link
+	// fails, so all of them have to be rolled back.
+	failDBOperation(t, "create", "wishlist_memberships", 0)
+
+	reqBody := `{"name":"Team Group","description":"desc","members":["` + member.ID.String() + `"],"wishlists":["` + wishlist.ID.String() + `"]}`
+	ctx, w := groupTestContext("POST", "/api/groups", reqBody)
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RegisterGroup(ctx)
+
+	if w.Code != 500 {
+		t.Fatalf("status = %d, want 500 when linking the wishlist fails; body=%s", w.Code, w.Body.String())
+	}
+	assertNoGroupNamed(t, owner.ID, "Team Group")
+	groups, err := database.GetGroupsAUserIsAMemberOf(member.ID)
+	if err != nil {
+		t.Fatalf("failed to list the member's groups: %v", err)
+	}
+	if len(groups) != 0 {
+		t.Errorf("member still belongs to %d group(s) after the rollback", len(groups))
+	}
+
+	ctx, w = groupTestContext("POST", "/api/groups", `{"name":"Team Group","description":"desc","members":["`+member.ID.String()+`"]}`)
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RegisterGroup(ctx)
+	if w.Code != 201 {
+		t.Fatalf("retry status = %d, want 201; body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -1546,7 +1607,7 @@ func TestGroupHandlersInjectedDatabaseFailures(t *testing.T) {
 			},
 			caller: func(f groupTestFixture) uuid.UUID { return f.owner.ID },
 			op:     "create", table: "group_memberships", skip: 1,
-			wantStatus: http.StatusInternalServerError, wantError: "Failed to create group memberships.",
+			wantStatus: http.StatusInternalServerError, wantError: "Failed to create group in database.",
 		},
 		{
 			// Query #1 on groups is the duplicate-name check.
