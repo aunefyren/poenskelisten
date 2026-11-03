@@ -140,3 +140,14 @@ func TestGenerateTokenMFAChallengeFailure(t *testing.T) {
 		t.Errorf("mfa_token = %v, want absent", body["mfa_token"])
 	}
 }
+
+func TestGenerateTokenIgnoresEmailCaseAndSpace(t *testing.T) {
+	setupControllersDB(t)
+	enablePrivateKey(t)
+	user := createTestUserWithPassword(t, "correct-horse-battery-staple")
+
+	code, body := postGenerateToken(`{"email":"  ` + strings.ToUpper(*user.Email) + ` ","password":"correct-horse-battery-staple"}`)
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, body)
+	}
+}

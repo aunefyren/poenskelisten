@@ -14,15 +14,15 @@ type News struct {
 }
 
 type NewsCreationRequest struct {
-	Title      string     `json:"title"`
-	Body       string     `json:"body"`
+	Title      string     `json:"title" sanitize:"trim,text"`
+	Body       string     `json:"body" sanitize:"trim,text"`
 	Date       time.Time  `json:"date"`
 	ExpiryDate *time.Time `json:"expiry_date"`
 }
 
 type NewsUpdateRequest struct {
-	Title      string     `json:"title"`
-	Body       string     `json:"body"`
+	Title      string     `json:"title" sanitize:"trim,text"`
+	Body       string     `json:"body" sanitize:"trim,text"`
 	Date       time.Time  `json:"date"`
 	ExpiryDate *time.Time `json:"expiry_date"`
 }

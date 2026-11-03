@@ -40,21 +40,16 @@ func GetUserByOIDCSubject(issuer string, subject string) (models.User, bool, err
 	return user, true, nil
 }
 
-// getEnabledUserByEmail returns an enabled user with the given email, reporting
-// whether one was found without treating "not found" as an error.
+// getEnabledUserByEmail returns an enabled user with the given email (matched
+// as findEnabledUserByEmail does), reporting whether one was found without
+// treating "not found" as an error. An ambiguous address stays an error, so
+// it can't fall through to provisioning a third account.
 func getEnabledUserByEmail(email string) (models.User, bool, error) {
-	var user models.User
-	record := Instance.
-		Where("enabled = ? AND email = ?", true, email).
-		Find(&user)
-	if record.Error != nil {
-		return models.User{}, false, record.Error
-	}
-	if record.RowsAffected == 0 {
+	user, err := findEnabledUserByEmail(email)
+	if errors.Is(err, ErrUserNotFound) {
 		return models.User{}, false, nil
-	}
-	if record.RowsAffected != 1 {
-		return models.User{}, false, errors.New("multiple users share the same email")
+	} else if err != nil {
+		return models.User{}, false, err
 	}
 	return user, true, nil
 }
@@ -83,6 +78,8 @@ func linkUserOIDC(userID uuid.UUID, issuer string, subject string) error {
 func createOIDCUser(issuer string, subject string, email string, firstName string, lastName string) (models.User, error) {
 	trueVar := true
 	authSource := models.AuthSourceOIDC
+	// Stored lowercased like a locally registered address.
+	email = strings.ToLower(email)
 
 	user := models.User{
 		FirstName:   firstName,

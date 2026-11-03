@@ -118,10 +118,7 @@ func APIEnrollMFA(context *gin.Context) {
 // plaintext, for the user to store.
 func APIActivateMFA(context *gin.Context) {
 	var request models.MFAActivateRequest
-	if err := context.ShouldBindJSON(&request); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &request) {
 		return
 	}
 
@@ -214,10 +211,7 @@ func APIActivateMFA(context *gin.Context) {
 // hijacked session from stripping MFA.
 func APIDisableMFA(context *gin.Context) {
 	var request models.MFADisableRequest
-	if err := context.ShouldBindJSON(&request); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &request) {
 		return
 	}
 
@@ -278,10 +272,7 @@ func APIDisableMFA(context *gin.Context) {
 // on success.
 func APIValidateMFA(context *gin.Context) {
 	var request models.MFAValidateRequest
-	if err := context.ShouldBindJSON(&request); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &request) {
 		return
 	}
 
@@ -368,10 +359,7 @@ func APIAdminDeleteUserMFA(context *gin.Context) {
 // MFA-enforcement flag) and persists them to the config file.
 func APIUpdateServerSettings(context *gin.Context) {
 	var request models.ServerSettingsRequest
-	if err := context.ShouldBindJSON(&request); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &request) {
 		return
 	}
 

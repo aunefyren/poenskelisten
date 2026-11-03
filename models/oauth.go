@@ -65,12 +65,12 @@ func (c *OAuthClient) AllowsScopes(requested []string) bool {
 
 // OAuthRegisterRequest is the RFC 7591 dynamic client registration payload.
 type OAuthRegisterRequest struct {
-	RedirectURIs            []string `json:"redirect_uris"`
-	ClientName              string   `json:"client_name"`
-	GrantTypes              []string `json:"grant_types"`
-	ResponseTypes           []string `json:"response_types"`
-	Scope                   string   `json:"scope"`
-	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
+	RedirectURIs            []string `json:"redirect_uris" sanitize:"trim"`
+	ClientName              string   `json:"client_name" sanitize:"trim,text"`
+	GrantTypes              []string `json:"grant_types" sanitize:"trim"`
+	ResponseTypes           []string `json:"response_types" sanitize:"trim"`
+	Scope                   string   `json:"scope" sanitize:"trim"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method" sanitize:"trim"`
 }
 
 // AuthorizationCode is a single-use, short-lived code exchanged at the token

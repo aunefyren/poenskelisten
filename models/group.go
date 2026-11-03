@@ -12,15 +12,15 @@ type Group struct {
 }
 
 type GroupCreationRequest struct {
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
+	Name        string      `json:"name" sanitize:"trim,text"`
+	Description string      `json:"description" sanitize:"trim,text"`
 	Members     []uuid.UUID `json:"members"`
 	Wishlists   []uuid.UUID `json:"wishlists"`
 }
 
 type GroupUpdateRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name        string `json:"name" sanitize:"trim,text"`
+	Description string `json:"description" sanitize:"trim,text"`
 }
 
 type GroupUser struct {

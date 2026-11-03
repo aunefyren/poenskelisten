@@ -182,8 +182,29 @@ func TestOIDCLookupsRejectDuplicates(t *testing.T) {
 	if _, found, err := GetUserByOIDCSubject("iss", "sub"); found || err == nil {
 		t.Errorf("GetUserByOIDCSubject = (found=%v, err=%v), want a duplicate error", found, err)
 	}
-	if _, found, err := getEnabledUserByEmail("a@example.com"); found || err == nil {
-		t.Errorf("getEnabledUserByEmail = (found=%v, err=%v), want a duplicate error", found, err)
+}
+
+// Two legacy accounts that differ only by case, with no exact match for the
+// address the identity provider sent: linking must fail rather than report
+// "not found", which would provision a third account.
+func TestGetEnabledUserByEmailRejectsAmbiguousCase(t *testing.T) {
+	setupTestDB(t)
+	createTestUserWithEmail(t, "Ada@example.com")
+	createTestUserWithEmail(t, "ADA@example.com")
+
+	if _, found, err := getEnabledUserByEmail("ada@example.com"); found || !errors.Is(err, ErrUserEmailAmbiguous) {
+		t.Errorf("getEnabledUserByEmail = (found=%v, err=%v), want ErrUserEmailAmbiguous", found, err)
+	}
+}
+
+func TestCreateOIDCUserLowercasesEmail(t *testing.T) {
+	setupTestDB(t)
+	user, err := createOIDCUser("iss", "sub", "Grace@Example.com", "Grace", "Hopper")
+	if err != nil {
+		t.Fatalf("createOIDCUser: %v", err)
+	}
+	if *user.Email != "grace@example.com" {
+		t.Errorf("stored email = %q, want %q", *user.Email, "grace@example.com")
 	}
 }
 

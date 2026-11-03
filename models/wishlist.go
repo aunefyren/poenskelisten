@@ -23,9 +23,9 @@ type Wishlist struct {
 
 type WishlistCreationRequest struct {
 	GormModel
-	Name         string       `json:"name"`
-	Description  string       `json:"description"`
-	Date         *string      `json:"date"`
+	Name         string       `json:"name" sanitize:"trim,text"`
+	Description  string       `json:"description" sanitize:"trim,text"`
+	Date         *string      `json:"date" sanitize:"trim"`
 	Expires      bool         `json:"expires"`
 	Groups       *[]uuid.UUID `json:"groups"`
 	Claimable    bool         `json:"claimable"`
@@ -35,9 +35,9 @@ type WishlistCreationRequest struct {
 
 type WishlistUpdateRequest struct {
 	GormModel
-	Name         string  `json:"name"`
-	Description  string  `json:"description"`
-	Date         *string `json:"date"`
+	Name         string  `json:"name" sanitize:"trim,text"`
+	Description  string  `json:"description" sanitize:"trim,text"`
+	Date         *string `json:"date" sanitize:"trim"`
 	Expires      bool    `json:"expires"`
 	Claimable    bool    `json:"claimable"`
 	HideClaimers bool    `json:"hide_claimers"`

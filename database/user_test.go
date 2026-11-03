@@ -375,3 +375,39 @@ func TestGenerateRandomResetCodeForUserExpiryWriteFailures(t *testing.T) {
 		}
 	})
 }
+
+func TestEmailLookupsIgnoreCase(t *testing.T) {
+	setupTestDB(t)
+	user := createTestUserWithEmail(t, "Ada@Example.com")
+
+	got, err := GetUserInformationByEmail("ada@example.com")
+	if err != nil || got.ID != user.ID {
+		t.Errorf("GetUserInformationByEmail = (%v, %v), want user %v", got.ID, err, user.ID)
+	}
+	full, err := GetAllUserInformationByEmail("ADA@EXAMPLE.COM")
+	if err != nil || full.ID != user.ID {
+		t.Errorf("GetAllUserInformationByEmail = (%v, %v), want user %v", full.ID, err, user.ID)
+	}
+	if unique, err := VerifyUniqueUserEmail("ada@example.com"); err != nil || unique {
+		t.Errorf("VerifyUniqueUserEmail = (%v, %v), want taken", unique, err)
+	}
+}
+
+// Accounts created before e-mails were lowercased on write can differ only by
+// case. Each must stay reachable by its exact address; an address matching
+// several of them only case-insensitively is ambiguous.
+func TestEmailLookupPrefersExactMatch(t *testing.T) {
+	setupTestDB(t)
+	upper := createTestUserWithEmail(t, "Ada@example.com")
+	lower := createTestUserWithEmail(t, "ada@example.com")
+
+	for email, want := range map[string]uuid.UUID{"Ada@example.com": upper.ID, "ada@example.com": lower.ID} {
+		got, err := GetAllUserInformationByEmail(email)
+		if err != nil || got.ID != want {
+			t.Errorf("GetAllUserInformationByEmail(%q) = (%v, %v), want user %v", email, got.ID, err, want)
+		}
+	}
+	if _, err := GetUserInformationByEmail("ADA@example.com"); !errors.Is(err, ErrUserEmailAmbiguous) {
+		t.Errorf("GetUserInformationByEmail(ambiguous) error = %v, want ErrUserEmailAmbiguous", err)
+	}
+}
