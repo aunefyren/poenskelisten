@@ -147,7 +147,7 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	// Return response
-	context.JSON(http.StatusCreated, gin.H{"message": "User created! Redirecting to login..."})
+	context.JSON(http.StatusCreated, gin.H{"message": "User created!"})
 }
 
 // APICurrentUser returns the authenticated user's basic profile, in the shape the

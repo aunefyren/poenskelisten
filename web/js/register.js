@@ -139,10 +139,10 @@ function send_registration() {
 
             } else {
 
-                success(result.message);
+                success(result.message + " Redirecting to login...");
                 window.setTimeout(function () {
-                    navigateTo("/login")
-                }, 1500)
+                    navigateTo("/login");
+                }, 1500);
                 clear_data();
                 disable_register_button();
 
