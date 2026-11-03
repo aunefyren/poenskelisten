@@ -17,8 +17,10 @@ import (
 
 var (
 	poenskelistenVersionParameter = "{{RELEASE_TAG}}"
-	configFilePath, _             = filepath.Abs("./files/config.json")
-	ConfigFile                    = models.ConfigStruct{}
+	// Relative to the working directory at use, like the log file and the
+	// default SQLite location, so a test that changes directory moves all three.
+	configFilePath = filepath.Join("files", "config.json")
+	ConfigFile     = models.ConfigStruct{}
 )
 
 func LoadConfig() (err error) {
