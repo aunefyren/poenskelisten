@@ -12,7 +12,7 @@ on:
         type: string
         required: true
       version:
-        description: Replaces the {{RELEASE_TAG}} placeholder in config/config.go.
+        description: The in-app version, passed to the Dockerfile as the VERSION build arg.
         type: string
         required: true
       tags:
@@ -105,11 +105,6 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Replace version variable
-      env:
-        VERSION: ${{ inputs.version }}
-      run: sed -i "s/{{RELEASE_TAG}}/${VERSION}/g" config/config.go
-
     - name: Build and push
       uses: docker/build-push-action@v7
       with:
@@ -120,6 +115,8 @@ jobs:
         context: .
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
+        build-args: |
+          VERSION=${{ inputs.version }}
         # Layer cache (mainly the `go mod download` layer) shared by beta and
         # release builds; tag runs can read caches saved from the default branch.
         cache-from: type=gha,scope=docker-image
