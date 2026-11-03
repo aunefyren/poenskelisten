@@ -16,7 +16,6 @@ import (
 )
 
 var (
-	poenskelistenVersionParameter = "{{RELEASE_TAG}}"
 	// Relative to the working directory at use, like the log file and the
 	// default SQLite location, so a test that changes directory moves all three.
 	configFilePath = filepath.Join("files", "config.json")
@@ -92,9 +91,8 @@ func LoadConfig() (err error) {
 		anythingChanged = true
 	}
 
-	if ConfigFile.PoenskelistenVersion == "" || ConfigFile.PoenskelistenVersion != poenskelistenVersionParameter {
-		// Set new value
-		ConfigFile.PoenskelistenVersion = poenskelistenVersionParameter
+	if resolved := resolveVersion(); ConfigFile.PoenskelistenVersion != resolved {
+		ConfigFile.PoenskelistenVersion = resolved
 		anythingChanged = true
 	}
 
@@ -215,7 +213,7 @@ func CreateConfigFile() error {
 	ConfigFile.DBType = "sqlite"
 	ConfigFile.DBLocation = "files/data.db"
 	ConfigFile.SMTPEnabled = false
-	ConfigFile.PoenskelistenVersion = poenskelistenVersionParameter
+	ConfigFile.PoenskelistenVersion = resolveVersion()
 	ConfigFile.PoenskelistenCurrencyLeft = true
 
 	privateKey, err := GenerateSecureKey(64)
