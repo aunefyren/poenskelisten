@@ -9,6 +9,7 @@ import (
 	"aunefyren/poenskelisten/models"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -1150,6 +1151,199 @@ func TestInitRouterTrustsForwardedForOnlyFromTrustedProxies(t *testing.T) {
 			}
 			if limitedAt != c.wantLimitedAt {
 				t.Errorf("first 429 at request %d, want %d", limitedAt, c.wantLimitedAt)
+			}
+		})
+	}
+}
+
+// setupRunDir runs the test in a fresh working directory, so run's files/
+// directory (config, log, SQLite database) lands there, with the repository's
+// web/ linked in for initRouter. It restores every global run replaces.
+func setupRunDir(t *testing.T) string {
+	t.Helper()
+	webDir, err := filepath.Abs("web")
+	if err != nil {
+		t.Fatalf("failed to resolve web directory: %v", err)
+	}
+	dir := t.TempDir()
+	if err := os.Symlink(webDir, filepath.Join(dir, "web")); err != nil {
+		t.Fatalf("failed to link web directory: %v", err)
+	}
+	t.Chdir(dir)
+
+	origConfig, origInstance, origLog, origLocal := config.ConfigFile, database.Instance, logger.Log, time.Local
+	t.Cleanup(func() {
+		if database.Instance != nil && database.Instance != origInstance {
+			if sqlDB, err := database.Instance.DB(); err == nil {
+				sqlDB.Close()
+			}
+		}
+		config.ConfigFile, database.Instance, logger.Log, time.Local = origConfig, origInstance, origLog, origLocal
+	})
+	return dir
+}
+
+// readSavedConfig decodes files/config.json in the working directory.
+func readSavedConfig(t *testing.T) models.ConfigStruct {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("files", "config.json"))
+	if err != nil {
+		t.Fatalf("failed to read config.json: %v", err)
+	}
+	var saved models.ConfigStruct
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatalf("failed to parse config.json: %v", err)
+	}
+	return saved
+}
+
+// TestRunFirstStartServesFrontend is a first start in an empty directory: run
+// creates the config, log and SQLite database, then hands serve a router that
+// renders the frontend.
+func TestRunFirstStartServesFrontend(t *testing.T) {
+	setupRunDir(t)
+	withArgs(t)
+
+	var address string
+	var status int
+	err := run(func(router *gin.Engine, addr string) error {
+		address = addr
+		status = serve(router, http.MethodGet, "/").Code
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+	if address != ":8080" {
+		t.Errorf("serve address = %q, want :8080", address)
+	}
+	if status != http.StatusOK {
+		t.Errorf("GET / = %d, want 200", status)
+	}
+	for _, name := range []string{"config.json", "poenskelisten.log", "data.db"} {
+		if _, err := os.Stat(filepath.Join("files", name)); err != nil {
+			t.Errorf("files/%s not created: %v", name, err)
+		}
+	}
+	if !database.Instance.Migrator().HasTable(&models.User{}) {
+		t.Error("database was not migrated")
+	}
+}
+
+// TestRunPersistsFlagsAndGeneratesInvite checks that a configuration flag is
+// saved to config.json and that -generateinvite adds an invite.
+func TestRunPersistsFlagsAndGeneratesInvite(t *testing.T) {
+	setupRunDir(t)
+	withArgs(t, "-port", "9123", "-generateinvite", "true")
+
+	var address string
+	err := run(func(router *gin.Engine, addr string) error {
+		address = addr
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+	if address != ":9123" {
+		t.Errorf("serve address = %q, want :9123", address)
+	}
+	if port := readSavedConfig(t).PoenskelistenPort; port != 9123 {
+		t.Errorf("saved port = %d, want 9123", port)
+	}
+	var invites int64
+	if err := database.Instance.Model(&models.Invite{}).Count(&invites).Error; err != nil {
+		t.Fatalf("failed to count invites: %v", err)
+	}
+	if invites != 1 {
+		t.Errorf("invites = %d, want 1", invites)
+	}
+}
+
+// TestRunUnknownTimezoneFallsBackToParis checks that an unloadable time zone
+// is replaced in the saved config rather than stopping startup.
+func TestRunUnknownTimezoneFallsBackToParis(t *testing.T) {
+	setupRunDir(t)
+	withArgs(t, "-timezone", "Not/AZone")
+
+	if err := run(func(*gin.Engine, string) error { return nil }); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+	if tz := readSavedConfig(t).Timezone; tz != "Europe/Paris" {
+		t.Errorf("saved timezone = %q, want Europe/Paris", tz)
+	}
+}
+
+// TestRunReturnsServeError checks that a server failure comes back from run
+// (main exits non-zero on it) instead of being swallowed.
+func TestRunReturnsServeError(t *testing.T) {
+	setupRunDir(t)
+	withArgs(t)
+
+	serveErr := fmt.Errorf("address already in use")
+	err := run(func(*gin.Engine, string) error { return serveErr })
+	if !errors.Is(err, serveErr) {
+		t.Errorf("run error = %v, want it to wrap %v", err, serveErr)
+	}
+}
+
+// TestRunStartupFailures covers each step that stops startup.
+func TestRunStartupFailures(t *testing.T) {
+	cases := []struct {
+		name    string
+		prepare func(t *testing.T)
+		args    []string
+		want    string
+	}{
+		{
+			name: "files is not a directory",
+			prepare: func(t *testing.T) {
+				if err := os.WriteFile("files", nil, 0600); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: "failed to create 'files' directory",
+		},
+		{
+			name: "config is not JSON",
+			prepare: func(t *testing.T) {
+				if err := os.Mkdir("files", 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join("files", "config.json"), []byte("{"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: "failed to load configuration file",
+		},
+		{
+			name: "invalid flag",
+			args: []string{"-additionalurls", "not a url"},
+			want: "failed to parse input flags",
+		},
+		{
+			name: "unknown database type",
+			args: []string{"-dbtype", "oracle"},
+			want: "failed to connect to database",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			setupRunDir(t)
+			withArgs(t, tc.args...)
+			if tc.prepare != nil {
+				tc.prepare(t)
+			}
+
+			served := false
+			err := run(func(*gin.Engine, string) error {
+				served = true
+				return nil
+			})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("run error = %v, want it to contain %q", err, tc.want)
+			}
+			if served {
+				t.Error("serve was called despite the startup failure")
 			}
 		})
 	}

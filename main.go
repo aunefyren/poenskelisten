@@ -15,7 +15,6 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -36,20 +35,40 @@ func main() {
 	utilities.PrintASCII()
 	gin.SetMode(gin.ReleaseMode)
 
+	if err := run(serveRouter); err != nil {
+		// The logger only exists once the config has loaded, so earlier
+		// failures go to stdout.
+		if logger.Log != nil {
+			logger.Log.Error(err.Error())
+		} else {
+			fmt.Println(err.Error())
+		}
+		os.Exit(1)
+	}
+}
+
+// serveRouter is how run serves in production; it blocks until the server
+// fails.
+func serveRouter(router *gin.Engine, address string) error {
+	return router.Run(address)
+}
+
+// run starts Pønskelisten: config, logger, flags, database, startup actions,
+// then serve with the router. It is separate from main so tests can drive the
+// whole startup with a serve that returns instead of blocking.
+func run(serve func(router *gin.Engine, address string) error) error {
 	// Create files directory
 	newPath := filepath.Join(".", "files")
 	err := os.MkdirAll(newPath, os.ModePerm)
 	if err != nil {
-		fmt.Println("failed to create 'files' directory. error: " + err.Error())
-		os.Exit(1)
+		return fmt.Errorf("failed to create 'files' directory. error: %w", err)
 	}
 	fmt.Println("directory 'files' valid")
 
 	// Load config file
 	err = config.LoadConfig()
 	if err != nil {
-		fmt.Println("failed to load configuration file. error: " + err.Error())
-		os.Exit(1)
+		return fmt.Errorf("failed to load configuration file. error: %w", err)
 	}
 	fmt.Println("configuration file loaded")
 
@@ -63,8 +82,7 @@ func main() {
 	flagsProvided := false
 	config.ConfigFile, actions, flagsProvided, err = parseFlags(config.ConfigFile)
 	if err != nil {
-		logger.Log.Error("failed to parse input flags. error: " + err.Error())
-		os.Exit(1)
+		return fmt.Errorf("failed to parse input flags. error: %w", err)
 	}
 	logger.Log.Info("flags parsed")
 
@@ -90,8 +108,7 @@ func main() {
 	if flagsProvided {
 		err = config.SaveConfig()
 		if err != nil {
-			logger.Log.Error("failed to save new config. error: " + err.Error())
-			os.Exit(1)
+			return fmt.Errorf("failed to save new config. error: %w", err)
 		}
 	}
 
@@ -104,8 +121,7 @@ func main() {
 		config.ConfigFile.Timezone = "Europe/Paris"
 		err = config.SaveConfig()
 		if err != nil {
-			logger.Log.Error("failed to set new time zone in the config. error: " + err.Error())
-			os.Exit(1)
+			return fmt.Errorf("failed to set new time zone in the config. error: %w", err)
 		}
 
 	} else {
@@ -118,8 +134,7 @@ func main() {
 
 	err = database.Connect(config.ConfigFile.DBType, config.ConfigFile.Timezone, config.ConfigFile.DBUsername, config.ConfigFile.DBPassword, config.ConfigFile.DBIP, config.ConfigFile.DBPort, config.ConfigFile.DBName, config.ConfigFile.DBSSL, config.ConfigFile.DBLocation)
 	if err != nil {
-		logger.Log.Error("failed to connect to database. error: " + err.Error())
-		os.Exit(1)
+		return fmt.Errorf("failed to connect to database. error: %w", err)
 	}
 	database.Migrate()
 	logger.Log.Info("database connected")
@@ -127,8 +142,7 @@ func main() {
 	if actions.generateInvite {
 		invite, err := database.GenerateRandomInvite()
 		if err != nil {
-			logger.Log.Error("failed to generate random invitation code. error: " + err.Error())
-			os.Exit(1)
+			return fmt.Errorf("failed to generate random invitation code. error: %w", err)
 		}
 		logger.Log.Info("generated new invite code. code: " + invite)
 	}
@@ -138,7 +152,10 @@ func main() {
 	// Initialize Router
 	router := initRouter(config.ConfigFile)
 	logger.Log.Info("router initialized. starting Pønskelisten at http://*:" + strconv.Itoa(config.ConfigFile.PoenskelistenPort))
-	log.Fatal(router.Run(":" + strconv.Itoa(config.ConfigFile.PoenskelistenPort)))
+	if err := serve(router, ":"+strconv.Itoa(config.ConfigFile.PoenskelistenPort)); err != nil {
+		return fmt.Errorf("failed to serve. error: %w", err)
+	}
+	return nil
 }
 
 func initRouter(configFile models.ConfigStruct) *gin.Engine {
