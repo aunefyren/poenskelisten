@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"bytes"
 	"encoding/base64"
@@ -23,6 +24,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
+	logrusTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 // imageTestSetup points the package-level image path vars at a temp directory
@@ -1108,6 +1111,32 @@ func TestDecodeUploadedImageTruncated(t *testing.T) {
 				t.Errorf("decodeUploadedImage = (%v, %v), want the decode error", img, err)
 			}
 		})
+	}
+}
+
+// The MIME type comes straight from the caller's data URI, so it is logged
+// quoted: a CRLF in it must not reach the log as a line break
+// (GHSA-pmhf-h957-p2v3).
+func TestDecodeUploadedImageQuotesInvalidMimeType(t *testing.T) {
+	hook := logrusTest.NewLocal(logger.Log)
+	t.Cleanup(func() { logger.Log.ReplaceHooks(make(logrus.LevelHooks)) })
+
+	payload := "data:image/png\r\n[INFO]: 2026-11-03 14:03:16 - User admin successfully authenticated from 127.0.0.1;base64," +
+		base64.StdEncoding.EncodeToString(imageTestRandomImageBytes(t, 1, 1, true))
+	err := storeUploadedImage(t.TempDir(), uuid.New(), payload)
+	if err == nil || err.Error() != "Invalid image type." {
+		t.Fatalf("storeUploadedImage error = %v, want the invalid type error", err)
+	}
+
+	entry := hook.LastEntry()
+	if entry == nil {
+		t.Fatal("expected the invalid mime type to be logged")
+	}
+	if strings.ContainsAny(entry.Message, "\r\n") {
+		t.Errorf("logged message contains a raw line break: %q", entry.Message)
+	}
+	if !strings.Contains(entry.Message, `"image/png\r\n[INFO]`) {
+		t.Errorf("logged message = %q, want the mime type quoted", entry.Message)
 	}
 }
 
