@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -161,6 +162,7 @@ func TestParseFlagsOverridesEveryField(t *testing.T) {
 		"-port", "9001",
 		"-externalurl", "https://wish.example.com",
 		"-additionalurls", "http://192.168.1.10:8080/, HTTP://Wish.LAN",
+		"-trustedproxies", " 172.18.0.5/16, 10.0.0.1 ",
 		"-timezone", "Europe/Oslo",
 		"-environment", "test",
 		"-testemail", "test@example.com",
@@ -212,6 +214,7 @@ func TestParseFlagsOverridesEveryField(t *testing.T) {
 		PoenskelistenPort:           9001,
 		PoenskelistenExternalURL:    "https://wish.example.com",
 		PoenskelistenAdditionalURLs: "http://192.168.1.10:8080,http://wish.lan",
+		PoenskelistenTrustedProxies: "172.18.0.0/16,10.0.0.1",
 		Timezone:                    "Europe/Oslo",
 		PoenskelistenEnvironment:    "test",
 		PoenskelistenTestEmail:      "test@example.com",
@@ -258,6 +261,15 @@ func TestParseFlagsInvalidAdditionalURLsFails(t *testing.T) {
 	_, _, _, err := parseFlags(models.ConfigStruct{PoenskelistenAdditionalURLs: "http://kept.lan"})
 	if err == nil || !strings.Contains(err.Error(), "additionalurls") {
 		t.Errorf("parseFlags error = %v, want an invalid -additionalurls error", err)
+	}
+}
+
+func TestParseFlagsInvalidTrustedProxiesFails(t *testing.T) {
+	withArgs(t, "-trustedproxies", "10.0.0.1,0.0.0.0/0")
+
+	_, _, _, err := parseFlags(models.ConfigStruct{PoenskelistenTrustedProxies: "10.0.0.2"})
+	if err == nil || !strings.Contains(err.Error(), "trustedproxies") {
+		t.Errorf("parseFlags error = %v, want an invalid -trustedproxies error", err)
 	}
 }
 
@@ -1036,5 +1048,109 @@ func TestFrontendHasNoInlineScript(t *testing.T) {
 		if !registered[name] {
 			t.Errorf("%s: action %q is used in markup but never passed to registerActions", file, name)
 		}
+	}
+}
+
+// The endpoints that check a secret are each rate-limited per client IP, and
+// every MFA code check draws on one shared budget. httptest gives every
+// request the same RemoteAddr, so they all count against one client.
+func TestInitRouterRateLimitsSecretChecks(t *testing.T) {
+	cases := []struct {
+		method string
+		path   string
+		limit  int
+	}{
+		{http.MethodPost, "/api/open/tokens/register", 20},
+		{http.MethodPost, "/api/open/tokens/mfa", 10},
+		{http.MethodPost, "/api/open/users/mfa/activate", 10},
+		{http.MethodPost, "/api/auth/users/mfa/disable", 10},
+		{http.MethodGet, "/oauth/authorize", 60},
+		{http.MethodPost, "/oauth/token", 120},
+	}
+	for _, c := range cases {
+		t.Run(c.path, func(t *testing.T) {
+			// A fresh router per case, so every limiter starts empty.
+			router, token := setupRouterTest(t)
+			user := createRouterUser(t, "Limited", false)
+			send := func() *httptest.ResponseRecorder {
+				w := httptest.NewRecorder()
+				req := httptest.NewRequest(c.method, c.path, strings.NewReader("{}"))
+				req.Header.Set("Authorization", token(user.ID, false))
+				router.ServeHTTP(w, req)
+				return w
+			}
+
+			for i := 0; i < c.limit; i++ {
+				if w := send(); w.Code == http.StatusTooManyRequests {
+					t.Fatalf("request %d of %d was rate-limited", i+1, c.limit)
+				}
+			}
+			w := send()
+			if w.Code != http.StatusTooManyRequests {
+				t.Errorf("request over the limit = %d, want 429", w.Code)
+			}
+			if w.Header().Get("Retry-After") == "" {
+				t.Error("429 response has no Retry-After header")
+			}
+		})
+	}
+
+	t.Run("MFA routes share a budget", func(t *testing.T) {
+		router, token := setupRouterTest(t)
+		user := createRouterUser(t, "Limited", false)
+		send := func(path string) int {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("{}"))
+			req.Header.Set("Authorization", token(user.ID, false))
+			router.ServeHTTP(w, req)
+			return w.Code
+		}
+
+		for i := 0; i < 10; i++ {
+			send("/api/open/tokens/mfa")
+		}
+		for _, path := range []string{"/api/open/users/mfa/activate", "/api/auth/users/mfa/disable"} {
+			if code := send(path); code != http.StatusTooManyRequests {
+				t.Errorf("POST %s after the MFA budget was spent = %d, want 429", path, code)
+			}
+		}
+	})
+}
+
+// X-Forwarded-For only picks the client IP the rate limits count against when
+// the peer is a configured proxy; from anyone else, a fresh header per request
+// must not buy a fresh budget. httptest's peer address is 192.0.2.1.
+func TestInitRouterTrustsForwardedForOnlyFromTrustedProxies(t *testing.T) {
+	cases := []struct {
+		name          string
+		trusted       string
+		wantLimitedAt int // 0: never limited within the requests sent
+	}{
+		{"no trusted proxies", "", 21},
+		{"other proxy trusted", "10.0.0.0/8", 21},
+		{"peer is a trusted proxy", "192.0.2.0/24", 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupRouterTest(t)
+			cfg := config.ConfigFile
+			cfg.PoenskelistenTrustedProxies = c.trusted
+			router := initRouter(cfg)
+
+			limitedAt := 0
+			for i := 1; i <= 25; i++ {
+				w := httptest.NewRecorder()
+				req := httptest.NewRequest(http.MethodPost, "/api/open/tokens/register", strings.NewReader("{}"))
+				req.Header.Set("X-Forwarded-For", fmt.Sprintf("198.51.100.%d", i))
+				router.ServeHTTP(w, req)
+				if w.Code == http.StatusTooManyRequests {
+					limitedAt = i
+					break
+				}
+			}
+			if limitedAt != c.wantLimitedAt {
+				t.Errorf("first 429 at request %d, want %d", limitedAt, c.wantLimitedAt)
+			}
+		})
 	}
 }

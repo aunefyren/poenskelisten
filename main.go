@@ -72,6 +72,9 @@ func main() {
 		logger.Log.Warn("ignoring invalid entry in poenskelisten_additional_urls: " + err.Error())
 	}
 	logger.Log.Info("login allowed from: " + strings.Join(config.AllowedOrigins(), ", "))
+	if _, err := config.ParseTrustedProxies(config.ConfigFile.PoenskelistenTrustedProxies); err != nil {
+		logger.Log.Warn("ignoring invalid entry in poenskelisten_trusted_proxies: " + err.Error())
+	}
 	if strings.TrimSpace(config.ConfigFile.PoenskelistenExternalURL) == "" {
 		logger.Log.Warn("externalurl is not set, so " + config.OAuthIssuer() + " is used for links, single sign-on and as the main login address. Set externalurl to the address users open Pønskelisten on, and additionalurls for any others.")
 	}
@@ -140,6 +143,14 @@ func main() {
 
 func initRouter(configFile models.ConfigStruct) *gin.Engine {
 	router := gin.Default()
+	// Gin trusts X-Forwarded-For from every peer by default, which would let any
+	// client choose its own IP and dodge the per-IP rate limits. Only the
+	// configured reverse proxies may vouch for a client's address.
+	if err := router.SetTrustedProxies(config.ValidTrustedProxies(configFile.PoenskelistenTrustedProxies)); err != nil {
+		logger.Log.Error("failed to set trusted proxies, trusting none. error: " + err.Error())
+		_ = router.SetTrustedProxies(nil)
+	}
+	router.Use(middlewares.WarnUntrustedProxyHeaders())
 	router.Use(middlewares.SecurityHeaders())
 	// Routes whose JSON body can carry a base64 image get a raised limit.
 	router.Use(middlewares.MaxBodySize(middlewares.DefaultMaxBodyBytes, map[string]int64{
@@ -147,6 +158,13 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 		"/api/auth/wishes/:wish_id": middlewares.ImageUploadMaxBodyBytes,
 		"/api/auth/users/update":    middlewares.ImageUploadMaxBodyBytes,
 	}))
+
+	// Per-IP limits on the endpoints that check a secret. A household behind one
+	// NAT shares a budget, so they're sized for typos, not for a single user.
+	// The MFA routes share one limiter: they all check a TOTP or recovery code,
+	// and separate budgets would multiply the guesses an attacker gets.
+	passwordLoginLimit := middlewares.RateLimitAPI(20, 15*time.Minute)
+	mfaCodeLimit := middlewares.RateLimitAPI(10, 15*time.Minute)
 
 	// API endpoint
 	api := router.Group("/api")
@@ -156,7 +174,7 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 			// Password-based entry points; all refused when local login is
 			// disabled (OIDC-only), see middlewares.RequireLocalLogin.
 			localLogin := middlewares.RequireLocalLogin()
-			open.POST("/tokens/register", localLogin, controllers.GenerateToken)
+			open.POST("/tokens/register", passwordLoginLimit, localLogin, controllers.GenerateToken)
 
 			open.POST("/users", localLogin, controllers.RegisterUser)
 			open.POST("/users/reset", localLogin, controllers.APIResetPassword)
@@ -168,9 +186,9 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 			// MFA enrollment is reachable during the login gate (SSO-authed), so it
 			// lives under /open: a user forced to enroll has no access token yet.
 			open.POST("/users/mfa/enroll", controllers.APIEnrollMFA)
-			open.POST("/users/mfa/activate", controllers.APIActivateMFA)
+			open.POST("/users/mfa/activate", mfaCodeLimit, controllers.APIActivateMFA)
 
-			open.POST("/tokens/mfa", localLogin, controllers.APIValidateMFA)
+			open.POST("/tokens/mfa", mfaCodeLimit, localLogin, controllers.APIValidateMFA)
 
 			open.GET("/oidc/config", controllers.APIGetOIDCConfig)
 			open.GET("/oidc/login", controllers.OIDCLogin)
@@ -233,7 +251,7 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 			auth.GET("/users", controllers.GetUsers)
 			auth.POST("/users/update", controllers.UpdateUser)
 
-			auth.POST("/users/mfa/disable", controllers.APIDisableMFA)
+			auth.POST("/users/mfa/disable", mfaCodeLimit, controllers.APIDisableMFA)
 		}
 
 		admin := api.Group("/admin").Use(middlewares.Auth(true))
@@ -334,10 +352,12 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 	router.GET("/.well-known/oauth-protected-resource", controllers.APIOAuthProtectedResourceMetadata)
 	router.GET("/.well-known/jwks.json", controllers.APIOAuthJWKS)
 
-	// OAuth 2.1 authorization server endpoints (also outside /api).
-	router.GET("/oauth/authorize", controllers.APIOAuthAuthorize)
+	// OAuth 2.1 authorization server endpoints (also outside /api). The web
+	// client hits /oauth/token on every page load to roll its access token, so
+	// its limit is generous; it is there to cap abuse, not to slow guessing.
+	router.GET("/oauth/authorize", middlewares.RateLimit(60, time.Minute), controllers.APIOAuthAuthorize)
 	router.POST("/oauth/consent", controllers.APIOAuthConsent)
-	router.POST("/oauth/token", controllers.APIOAuthToken)
+	router.POST("/oauth/token", middlewares.RateLimit(120, time.Minute), controllers.APIOAuthToken)
 	router.POST("/oauth/revoke", controllers.APIOAuthRevoke)
 	// Open dynamic client registration (RFC 7591), rate-limited per IP.
 	router.POST("/oauth/register", middlewares.RateLimit(10, time.Hour), controllers.APIOAuthRegister)
@@ -426,6 +446,7 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, startupAct
 	var port = flag.Int("port", configFile.PoenskelistenPort, "The port Pønskelisten is listening on.")
 	var externalURL = flag.String("externalurl", configFile.PoenskelistenExternalURL, "The URL others would use to access Pønskelisten.")
 	var additionalURLs = flag.String("additionalurls", configFile.PoenskelistenAdditionalURLs, "Comma-separated extra URLs Pønskelisten can be logged in from, e.g. a LAN address.")
+	var trustedProxies = flag.String("trustedproxies", configFile.PoenskelistenTrustedProxies, "Comma-separated IP addresses or CIDR ranges of reverse proxies whose X-Forwarded-For header is trusted.")
 	var timezone = flag.String("timezone", configFile.Timezone, "The timezone Pønskelisten is running in.")
 	var environment = flag.String("environment", configFile.PoenskelistenEnvironment, "The environment Pønskelisten is running in. It will behave differently in 'test'.")
 	var testemail = flag.String("testemail", configFile.PoenskelistenTestEmail, "The email all emails are sent to in test mode.")
@@ -509,6 +530,14 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, startupAct
 			return configFile, actions, flagsProvided, errors.New("invalid -additionalurls value: " + err.Error())
 		}
 		configFile.PoenskelistenAdditionalURLs = strings.Join(origins, ",")
+	}
+
+	if provided["trustedproxies"] {
+		proxies, err := config.ParseTrustedProxies(*trustedProxies)
+		if err != nil {
+			return configFile, actions, flagsProvided, errors.New("invalid -trustedproxies value: " + err.Error())
+		}
+		configFile.PoenskelistenTrustedProxies = strings.Join(proxies, ",")
 	}
 
 	if provided["timezone"] {
