@@ -1882,3 +1882,92 @@ func TestAPIDeleteUserImageCleanupFailureIsNotFatal(t *testing.T) {
 		t.Error("expected the deleted user to be disabled")
 	}
 }
+
+func TestRegisterUserSanitizesInput(t *testing.T) {
+	setupControllersDB(t)
+	invite := createTestInvite(t)
+
+	body := fmt.Sprintf(`{"first_name":"  ada ","last_name":" lovelace","email":"  Ada@Example.COM ","password":"Sup3rSecret!","password_repeat":"Sup3rSecret!","invite_code":" %s "}`, invite.Code)
+	code, resp, _ := doRequest(RegisterUser, "POST", "/api/open/users/register", body, nil, nil)
+	if code != 201 {
+		t.Fatalf("status = %d, want 201; body=%v", code, resp)
+	}
+
+	user, err := database.GetAllUserInformationByEmail("ada@example.com")
+	if err != nil {
+		t.Fatalf("failed to look up created user: %v", err)
+	}
+	if user.FirstName != "Ada" || user.LastName != "Lovelace" || *user.Email != "ada@example.com" {
+		t.Errorf("stored (%q, %q, %q), want (\"Ada\", \"Lovelace\", \"ada@example.com\")", user.FirstName, user.LastName, *user.Email)
+	}
+}
+
+func TestRegisterUserRejectsEmailDifferingOnlyByCase(t *testing.T) {
+	setupControllersDB(t)
+	existing := setUserEmail(t, createTestUser(t), "Ada@Example.com")
+	invite := createTestInvite(t)
+
+	body := fmt.Sprintf(`{"first_name":"Ada","last_name":"Lovelace","email":"ada@example.com","password":"Sup3rSecret!","password_repeat":"Sup3rSecret!","invite_code":"%s"}`, invite.Code)
+	code, resp, _ := doRequest(RegisterUser, "POST", "/api/open/users/register", body, nil, nil)
+	if code != 400 {
+		t.Fatalf("status = %d, want 400 for an address %q already holds in another case; body=%v", code, *existing.Email, resp)
+	}
+}
+
+// An account registered before e-mails were lowercased gets its own address
+// back lowercased from the sanitizer. Saving settings must not count that as
+// an e-mail change, which would collide with the account itself, and the
+// stored capitalisation is kept.
+func TestUpdateUserKeepsLegacyEmailCapitalisation(t *testing.T) {
+	setupControllersDB(t)
+	user := setUserEmail(t, newUserWithPassword(t, "CorrectHorse1!"), "Ada@Example.com")
+
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	body := `{"email":"Ada@Example.com","password_original":"CorrectHorse1!"}`
+	code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil)
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+
+	updated, err := database.GetAllUserInformation(user.ID)
+	if err != nil {
+		t.Fatalf("failed to reload user: %v", err)
+	}
+	if *updated.Email != "Ada@Example.com" {
+		t.Errorf("email = %q, want the stored capitalisation kept", *updated.Email)
+	}
+	if updated.Verified == nil || !*updated.Verified {
+		t.Error("an unchanged e-mail must not unverify the account")
+	}
+}
+
+func TestUpdateUserLowercasesNewEmail(t *testing.T) {
+	setupControllersDB(t)
+	user := newUserWithPassword(t, "CorrectHorse1!")
+
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	body := `{"email":" New-Address@Example.com ","password_original":"CorrectHorse1!"}`
+	if code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil); code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+
+	updated, err := database.GetAllUserInformation(user.ID)
+	if err != nil {
+		t.Fatalf("failed to reload user: %v", err)
+	}
+	if *updated.Email != "new-address@example.com" {
+		t.Errorf("email = %q, want it trimmed and lowercased", *updated.Email)
+	}
+}
+
+// setUserEmail stores email on user exactly as given, the way an account
+// created before e-mails were lowercased on write would hold it.
+func setUserEmail(t *testing.T, user models.User, email string) models.User {
+	t.Helper()
+	user.Email = &email
+	updated, err := database.UpdateUserInDB(user)
+	if err != nil {
+		t.Fatalf("failed to set e-mail: %v", err)
+	}
+	return updated
+}

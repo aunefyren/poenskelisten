@@ -311,3 +311,33 @@ func TestAdminListOAuthClientsDatabaseError(t *testing.T) {
 		t.Errorf("status = %d body=%v, want 500 'Failed to list clients.'", status, body)
 	}
 }
+
+func TestOAuthRegisterSanitizesMetadata(t *testing.T) {
+	setupControllersDB(t)
+	enableRegistration(t)
+
+	code, body := postRegister(`{"redirect_uris":[" https://client.example/cb "],"client_name":"  Test MCP ","scope":"   "}`)
+	if code != 201 {
+		t.Fatalf("status = %d, want 201; body=%v", code, body)
+	}
+	if body["client_name"] != "Test MCP" {
+		t.Errorf("client_name = %q, want it trimmed", body["client_name"])
+	}
+	if uris, _ := body["redirect_uris"].([]interface{}); len(uris) != 1 || uris[0] != "https://client.example/cb" {
+		t.Errorf("redirect_uris = %v, want the URI trimmed", body["redirect_uris"])
+	}
+	if scope, _ := body["scope"].(string); !strings.Contains(scope, "openid") {
+		t.Errorf("scope = %q, want a whitespace-only scope to default to every known scope", scope)
+	}
+}
+
+// client_name is shown to users on the consent screen, so markup in it is refused.
+func TestOAuthRegisterRejectsMarkupInClientName(t *testing.T) {
+	setupControllersDB(t)
+	enableRegistration(t)
+
+	code, body := postRegister(`{"redirect_uris":["https://client.example/cb"],"client_name":"<script>alert(1)</script>"}`)
+	if code != http.StatusBadRequest || body["error"] != "invalid_client_metadata" {
+		t.Errorf("got %d %v, want 400 invalid_client_metadata", code, body)
+	}
+}

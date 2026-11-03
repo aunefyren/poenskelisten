@@ -25,12 +25,10 @@ func RegisterWishlist(context *gin.Context) {
 	var wishlistdb models.Wishlist
 	var now = time.Now()
 
-	if err := context.ShouldBindJSON(&wishlist); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &wishlist) {
 		return
-	} else if wishlist.Groups != nil && utilities.HasNilID(*wishlist.Groups...) {
+	}
+	if wishlist.Groups != nil && utilities.HasNilID(*wishlist.Groups...) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -45,8 +43,6 @@ func RegisterWishlist(context *gin.Context) {
 	}
 
 	// Trim request input
-	wishlist.Name = strings.TrimSpace(wishlist.Name)
-	wishlist.Description = strings.TrimSpace(wishlist.Description)
 
 	// Get user ID
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
@@ -75,24 +71,6 @@ func RegisterWishlist(context *gin.Context) {
 
 	if len(wishlist.Name) < 5 || wishlist.Name == "" {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The name of the wishlist must be five or more letters."})
-		context.Abort()
-		return
-	}
-
-	// Validate wishlist name format
-	stringMatch, requirements := utilities.ValidateTextCharacters(wishlist.Name)
-	if !stringMatch {
-		logger.Log.Error("Wishlist name text string failed validation.")
-		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-		context.Abort()
-		return
-	}
-
-	// Validate wishlist description format
-	stringMatch, requirements = utilities.ValidateTextCharacters(wishlist.Description)
-	if !stringMatch {
-		logger.Log.Error("description name text string failed validation.")
-		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
 	}
@@ -633,12 +611,10 @@ func JoinWishlist(context *gin.Context) {
 	var wishlist_id = context.Param("wishlist_id")
 	var wishlistmembership models.WishlistMembershipCreationRequest
 
-	if err := context.ShouldBindJSON(&wishlistmembership); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &wishlistmembership) {
 		return
-	} else if utilities.HasNilID(wishlistmembership.Groups...) {
+	}
+	if utilities.HasNilID(wishlistmembership.Groups...) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -744,12 +720,10 @@ func RemoveFromWishlist(context *gin.Context) {
 	var wishlistObjects = []models.WishlistUser{}
 
 	var wishlistMembershipRequest models.WishlistMembershipDeletionRequest
-	if err := context.ShouldBindJSON(&wishlistMembershipRequest); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &wishlistMembershipRequest) {
 		return
-	} else if utilities.HasNilID(wishlistMembershipRequest.Group) {
+	}
+	if utilities.HasNilID(wishlistMembershipRequest.Group) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -872,16 +846,11 @@ func APIUpdateWishlist(context *gin.Context) {
 	var wishlist_id = context.Param("wishlist_id")
 	var wishlist models.WishlistUpdateRequest
 
-	if err := context.ShouldBindJSON(&wishlist); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &wishlist) {
 		return
 	}
 
 	// Trim request input
-	wishlist.Name = strings.TrimSpace(wishlist.Name)
-	wishlist.Description = strings.TrimSpace(wishlist.Description)
 
 	// Parse group id
 	wishlist_id_int, err := utilities.ParseID(wishlist_id)
@@ -940,15 +909,6 @@ func APIUpdateWishlist(context *gin.Context) {
 			return
 		}
 
-		// Validate wishlist name format
-		stringMatch, requirements := utilities.ValidateTextCharacters(wishlist.Name)
-		if !stringMatch {
-			logger.Log.Error("Wishlist name text string failed validation.")
-			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-			context.Abort()
-			return
-		}
-
 		// Names are unique per owner, and a collaborator edits on the owner's
 		// behalf, so check against the owner's wishlists rather than the caller's.
 		unique_wish_name, err := database.VerifyUniqueWishlistNameForUser(wishlist.Name, wishlistOriginal.OwnerID)
@@ -965,15 +925,6 @@ func APIUpdateWishlist(context *gin.Context) {
 	}
 
 	if wishlistOriginal.Description != wishlist.Description && wishlist.Description != "" {
-
-		// Validate wishlist description format
-		stringMatch, requirements := utilities.ValidateTextCharacters(wishlist.Description)
-		if !stringMatch {
-			logger.Log.Error("Wishlist description text string failed validation.")
-			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-			context.Abort()
-			return
-		}
 
 	}
 
@@ -1172,12 +1123,10 @@ func APICollaborateWishlist(context *gin.Context) {
 	var wishlist_id = context.Param("wishlist_id")
 	var wishlistCollaboratorsRequest models.WishlistCollaboratorCreationRequest
 
-	if err := context.ShouldBindJSON(&wishlistCollaboratorsRequest); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &wishlistCollaboratorsRequest) {
 		return
-	} else if utilities.HasNilID(wishlistCollaboratorsRequest.Users...) {
+	}
+	if utilities.HasNilID(wishlistCollaboratorsRequest.Users...) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -1292,12 +1241,10 @@ func APIUnCollaborateWishlist(context *gin.Context) {
 	// Create groupmembership request
 	var wishlist_id = context.Param("wishlist_id")
 	wishlistCollaboratorRequest := models.WishlistCollaboratorDeletionRequest{}
-	if err := context.ShouldBindJSON(&wishlistCollaboratorRequest); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &wishlistCollaboratorRequest) {
 		return
-	} else if utilities.HasNilID(wishlistCollaboratorRequest.User) {
+	}
+	if utilities.HasNilID(wishlistCollaboratorRequest.User) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return

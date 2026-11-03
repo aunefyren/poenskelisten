@@ -66,45 +66,45 @@ type UserMinimal struct {
 }
 
 type UserCreationRequest struct {
-	FirstName      string `json:"first_name"`
-	LastName       string `json:"last_name"`
-	Email          string `json:"email"`
-	Password       string `json:"password"`
-	PasswordRepeat string `json:"password_repeat"`
-	InviteCode     string `json:"invite_code"`
+	FirstName      string `json:"first_name" sanitize:"trim,capfirst,text"`
+	LastName       string `json:"last_name" sanitize:"trim,capfirst,text"`
+	Email          string `json:"email" sanitize:"trim,lower"`
+	Password       string `json:"password" sanitize:"none"`
+	PasswordRepeat string `json:"password_repeat" sanitize:"none"`
+	InviteCode     string `json:"invite_code" sanitize:"trim"`
 }
 
 type UserUpdateRequest struct {
-	Email            string `json:"email"`
-	Password         string `json:"password"`
-	PasswordRepeat   string `json:"password_repeat"`
-	ProfileImage     string `json:"profile_image"`
-	PasswordOriginal string `json:"password_original"`
+	Email            string `json:"email" sanitize:"trim,lower"`
+	Password         string `json:"password" sanitize:"none"`
+	PasswordRepeat   string `json:"password_repeat" sanitize:"none"`
+	ProfileImage     string `json:"profile_image" sanitize:"none"`
+	PasswordOriginal string `json:"password_original" sanitize:"none"`
 }
 
 type UserUpdatePasswordRequest struct {
-	ResetCode      string `json:"reset_code"`
-	Password       string `json:"password"`
-	PasswordRepeat string `json:"password_repeat"`
+	ResetCode      string `json:"reset_code" sanitize:"trim"`
+	Password       string `json:"password" sanitize:"none"`
+	PasswordRepeat string `json:"password_repeat" sanitize:"none"`
 }
 
 // MFAActivateRequest carries the TOTP code a user enters to confirm enrollment.
 type MFAActivateRequest struct {
-	Code string `json:"code"`
+	Code string `json:"code" sanitize:"trim"`
 }
 
 // MFADisableRequest carries the credentials required to turn MFA off: the current
 // password plus a valid TOTP or recovery code.
 type MFADisableRequest struct {
-	Password string `json:"password"`
-	Code     string `json:"code"`
+	Password string `json:"password" sanitize:"none"`
+	Code     string `json:"code" sanitize:"trim"`
 }
 
 // MFAValidateRequest is the second login step: the challenge token issued after a
 // correct password, plus a TOTP or recovery code.
 type MFAValidateRequest struct {
-	MFAToken string `json:"mfa_token"`
-	Code     string `json:"code"`
+	MFAToken string `json:"mfa_token" sanitize:"trim"`
+	Code     string `json:"code" sanitize:"trim"`
 }
 
 // ServerSettingsRequest is the admin-editable runtime settings payload.

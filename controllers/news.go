@@ -9,7 +9,6 @@ import (
 	"errors"
 	"net/http"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -120,16 +119,9 @@ func RegisterNewsPost(context *gin.Context) {
 	var newsCreationRequest models.NewsCreationRequest
 
 	// Bind the incoming request body to the NewsCreationRequest model
-	if err := context.ShouldBindJSON(&newsCreationRequest); err != nil {
-		// If there is an error binding the request, return a Bad Request response
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &newsCreationRequest) {
 		return
 	}
-
-	newsCreationRequest.Title = strings.TrimSpace(newsCreationRequest.Title)
-	newsCreationRequest.Body = strings.TrimSpace(newsCreationRequest.Body)
 
 	// Copy the data from the NewsCreationRequest model to the News model
 	news.Title = newsCreationRequest.Title
@@ -143,25 +135,9 @@ func RegisterNewsPost(context *gin.Context) {
 		return
 	}
 
-	stringMatch, requirements := utilities.ValidateTextCharacters(news.Title)
-	if !stringMatch {
-		logger.Log.Error("News title text string failed validation.")
-		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-		context.Abort()
-		return
-	}
-
 	if len(news.Body) < 5 || news.Body == "" {
 		// If the News body is not valid, return a Bad Request response
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The body of the news post must be five or more letters."})
-		context.Abort()
-		return
-	}
-
-	stringMatch, requirements = utilities.ValidateTextCharacters(news.Body)
-	if !stringMatch {
-		logger.Log.Error("News body text string failed validation.")
-		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
 	}
@@ -261,11 +237,7 @@ func APIEditNewsPost(context *gin.Context) {
 	var newsUpdateRequest models.NewsUpdateRequest
 
 	// Bind the incoming request body to the NewsCreationRequest model
-	if err := context.ShouldBindJSON(&newsUpdateRequest); err != nil {
-		// If there is an error binding the request, return a Bad Request response
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &newsUpdateRequest) {
 		return
 	}
 
@@ -282,9 +254,6 @@ func APIEditNewsPost(context *gin.Context) {
 		return
 	}
 
-	newsUpdateRequest.Title = strings.TrimSpace(newsUpdateRequest.Title)
-	newsUpdateRequest.Body = strings.TrimSpace(newsUpdateRequest.Body)
-
 	// Copy the data from the NewsCreationRequest model to the News model
 	news.Title = newsUpdateRequest.Title
 	news.Body = newsUpdateRequest.Body
@@ -297,25 +266,9 @@ func APIEditNewsPost(context *gin.Context) {
 		return
 	}
 
-	stringMatch, requirements := utilities.ValidateTextCharacters(news.Title)
-	if !stringMatch {
-		logger.Log.Error("News title text string failed validation.")
-		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-		context.Abort()
-		return
-	}
-
 	if len(news.Body) < 5 || news.Body == "" {
 		// If the News body is not valid, return a Bad Request response
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The body of the news post must be five or more letters."})
-		context.Abort()
-		return
-	}
-
-	stringMatch, requirements = utilities.ValidateTextCharacters(news.Body)
-	if !stringMatch {
-		logger.Log.Error("News body text string failed validation.")
-		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
 	}

@@ -5,6 +5,7 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/oidcprovider"
+	"aunefyren/poenskelisten/utilities"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -141,6 +142,8 @@ func OIDCCallback(ctx *gin.Context) {
 	}
 
 	firstName, lastName := deriveNames(claims.GivenName, claims.FamilyName, claims.Name, claims.Email)
+	// Same normalisation a locally registered name gets from its sanitize tag.
+	firstName, lastName = utilities.CapitalizeFirst(firstName), utilities.CapitalizeFirst(lastName)
 
 	user, err := database.ResolveOIDCUser(
 		idToken.Issuer,

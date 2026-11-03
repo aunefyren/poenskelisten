@@ -24,18 +24,11 @@ func RegisterUser(context *gin.Context) {
 	var userCreationRequest models.UserCreationRequest
 
 	// Parse creation request
-	if err := context.ShouldBindJSON(&userCreationRequest); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &userCreationRequest) {
 		return
 	}
 
 	// Trim request input
-	userCreationRequest.Email = strings.TrimSpace(userCreationRequest.Email)
-	userCreationRequest.FirstName = strings.TrimSpace(userCreationRequest.FirstName)
-	userCreationRequest.LastName = strings.TrimSpace(userCreationRequest.LastName)
-	userCreationRequest.InviteCode = strings.TrimSpace(userCreationRequest.InviteCode)
 
 	// Make sure password match
 	if userCreationRequest.Password != userCreationRequest.PasswordRepeat {
@@ -57,23 +50,7 @@ func RegisterUser(context *gin.Context) {
 	user.Password = &userCreationRequest.Password
 	user.FirstName = userCreationRequest.FirstName
 
-	stringMatch, requirements := utilities.ValidateTextCharacters(user.FirstName)
-	if !stringMatch {
-		logger.Log.Error("First name text string failed validation.")
-		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-		context.Abort()
-		return
-	}
-
 	user.LastName = userCreationRequest.LastName
-
-	stringMatch, requirements = utilities.ValidateTextCharacters(user.LastName)
-	if !stringMatch {
-		logger.Log.Error("Last name text string failed validation.")
-		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-		context.Abort()
-		return
-	}
 
 	var trueVariable = true
 	var now = time.Now()
@@ -497,15 +474,11 @@ func UpdateUser(context *gin.Context) {
 	var err error
 
 	// Parse creation request
-	if err := context.ShouldBindJSON(&userUpdateRequest); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &userUpdateRequest) {
 		return
 	}
 
 	// Trim request input
-	userUpdateRequest.Email = strings.TrimSpace(userUpdateRequest.Email)
 
 	// Get user ID
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
@@ -562,7 +535,11 @@ func UpdateUser(context *gin.Context) {
 
 	// Email changes are only allowed for local accounts; an OIDC account's email
 	// is owned by the identity provider and used for linking, so it is left as-is.
-	if userOriginal.HasPassword() && *userOriginal.Email != userUpdateRequest.Email {
+	// The request's email arrives lowercased, so compare ignoring case: an
+	// account registered before emails were lowercased must be able to save its
+	// settings without that counting as an email change (which would collide
+	// with itself in the uniqueness check). Its stored capitalisation is kept.
+	if userOriginal.HasPassword() && !strings.EqualFold(*userOriginal.Email, userUpdateRequest.Email) {
 
 		// Verify e-mail is not in use
 		unique_email, err := database.VerifyUniqueUserEmail(userUpdateRequest.Email)
@@ -661,6 +638,15 @@ func UpdateUser(context *gin.Context) {
 
 }
 
+// resetRequest is the body of a password reset request. It's declared at
+// package level, not inside APIResetPassword, so the sanitize-tag test can
+// reach it by reflection. The e-mail is trimmed but not lowercased: lookups
+// prefer an exact match, which keeps legacy accounts differing only by case
+// reachable.
+type resetRequest struct {
+	Email string `json:"email" sanitize:"trim"`
+}
+
 func APIResetPassword(context *gin.Context) {
 	if !config.ConfigFile.SMTPEnabled {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The website administrator has not enabled SMTP."})
@@ -674,17 +660,10 @@ func APIResetPassword(context *gin.Context) {
 		return
 	}
 
-	type resetRequest struct {
-		Email string `json:"email"`
-	}
-
 	var resetRequestVar resetRequest
 
 	// Parse reset request
-	if err := context.ShouldBindJSON(&resetRequestVar); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &resetRequestVar) {
 		return
 	}
 
@@ -770,10 +749,7 @@ func APIChangePassword(context *gin.Context) {
 	var userUpdatePasswordRequest models.UserUpdatePasswordRequest
 
 	// Parse creation request
-	if err := context.ShouldBindJSON(&userUpdatePasswordRequest); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &userUpdatePasswordRequest) {
 		return
 	}
 

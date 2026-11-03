@@ -193,11 +193,12 @@ func GenerateRandomVerificationCodeForUser(userID uuid.UUID) (string, error) {
 
 }
 
-// Verify e-mail is not in use
+// Verify e-mail is not in use. Case is ignored, so "Ada@x.com" and
+// "ada@x.com" can't become two accounts.
 func VerifyUniqueUserEmail(providedEmail string) (bool, error) {
 	var user models.User
 	userRecords := Instance.
-		Where("enabled = ? AND email = ?", true, providedEmail).
+		Where("enabled = ? AND LOWER(email) = LOWER(?)", true, providedEmail).
 		Find(&user)
 
 	if userRecords.Error != nil {

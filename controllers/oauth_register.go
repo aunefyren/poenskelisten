@@ -27,8 +27,16 @@ func APIOAuthRegister(ctx *gin.Context) {
 	}
 
 	var request models.OAuthRegisterRequest
+	// Bound directly rather than through bindJSON because RFC 7591 dictates
+	// this endpoint's error format.
 	if err := ctx.ShouldBindJSON(&request); err != nil {
 		registrationError(ctx, "invalid_client_metadata", "Failed to parse registration request.")
+		return
+	}
+	// client_name is chosen by an unauthenticated third party and shown to
+	// users on the consent screen, so it gets the "text" rule.
+	if err := utilities.SanitizeRequest(&request); err != nil {
+		registrationError(ctx, "invalid_client_metadata", "Invalid client metadata: "+err.Error()+".")
 		return
 	}
 
@@ -59,7 +67,7 @@ func APIOAuthRegister(ctx *gin.Context) {
 	// scope: filter to known scopes; default to all scopes when omitted (the user
 	// still consents to the actual scopes at authorization time).
 	scopes := oauth.FilterValid(oauth.Parse(request.Scope))
-	if strings.TrimSpace(request.Scope) == "" {
+	if request.Scope == "" {
 		scopes = oauth.AllNames()
 	}
 
@@ -73,7 +81,7 @@ func APIOAuthRegister(ctx *gin.Context) {
 	enabled := true
 	client := models.OAuthClient{
 		ClientID:                clientID,
-		ClientName:              strings.TrimSpace(request.ClientName),
+		ClientName:              request.ClientName,
 		RedirectURIs:            request.RedirectURIs,
 		Scopes:                  scopes,
 		GrantTypes:              grantTypes,

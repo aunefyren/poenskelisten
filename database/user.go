@@ -17,6 +17,11 @@ import (
 // server fault (500).
 var ErrUserNotFound = errors.New("Failed to find correct user in DB.")
 
+// ErrUserEmailAmbiguous means several accounts match an e-mail address when
+// case is ignored and none matches it exactly (accounts created before e-mail
+// addresses were lowercased on write).
+var ErrUserEmailAmbiguous = errors.New("More than one user matches this e-mail address when ignoring case.")
+
 // ErrInviteCodeUnavailable means the invite code was already used or disabled
 // by the time registration tried to claim it.
 var ErrInviteCodeUnavailable = errors.New("Invite code is not valid.")
@@ -95,18 +100,41 @@ func GetAllUserInformationAnyState(UserID uuid.UUID) (models.User, error) {
 	return user, nil
 }
 
+// findEnabledUserByEmail looks an enabled user up by e-mail, ignoring case:
+// new addresses are stored lowercased, but accounts created before that keep
+// the capitalisation they registered with. If legacy accounts differ only by
+// case, an exact match wins so each can still be reached; with no exact match
+// among several, it returns ErrUserEmailAmbiguous.
+func findEnabledUserByEmail(email string) (models.User, error) {
+	var users []models.User
+
+	userRecords := Instance.
+		Where("enabled = ? AND LOWER(email) = LOWER(?)", true, email).
+		Find(&users)
+
+	if userRecords.Error != nil {
+		return models.User{}, userRecords.Error
+	}
+	for _, user := range users {
+		if user.Email != nil && *user.Email == email {
+			return user, nil
+		}
+	}
+	switch len(users) {
+	case 0:
+		return models.User{}, ErrUserNotFound
+	case 1:
+		return users[0], nil
+	default:
+		return models.User{}, ErrUserEmailAmbiguous
+	}
+}
+
 // Get redacted user information using email
 func GetUserInformationByEmail(email string) (models.User, error) {
-	var user models.User
-
-	userRecord := Instance.
-		Where("enabled = ? AND email = ?", true, email).
-		Find(&user)
-
-	if userRecord.Error != nil {
-		return models.User{}, userRecord.Error
-	} else if userRecord.RowsAffected != 1 {
-		return models.User{}, ErrUserNotFound
+	user, err := findEnabledUserByEmail(email)
+	if err != nil {
+		return models.User{}, err
 	}
 
 	// Redact user information
@@ -117,19 +145,7 @@ func GetUserInformationByEmail(email string) (models.User, error) {
 
 // Get ALL user information using email
 func GetAllUserInformationByEmail(email string) (models.User, error) {
-	var user models.User
-
-	userRecord := Instance.
-		Where("enabled = ? AND email = ?", true, email).
-		Find(&user)
-
-	if userRecord.Error != nil {
-		return models.User{}, userRecord.Error
-	} else if userRecord.RowsAffected != 1 {
-		return models.User{}, ErrUserNotFound
-	}
-
-	return user, nil
+	return findEnabledUserByEmail(email)
 }
 
 // GetAllUserInformationByEmailCaseInsensitive finds an enabled user by e-mail,

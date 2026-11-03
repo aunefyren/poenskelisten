@@ -9,7 +9,6 @@ import (
 	"errors"
 	"net/http"
 	"sort"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -23,21 +22,18 @@ func RegisterGroup(context *gin.Context) {
 	var groupCreationRequest models.GroupCreationRequest
 
 	// Bind the incoming request body to the GroupCreationRequest model
-	if err := context.ShouldBindJSON(&groupCreationRequest); err != nil {
-		// If there is an error binding the request, return a Bad Request response
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &groupCreationRequest) {
 		return
-	} else if utilities.HasNilID(groupCreationRequest.Members...) || utilities.HasNilID(groupCreationRequest.Wishlists...) {
+	}
+	if utilities.HasNilID(groupCreationRequest.Members...) || utilities.HasNilID(groupCreationRequest.Wishlists...) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
 
 	// Copy the trimmed request input to the Group model
-	group.Description = strings.TrimSpace(groupCreationRequest.Description)
-	group.Name = strings.TrimSpace(groupCreationRequest.Name)
+	group.Description = groupCreationRequest.Description
+	group.Name = groupCreationRequest.Name
 	group.ID = uuid.New()
 
 	// Get the user ID from the Authorization header of the request
@@ -57,22 +53,6 @@ func RegisterGroup(context *gin.Context) {
 	if len(group.Name) < 5 || group.Name == "" {
 		// If the group name is not valid, return a Bad Request response
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The name of the group must be five or more letters."})
-		context.Abort()
-		return
-	}
-
-	stringMatch, requirements := utilities.ValidateTextCharacters(group.Name)
-	if !stringMatch {
-		logger.Log.Error("Group name text string failed validation.")
-		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-		context.Abort()
-		return
-	}
-
-	stringMatch, requirements = utilities.ValidateTextCharacters(group.Description)
-	if !stringMatch {
-		logger.Log.Error("Group description text string failed validation.")
-		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
 	}
@@ -165,13 +145,10 @@ func JoinGroup(context *gin.Context) {
 	var groupMembership models.GroupMembershipCreationRequest
 
 	// Bind the incoming request body to the GroupMembershipCreationRequest model
-	if err := context.ShouldBindJSON(&groupMembership); err != nil {
-		// If there is an error binding the request, return a Bad Request response
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &groupMembership) {
 		return
-	} else if utilities.HasNilID(groupMembership.Members...) {
+	}
+	if utilities.HasNilID(groupMembership.Members...) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -298,12 +275,10 @@ func RemoveFromGroup(context *gin.Context) {
 	var groupMembershipRequest models.GroupMembershipRemovalRequest
 
 	groupID := context.Param("group_id")
-	if err := context.ShouldBindJSON(&groupMembershipRequest); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &groupMembershipRequest) {
 		return
-	} else if utilities.HasNilID(groupMembershipRequest.MemberID) {
+	}
+	if utilities.HasNilID(groupMembershipRequest.MemberID) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -829,11 +804,7 @@ func APIUpdateGroup(context *gin.Context) {
 	var groupID = context.Param("group_id")
 
 	// Bind the incoming request body to the GroupCreationRequest model
-	if err := context.ShouldBindJSON(&groupUpdateRequest); err != nil {
-		// If there is an error binding the request, return a Bad Request response
-		logger.Log.Error(("Failed to parse request. Error: " + err.Error()))
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &groupUpdateRequest) {
 		return
 	}
 
@@ -871,8 +842,8 @@ func APIUpdateGroup(context *gin.Context) {
 	}
 
 	// Copy the data from the GroupUpdateRequest model to the Group model
-	group.Description = strings.TrimSpace(groupUpdateRequest.Description)
-	group.Name = strings.TrimSpace(groupUpdateRequest.Name)
+	group.Description = groupUpdateRequest.Description
+	group.Name = groupUpdateRequest.Name
 	group.OwnerID = userID
 
 	groupOriginal, err := database.GetGroupInformation(groupIDInt)
@@ -893,14 +864,6 @@ func APIUpdateGroup(context *gin.Context) {
 		if len(group.Name) < 5 || group.Name == "" {
 			// If the group name is not valid, return a Bad Request response
 			context.JSON(http.StatusBadRequest, gin.H{"error": "The name of the group must be five or more letters."})
-			context.Abort()
-			return
-		}
-
-		stringMatch, requirements := utilities.ValidateTextCharacters(group.Name)
-		if !stringMatch {
-			logger.Log.Error("Group name text string failed validation.")
-			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 			context.Abort()
 			return
 		}
@@ -928,13 +891,6 @@ func APIUpdateGroup(context *gin.Context) {
 			return
 		}
 
-		stringMatch, requirements := utilities.ValidateTextCharacters(group.Description)
-		if !stringMatch {
-			logger.Log.Error("Group description text string failed validation.")
-			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-			context.Abort()
-			return
-		}
 	}
 
 	err = database.UpdateGroupValuesByID(groupIDInt, group.Name, group.Description)
@@ -1020,13 +976,10 @@ func APIAddWishlistsToGroup(context *gin.Context) {
 	var wishlistsRequest models.GroupAddWishlistsRequest
 	var groupIDString = context.Param("group_id")
 
-	if err := context.ShouldBindJSON(&wishlistsRequest); err != nil {
-		// If there is an error binding the request, return a Bad Request response
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &wishlistsRequest) {
 		return
-	} else if utilities.HasNilID(wishlistsRequest.Wishlists...) {
+	}
+	if utilities.HasNilID(wishlistsRequest.Wishlists...) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
