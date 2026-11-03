@@ -4,6 +4,7 @@ import (
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/models"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,6 +23,7 @@ func APIGetServerInfo(context *gin.Context) {
 		Timezone:                    config.ConfigFile.Timezone,
 		PoenskelistenLogLevel:       config.ConfigFile.PoenskelistenLogLevel,
 		PoenskelistenTestEmail:      config.ConfigFile.PoenskelistenTestEmail,
+		PoenskelistenTrustedProxies: config.ValidTrustedProxies(config.ConfigFile.PoenskelistenTrustedProxies),
 
 		// Database (credentials intentionally omitted)
 		DatabaseType:     config.ConfigFile.DBType,
@@ -49,6 +51,8 @@ func APIGetServerInfo(context *gin.Context) {
 		// Security
 		MFAEnforced:             config.ConfigFile.MFAEnforced,
 		MFARecoveryCodesEnabled: config.ConfigFile.MFARecoveryCodesEnabled,
+		AccessTokenMinutes:      int(config.AccessTokenLifetime() / time.Minute),
+		RefreshTokenDays:        int(config.RefreshTokenLifetime() / (24 * time.Hour)),
 
 		// AI assistants
 		MCPEnabled:  config.ConfigFile.MCPEnabled,
