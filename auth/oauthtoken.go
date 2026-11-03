@@ -13,10 +13,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// OAuthAccessTokenDuration is the lifetime of an OAuth access token. Short,
-// because access tokens are validated statelessly (revocation bites at refresh).
-const OAuthAccessTokenDuration = 15 * time.Minute
-
 // IDTokenDuration is the lifetime of an OIDC ID token.
 const IDTokenDuration = 15 * time.Minute
 
@@ -72,7 +68,7 @@ func GenerateOAuthAccessToken(userID uuid.UUID, clientID string, audience string
 			Subject:   userID.String(),
 			Audience:  jwt.ClaimStrings{audience},
 			Issuer:    config.OAuthIssuer(),
-			ExpiresAt: jwt.NewNumericDate(now.Add(OAuthAccessTokenDuration)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(config.AccessTokenLifetime())),
 			NotBefore: jwt.NewNumericDate(now),
 			IssuedAt:  jwt.NewNumericDate(now),
 		},

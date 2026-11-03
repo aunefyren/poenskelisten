@@ -1,6 +1,7 @@
 package database
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/models"
 	"errors"
 	"testing"
@@ -256,5 +257,23 @@ func TestRotateSessionWriteFailures(t *testing.T) {
 				t.Fatalf("RotateSession = (%+v, %v), want the injected fault and no rotation", result, err)
 			}
 		})
+	}
+}
+
+func TestCreateSessionUsesConfiguredLifetime(t *testing.T) {
+	setupTestDB(t)
+	original := config.ConfigFile
+	t.Cleanup(func() { config.ConfigFile = original })
+	user := createTestUser(t)
+
+	for _, days := range []int{0, 30} {
+		config.ConfigFile.RefreshTokenDays = days
+		session, err := CreateSession(user.ID, "hash-lifetime-"+time.Now().String(), "test-agent", "127.0.0.1")
+		if err != nil {
+			t.Fatalf("CreateSession error: %v", err)
+		}
+		if got, want := session.ExpiresAt.Sub(session.IssuedAt), config.RefreshTokenLifetime(); got != want {
+			t.Errorf("with refresh_token_days %d, session lifetime = %v, want %v", days, got, want)
+		}
 	}
 }
