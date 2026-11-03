@@ -29,7 +29,7 @@ jobs:
         goarch: ${{ matrix.goarch }}
         goversion: "go.mod"
         binary_name: "poenskelisten"
-        ldflags: "-s -w"
+        ldflags: "-s -w -X aunefyren/poenskelisten/config.version=${{ github.event.release.tag_name }}"
         # Only web/ (templates + static assets) is read at runtime; the Go
         # packages are compiled into the binary.
         extra_files: README.md LICENSE web
@@ -38,4 +38,3 @@ jobs:
         # No release_name: when it's set, go-release-action blanks the release tag,
         # which left asset names like poenskelisten--linux-amd64. On a release
         # event the tag (and target release) come from the event itself.
-        pre_command: sed -i 's/{{RELEASE_TAG}}/${{ github.event.release.tag_name }}/g' config/config.go # Replace release variable with the name of this release

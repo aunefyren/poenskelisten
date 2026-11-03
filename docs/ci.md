@@ -10,8 +10,8 @@ What runs in GitHub Actions, what each workflow publishes, and how it behaves on
 | `codeql-analysis.yml` | push/PR to `main`, weekly | CodeQL static analysis for Go. |
 | `docker-image-beta.yml` | hourly (`23 * * * *`), manual | Gate job decides, then calls `docker-build.yml` to push `beta` and `beta-<short sha>`. See [Beta images](#beta-images). |
 | `docker-image.yml` | release published | Calls `docker-build.yml` to push the release tag and `latest`. |
-| `docker-build.yml` | called by the two above | The shared multi-arch image build (`linux/amd64`, `arm64`, `arm/v7`, `386`). Replaces the `{{RELEASE_TAG}}` placeholder in `config/config.go` with the version it's given. |
-| `release.yaml` | release published | Cross-compiles the binaries with `wangyoucao577/go-release-action` and attaches them to the release. |
+| `docker-build.yml` | called by the two above | The shared multi-arch image build (`linux/amd64`, `arm64`, `arm/v7`, `386`). Passes the version it's given to the `Dockerfile` as the `VERSION` build arg. See [App version](#app-version). |
+| `release.yaml` | release published | Cross-compiles the binaries with `wangyoucao577/go-release-action` and attaches them to the release, stamping the tag in with `-ldflags -X`. |
 
 ## Multi-arch image builds
 
@@ -27,6 +27,24 @@ release builds), which mainly saves the `go mod download` layer.
 
 Building the image needs BuildKit (`docker buildx`). Building for arm locally also needs QEMU
 registered on the host (`docker run --privileged --rm tonistiigi/binfmt --install arm64,arm`).
+
+## App version
+
+`config/version.go` resolves the version the app reports (and persists to `config.json` as
+`poenskelisten_version`) from the first of these that's set, falling back to `dev`:
+
+1. **`-ldflags -X aunefyren/poenskelisten/config.version=<tag>`**: set by `release.yaml`
+   (go-release-action's `ldflags` input) and by the `Dockerfile` from its `VERSION` build arg,
+   which `docker-build.yml` fills from its `version` input.
+2. **`git archive`**: `.gitattributes` marks `config/version.go` `export-subst`, so GitHub's
+   "Source code" downloads carry the `git describe --tags` result.
+
+Go's own VCS stamp (`debug.ReadBuildInfo`) isn't used: the module path has no `/v2` suffix,
+so Go ignores the v2.x tags and would report a v1.0.x pseudo-version. A plain `go build` in a
+checkout therefore reports `dev`.
+
+Nothing edits the source or commits onto the tag, so the release workflows check out the
+tag as-is.
 
 ## Beta images
 

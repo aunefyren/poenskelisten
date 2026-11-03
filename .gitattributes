@@ -14,3 +14,7 @@
 *.ttf binary
 *.eot binary
 *.pdf binary
+
+# Lets `git archive` (GitHub's "Source code" downloads) stamp the tag into the
+# version fallback; see config/version.go.
+config/version.go export-subst

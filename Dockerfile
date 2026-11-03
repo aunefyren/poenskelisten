@@ -14,11 +14,16 @@ RUN go mod download
 
 COPY . .
 
+# Set by docker-build.yml; when empty the binary reports "dev" (see
+# config/version.go). Declared here so it doesn't invalidate the
+# `go mod download` layer.
+ARG VERSION
+
 # GOARM comes from the variant (linux/arm/v7 -> 7) and only applies to GOARCH=arm;
 # arm64 can carry a "v8" variant that must not leak into GOARM.
 RUN if [ "${TARGETARCH}" = "arm" ]; then export GOARM="${TARGETVARIANT#v}"; fi && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -o /app/poenskelisten .
+    go build -trimpath -ldflags="-s -w -X aunefyren/poenskelisten/config.version=${VERSION}" -o /app/poenskelisten .
 
 # ---------- Runtime ----------
 FROM alpine:3.24
