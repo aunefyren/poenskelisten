@@ -30,10 +30,7 @@ func TestValidatePasswordFormat(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			ok, requirements, err := ValidatePasswordFormat(c.password)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			ok, requirements := ValidatePasswordFormat(c.password)
 			if ok != c.want {
 				t.Errorf("ValidatePasswordFormat(%q) = %v, want %v", c.password, ok, c.want)
 			}
@@ -60,10 +57,7 @@ func TestValidateTextCharacters(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			ok, requirements, err := ValidateTextCharacters(c.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			ok, requirements := ValidateTextCharacters(c.input)
 			if ok != c.want {
 				t.Errorf("ValidateTextCharacters(%q) = %v, want %v", c.input, ok, c.want)
 			}

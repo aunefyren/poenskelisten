@@ -80,13 +80,8 @@ func RegisterWishlist(context *gin.Context) {
 	}
 
 	// Validate wishlist name format
-	stringMatch, requirements, err := utilities.ValidateTextCharacters(wishlist.Name)
-	if err != nil {
-		logger.Log.Error("Failed to validate wishlist name text string. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-		context.Abort()
-		return
-	} else if !stringMatch {
+	stringMatch, requirements := utilities.ValidateTextCharacters(wishlist.Name)
+	if !stringMatch {
 		logger.Log.Error("Wishlist name text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
@@ -94,13 +89,8 @@ func RegisterWishlist(context *gin.Context) {
 	}
 
 	// Validate wishlist description format
-	stringMatch, requirements, err = utilities.ValidateTextCharacters(wishlist.Description)
-	if err != nil {
-		logger.Log.Error("Failed to validate description name text string. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-		context.Abort()
-		return
-	} else if !stringMatch {
+	stringMatch, requirements = utilities.ValidateTextCharacters(wishlist.Description)
+	if !stringMatch {
 		logger.Log.Error("description name text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
@@ -951,13 +941,8 @@ func APIUpdateWishlist(context *gin.Context) {
 		}
 
 		// Validate wishlist name format
-		stringMatch, requirements, err := utilities.ValidateTextCharacters(wishlist.Name)
-		if err != nil {
-			logger.Log.Error("Failed to validate wishlist name text string. Error: " + err.Error())
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-			context.Abort()
-			return
-		} else if !stringMatch {
+		stringMatch, requirements := utilities.ValidateTextCharacters(wishlist.Name)
+		if !stringMatch {
 			logger.Log.Error("Wishlist name text string failed validation.")
 			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 			context.Abort()
@@ -982,13 +967,8 @@ func APIUpdateWishlist(context *gin.Context) {
 	if wishlistOriginal.Description != wishlist.Description && wishlist.Description != "" {
 
 		// Validate wishlist description format
-		stringMatch, requirements, err := utilities.ValidateTextCharacters(wishlist.Description)
-		if err != nil {
-			logger.Log.Error("Failed to validate wishlist description text string. Error: " + err.Error())
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-			context.Abort()
-			return
-		} else if !stringMatch {
+		stringMatch, requirements := utilities.ValidateTextCharacters(wishlist.Description)
+		if !stringMatch {
 			logger.Log.Error("Wishlist description text string failed validation.")
 			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 			context.Abort()

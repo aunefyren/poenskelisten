@@ -143,13 +143,8 @@ func RegisterNewsPost(context *gin.Context) {
 		return
 	}
 
-	stringMatch, requirements, err := utilities.ValidateTextCharacters(news.Title)
-	if err != nil {
-		logger.Log.Error("Failed to validate news title text string. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-		context.Abort()
-		return
-	} else if !stringMatch {
+	stringMatch, requirements := utilities.ValidateTextCharacters(news.Title)
+	if !stringMatch {
 		logger.Log.Error("News title text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
@@ -163,13 +158,8 @@ func RegisterNewsPost(context *gin.Context) {
 		return
 	}
 
-	stringMatch, requirements, err = utilities.ValidateTextCharacters(news.Body)
-	if err != nil {
-		logger.Log.Error("Failed to validate news body text string. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-		context.Abort()
-		return
-	} else if !stringMatch {
+	stringMatch, requirements = utilities.ValidateTextCharacters(news.Body)
+	if !stringMatch {
 		logger.Log.Error("News body text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
@@ -307,13 +297,8 @@ func APIEditNewsPost(context *gin.Context) {
 		return
 	}
 
-	stringMatch, requirements, err := utilities.ValidateTextCharacters(news.Title)
-	if err != nil {
-		logger.Log.Error("Failed to validate news title text string. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-		context.Abort()
-		return
-	} else if !stringMatch {
+	stringMatch, requirements := utilities.ValidateTextCharacters(news.Title)
+	if !stringMatch {
 		logger.Log.Error("News title text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
@@ -327,13 +312,8 @@ func APIEditNewsPost(context *gin.Context) {
 		return
 	}
 
-	stringMatch, requirements, err = utilities.ValidateTextCharacters(news.Body)
-	if err != nil {
-		logger.Log.Error("Failed to validate news body text string. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-		context.Abort()
-		return
-	} else if !stringMatch {
+	stringMatch, requirements = utilities.ValidateTextCharacters(news.Body)
+	if !stringMatch {
 		logger.Log.Error("News body text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
