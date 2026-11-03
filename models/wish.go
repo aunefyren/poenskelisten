@@ -17,24 +17,24 @@ type Wish struct {
 }
 
 type WishCreationRequest struct {
-	Name         string     `json:"name"`
-	Note         string     `json:"note"`
+	Name         string     `json:"name" sanitize:"trim,text"`
+	Note         string     `json:"note" sanitize:"trim,text"`
 	Price        *float64   `json:"price"`
-	URL          string     `json:"url"`
-	Image        string     `json:"image_data"`
+	URL          string     `json:"url" sanitize:"trim,text"`
+	Image        string     `json:"image_data" sanitize:"none"`
 	CategoryID   *uuid.UUID `json:"category_id"`
-	CategoryName string     `json:"category_name"`
+	CategoryName string     `json:"category_name" sanitize:"trim,text"`
 }
 
 type WishUpdateRequest struct {
-	Name         string     `json:"name"`
-	Note         string     `json:"note"`
+	Name         string     `json:"name" sanitize:"trim,text"`
+	Note         string     `json:"note" sanitize:"trim,text"`
 	Price        *float64   `json:"price"`
-	URL          string     `json:"url"`
-	Image        string     `json:"image_data"`
+	URL          string     `json:"url" sanitize:"trim,text"`
+	Image        string     `json:"image_data" sanitize:"none"`
 	ImageDelete  bool       `json:"image_delete"`
 	CategoryID   *uuid.UUID `json:"category_id"`
-	CategoryName string     `json:"category_name"`
+	CategoryName string     `json:"category_name" sanitize:"trim,text"`
 }
 
 type WishObject struct {

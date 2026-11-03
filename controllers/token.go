@@ -10,25 +10,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// TokenRequest is the password login body. The e-mail is trimmed but not
+// lowercased, for the same reason as resetRequest's.
 type TokenRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email    string `json:"email" sanitize:"trim"`
+	Password string `json:"password" sanitize:"none"`
 }
 
 func GenerateToken(context *gin.Context) {
 	var request TokenRequest
 	var user models.User
 
-	err := context.ShouldBindJSON(&request)
-	if err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &request) {
 		return
 	}
 
 	// check if email exists and password is correct
-	user, err = database.GetAllUserInformationByEmail(request.Email)
+	user, err := database.GetAllUserInformationByEmail(request.Email)
 	if err != nil {
 		logger.Log.Error("Failed to get user by e-mail. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid credentials."})

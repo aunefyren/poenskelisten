@@ -71,8 +71,14 @@ func strPtr(s string) *string { return &s }
 // createTestUser inserts an enabled, verified user with a unique e-mail.
 func createTestUser(t *testing.T) models.User {
 	t.Helper()
+	return createTestUserWithEmail(t, uuid.NewString()+"@example.com")
+}
 
-	email := uuid.NewString() + "@example.com"
+// createTestUserWithEmail inserts an enabled, verified user with the given
+// e-mail address stored exactly as passed.
+func createTestUserWithEmail(t *testing.T, email string) models.User {
+	t.Helper()
+
 	password := "hashed-password"
 
 	user := models.User{

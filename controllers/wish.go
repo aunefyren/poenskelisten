@@ -279,21 +279,16 @@ func RegisterWish(context *gin.Context) {
 	var wish models.WishCreationRequest
 	var db_wish models.Wish
 
-	if err := context.ShouldBindJSON(&wish); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &wish) {
 		return
-	} else if wish.CategoryID != nil && utilities.HasNilID(*wish.CategoryID) {
+	}
+	if wish.CategoryID != nil && utilities.HasNilID(*wish.CategoryID) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
 
 	// Trim request input
-	wish.Name = strings.TrimSpace(wish.Name)
-	wish.Note = strings.TrimSpace(wish.Note)
-	wish.URL = strings.TrimSpace(wish.URL)
 
 	// Get user ID
 	UserID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
@@ -337,33 +332,6 @@ func RegisterWish(context *gin.Context) {
 
 	if len(wish.Name) < 5 || wish.Name == "" {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "The name of the wish must be five or more letters."})
-		context.Abort()
-		return
-	}
-
-	// Validate wish name format
-	stringMatch, requirements := utilities.ValidateTextCharacters(wish.Name)
-	if !stringMatch {
-		logger.Log.Error("Wish name text string failed validation.")
-		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-		context.Abort()
-		return
-	}
-
-	// Validate wish note format
-	stringMatch, requirements = utilities.ValidateTextCharacters(wish.Note)
-	if !stringMatch {
-		logger.Log.Error("Wish note text string failed validation.")
-		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-		context.Abort()
-		return
-	}
-
-	// Validate wish url format
-	stringMatch, requirements = utilities.ValidateTextCharacters(wish.URL)
-	if !stringMatch {
-		logger.Log.Error("Wish URL text string failed validation.")
-		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
 	}
@@ -618,12 +586,10 @@ func RegisterWishClaim(context *gin.Context) {
 	var wishclaim models.WishClaimCreationRequest
 	var db_wishclaim models.WishClaim
 
-	if err := context.ShouldBindJSON(&wishclaim); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &wishclaim) {
 		return
-	} else if wishclaim.WishlistID != nil && utilities.HasNilID(*wishclaim.WishlistID) {
+	}
+	if wishclaim.WishlistID != nil && utilities.HasNilID(*wishclaim.WishlistID) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -786,12 +752,10 @@ func RemoveWishClaim(context *gin.Context) {
 	var wish_id = context.Param("wish_id")
 	var wishclaim models.WishClaimCreationRequest
 
-	if err := context.ShouldBindJSON(&wishclaim); err != nil {
-		logger.Log.Error("Failed to parse request. Error: " + err.Error())
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &wishclaim) {
 		return
-	} else if wishclaim.WishlistID != nil && utilities.HasNilID(*wishclaim.WishlistID) {
+	}
+	if wishclaim.WishlistID != nil && utilities.HasNilID(*wishclaim.WishlistID) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
@@ -939,22 +903,16 @@ func APIUpdateWish(context *gin.Context) {
 	var wish models.WishUpdateRequest
 
 	// Bind the incoming request body to the model
-	if err := context.ShouldBindJSON(&wish); err != nil {
-		// If there is an error binding the request, return a Bad Request response
-		logger.Log.Error(("Failed to parse request. Error: " + err.Error()))
-		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
-		context.Abort()
+	if !bindJSON(context, &wish) {
 		return
-	} else if wish.CategoryID != nil && utilities.HasNilID(*wish.CategoryID) {
+	}
+	if wish.CategoryID != nil && utilities.HasNilID(*wish.CategoryID) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request."})
 		context.Abort()
 		return
 	}
 
 	// Trim request input
-	wish.Name = strings.TrimSpace(wish.Name)
-	wish.Note = strings.TrimSpace(wish.Note)
-	wish.URL = strings.TrimSpace(wish.URL)
 
 	// Get user ID
 	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
@@ -1017,15 +975,6 @@ func APIUpdateWish(context *gin.Context) {
 			return
 		}
 
-		// Validate wish name format
-		stringMatch, requirements := utilities.ValidateTextCharacters(wish.Name)
-		if !stringMatch {
-			logger.Log.Error("Wish name text string failed validation.")
-			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-			context.Abort()
-			return
-		}
-
 		unique_wish_name, err := database.VerifyUniqueWishNameInWishlistExcludingWish(wish.Name, wishOriginal.WishlistID, wishOriginal.ID)
 		if err != nil {
 			logger.Log.Error("Failed to verify wish name. Error: " + err.Error())
@@ -1038,39 +987,21 @@ func APIUpdateWish(context *gin.Context) {
 			return
 		}
 
-		wishOriginal.Name = strings.TrimSpace(wish.Name)
+		wishOriginal.Name = wish.Name
 	}
 
 	if wish.URL != wishOriginal.URL {
-		// Validate wish URL format
-		stringMatch, requirements := utilities.ValidateTextCharacters(wish.URL)
-		if !stringMatch {
-			logger.Log.Error("Wish URL text string failed validation.")
-			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-			context.Abort()
-			return
-		}
-
 		if wish.URL != "" && !isValidWishURL(wish.URL) {
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL given."})
 			context.Abort()
 			return
 		}
 
-		wishOriginal.URL = strings.TrimSpace(wish.URL)
+		wishOriginal.URL = wish.URL
 	}
 
 	if wish.Note != wishOriginal.Note {
-		// Validate wish note format
-		stringMatch, requirements := utilities.ValidateTextCharacters(wish.Note)
-		if !stringMatch {
-			logger.Log.Error("Wish note text string failed validation.")
-			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
-			context.Abort()
-			return
-		}
-
-		wishOriginal.Note = strings.TrimSpace(wish.Note)
+		wishOriginal.Note = wish.Note
 	}
 
 	if wish.Price != wishOriginal.Price {

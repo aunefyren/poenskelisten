@@ -46,7 +46,7 @@ type ConfigStruct struct {
 }
 
 type UpdateCurrencyRequest struct {
-	PoenskelistenCurrency     string `json:"poenskelisten_currency"`
+	PoenskelistenCurrency     string `json:"poenskelisten_currency" sanitize:"trim,text"`
 	PoenskelistenCurrencyPad  bool   `json:"poenskelisten_currency_pad"`
 	PoenskelistenCurrencyLeft bool   `json:"poenskelisten_currency_left"`
 }
