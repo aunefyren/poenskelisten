@@ -3,7 +3,7 @@ function load_page(result) {
     // Drop any in-memory access token: these pages render the logged-out view.
     clearAccessToken();
 
-    if(!LOCAL_LOGIN_ENABLED) {
+    if (!LOCAL_LOGIN_ENABLED) {
         load_page_oidc_only();
         return;
     }
@@ -99,7 +99,7 @@ function load_page_oidc_only() {
     showLoggedOutMenu();
 }
 
-function send_registration(){
+function send_registration() {
 
     var user_email = document.getElementById("email").value;
     var user_password = document.getElementById("password").value;
@@ -108,31 +108,31 @@ function send_registration(){
     var user_last_name = document.getElementById("last_name").value;
     var invitation_code = document.getElementById("invitation_code").value;
 
-    var form_obj = { 
-                                    "email" : user_email,
-                                    "password" : user_password,
-                                    "password_repeat": user_password_repeat,
-                                    "first_name": user_first_name,
-                                    "last_name": user_last_name,
-                                    "invite_code": invitation_code
-                                };
+    var form_obj = {
+        "email": user_email,
+        "password": user_password,
+        "password_repeat": user_password_repeat,
+        "first_name": user_first_name,
+        "last_name": user_last_name,
+        "invite_code": invitation_code
+    };
 
     var form_data = JSON.stringify(form_obj);
 
     var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
+    xhttp.onreadystatechange = function () {
         if (this.readyState == 4) {
-            
+
             try {
                 result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
+            } catch (e) {
+                console.log(e + ' - Response: ' + this.responseText);
                 error("Could not reach API.");
                 clear_data();
                 return;
             }
-            
-            if(result.error) {
+
+            if (result.error) {
 
                 error(result.error);
                 clear_data();
@@ -140,6 +140,9 @@ function send_registration(){
             } else {
 
                 success(result.message);
+                window.setTimeout(function () {
+                    navigateTo("/login")
+                }, 1500)
                 clear_data();
                 disable_register_button();
 
