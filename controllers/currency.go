@@ -27,13 +27,8 @@ func APIUpdateCurrency(context *gin.Context) {
 	}
 
 	// Validate currency format
-	stringMatch, requirements, err := utilities.ValidateTextCharacters(currency.PoenskelistenCurrency)
-	if err != nil {
-		logger.Log.Error("failed to validate currency text string. error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate text string"})
-		context.Abort()
-		return
-	} else if !stringMatch {
+	stringMatch, requirements := utilities.ValidateTextCharacters(currency.PoenskelistenCurrency)
+	if !stringMatch {
 		logger.Log.Error("currency string failed validation")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()

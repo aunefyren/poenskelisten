@@ -342,13 +342,8 @@ func RegisterWish(context *gin.Context) {
 	}
 
 	// Validate wish name format
-	stringMatch, requirements, err := utilities.ValidateTextCharacters(wish.Name)
-	if err != nil {
-		logger.Log.Error("Failed to validate wish name text string. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-		context.Abort()
-		return
-	} else if !stringMatch {
+	stringMatch, requirements := utilities.ValidateTextCharacters(wish.Name)
+	if !stringMatch {
 		logger.Log.Error("Wish name text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
@@ -356,13 +351,8 @@ func RegisterWish(context *gin.Context) {
 	}
 
 	// Validate wish note format
-	stringMatch, requirements, err = utilities.ValidateTextCharacters(wish.Note)
-	if err != nil {
-		logger.Log.Error("Failed to validate wish note text string. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-		context.Abort()
-		return
-	} else if !stringMatch {
+	stringMatch, requirements = utilities.ValidateTextCharacters(wish.Note)
+	if !stringMatch {
 		logger.Log.Error("Wish note text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
@@ -370,13 +360,8 @@ func RegisterWish(context *gin.Context) {
 	}
 
 	// Validate wish url format
-	stringMatch, requirements, err = utilities.ValidateTextCharacters(wish.URL)
-	if err != nil {
-		logger.Log.Error("Failed to validate wish URL text string. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-		context.Abort()
-		return
-	} else if !stringMatch {
+	stringMatch, requirements = utilities.ValidateTextCharacters(wish.URL)
+	if !stringMatch {
 		logger.Log.Error("Wish URL text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
@@ -1033,13 +1018,8 @@ func APIUpdateWish(context *gin.Context) {
 		}
 
 		// Validate wish name format
-		stringMatch, requirements, err := utilities.ValidateTextCharacters(wish.Name)
-		if err != nil {
-			logger.Log.Error("Failed to validate wish name text string. Error: " + err.Error())
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-			context.Abort()
-			return
-		} else if !stringMatch {
+		stringMatch, requirements := utilities.ValidateTextCharacters(wish.Name)
+		if !stringMatch {
 			logger.Log.Error("Wish name text string failed validation.")
 			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 			context.Abort()
@@ -1063,13 +1043,8 @@ func APIUpdateWish(context *gin.Context) {
 
 	if wish.URL != wishOriginal.URL {
 		// Validate wish URL format
-		stringMatch, requirements, err := utilities.ValidateTextCharacters(wish.URL)
-		if err != nil {
-			logger.Log.Error("Failed to validate wish URL text string. Error: " + err.Error())
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-			context.Abort()
-			return
-		} else if !stringMatch {
+		stringMatch, requirements := utilities.ValidateTextCharacters(wish.URL)
+		if !stringMatch {
 			logger.Log.Error("Wish URL text string failed validation.")
 			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 			context.Abort()
@@ -1087,13 +1062,8 @@ func APIUpdateWish(context *gin.Context) {
 
 	if wish.Note != wishOriginal.Note {
 		// Validate wish note format
-		stringMatch, requirements, err := utilities.ValidateTextCharacters(wish.Note)
-		if err != nil {
-			logger.Log.Error("Failed to validate wish note text string. Error: " + err.Error())
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-			context.Abort()
-			return
-		} else if !stringMatch {
+		stringMatch, requirements := utilities.ValidateTextCharacters(wish.Note)
+		if !stringMatch {
 			logger.Log.Error("Wish note text string failed validation.")
 			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 			context.Abort()

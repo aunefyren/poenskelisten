@@ -61,26 +61,16 @@ func RegisterGroup(context *gin.Context) {
 		return
 	}
 
-	stringMatch, requirements, err := utilities.ValidateTextCharacters(group.Name)
-	if err != nil {
-		logger.Log.Error("Failed to validate group name text string. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-		context.Abort()
-		return
-	} else if !stringMatch {
+	stringMatch, requirements := utilities.ValidateTextCharacters(group.Name)
+	if !stringMatch {
 		logger.Log.Error("Group name text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
 	}
 
-	stringMatch, requirements, err = utilities.ValidateTextCharacters(group.Description)
-	if err != nil {
-		logger.Log.Error("Failed to validate group description text string. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-		context.Abort()
-		return
-	} else if !stringMatch {
+	stringMatch, requirements = utilities.ValidateTextCharacters(group.Description)
+	if !stringMatch {
 		logger.Log.Error("Group description text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
@@ -907,13 +897,8 @@ func APIUpdateGroup(context *gin.Context) {
 			return
 		}
 
-		stringMatch, requirements, err := utilities.ValidateTextCharacters(group.Name)
-		if err != nil {
-			logger.Log.Error("Failed to validate group name text string. Error: " + err.Error())
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-			context.Abort()
-			return
-		} else if !stringMatch {
+		stringMatch, requirements := utilities.ValidateTextCharacters(group.Name)
+		if !stringMatch {
 			logger.Log.Error("Group name text string failed validation.")
 			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 			context.Abort()
@@ -943,13 +928,8 @@ func APIUpdateGroup(context *gin.Context) {
 			return
 		}
 
-		stringMatch, requirements, err := utilities.ValidateTextCharacters(group.Description)
-		if err != nil {
-			logger.Log.Error("Failed to validate group description text string. Error: " + err.Error())
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-			context.Abort()
-			return
-		} else if !stringMatch {
+		stringMatch, requirements := utilities.ValidateTextCharacters(group.Description)
+		if !stringMatch {
 			logger.Log.Error("Group description text string failed validation.")
 			context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 			context.Abort()
