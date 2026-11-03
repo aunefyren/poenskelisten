@@ -321,9 +321,9 @@ All four places + README.
 >
 > **Known tradeoff (by design):** access-token validation stays stateless (no DB
 > hit on the hot path), so a revoked session's *access* token remains usable until
-> it expires (≤15 min). Revocation is enforced at refresh time. TTLs are constants
-> (`auth.AccessTokenValidDuration`, `database.RefreshTokenValidDuration`), not yet
-> config options.
+> it expires (15 min by default). Revocation is enforced at refresh time. TTLs are
+> config options (`access_token_minutes`, 1–60, and `refresh_token_days`, 1–365;
+> see `config/tokens.go`); the 60-minute cap bounds that revocation window.
 
 **Goal:** short-lived access tokens + long-lived, **revocable** refresh tokens
 backed by a DB table. Enables real logout and "sign out everywhere". Replaces the

@@ -361,7 +361,7 @@ func handleRefreshTokenGrant(ctx *gin.Context) {
 	resp := gin.H{
 		"access_token": accessToken,
 		"token_type":   "Bearer",
-		"expires_in":   int(auth.OAuthAccessTokenDuration.Seconds()),
+		"expires_in":   int(config.AccessTokenLifetime().Seconds()),
 		"scope":        result.Scope,
 	}
 	if scopeContains(result.Scope, "openid") {
@@ -404,7 +404,7 @@ func issueTokenResponse(ctx *gin.Context, client models.OAuthClient, user models
 	resp := gin.H{
 		"access_token": accessToken,
 		"token_type":   "Bearer",
-		"expires_in":   int(auth.OAuthAccessTokenDuration.Seconds()),
+		"expires_in":   int(config.AccessTokenLifetime().Seconds()),
 		"scope":        scope,
 	}
 	if scopeContains(scope, "openid") {

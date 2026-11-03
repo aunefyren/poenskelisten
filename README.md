@@ -113,6 +113,8 @@ You can configure Pønskelisten in **three different ways**:
 | smtp_from | smtpfrom | smtpfrom | string | Sender email address |
 | mfa_enforced | mfaenforced | mfaenforced | bool | Require all local users to enroll in MFA (TOTP) |
 | mfa_recovery_codes_enabled | mfarecoverycodes | mfarecoverycodes | bool | Issue single-use recovery codes on MFA enrollment (default off; when off, an admin must remove MFA for locked-out users) |
+| access_token_minutes | accesstokenminutes | accesstokenminutes | int | Minutes an access token is valid, `1`–`60` (default: `15`). Signing out (or "sign out everywhere") takes effect once the current access token expires, so a longer lifetime delays it |
+| refresh_token_days | refreshtokendays | refreshtokendays | int | Days a login lasts before users must sign in again, `1`–`365` (default: `7`). Also applies to connected apps (MCP clients) |
 | oidc_enabled | oidcenabled | oidcenabled | bool | Enable OpenID Connect single sign-on |
 | oidc_provider_name | oidcprovidername | oidcprovidername | string | Display name on the SSO login button (e.g. "Authelia") |
 | oidc_issuer_url | oidcissuerurl | oidcissuerurl | string | OIDC issuer URL used for discovery (e.g. https://auth.example.com) |

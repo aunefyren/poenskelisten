@@ -1,16 +1,13 @@
 package database
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/models"
 	"errors"
 	"time"
 
 	"github.com/google/uuid"
 )
-
-// RefreshTokenValidDuration is how long a refresh token (and thus a session) is
-// valid before the user must log in again.
-const RefreshTokenValidDuration = 7 * 24 * time.Hour
 
 // RotationGraceWindow tolerates a just-rotated refresh token being presented
 // again for a short period, so two browser tabs racing to refresh don't trip
@@ -71,7 +68,7 @@ func CreateOAuthRefreshSession(userID uuid.UUID, refreshHash string, clientID st
 func createSession(session models.Session) (models.Session, error) {
 	now := time.Now()
 	session.IssuedAt = now
-	session.ExpiresAt = now.Add(RefreshTokenValidDuration)
+	session.ExpiresAt = now.Add(config.RefreshTokenLifetime())
 	session.LastUsedAt = &now
 	session.ID = uuid.New()
 
