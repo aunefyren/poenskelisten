@@ -32,10 +32,8 @@ func ResolveWishCategoryForWish(wishlistID uuid.UUID, ownerID uuid.UUID, categor
 			return nil, "The name of the category must be two or more letters.", nil
 		}
 
-		stringMatch, requirements, err := utilities.ValidateTextCharacters(categoryName)
-		if err != nil {
-			return nil, "", err
-		} else if !stringMatch {
+		stringMatch, requirements := utilities.ValidateTextCharacters(categoryName)
+		if !stringMatch {
 			return nil, requirements, nil
 		}
 

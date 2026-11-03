@@ -20,53 +20,30 @@ func PrintASCII() {
 	fmt.Println(``)
 }
 
-func ValidatePasswordFormat(password string) (bool, string, error) {
+// The validator patterns are compiled once at startup; MustCompile panics on a
+// bad pattern, so the validators themselves have no error path to report.
+var (
+	passwordUpperPattern  = regexp.MustCompile(`[A-ZÆØÅ]`)
+	passwordLowerPattern  = regexp.MustCompile(`[a-zæøå]`)
+	passwordDigitPattern  = regexp.MustCompile(`[0-9]`)
+	textCharactersPattern = regexp.MustCompile(`^[^<>"\x60]+$`)
+)
+
+func ValidatePasswordFormat(password string) (bool, string) {
 	requirements := "Password must have a minimum of eight characters, at least one uppercase letter, one lowercase letter and one number."
 
-	if len(password) < 8 {
-		return false, requirements, nil
-	}
+	valid := len(password) >= 8 &&
+		passwordUpperPattern.MatchString(password) &&
+		passwordLowerPattern.MatchString(password) &&
+		passwordDigitPattern.MatchString(password)
 
-	match, err := regexp.Match(`[A-ZÆØÅ]{1,20}`, []byte(password))
-	if err != nil {
-		return false, requirements, err
-	} else if !match {
-		return false, requirements, nil
-	}
-
-	match, err = regexp.Match(`[a-zæøå]{1,20}`, []byte(password))
-	if err != nil {
-		return false, requirements, err
-	} else if !match {
-		return false, requirements, nil
-	}
-
-	match, err = regexp.Match(`[0-9]{1,20}`, []byte(password))
-	if err != nil {
-		return false, requirements, err
-	} else if !match {
-		return false, requirements, nil
-	}
-
-	return true, requirements, nil
+	return valid, requirements
 }
 
-func ValidateTextCharacters(string string) (bool, string, error) {
+func ValidateTextCharacters(text string) (bool, string) {
 	requirements := `Text must not contain <, >, or ".`
 
-	if string == "" {
-		return true, requirements, nil
-	}
-
-	match, err := regexp.Match(`^[^<>"\x60]+$`, []byte(string))
-	if err != nil {
-		return false, requirements, err
-	} else if !match {
-		return false, requirements, nil
-	}
-
-	return true, requirements, nil
-
+	return text == "" || textCharactersPattern.MatchString(text), requirements
 }
 
 // CleanConsoleEmail normalises an e-mail address given as a startup flag or

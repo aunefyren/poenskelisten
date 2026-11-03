@@ -45,13 +45,8 @@ func RegisterUser(context *gin.Context) {
 	}
 
 	// Make password is strong enough
-	valid, requirements, err := utilities.ValidatePasswordFormat(userCreationRequest.Password)
-	if err != nil {
-		logger.Log.Error("Failed to verify password quality. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify password quality."})
-		context.Abort()
-		return
-	} else if !valid {
+	valid, requirements := utilities.ValidatePasswordFormat(userCreationRequest.Password)
+	if !valid {
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
@@ -62,13 +57,8 @@ func RegisterUser(context *gin.Context) {
 	user.Password = &userCreationRequest.Password
 	user.FirstName = userCreationRequest.FirstName
 
-	stringMatch, requirements, err := utilities.ValidateTextCharacters(user.FirstName)
-	if err != nil {
-		logger.Log.Error("Failed to validate first name text string. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-		context.Abort()
-		return
-	} else if !stringMatch {
+	stringMatch, requirements := utilities.ValidateTextCharacters(user.FirstName)
+	if !stringMatch {
 		logger.Log.Error("First name text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
@@ -77,13 +67,8 @@ func RegisterUser(context *gin.Context) {
 
 	user.LastName = userCreationRequest.LastName
 
-	stringMatch, requirements, err = utilities.ValidateTextCharacters(user.LastName)
-	if err != nil {
-		logger.Log.Error("Failed to validate last name text string. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate text string."})
-		context.Abort()
-		return
-	} else if !stringMatch {
+	stringMatch, requirements = utilities.ValidateTextCharacters(user.LastName)
+	if !stringMatch {
 		logger.Log.Error("Last name text string failed validation.")
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
@@ -559,13 +544,8 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// Make password is strong enough
-	valid, requirements, err := utilities.ValidatePasswordFormat(userUpdateRequest.Password)
-	if err != nil {
-		logger.Log.Error("Failed to verify password quality. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify password quality."})
-		context.Abort()
-		return
-	} else if !valid && userUpdateRequest.Password != "" {
+	valid, requirements := utilities.ValidatePasswordFormat(userUpdateRequest.Password)
+	if !valid && userUpdateRequest.Password != "" {
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
@@ -823,13 +803,8 @@ func APIChangePassword(context *gin.Context) {
 	}
 
 	// Make password is strong enough
-	valid, requirements, err := utilities.ValidatePasswordFormat(userUpdatePasswordRequest.Password)
-	if err != nil {
-		logger.Log.Error("Failed to verify password quality. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify password quality."})
-		context.Abort()
-		return
-	} else if !valid {
+	valid, requirements := utilities.ValidatePasswordFormat(userUpdatePasswordRequest.Password)
+	if !valid {
 		context.JSON(http.StatusBadRequest, gin.H{"error": requirements})
 		context.Abort()
 		return
