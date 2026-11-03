@@ -75,6 +75,10 @@ var OIDC_PROVIDER_NAME = {{.oidcProviderNameJSON}};
 var OIDC_LOGIN_URL = {{.oidcLoginURLJSON}};
 var oauth_base = window.location.origin + "/oauth/";
 var sessionRefreshTimer = null;
+var sessionRefreshActive = false;
+// Seconds, from the last token response's expires_in; the server's lifetime is
+// configurable (access_token_minutes), so this is only the initial guess.
+var accessTokenLifetime = 15 * 60;
 
 // base64url without padding (for PKCE + state).
 function base64UrlEncode(bytes) {
@@ -265,6 +269,12 @@ function refreshAccessToken(onSuccess, onFailure) {
                 try { result = JSON.parse(this.responseText); } catch(e) { result = null; }
                 if(result && result.access_token) {
                     jwt = result.access_token;
+                    if(result.expires_in > 0) {
+                        accessTokenLifetime = result.expires_in;
+                    }
+                    if(sessionRefreshActive) {
+                        scheduleSessionRefresh();
+                    }
                     if(onSuccess) onSuccess();
                     return;
                 }
@@ -278,18 +288,31 @@ function refreshAccessToken(onSuccess, onFailure) {
     xhttp.send(body.toString());
 }
 
-// Access tokens are short-lived (~15 min), so roll them on a timer while a tab is
-// open to keep an active session alive between reloads.
+// Access tokens are short-lived, so roll them on a timer while a tab is open to
+// keep an active session alive between reloads.
 function startSessionRefreshTimer() {
     if(isPublicAuthPage()) {
         return;
     }
-    if(sessionRefreshTimer !== null) {
+    if(sessionRefreshActive) {
         return;
     }
-    sessionRefreshTimer = setInterval(function() {
-        refreshAccessToken(null, null);
-    }, 10 * 60 * 1000);
+    sessionRefreshActive = true;
+    scheduleSessionRefresh();
+}
+
+// Refresh at two thirds of the access token's lifetime, leaving room for a slow
+// request before it expires. A successful refresh schedules the next one; a
+// failed one (e.g. a network blip) is retried after the same delay.
+function scheduleSessionRefresh() {
+    if(sessionRefreshTimer !== null) {
+        clearTimeout(sessionRefreshTimer);
+    }
+    var delaySeconds = Math.max(30, Math.floor(accessTokenLifetime * 2 / 3));
+    sessionRefreshTimer = setTimeout(function() {
+        sessionRefreshTimer = null;
+        refreshAccessToken(null, scheduleSessionRefresh);
+    }, delaySeconds * 1000);
 }
 
 // Bootstrap the page: ensure a valid access token (refresh, or start the OAuth

@@ -697,6 +697,51 @@ func TestOAuthTokenRefreshSuccess(t *testing.T) {
 	}
 }
 
+func TestOAuthTokenHonorsConfiguredLifetimes(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	restoreConfig(t)
+	config.ConfigFile.AccessTokenMinutes = 5
+	config.ConfigFile.RefreshTokenDays = 30
+	client := oauthServerTestNewClient(t, true, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+	authCode, verifier := oauthServerTestIssueCode(t, client, user)
+
+	code, body, w := postForm(APIOAuthToken, "/oauth/token", url.Values{
+		"grant_type": {"authorization_code"}, "code": {authCode},
+		"redirect_uri": {client.RedirectURIs[0]}, "client_id": {client.ClientID},
+		"code_verifier": {verifier},
+	})
+	if code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%v", code, body)
+	}
+	if body["expires_in"] != float64(5*60) {
+		t.Errorf("expires_in = %v, want 300", body["expires_in"])
+	}
+	var refreshCookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == refreshCookieName {
+			refreshCookie = c
+		}
+	}
+	if refreshCookie == nil {
+		t.Fatal("expected the refresh cookie to be set for a first-party client")
+	}
+	if refreshCookie.MaxAge != 30*24*3600 {
+		t.Errorf("refresh cookie MaxAge = %d, want %d", refreshCookie.MaxAge, 30*24*3600)
+	}
+
+	code, body, _ = postForm(APIOAuthToken, "/oauth/token", url.Values{
+		"grant_type": {"refresh_token"}, "client_id": {client.ClientID},
+	}, refreshCookie)
+	if code != http.StatusOK {
+		t.Fatalf("refresh status = %d, want 200; body=%v", code, body)
+	}
+	if body["expires_in"] != float64(5*60) {
+		t.Errorf("refresh expires_in = %v, want 300", body["expires_in"])
+	}
+}
+
 func TestOAuthTokenRefreshMissingToken(t *testing.T) {
 	setupControllersDB(t)
 	oauthServerTestSetup(t)

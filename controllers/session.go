@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"aunefyren/poenskelisten/auth"
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/middlewares"
@@ -17,9 +18,8 @@ import (
 const (
 	// The OAuth refresh cookie (first-party web client). Scoped to /oauth so it is
 	// only sent to the token/revoke endpoints.
-	refreshCookieName   = "poenskelisten_refresh"
-	refreshCookieMaxAge = 7 * 24 * 3600
-	refreshCookiePath   = "/oauth"
+	refreshCookieName = "poenskelisten_refresh"
+	refreshCookiePath = "/oauth"
 
 	// The SSO login-state cookie, read only by /oauth/authorize.
 	ssoCookieName   = "poenskelisten_sso"
@@ -29,7 +29,7 @@ const (
 
 func setRefreshCookie(ctx *gin.Context, token string) {
 	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie(refreshCookieName, token, refreshCookieMaxAge, refreshCookiePath, "", cookieSecure(ctx), true)
+	ctx.SetCookie(refreshCookieName, token, int(config.RefreshTokenLifetime().Seconds()), refreshCookiePath, "", cookieSecure(ctx), true)
 }
 
 func clearRefreshCookie(ctx *gin.Context) {

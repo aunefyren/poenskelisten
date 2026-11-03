@@ -26,6 +26,8 @@ type ConfigStruct struct {
 	PoenskelistenLogLevel       string `json:"poenskelisten_log_level"`
 	MFAEnforced                 bool   `json:"mfa_enforced"`
 	MFARecoveryCodesEnabled     bool   `json:"mfa_recovery_codes_enabled"`
+	AccessTokenMinutes          int    `json:"access_token_minutes"`
+	RefreshTokenDays            int    `json:"refresh_token_days"`
 	OIDCEnabled                 bool   `json:"oidc_enabled"`
 	OIDCProviderName            string `json:"oidc_provider_name"`
 	OIDCIssuerURL               string `json:"oidc_issuer_url"`

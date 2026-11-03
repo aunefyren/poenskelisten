@@ -24,7 +24,6 @@ const (
 	oidcNonceCookie = "oidc_nonce"
 	// oidcFlowCookieMaxAge bounds how long a login attempt (state/nonce) is valid.
 	oidcFlowCookieMaxAge = 600 // 10 minutes
-	sessionCookieMaxAge  = 7 * 24 * 3600
 )
 
 // APIGetOIDCConfig exposes just enough for the login page to render (or hide) the

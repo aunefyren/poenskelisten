@@ -261,3 +261,22 @@ func TestValidateSSOTokenRequiresPrivateKey(t *testing.T) {
 		t.Errorf("ValidateSSOToken = (%v, %v), want nil claims and an error", claims, err)
 	}
 }
+
+func TestOAuthAccessTokenUsesConfiguredLifetime(t *testing.T) {
+	setupOAuthTokenTest(t)
+
+	for _, minutes := range []int{0, 5} {
+		config.ConfigFile.AccessTokenMinutes = minutes
+		token, err := GenerateOAuthAccessToken(uuid.New(), "test-client", "https://iss.example.com/api", "openid", false, true)
+		if err != nil {
+			t.Fatalf("GenerateOAuthAccessToken error: %v", err)
+		}
+		claims, err := ValidateOAuthAccessToken(token, "https://iss.example.com/api")
+		if err != nil {
+			t.Fatalf("ValidateOAuthAccessToken error: %v", err)
+		}
+		if got, want := claims.ExpiresAt.Sub(claims.IssuedAt.Time), config.AccessTokenLifetime(); got != want {
+			t.Errorf("with access_token_minutes %d, lifetime = %v, want %v", minutes, got, want)
+		}
+	}
+}

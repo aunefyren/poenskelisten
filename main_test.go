@@ -186,6 +186,8 @@ func TestParseFlagsOverridesEveryField(t *testing.T) {
 		"-smtpfrom", "noreply@example.com",
 		"-mfaenforced", "true",
 		"-mfarecoverycodes", "true",
+		"-accesstokenminutes", "30",
+		"-refreshtokendays", "14",
 		"-oidcenabled", "true",
 		"-oidcprovidername", "Authentik",
 		"-oidcissuerurl", "https://idp.example.com",
@@ -238,6 +240,8 @@ func TestParseFlagsOverridesEveryField(t *testing.T) {
 		SMTPFrom:                    "noreply@example.com",
 		MFAEnforced:                 true,
 		MFARecoveryCodesEnabled:     true,
+		AccessTokenMinutes:          30,
+		RefreshTokenDays:            14,
 		OIDCEnabled:                 true,
 		OIDCProviderName:            "Authentik",
 		OIDCIssuerURL:               "https://idp.example.com",
@@ -271,6 +275,38 @@ func TestParseFlagsInvalidTrustedProxiesFails(t *testing.T) {
 	_, _, _, err := parseFlags(models.ConfigStruct{PoenskelistenTrustedProxies: "10.0.0.2"})
 	if err == nil || !strings.Contains(err.Error(), "trustedproxies") {
 		t.Errorf("parseFlags error = %v, want an invalid -trustedproxies error", err)
+	}
+}
+
+func TestParseFlagsOutOfRangeTokenLifetimesFail(t *testing.T) {
+	cases := []struct {
+		flag  string
+		value string
+	}{
+		{"accesstokenminutes", "61"},
+		{"accesstokenminutes", "-1"},
+		{"refreshtokendays", "366"},
+		{"refreshtokendays", "-1"},
+	}
+	for _, c := range cases {
+		withArgs(t, "-"+c.flag, c.value)
+
+		_, _, _, err := parseFlags(models.ConfigStruct{})
+		if err == nil || !strings.Contains(err.Error(), c.flag) {
+			t.Errorf("parseFlags with -%s %s error = %v, want an invalid -%s error", c.flag, c.value, err, c.flag)
+		}
+	}
+}
+
+func TestParseFlagsZeroTokenLifetimeResetsToDefault(t *testing.T) {
+	withArgs(t, "-accesstokenminutes", "0", "-refreshtokendays", "0")
+
+	out, _, _, err := parseFlags(models.ConfigStruct{AccessTokenMinutes: 30, RefreshTokenDays: 14})
+	if err != nil {
+		t.Fatalf("parseFlags returned error: %v", err)
+	}
+	if out.AccessTokenMinutes != 0 || out.RefreshTokenDays != 0 {
+		t.Errorf("lifetimes = %d min / %d days, want 0 / 0 (the defaults)", out.AccessTokenMinutes, out.RefreshTokenDays)
 	}
 }
 
