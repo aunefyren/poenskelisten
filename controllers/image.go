@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -377,7 +378,7 @@ func decodeUploadedImage(imageBytes []byte, mimeType string) (image.Image, error
 		decodeConfig = func(b []byte) (image.Config, error) { return png.DecodeConfig(bytes.NewReader(b)) }
 		decode = func(b []byte) (image.Image, error) { return png.Decode(bytes.NewReader(b)) }
 	default:
-		logger.Log.Error("Invalid mime type for image. Type: " + mimeType)
+		logger.Log.Error("Invalid mime type for image. Type: " + strconv.Quote(mimeType))
 		return nil, errors.New("Invalid image type.")
 	}
 
