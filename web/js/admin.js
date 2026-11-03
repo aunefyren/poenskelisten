@@ -199,6 +199,14 @@ function serverInfoGroup(title, rows) {
     return '<div class="server-info-group"><div class="server-info-group-title">' + escapeServerInfo(title) + '</div>' + rows.join("") + '</div>';
 }
 
+// "15 minutes", "1 day"; empty for a missing value so the row reads "Not set".
+function pluralUnit(count, unit) {
+    if(count === null || count === undefined) {
+        return "";
+    }
+    return count + " " + unit + (count === 1 ? "" : "s");
+}
+
 function place_server_info(server_info) {
     var groups = [];
 
@@ -213,6 +221,7 @@ function place_server_info(server_info) {
                 : "Not set: links and single sign-on use ") + server_info.oauth_issuer, "warn")
             : serverInfoRow("External URL", server_info.poenskelisten_external_url, "mono"),
         serverInfoRow("Additional URLs", (server_info.poenskelisten_additional_urls || []).join(", "), "mono"),
+        serverInfoRow("Trusted proxies", (server_info.poenskelisten_trusted_proxies || []).join(", "), "mono"),
         serverInfoRow("Port", server_info.poenskelisten_port, "text"),
         serverInfoRow("Timezone", server_info.timezone, "text"),
         serverInfoRow("Log level", server_info.poenskelisten_log_level, "text")
@@ -258,7 +267,9 @@ function place_server_info(server_info) {
     // Security
     groups.push(serverInfoGroup("Security", [
         serverInfoRow("Require MFA", server_info.mfa_enforced, "bool"),
-        serverInfoRow("Recovery codes", server_info.mfa_recovery_codes_enabled, "bool")
+        serverInfoRow("Recovery codes", server_info.mfa_recovery_codes_enabled, "bool"),
+        serverInfoRow("Access token lifetime", pluralUnit(server_info.access_token_minutes, "minute"), "text"),
+        serverInfoRow("Login lasts", pluralUnit(server_info.refresh_token_days, "day"), "text")
     ]));
 
     // AI assistants: registering third-party apps is only possible while MCP is on.
