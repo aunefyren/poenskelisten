@@ -16,6 +16,7 @@ type ConfigStruct struct {
 	PoenskelistenDescription    string `json:"poenskelisten_description"`
 	PoenskelistenExternalURL    string `json:"poenskelisten_external_url"`
 	PoenskelistenAdditionalURLs string `json:"poenskelisten_additional_urls"`
+	PoenskelistenTrustedProxies string `json:"poenskelisten_trusted_proxies"`
 	PoenskelistenVersion        string `json:"poenskelisten_version"`
 	PoenskelistenCurrency       string `json:"poenskelisten_currency"`
 	PoenskelistenCurrencyPad    bool   `json:"poenskelisten_currency_pad"`

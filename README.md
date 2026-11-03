@@ -87,6 +87,7 @@ You can configure Pønskelisten in **three different ways**:
 | poenskelisten_port | port | port | int | Port to run on (default: `8080`) |
 | poenskelisten_external_url | externalurl | externalurl | string | **Required.** The main URL users open in their browser, e.g. `https://wishlist.example.com`. Used for login, e-mail links, public wishlist links, single sign-on and as the OAuth issuer. If unset, only `http://localhost:<port>` can log in. |
 | poenskelisten_additional_urls | additionalurls | additionalurls | string | Comma-separated extra URLs users can log in from, e.g. `http://192.168.1.10:8080,http://wishlist.lan`. Each must be just scheme, host and port. Links and single sign-on still use `external_url` (the SSO button switches to it). |
+| poenskelisten_trusted_proxies | trustedproxies | trustedproxies | string | Comma-separated IP addresses or CIDR ranges of your reverse proxy, e.g. `172.18.0.2` or `172.16.0.0/12`. Only these may report a visitor's IP through `X-Forwarded-For`. **Set this when running behind a reverse proxy**, see [Behind a reverse proxy](#behind-a-reverse-proxy). |
 | poenskelisten_environment | environment | environment | string | `production` or `test` |
 | poenskelisten_test_email | testemail | testemail | string | E-mail destination when in `test` |
 | poenskelisten_name | name | name | string | Display name of the app |
@@ -283,9 +284,24 @@ Remove `generateinvite` after first run to stop generating codes on start up.
 
 ### Optional Add-ons
 
-- Reverse proxy for access outside of home network (Caddy, Traefik, Nginx)
+- Reverse proxy for access outside of home network (Caddy, Traefik, Nginx), see [Behind a reverse proxy](#behind-a-reverse-proxy)
 
 - Adminer or phpMyAdmin (if you like UI DB tools, but not required anymore)
+
+### Behind a reverse proxy
+
+Login, MFA and the OAuth endpoints are rate-limited per visitor IP. Behind a
+reverse proxy, every request reaches Pønskelisten from the proxy's address, so
+set `trustedproxies` to that address for the real visitor IP to be used:
+
+```yaml
+    environment:
+      trustedproxies: 172.16.0.0/12 # Docker's default bridge networks; or the proxy's exact IP
+```
+
+Without it, `X-Forwarded-For` is ignored and all visitors share one rate limit,
+and the log warns about this once after startup. Only list proxies you run:
+any address in the list can claim to be any visitor.
 
 ## 🔑 Admin Access
 
