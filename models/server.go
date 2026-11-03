@@ -17,6 +17,9 @@ type ServerInfoReply struct {
 	Timezone                    string   `json:"timezone"`
 	PoenskelistenLogLevel       string   `json:"poenskelisten_log_level"`
 	PoenskelistenTestEmail      string   `json:"poenskelisten_test_email"`
+	// The reverse proxies in effect (invalid entries are already dropped). Empty
+	// means no peer may report a visitor's IP through X-Forwarded-For.
+	PoenskelistenTrustedProxies []string `json:"poenskelisten_trusted_proxies"`
 
 	// Database
 	DatabaseType     string `json:"database_type"`
@@ -44,6 +47,10 @@ type ServerInfoReply struct {
 	// Security (MFA)
 	MFAEnforced             bool `json:"mfa_enforced"`
 	MFARecoveryCodesEnabled bool `json:"mfa_recovery_codes_enabled"`
+	// Token lifetimes in effect (an unset or out-of-range value is already
+	// replaced by the default).
+	AccessTokenMinutes int `json:"access_token_minutes"`
+	RefreshTokenDays   int `json:"refresh_token_days"`
 
 	// AI assistants (MCP). Third-party app registration follows MCPEnabled.
 	MCPEnabled  bool   `json:"mcp_enabled"`

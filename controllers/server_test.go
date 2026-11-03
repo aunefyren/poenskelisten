@@ -29,6 +29,31 @@ func TestGetServerInfoLoginOriginsAndMCP(t *testing.T) {
 	}
 }
 
+func TestGetServerInfoProxiesAndTokenLifetimes(t *testing.T) {
+	restoreConfig(t)
+	config.ConfigFile.PoenskelistenTrustedProxies = "172.18.0.2, not-an-ip, 172.16.0.0/12"
+	config.ConfigFile.AccessTokenMinutes = 30
+	config.ConfigFile.RefreshTokenDays = 0
+
+	_, body := runHandler(APIGetServerInfo)
+	server, _ := body["server"].(map[string]interface{})
+
+	// Only the proxies actually trusted are shown; invalid entries are skipped
+	// at startup too.
+	proxies, _ := server["poenskelisten_trusted_proxies"].([]interface{})
+	if len(proxies) != 2 || proxies[0] != "172.18.0.2" || proxies[1] != "172.16.0.0/12" {
+		t.Errorf("poenskelisten_trusted_proxies = %v, want the two valid entries", server["poenskelisten_trusted_proxies"])
+	}
+	// JSON numbers decode as float64. Zero means the default, which is what's
+	// reported rather than the raw 0.
+	if server["access_token_minutes"] != float64(30) {
+		t.Errorf("access_token_minutes = %v, want 30", server["access_token_minutes"])
+	}
+	if server["refresh_token_days"] != float64(config.DefaultRefreshTokenDays) {
+		t.Errorf("refresh_token_days = %v, want the default %d", server["refresh_token_days"], config.DefaultRefreshTokenDays)
+	}
+}
+
 func TestGetServerInfo(t *testing.T) {
 	restoreConfig(t)
 	config.ConfigFile.PoenskelistenName = "Test App"
