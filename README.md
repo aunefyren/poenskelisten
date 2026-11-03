@@ -284,7 +284,7 @@ Remove `generateinvite` after first run to stop generating codes on start up.
 
 ### Optional Add-ons
 
-- Reverse proxy for access outside of home network (Caddy, Traefik, Nginx), see [Behind a reverse proxy](#behind-a-reverse-proxy)
+- Reverse proxy for HTTPS and access outside of home network (Caddy, Traefik, Nginx), see [HTTPS](#https) and [Behind a reverse proxy](#behind-a-reverse-proxy)
 
 - Adminer or phpMyAdmin (if you like UI DB tools, but not required anymore)
 
@@ -302,6 +302,69 @@ set `trustedproxies` to that address for the real visitor IP to be used:
 Without it, `X-Forwarded-For` is ignored and all visitors share one rate limit,
 and the log warns about this once after startup. Only list proxies you run:
 any address in the list can claim to be any visitor.
+
+### HTTPS
+
+Pønskelisten serves plain HTTP. When it's reachable from the internet, put a
+reverse proxy in front of it to handle HTTPS. Otherwise passwords and login
+cookies cross the network unencrypted. [Caddy](https://caddyserver.com) is the
+simplest choice: it gets and renews a free Let's Encrypt certificate on its own.
+
+You need a domain whose DNS points at your server, with ports 80 and 443
+forwarded to it (Let's Encrypt uses port 80 to verify the domain).
+
+`docker-compose.yml`:
+
+```yaml
+services:
+  caddy:
+    container_name: poenskelisten-caddy
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/data/:/data/:rw     # certificates, keep this
+      - ./caddy/config/:/config/:rw
+
+  poenskelisten-app:
+    container_name: poenskelisten-app
+    image: ghcr.io/aunefyren/poenskelisten:latest
+    restart: unless-stopped
+    # No "ports:" here: only Caddy can reach the app, so nobody can skip HTTPS.
+    environment:
+      PUID: 1000
+      PGID: 1000
+      externalurl: https://wishlist.example.com # must match the domain in the Caddyfile
+      trustedproxies: 172.16.0.0/12 # Docker's default bridge networks, where Caddy lives
+      dbtype: sqlite
+      timezone: Europe/Oslo
+      generateinvite: true
+    volumes:
+      - ./files/:/app/files/:rw
+      - ./images/:/app/images/:rw
+```
+
+`Caddyfile`, next to the compose file:
+
+```
+wishlist.example.com {
+	reverse_proxy poenskelisten-app:8080
+}
+```
+
+Run `docker compose up -d` and open `https://wishlist.example.com`. Caddy
+redirects plain HTTP to HTTPS and passes the visitor's address and the original
+scheme on to Pønskelisten, so rate limiting and secure cookies work without
+further setup.
+
+Using a different proxy (Nginx Proxy Manager, Traefik, a Cloudflare Tunnel)?
+The same rules apply: set `externalurl` to the public `https://` address, set
+`trustedproxies` to the proxy's address, keep the original `Host` header, and
+don't publish Pønskelisten's own port to the internet.
 
 ## 🔑 Admin Access
 
