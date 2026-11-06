@@ -9,12 +9,14 @@ import (
 	pauth "aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/utilities"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"runtime/debug"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -102,6 +104,7 @@ func buildServer() *mcp.Server {
 		Name:    "poenskelisten",
 		Version: config.ConfigFile.PoenskelistenVersion,
 	}, nil)
+	server.AddReceivingMiddleware(recoverPanics)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_wishlists",
@@ -119,6 +122,21 @@ func buildServer() *mcp.Server {
 	}, listGroups)
 
 	return server
+}
+
+// recoverPanics turns a panic while handling a request into an error for the
+// client. The SDK handles each request on a goroutine of its own, where gin's
+// recovery can't catch it, so a panic in a tool would stop the whole app.
+func recoverPanics(next mcp.MethodHandler) mcp.MethodHandler {
+	return func(ctx context.Context, method string, req mcp.Request) (result mcp.Result, err error) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				logger.Log.Error(fmt.Sprintf("MCP %s panicked: %v\n%s", method, recovered, debug.Stack()))
+				result, err = nil, errors.New("internal error")
+			}
+		}()
+		return next(ctx, method, req)
+	}
 }
 
 func listWishlists(ctx context.Context, _ *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
