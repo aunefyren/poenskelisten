@@ -176,9 +176,14 @@ func APIGetWishImage(context *gin.Context) {
 	context.JSON(http.StatusOK, gin.H{"image": ImageBytesToBase64(imageBytes), "message": "Picture retrieved."})
 }
 
-// userCanViewWishlist mirrors who can list a wishlist's wishes: its owner,
-// members of a group it is shared with, and its collaborators.
+// userCanViewWishlist is who may see a live wishlist and its wishes: its
+// owner, members of a group it is shared with, and its collaborators.
 func userCanViewWishlist(userID uuid.UUID, wishlistID uuid.UUID) (bool, error) {
+	// The membership and collaboration checks don't look at the wishlist
+	// itself, which may have been deleted.
+	if found, _, err := database.GetWishlistByWishlistID(wishlistID); err != nil || !found {
+		return false, err
+	}
 	checks := []func() (bool, error){
 		func() (bool, error) { return database.VerifyUserOwnershipToWishlist(userID, wishlistID) },
 		func() (bool, error) {
