@@ -931,6 +931,12 @@ func APIDeleteUser(context *gin.Context) {
 		logger.Log.Error("Failed to delete profile image of deleted user. Error: " + err.Error())
 	}
 
+	// Their claims already count as free; releasing them lets others claim
+	// those wishes, which the one-claim-per-wish index would otherwise refuse.
+	if err := database.DisableWishClaimsOfUser(user.ID); err != nil {
+		logger.Log.Error("Failed to release the claims of deleted user. Error: " + err.Error())
+	}
+
 	user = database.RedactUserObject(user)
 
 	context.JSON(http.StatusOK, gin.H{"user": user, "message": "User deleted."})

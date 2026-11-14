@@ -738,6 +738,31 @@ func TestAPIDeleteUserSuccess(t *testing.T) {
 	}
 }
 
+// A deleted account's claims are released, so someone else can claim the
+// wish: one live claim per wish would otherwise keep it taken.
+func TestAPIDeleteUserReleasesTheirClaims(t *testing.T) {
+	setupControllersDB(t)
+	admin := createTestUser(t)
+	_, claimant, wishlist, wish := claimSetup(t)
+	wishTestSeedClaim(t, wish.ID, claimant.ID)
+
+	header := map[string]string{"Authorization": authHeader(t, admin.ID, true)}
+	params := gin.Params{{Key: "user_id", Value: claimant.ID.String()}}
+	if code, resp, _ := doRequest(APIDeleteUser, "DELETE", "/api/admin/users/"+claimant.ID.String(), "", header, params); code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+
+	other := createTestUser(t)
+	group := createTestGroup(t, other.ID)
+	addGroupMembership(t, group.ID, other.ID)
+	addWishlistMembership(t, wishlist.ID, group.ID)
+	claim := models.WishClaim{WishID: wish.ID, UserID: other.ID, Enabled: true}
+	claim.ID = uuid.New()
+	if _, err := database.CreateWishClaimInDB(claim); err != nil {
+		t.Errorf("the wish can't be claimed after its claimer was deleted: %v", err)
+	}
+}
+
 func TestAPIDeleteUserInvalidUUID(t *testing.T) {
 	setupControllersDB(t)
 	admin := createTestUser(t)

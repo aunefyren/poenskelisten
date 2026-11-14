@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -641,22 +642,50 @@ func JoinWishlist(context *gin.Context) {
 		return
 	}
 
-	for _, Group := range wishlistmembership.Groups {
+	// Verify wishlist is owned by requester
+	wishlistOwned, err := database.VerifyUserOwnershipToWishlist(UserID, wishlist_id_int)
+	if err != nil {
+		logger.Log.Error("Failed to verify ownership to wishlist. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership to wishlist."})
+		context.Abort()
+		return
+	} else if !wishlistOwned {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Only owners can edit their wishlist."})
+		context.Abort()
+		return
+	}
 
-		var wishlistmembershipdb models.WishlistMembership
-		wishlistmembershipdb.GroupID = Group
+	// Every group is checked before any is shared, so a refusal shares none.
+	// A wishlist is only shared with groups its owner is in, as
+	// APIAddWishlistsToGroup and the MCP have it.
+	groups := []uuid.UUID{}
+	for _, groupID := range wishlistmembership.Groups {
+		if slices.Contains(groups, groupID) {
+			continue
+		}
 
-		// Verify user exists
-		_, err := database.GetGroupInformation(Group)
-		if err != nil {
+		// A deleted group keeps its memberships, so it is looked up too.
+		_, err := database.GetGroupInformation(groupID)
+		if err != nil && !errors.Is(err, database.ErrGroupNotFound) {
 			logger.Log.Error("Failed to get group. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get group."})
 			context.Abort()
 			return
 		}
+		isMember, memberErr := database.VerifyUserMembershipToGroup(UserID, groupID)
+		if memberErr != nil {
+			logger.Log.Error("Failed to verify membership to group. Error: " + memberErr.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
+			context.Abort()
+			return
+		} else if err != nil || !isMember {
+			context.JSON(http.StatusBadRequest, gin.H{"error": "You must be a member of the group."})
+			context.Abort()
+			return
+		}
 
 		// Verify membership doesnt exist
-		MembershipStatus, err := database.VerifyGroupMembershipToWishlist(wishlist_id_int, Group)
+		MembershipStatus, err := database.VerifyGroupMembershipToWishlist(wishlist_id_int, groupID)
 		if err != nil {
 			logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
@@ -668,20 +697,11 @@ func JoinWishlist(context *gin.Context) {
 			return
 		}
 
-		// Verify wishlist is owned by requester
-		wishlistOwned, err := database.VerifyUserOwnershipToWishlist(UserID, wishlist_id_int)
-		if err != nil {
-			logger.Log.Error("Failed to verify ownership to wishlist. Error: " + err.Error())
-			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership to wishlist."})
-			context.Abort()
-			return
-		} else if !wishlistOwned {
-			context.JSON(http.StatusBadRequest, gin.H{"error": "Only owners can edit their wishlist."})
-			context.Abort()
-			return
-		}
+		groups = append(groups, groupID)
+	}
 
-		wishlistmembershipdb.WishlistID = wishlist_id_int
+	for _, groupID := range groups {
+		wishlistmembershipdb := models.WishlistMembership{GroupID: groupID, WishlistID: wishlist_id_int, Enabled: true}
 		wishlistmembershipdb.ID = uuid.New()
 
 		// Add group membership to database
@@ -692,7 +712,6 @@ func JoinWishlist(context *gin.Context) {
 			context.Abort()
 			return
 		}
-
 	}
 
 	// get new group list

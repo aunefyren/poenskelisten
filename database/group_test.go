@@ -255,6 +255,71 @@ func TestDeleteGroupMembership(t *testing.T) {
 	}
 }
 
+// Leaving a group, or being removed from it, stops sharing one's wishlists
+// with it, and only with it: the leaver no longer sees the group to
+// withdraw them, while its members kept reading and claiming on them.
+func TestDeleteGroupMembershipWithdrawsTheMembersWishlists(t *testing.T) {
+	setupTestDB(t)
+	owner, member := createTestUser(t), createTestUser(t)
+	group, other := createTestGroup(t, owner.ID), createTestGroup(t, owner.ID)
+	for _, g := range []models.Group{group, other} {
+		addGroupMember(t, g.ID, owner.ID)
+	}
+	membership := addGroupMember(t, group.ID, member.ID)
+	addGroupMember(t, other.ID, member.ID)
+	memberList, ownerList := createTestWishlist(t, member.ID), createTestWishlist(t, owner.ID)
+	addWishlistMembership(t, memberList.ID, group.ID)
+	addWishlistMembership(t, memberList.ID, other.ID)
+	addWishlistMembership(t, ownerList.ID, group.ID)
+
+	if err := DeleteGroupMembership(membership.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		wishlist, group uuid.UUID
+		want            bool
+	}{
+		{memberList.ID, group.ID, false},
+		{memberList.ID, other.ID, true},
+		{ownerList.ID, group.ID, true},
+	} {
+		if shared, err := VerifyGroupMembershipToWishlist(c.wishlist, c.group); err != nil || shared != c.want {
+			t.Errorf("wishlist %s in group %s: shared = %v (err %v), want %v", c.wishlist, c.group, shared, err, c.want)
+		}
+	}
+}
+
+// Shares made before leaving was handled, or by an owner who never was in
+// the group, are withdrawn; those of current members stay.
+func TestWithdrawWishlistsFromOutsideGroups(t *testing.T) {
+	setupTestDB(t)
+	owner, leaver, outsider := createTestUser(t), createTestUser(t), createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMember(t, group.ID, owner.ID)
+	left := addGroupMember(t, group.ID, leaver.ID)
+	if err := Instance.Model(&models.GroupMembership{}).Where("id = ?", left.ID).Update("enabled", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	ownerList, leaverList, outsiderList := createTestWishlist(t, owner.ID), createTestWishlist(t, leaver.ID), createTestWishlist(t, outsider.ID)
+	for _, w := range []models.Wishlist{ownerList, leaverList, outsiderList} {
+		addWishlistMembership(t, w.ID, group.ID)
+	}
+
+	for round := 1; round <= 2; round++ {
+		if err := WithdrawWishlistsFromOutsideGroups(); err != nil {
+			t.Fatalf("round %d: %v", round, err)
+		}
+	}
+	for _, c := range []struct {
+		wishlist uuid.UUID
+		want     bool
+	}{{ownerList.ID, true}, {leaverList.ID, false}, {outsiderList.ID, false}} {
+		if shared, err := VerifyGroupMembershipToWishlist(c.wishlist, group.ID); err != nil || shared != c.want {
+			t.Errorf("wishlist %s: shared = %v (err %v), want %v", c.wishlist, shared, err, c.want)
+		}
+	}
+}
+
 func TestGroupToWishlistMembership(t *testing.T) {
 	setupTestDB(t)
 

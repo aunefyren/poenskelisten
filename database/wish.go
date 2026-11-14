@@ -5,6 +5,10 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	moderncsqlite "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // Get wishlist id from wish id
@@ -228,16 +232,91 @@ func CreateWishInDB(wishDB models.Wish) (wish models.Wish, err error) {
 	return wishDB, nil
 }
 
+// ErrWishAlreadyClaimed means the wish got a live claim before this one was
+// stored.
+var ErrWishAlreadyClaimed = errors.New("Wish is already claimed.")
+
+// CreateWishClaimInDB stores a claim unless the wish already has a live one.
+// Callers check first for a friendly answer, but two claims checked at once
+// both find the wish free; the unique index from EnsureOneClaimPerWish turns
+// the second insert away, and on MySQL, which has no partial index, the wish
+// is locked while its claims are counted.
 func CreateWishClaimInDB(wishClaimDB models.WishClaim) (wishClaim models.WishClaim, err error) {
-	record := Instance.Create(&wishClaimDB)
-
-	if record.Error != nil {
-		return models.WishClaim{}, record.Error
+	if Instance.Dialector.Name() == "mysql" {
+		err = Instance.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", wishClaimDB.WishID).Find(&models.Wish{}).Error; err != nil {
+				return err
+			}
+			var live int64
+			if err := tx.Model(&models.WishClaim{}).
+				Joins("JOIN users ON users.id = wish_claims.user_id").
+				Where("wish_claims.wish_id = ? AND wish_claims.enabled = ? AND users.enabled = ?", wishClaimDB.WishID, true, true).
+				Count(&live).Error; err != nil {
+				return err
+			} else if live > 0 {
+				return ErrWishAlreadyClaimed
+			}
+			return insertWishClaim(tx, &wishClaimDB)
+		})
+	} else {
+		err = insertWishClaim(Instance, &wishClaimDB)
 	}
-
-	if record.RowsAffected != 1 {
-		return models.WishClaim{}, errors.New("WishClaim not added to database.")
+	if err != nil {
+		return models.WishClaim{}, err
 	}
-
 	return wishClaimDB, nil
+}
+
+func insertWishClaim(db *gorm.DB, wishClaim *models.WishClaim) error {
+	record := db.Create(wishClaim)
+	if isUniqueViolation(record.Error) {
+		return ErrWishAlreadyClaimed
+	} else if record.Error != nil {
+		return record.Error
+	} else if record.RowsAffected != 1 {
+		return errors.New("WishClaim not added to database.")
+	}
+	return nil
+}
+
+// EnsureOneClaimPerWish adds the unique index that refuses a second live
+// claim on a wish. Claims that would break it are released first: those of
+// disabled accounts, which already count as free, and all but the oldest
+// live claim of a wish claimed twice by an earlier race.
+func EnsureOneClaimPerWish() error {
+	if Instance.Dialector.Name() == "mysql" {
+		return nil
+	}
+	if err := Instance.Exec("UPDATE wish_claims SET enabled = ? WHERE enabled = ? AND user_id IN (SELECT id FROM users WHERE enabled = ?)", false, true, false).Error; err != nil {
+		return err
+	}
+	if err := Instance.Exec(`UPDATE wish_claims SET enabled = ? WHERE id IN (
+		SELECT id FROM (
+			SELECT id, ROW_NUMBER() OVER (PARTITION BY wish_id ORDER BY created_at, id) AS position
+			FROM wish_claims WHERE enabled = ? AND deleted_at IS NULL
+		) ranked WHERE position > 1)`, false, true).Error; err != nil {
+		return err
+	}
+	return Instance.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_wish_claims_one_live ON wish_claims (wish_id) WHERE enabled AND deleted_at IS NULL").Error
+}
+
+// DisableWishClaimsOfUser releases every claim of a user whose account is
+// deleted, so their wishes can be claimed again.
+func DisableWishClaimsOfUser(userID uuid.UUID) error {
+	return Instance.Model(&models.WishClaim{}).
+		Where("user_id = ? AND enabled = ?", userID, true).
+		Update("enabled", false).Error
+}
+
+// isUniqueViolation recognises a broken unique index. GORM translates
+// PostgreSQL's error, but not the modernc SQLite driver's.
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	if translator, ok := Instance.Dialector.(gorm.ErrorTranslator); ok && errors.Is(translator.Translate(err), gorm.ErrDuplicatedKey) {
+		return true
+	}
+	var sqliteErr *moderncsqlite.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE
 }

@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"sort"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/gin-gonic/gin"
@@ -194,18 +193,17 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 		}
 	}
 
-	// Purge claim details if claimers are hidden
-	if wishlist.HideClaimers != nil && *wishlist.HideClaimers == true {
-		newClaimers := []models.WishClaimObject{}
-		for _, wishClaim := range wishClaimObject {
-			wishClaim.User.CreatedAt = time.Now()
-			wishClaim.User.UpdatedAt = time.Now()
-			wishClaim.User.Email = nil
-			wishClaim.User.FirstName = "Hidden"
-			wishClaim.User.LastName = "User"
-			newClaimers = append(newClaimers, wishClaim)
+	// With hidden claimers, others only learn that a wish is claimed: the
+	// claimer's ID would name them through the member list. The claimer keeps
+	// it, so they can tell the claim is theirs.
+	if wishlist.HideClaimers != nil && *wishlist.HideClaimers {
+		for i, wishClaim := range wishClaimObject {
+			hidden := models.UserMinimal{FirstName: "Hidden", LastName: "User"}
+			if requestUserID != nil && wishClaim.User.ID == *requestUserID {
+				hidden.ID = *requestUserID
+			}
+			wishClaimObject[i].User = hidden
 		}
-		wishClaimObject = newClaimers
 	}
 
 	wishObject.CreatedAt = wish.CreatedAt
@@ -470,14 +468,6 @@ func DeleteWish(context *gin.Context) {
 		return
 	}
 
-	wishObject, err := ConvertWishToWishObject(*wish, nil)
-	if err != nil {
-		logger.Log.Error("Failed to convert wish to wish object. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to convert wish to wish object."})
-		context.Abort()
-		return
-	}
-
 	// Verify if collaboration exists
 	collaborationStatus, err := database.VerifyWishlistCollaboratorToWishlist(wish.WishlistID, UserID)
 	if err != nil {
@@ -546,29 +536,49 @@ func DeleteWish(context *gin.Context) {
 	// Return response
 	context.JSON(http.StatusCreated, gin.H{"message": "Wish deleted.", "wishes": wishObjects})
 
-	if wishObject.WishClaimable {
-		for _, wishClaim := range wishObject.WishClaim {
-			if wishClaim.Enabled {
-				wishlist, err := database.GetWishlist(wish.WishlistID)
-				if err != nil {
-					logger.Log.Error("Failed to get wishlist. Error: " + err.Error())
-					return
-				}
+	// Whoever claimed the wish is told by e-mail, after the answer and whether
+	// or not it was claimed, so how long a delete takes says nothing about it.
+	if config.ConfigFile.SMTPEnabled {
+		go deletedWishNotifier(*wish)
+	}
+}
 
-				wishlistObject, err := ConvertWishlistToWishlistObject(wishlist, nil)
-				if err != nil {
-					logger.Log.Error("Failed to convert wishlist to wishlist object. Error: " + err.Error())
-					return
-				}
+// deletedWishNotifier is called once a wish is deleted; tests replace it.
+var deletedWishNotifier = notifyDeletedWishClaimers
 
-				wishClaimUser, err := database.GetAllUserInformation(wishClaim.User.ID)
-				if err != nil {
-					logger.Log.Error("Failed to get user object for user. Error: " + err.Error())
-					return
-				}
+// notifyDeletedWishClaimers e-mails whoever claimed a deleted wish. It reads
+// the claims itself: a wish converted for no one in particular hides the
+// claimers of a list with hidden claimers.
+func notifyDeletedWishClaimers(wish models.Wish) {
+	claims, err := database.GetWishClaimFromWish(wish.ID)
+	if err != nil {
+		logger.Log.Error("Failed to get the claims of a deleted wish. Error: " + err.Error())
+		return
+	} else if len(claims) == 0 {
+		return
+	}
 
-				utilities.SendSMTPDeletedClaimedWish(wishClaimUser, wishObject, wishlistObject)
-			}
+	wishlist, err := database.GetWishlist(wish.WishlistID)
+	if err != nil {
+		logger.Log.Error("Failed to get the wishlist of a deleted wish. Error: " + err.Error())
+		return
+	} else if wishlist.Claimable == nil || !*wishlist.Claimable {
+		return
+	}
+
+	wishObject := models.WishObject{Name: wish.Name}
+	wishlistObject := models.WishlistUser{GormModel: models.GormModel{ID: wishlist.ID}, Name: wishlist.Name}
+	for _, wishClaim := range claims {
+		if !wishClaim.Enabled {
+			continue
+		}
+		claimer, err := database.GetAllUserInformation(wishClaim.User.ID)
+		if err != nil {
+			logger.Log.Error("Failed to get the claimer of a deleted wish. Error: " + err.Error())
+			continue
+		}
+		if err := utilities.SendSMTPDeletedClaimedWish(claimer, wishObject, wishlistObject); err != nil {
+			logger.Log.Error("Failed to e-mail the claimer of a deleted wish. Error: " + err.Error())
 		}
 	}
 }
@@ -669,7 +679,13 @@ func RegisterWishClaim(context *gin.Context) {
 		return
 	}
 
-	if !WishlistOwnership && !WishlistMembership {
+	// The owner is refused before the claim is looked at, so the answer says
+	// nothing about it; being in one of the list's groups doesn't change that.
+	if WishlistOwnership {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "You cannot claim wishes on your own wishlist."})
+		context.Abort()
+		return
+	} else if !WishlistMembership {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "You are not a member of, or an owner of this wishlist group."})
 		context.Abort()
 		return
@@ -720,7 +736,11 @@ func RegisterWishClaim(context *gin.Context) {
 
 	// Create wish claim
 	_, err = database.CreateWishClaimInDB(db_wishclaim)
-	if err != nil {
+	if errors.Is(err, database.ErrWishAlreadyClaimed) {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Wish is already claimed."})
+		context.Abort()
+		return
+	} else if err != nil {
 		logger.Log.Error("Failed to create claim. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create claim."})
 		context.Abort()

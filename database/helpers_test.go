@@ -62,6 +62,9 @@ func setupTestDB(t *testing.T) {
 	}
 
 	Instance = instance
+	if err := EnsureOneClaimPerWish(); err != nil {
+		t.Fatalf("failed to add the claim index: %v", err)
+	}
 }
 
 func boolPtr(b bool) *bool { return &b }

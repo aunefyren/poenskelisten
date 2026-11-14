@@ -409,6 +409,7 @@ func TestJoinWishlistSuccess(t *testing.T) {
 	owner := createTestUser(t)
 	wishlist := createTestWishlist(t, owner.ID)
 	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
 
 	body := `{"groups":["` + group.ID.String() + `"]}`
 	code, resp := wlDo(JoinWishlist, "POST", "/api/auth/wishlists/"+wishlist.ID.String()+"/join", body, authHeader(t, owner.ID, false),
@@ -959,16 +960,35 @@ func TestJoinWishlistBadUUID(t *testing.T) {
 	}
 }
 
-func TestJoinWishlistUnknownGroup(t *testing.T) {
+// A wishlist is only shared with groups its owner is in. A group the owner
+// isn't in, has left, or that doesn't exist gets the same refusal, and when
+// one group of several is refused none is shared.
+func TestJoinWishlistOnlyIntoTheOwnersGroups(t *testing.T) {
 	setupControllersDB(t)
-	owner := createTestUser(t)
+	owner, other := createTestUser(t), createTestUser(t)
 	wishlist := createTestWishlist(t, owner.ID)
+	mine := createTestGroup(t, owner.ID)
+	addGroupMembership(t, mine.ID, owner.ID)
+	foreign := createTestGroup(t, other.ID)
+	addGroupMembership(t, foreign.ID, other.ID)
+	left := createTestGroup(t, other.ID)
+	addGroupMembership(t, left.ID, other.ID)
+	membership := addGroupMembership(t, left.ID, owner.ID)
+	if err := database.DeleteGroupMembership(membership.ID); err != nil {
+		t.Fatal(err)
+	}
 
-	body := `{"groups":["` + uuid.NewString() + `"]}`
-	code, resp := wlDo(JoinWishlist, "POST", "/api/auth/wishlists/"+wishlist.ID.String()+"/join", body, authHeader(t, owner.ID, false),
-		gin.Params{{Key: "wishlist_id", Value: wishlist.ID.String()}})
-	if code != 500 {
-		t.Fatalf("status = %d, want 500 when the group doesn't exist; body=%v", code, resp)
+	for _, groupID := range []uuid.UUID{foreign.ID, left.ID, uuid.New()} {
+		body := `{"groups":["` + mine.ID.String() + `","` + groupID.String() + `"]}`
+		code, resp := wlDo(JoinWishlist, "POST", "/api/auth/wishlists/"+wishlist.ID.String()+"/join", body, authHeader(t, owner.ID, false), wishlistTestParams(wishlist.ID))
+		if code != 400 || resp["error"] != "You must be a member of the group." {
+			t.Errorf("group %s: status = %d, want 400; body=%v", groupID, code, resp)
+		}
+	}
+	for _, groupID := range []uuid.UUID{mine.ID, foreign.ID, left.ID} {
+		if shared, err := database.VerifyGroupMembershipToWishlist(wishlist.ID, groupID); err != nil || shared {
+			t.Errorf("the wishlist was shared with group %s (err=%v)", groupID, err)
+		}
 	}
 }
 
@@ -1836,6 +1856,8 @@ func TestJoinWishlistDBFailures(t *testing.T) {
 		table string
 		skip  int
 	}{
+		{"group lookup", "query", "groups", 0},
+		{"group membership check", "query", "group_memberships", 0},
 		{"membership check", "query", "wishlist_memberships", 0},
 		{"ownership check", "query", "wishlists", 0},
 		{"membership create", "create", "wishlist_memberships", 0},
@@ -1847,6 +1869,7 @@ func TestJoinWishlistDBFailures(t *testing.T) {
 			owner := createTestUser(t)
 			wishlist := createTestWishlist(t, owner.ID)
 			group := createTestGroup(t, owner.ID)
+			addGroupMembership(t, group.ID, owner.ID)
 			failDBOperation(t, c.op, c.table, c.skip)
 
 			body := `{"groups":["` + group.ID.String() + `"]}`
@@ -1865,6 +1888,7 @@ func TestJoinWishlistReturnsNewestFirst(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 	newer := createTestWishlist(t, owner.ID)
 	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
 
 	body := `{"groups":["` + group.ID.String() + `"]}`
 	code, resp := wlDo(JoinWishlist, "POST", "/api/auth/wishlists/"+older.ID.String()+"/join", body, authHeader(t, owner.ID, false), wishlistTestParams(older.ID))
