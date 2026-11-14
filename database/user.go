@@ -313,11 +313,16 @@ func GetAllUsers() (usersRedacted []models.User, err error) {
 	return
 }
 
+// UpdateUserInDB saves the whole user record, except the one-time MFA state
+// (the last TOTP step used and the pending sign-in challenge): the record was
+// read earlier, and writing those back could undo a code or challenge used
+// in between, making it usable again. They change only through their own
+// conditional updates in mfa.go.
 func UpdateUserInDB(userOriginal models.User) (user models.User, err error) {
 	err = nil
 	user = userOriginal
 
-	record := Instance.Save(&user)
+	record := Instance.Omit("mfa_last_step", "mfa_challenge_id").Save(&user)
 
 	if record.Error != nil {
 		return user, record.Error

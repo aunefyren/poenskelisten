@@ -635,6 +635,73 @@ func TestAPIChangePasswordSuccess(t *testing.T) {
 	}
 }
 
+// userTestPendingChallenge gives the user a pending MFA sign-in and returns
+// its ID.
+func userTestPendingChallenge(t *testing.T, userID uuid.UUID) uuid.UUID {
+	t.Helper()
+	challengeID := uuid.New()
+	if err := database.SetMFAChallenge(userID, challengeID); err != nil {
+		t.Fatalf("failed to store MFA challenge: %v", err)
+	}
+	return challengeID
+}
+
+func userTestAssertNoChallenge(t *testing.T, userID uuid.UUID) {
+	t.Helper()
+	user, err := database.GetAllUserInformation(userID)
+	if err != nil {
+		t.Fatalf("failed to reload user: %v", err)
+	}
+	if user.MFAChallengeID != nil {
+		t.Errorf("MFA challenge = %v, want it dropped with the password change", *user.MFAChallengeID)
+	}
+}
+
+// A sign-in begun with the old password can't be finished after a reset.
+func TestAPIChangePasswordClearsMFAChallenge(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+	userTestPendingChallenge(t, user.ID)
+	resetCode, err := database.GenerateRandomResetCodeForUser(user.ID, true)
+	if err != nil {
+		t.Fatalf("failed to generate reset code: %v", err)
+	}
+
+	body := `{"reset_code":"` + resetCode + `","password":"NewPassword1!","password_repeat":"NewPassword1!"}`
+	if code, resp, _ := doRequest(APIChangePassword, "POST", "/api/open/users/password", body, nil, nil); code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	userTestAssertNoChallenge(t, user.ID)
+}
+
+// Nor after the user changes it on their profile.
+func TestUpdateUserPasswordChangeClearsMFAChallenge(t *testing.T) {
+	setupControllersDB(t)
+	user := newUserWithPassword(t, "CorrectHorse1!")
+	userTestPendingChallenge(t, user.ID)
+
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	body := `{"email":"` + *user.Email + `","password_original":"CorrectHorse1!","password":"NewPassword1!","password_repeat":"NewPassword1!"}`
+	if code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil); code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	userTestAssertNoChallenge(t, user.ID)
+}
+
+func TestUpdateUserClearMFAChallengeFails(t *testing.T) {
+	setupControllersDB(t)
+	user := newUserWithPassword(t, "CorrectHorse1!")
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	// The first users update is the profile save; fail the one after it.
+	failDBOperation(t, "update", "users", 1)
+
+	body := `{"email":"` + *user.Email + `","password_original":"CorrectHorse1!","password":"NewPassword1!","password_repeat":"NewPassword1!"}`
+	code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil)
+	if code != 500 || resp["error"] != "Failed to update user." {
+		t.Errorf("status = %d body=%v, want 500 'Failed to update user.'", code, resp)
+	}
+}
+
 func TestAPIDeleteUserCannotDeleteSelf(t *testing.T) {
 	setupControllersDB(t)
 	user := createTestUser(t)
@@ -1858,7 +1925,8 @@ func TestAPIChangePasswordDatabaseFailures(t *testing.T) {
 		wantMessage interface{}
 	}{
 		{"save password", 0, "Failed to update user.", nil},
-		{"rotate reset code", 1, nil, "Error."},
+		{"clear MFA challenge", 1, "Failed to update user.", nil},
+		{"rotate reset code", 2, nil, "Error."},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -29,6 +29,12 @@ type User struct {
 	MFAEnabled    *bool      `json:"mfa_enabled" gorm:"not null; default: false"`
 	MFASecret     *string    `json:"-"`
 	MFAEnrolledAt *time.Time `json:"mfa_enrolled_at"`
+	// MFALastStep is the 30-second step of the last TOTP code accepted, so a
+	// code can't be used twice.
+	MFALastStep *int64 `json:"-"`
+	// MFAChallengeID is the challenge token the user's last password sign-in
+	// got, cleared once its second factor is done, so it serves once.
+	MFAChallengeID *uuid.UUID `json:"-" gorm:"type:varchar(100)"`
 
 	// OIDC linkage fields (reserved for the OpenID Connect phase; added now so the
 	// schema is migrated once). OIDCSubject stores the IdP 'sub' claim.

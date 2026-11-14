@@ -10,12 +10,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/pquerna/otp/totp"
+	"gorm.io/gorm"
 )
 
 // enableTOTPEncryption installs a private key so utilities.EncryptString/
@@ -158,9 +161,23 @@ func mfaTestUserWithPassword(t *testing.T, plaintext string) models.User {
 	return updated
 }
 
+// mfaTestChallenge issues a challenge token the way a password sign-in does.
+func mfaTestChallenge(userID uuid.UUID) (string, error) {
+	token, challengeID, err := auth.GenerateMFAChallengeToken(userID)
+	if err != nil {
+		return "", err
+	}
+	return token, database.SetMFAChallenge(userID, challengeID)
+}
+
 func totpCodeFor(t *testing.T, secret string) string {
 	t.Helper()
-	code, err := totp.GenerateCode(secret, time.Now())
+	return totpCodeAt(t, secret, time.Now())
+}
+
+func totpCodeAt(t *testing.T, secret string, at time.Time) string {
+	t.Helper()
+	code, err := totp.GenerateCode(secret, at)
 	if err != nil {
 		t.Fatalf("failed to generate TOTP code: %v", err)
 	}
@@ -280,7 +297,9 @@ func activateTestUser(t *testing.T, userID uuid.UUID) (secret string, recoveryCo
 	config.ConfigFile.MFARecoveryCodesEnabled = true
 	secret = enrollTestUser(t, userID)
 
-	body := `{"code":"` + totpCodeFor(t, secret) + `"}`
+	// Activation uses up its code: take the previous step, still accepted, and
+	// leave the current one to the test.
+	body := `{"code":"` + totpCodeAt(t, secret, time.Now().Add(-30*time.Second)) + `"}`
 	code, parsed := runJSONHandler(APIActivateMFA, "POST", "/api/mfa/activate", body, map[string]string{
 		"Authorization": authHeader(t, userID, false),
 	}, nil)
@@ -382,7 +401,7 @@ func TestValidateMFASuccess(t *testing.T) {
 	user := mfaTestUserWithPassword(t, "correct horse battery staple")
 	secret, _ := activateTestUser(t, user.ID)
 
-	challenge, err := auth.GenerateMFAChallengeToken(user.ID)
+	challenge, err := mfaTestChallenge(user.ID)
 	if err != nil {
 		t.Fatalf("failed to generate challenge token: %v", err)
 	}
@@ -419,7 +438,7 @@ func TestValidateMFARecoveryCodeConsumed(t *testing.T) {
 	}
 	recoveryCode := recoveryCodes[0]
 
-	challenge, err := auth.GenerateMFAChallengeToken(user.ID)
+	challenge, err := mfaTestChallenge(user.ID)
 	if err != nil {
 		t.Fatalf("failed to generate challenge token: %v", err)
 	}
@@ -430,7 +449,7 @@ func TestValidateMFARecoveryCodeConsumed(t *testing.T) {
 	}
 
 	// The same recovery code must not work twice.
-	challenge2, err := auth.GenerateMFAChallengeToken(user.ID)
+	challenge2, err := mfaTestChallenge(user.ID)
 	if err != nil {
 		t.Fatalf("failed to generate challenge token: %v", err)
 	}
@@ -457,7 +476,7 @@ func TestValidateMFAWrongCode(t *testing.T) {
 	user := mfaTestUserWithPassword(t, "correct horse battery staple")
 	activateTestUser(t, user.ID)
 
-	challenge, err := auth.GenerateMFAChallengeToken(user.ID)
+	challenge, err := mfaTestChallenge(user.ID)
 	if err != nil {
 		t.Fatalf("failed to generate challenge token: %v", err)
 	}
@@ -473,7 +492,7 @@ func TestValidateMFANotEnabled(t *testing.T) {
 	enableTOTPEncryption(t)
 	user := createTestUser(t)
 
-	challenge, err := auth.GenerateMFAChallengeToken(user.ID)
+	challenge, err := mfaTestChallenge(user.ID)
 	if err != nil {
 		t.Fatalf("failed to generate challenge token: %v", err)
 	}
@@ -620,7 +639,7 @@ func TestValidateMFAUserNotFound(t *testing.T) {
 	enableTOTPEncryption(t)
 
 	// A well-formed challenge token for a user ID that was never created in the DB.
-	challenge, err := auth.GenerateMFAChallengeToken(uuid.New())
+	challenge, _, err := auth.GenerateMFAChallengeToken(uuid.New())
 	if err != nil {
 		t.Fatalf("failed to generate challenge token: %v", err)
 	}
@@ -656,7 +675,7 @@ func TestVerifySecondFactorRecoveryDisabledByConfig(t *testing.T) {
 	config.ConfigFile.MFARecoveryCodesEnabled = false
 	user := createTestUser(t)
 
-	ok, err := verifySecondFactor(user, "NOTASIXDIGITCODE")
+	ok, err := verifySecondFactor(user, "NOTASIXDIGITCODE", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -669,7 +688,7 @@ func TestVerifySecondFactorNoTOTPSecret(t *testing.T) {
 	setupControllersDB(t)
 	user := createTestUser(t)
 
-	_, err := verifySecondFactor(user, "123456")
+	_, err := verifySecondFactor(user, "123456", nil)
 	if err == nil {
 		t.Error("expected an error when the user has no TOTP secret configured")
 	}
@@ -710,7 +729,7 @@ func TestVerifySecondFactorCorruptSecret(t *testing.T) {
 	enableTOTPEncryption(t)
 	user := mfaUserWithCorruptSecret(t, "correct horse battery staple", true)
 
-	ok, err := verifySecondFactor(user, "123456")
+	ok, err := verifySecondFactor(user, "123456", nil)
 	if err == nil || ok {
 		t.Errorf("verifySecondFactor = (%v, %v), want (false, error) for an undecryptable secret", ok, err)
 	}
@@ -724,9 +743,41 @@ func TestVerifySecondFactorRecoveryCodeLookupFails(t *testing.T) {
 	user := createTestUser(t)
 	failDBOperation(t, "query", "mfa_recovery_codes", 0)
 
-	ok, err := verifySecondFactor(user, "ABCDEFGHIJKLMNOP")
+	ok, err := verifySecondFactor(user, "ABCDEFGHIJKLMNOP", nil)
 	if err == nil || ok {
 		t.Errorf("verifySecondFactor = (%v, %v), want (false, error) when recovery codes can't be loaded", ok, err)
+	}
+}
+
+// Two sign-ins sending the same recovery code at once both found it unused
+// and both got in. Here the other sign-in uses it between this one's check
+// and its consumption.
+func TestVerifySecondFactorRecoveryCodeUsedByARace(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	mfaKeepRecoveryCodesSetting(t)
+	user := createTestUser(t)
+	_, recoveryCodes := activateTestUser(t, user.ID)
+	if len(recoveryCodes) == 0 {
+		t.Fatal("expected recovery codes")
+	}
+
+	raced := false
+	err := database.Instance.Callback().Update().Before("gorm:begin_transaction").Register("test:rival-sign-in", func(db *gorm.DB) {
+		if raced || db.Statement.Table != "mfa_recovery_codes" {
+			return
+		}
+		raced = true
+		if err := db.Session(&gorm.Session{NewDB: true}).Model(&models.MFARecoveryCode{}).Where("user_id = ?", user.ID).Update("used_at", time.Now()).Error; err != nil {
+			t.Errorf("failed to use the code first: %v", err)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ok, err := verifySecondFactor(user, recoveryCodes[0], nil); ok || err != nil {
+		t.Errorf("verifySecondFactor = (%v, %v), want (false, nil) for a code used meanwhile", ok, err)
 	}
 }
 
@@ -741,7 +792,7 @@ func TestVerifySecondFactorRecoveryCodeConsumeFails(t *testing.T) {
 	}
 	failDBOperation(t, "update", "mfa_recovery_codes", 0)
 
-	ok, err := verifySecondFactor(user, recoveryCodes[0])
+	ok, err := verifySecondFactor(user, recoveryCodes[0], nil)
 	if err == nil || ok {
 		t.Errorf("verifySecondFactor = (%v, %v), want (false, error) when the code can't be marked used", ok, err)
 	}
@@ -787,11 +838,13 @@ func TestActivateMFADatabaseFailures(t *testing.T) {
 	cases := []struct {
 		name      string
 		op, table string
+		skip      int
 		wantError string
 	}{
-		{"clear old recovery codes", "delete", "mfa_recovery_codes", "Failed to store recovery codes."},
-		{"store recovery codes", "create", "mfa_recovery_codes", "Failed to store recovery codes."},
-		{"activate user", "update", "users", "Failed to enable MFA."},
+		{"record the code", "update", "users", 0, "Failed to verify code."},
+		{"clear old recovery codes", "delete", "mfa_recovery_codes", 0, "Failed to store recovery codes."},
+		{"store recovery codes", "create", "mfa_recovery_codes", 0, "Failed to store recovery codes."},
+		{"activate user", "update", "users", 1, "Failed to enable MFA."},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -802,7 +855,7 @@ func TestActivateMFADatabaseFailures(t *testing.T) {
 			user := createTestUser(t)
 			secret := enrollTestUser(t, user.ID)
 			header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
-			failDBOperation(t, c.op, c.table, 0)
+			failDBOperation(t, c.op, c.table, c.skip)
 
 			body := `{"code":"` + totpCodeFor(t, secret) + `"}`
 			code, parsed := runJSONHandler(APIActivateMFA, "POST", "/api/mfa/activate", body, header, nil)
@@ -842,7 +895,8 @@ func TestDisableMFAPersistFails(t *testing.T) {
 	user := mfaTestUserWithPassword(t, "correct horse battery staple")
 	secret, _ := activateTestUser(t, user.ID)
 	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
-	failDBOperation(t, "update", "users", 0)
+	// The first update of users records the TOTP code.
+	failDBOperation(t, "update", "users", 1)
 
 	body := `{"password":"correct horse battery staple","code":"` + totpCodeFor(t, secret) + `"}`
 	code, parsed := runJSONHandler(APIDisableMFA, "POST", "/api/mfa/disable", body, header, nil)
@@ -856,12 +910,307 @@ func TestValidateMFACorruptSecret(t *testing.T) {
 	enableTOTPEncryption(t)
 	user := mfaUserWithCorruptSecret(t, "correct horse battery staple", true)
 
-	challenge, err := auth.GenerateMFAChallengeToken(user.ID)
+	challenge, err := mfaTestChallenge(user.ID)
 	if err != nil {
 		t.Fatalf("failed to generate challenge token: %v", err)
 	}
 	body := `{"mfa_token":"` + challenge + `","code":"123456"}`
 	code, parsed := runJSONHandler(APIValidateMFA, "POST", "/api/mfa/validate", body, nil, nil)
+	if code != 500 || parsed["error"] != "Failed to verify code." {
+		t.Errorf("status = %d body=%v, want 500 'Failed to verify code.'", code, parsed)
+	}
+}
+
+// A TOTP code works once: seen over someone's shoulder or replayed from a
+// recorded request, it can't sign in again, through a new challenge or to
+// turn MFA off, and neither can an older one. The code that turned MFA on
+// is used up too.
+func TestTOTPCodesWorkOnce(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	user := mfaTestUserWithPassword(t, "correct horse battery staple")
+	secret := enrollTestUser(t, user.ID)
+	activation := totpCodeAt(t, secret, time.Now().Add(-30*time.Second))
+	if code, parsed := runJSONHandler(APIActivateMFA, "POST", "/api/mfa/activate", `{"code":"`+activation+`"}`, map[string]string{"Authorization": authHeader(t, user.ID, false)}, nil); code != 200 {
+		t.Fatalf("activation = %d %v, want 200", code, parsed)
+	}
+
+	if code := postValidateMFA(t, user, activation); code != 401 {
+		t.Errorf("the activation code signed in: status = %d, want 401", code)
+	}
+	current := totpCodeFor(t, secret)
+	if code := postValidateMFA(t, user, current); code != 200 {
+		t.Fatalf("first use = %d, want 200", code)
+	}
+	if code := postValidateMFA(t, user, current); code != 401 {
+		t.Errorf("replayed code = %d, want 401", code)
+	}
+	body := `{"password":"correct horse battery staple","code":"` + current + `"}`
+	if code, parsed := runJSONHandler(APIDisableMFA, "POST", "/api/mfa/disable", body, map[string]string{"Authorization": authHeader(t, user.ID, false)}, nil); code != 400 {
+		t.Errorf("replayed code turned MFA off: status = %d; body=%v", code, parsed)
+	}
+	if code := postValidateMFA(t, user, totpCodeAt(t, secret, time.Now().Add(30*time.Second))); code != 200 {
+		t.Errorf("the next code = %d, want 200", code)
+	}
+}
+
+func postValidateMFA(t *testing.T, userID models.User, code string) int {
+	t.Helper()
+	challenge, err := mfaTestChallenge(userID.ID)
+	if err != nil {
+		t.Fatalf("failed to generate challenge token: %v", err)
+	}
+	body := `{"mfa_token":"` + challenge + `","code":"` + code + `"}`
+	status, _ := runJSONHandler(APIValidateMFA, "POST", "/api/open/tokens/mfa", body, nil, nil)
+	return status
+}
+
+// The token a password sign-in gets for the MFA step serves once: replayed
+// with another valid code, it gets no second session. A newer sign-in
+// replaces it as well.
+func TestMFAChallengeWorksOnce(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	user := mfaTestUserWithPassword(t, "correct horse battery staple")
+	secret, _ := activateTestUser(t, user.ID)
+	signIn := func() string {
+		t.Helper()
+		code, body := postGenerateToken(`{"email":"` + *user.Email + `","password":"correct horse battery staple"}`)
+		token, _ := body["mfa_token"].(string)
+		if code != 200 || token == "" {
+			t.Fatalf("password sign-in = %d %v, want an mfa_token", code, body)
+		}
+		return token
+	}
+	complete := func(challenge string, at time.Time) int {
+		t.Helper()
+		body := `{"mfa_token":"` + challenge + `","code":"` + totpCodeAt(t, secret, at) + `"}`
+		code, _ := runJSONHandler(APIValidateMFA, "POST", "/api/open/tokens/mfa", body, nil, nil)
+		return code
+	}
+
+	replaced := signIn()
+	latest := signIn()
+	if code := complete(replaced, time.Now()); code != 401 {
+		t.Errorf("a replaced challenge = %d, want 401", code)
+	}
+	if code := complete(latest, time.Now()); code != 200 {
+		t.Fatalf("the latest challenge = %d, want 200", code)
+	}
+	if code := complete(latest, time.Now().Add(30*time.Second)); code != 401 {
+		t.Errorf("a completed challenge with a new code = %d, want 401", code)
+	}
+}
+
+// concurrently runs n handler calls released at once and counts the 200s.
+func concurrently(n int, call func(i int) int) int {
+	var wg sync.WaitGroup
+	var successes atomic.Int32
+	start := make(chan struct{})
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if call(i) == 200 {
+				successes.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	return int(successes.Load())
+}
+
+// The same challenge and code, sent many times at once, gets one session.
+func TestValidateMFAConcurrentSameCode(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	user := mfaTestUserWithPassword(t, "correct horse battery staple")
+	secret, _ := activateTestUser(t, user.ID)
+	challenge, err := mfaTestChallenge(user.ID)
+	if err != nil {
+		t.Fatalf("failed to generate challenge token: %v", err)
+	}
+	body := `{"mfa_token":"` + challenge + `","code":"` + totpCodeFor(t, secret) + `"}`
+
+	successes := concurrently(20, func(int) int {
+		code, _ := runJSONHandler(APIValidateMFA, "POST", "/api/open/tokens/mfa", body, nil, nil)
+		return code
+	})
+	if successes != 1 {
+		t.Errorf("sessions = %d, want 1", successes)
+	}
+}
+
+// One challenge sent with several valid recovery codes at once gets one
+// session, and only the winning code is used up.
+func TestValidateMFAConcurrentRecoveryCodes(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	mfaKeepRecoveryCodesSetting(t)
+	user := mfaTestUserWithPassword(t, "correct horse battery staple")
+	_, recoveryCodes := activateTestUser(t, user.ID)
+	challenge, err := mfaTestChallenge(user.ID)
+	if err != nil {
+		t.Fatalf("failed to generate challenge token: %v", err)
+	}
+
+	successes := concurrently(len(recoveryCodes), func(i int) int {
+		body := `{"mfa_token":"` + challenge + `","code":"` + recoveryCodes[i] + `"}`
+		code, _ := runJSONHandler(APIValidateMFA, "POST", "/api/open/tokens/mfa", body, nil, nil)
+		return code
+	})
+	if successes != 1 {
+		t.Errorf("sessions = %d, want 1", successes)
+	}
+	active, err := database.GetActiveRecoveryCodes(user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(active) != len(recoveryCodes)-1 {
+		t.Errorf("unused recovery codes = %d, want %d: the losing sign-ins used theirs up", len(active), len(recoveryCodes)-1)
+	}
+}
+
+// completeChallengeFirst makes a rival sign-in complete the user's pending
+// challenge just before this request's first write to users.
+func completeChallengeFirst(t *testing.T, userID uuid.UUID) {
+	t.Helper()
+	onDBOperation(t, "update", "users", 0, func(tx *gorm.DB) {
+		if err := tx.Model(&models.User{}).Where("id = ?", userID).Update("mfa_challenge_id", nil).Error; err != nil {
+			t.Errorf("rival sign-in failed: %v", err)
+		}
+	})
+}
+
+// A sign-in that loses its challenge to another one, after passing the
+// first check, leaves its TOTP code unused for the user's next sign-in.
+func TestValidateMFALosingTheChallengeKeepsTheTOTPCode(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	user := mfaTestUserWithPassword(t, "correct horse battery staple")
+	secret, _ := activateTestUser(t, user.ID)
+	current := totpCodeFor(t, secret)
+	challenge, err := mfaTestChallenge(user.ID)
+	if err != nil {
+		t.Fatalf("failed to generate challenge token: %v", err)
+	}
+	completeChallengeFirst(t, user.ID)
+
+	body := `{"mfa_token":"` + challenge + `","code":"` + current + `"}`
+	if code, parsed := runJSONHandler(APIValidateMFA, "POST", "/api/open/tokens/mfa", body, nil, nil); code != 401 {
+		t.Fatalf("losing sign-in = %d %v, want 401", code, parsed)
+	}
+	if code := postValidateMFA(t, user, current); code != 200 {
+		t.Errorf("the same code on a new sign-in = %d, want 200", code)
+	}
+}
+
+// Likewise with a recovery code: it stays unused.
+func TestValidateMFALosingTheChallengeKeepsTheRecoveryCode(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	mfaKeepRecoveryCodesSetting(t)
+	user := mfaTestUserWithPassword(t, "correct horse battery staple")
+	_, recoveryCodes := activateTestUser(t, user.ID)
+	challenge, err := mfaTestChallenge(user.ID)
+	if err != nil {
+		t.Fatalf("failed to generate challenge token: %v", err)
+	}
+	completeChallengeFirst(t, user.ID)
+
+	body := `{"mfa_token":"` + challenge + `","code":"` + recoveryCodes[0] + `"}`
+	if code, parsed := runJSONHandler(APIValidateMFA, "POST", "/api/open/tokens/mfa", body, nil, nil); code != 401 {
+		t.Fatalf("losing sign-in = %d %v, want 401", code, parsed)
+	}
+	active, err := database.GetActiveRecoveryCodes(user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(active) != len(recoveryCodes) {
+		t.Errorf("unused recovery codes = %d, want all %d", len(active), len(recoveryCodes))
+	}
+}
+
+// A typo doesn't use up the challenge: the user can try again on it.
+func TestValidateMFAWrongCodeKeepsTheChallenge(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	user := mfaTestUserWithPassword(t, "correct horse battery staple")
+	secret, _ := activateTestUser(t, user.ID)
+	challenge, err := mfaTestChallenge(user.ID)
+	if err != nil {
+		t.Fatalf("failed to generate challenge token: %v", err)
+	}
+	current := totpCodeFor(t, secret)
+	wrong := "000000"
+	if current == wrong {
+		wrong = "111111"
+	}
+
+	for _, c := range []struct {
+		code string
+		want int
+	}{{wrong, 401}, {current, 200}} {
+		body := `{"mfa_token":"` + challenge + `","code":"` + c.code + `"}`
+		if code, parsed := runJSONHandler(APIValidateMFA, "POST", "/api/open/tokens/mfa", body, nil, nil); code != c.want {
+			t.Errorf("code %s = %d %v, want %d", c.code, code, parsed, c.want)
+		}
+	}
+}
+
+func TestValidateMFACompleteChallengeFails(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	user := mfaTestUserWithPassword(t, "correct horse battery staple")
+	secret, _ := activateTestUser(t, user.ID)
+	challenge, err := mfaTestChallenge(user.ID)
+	if err != nil {
+		t.Fatalf("failed to generate challenge token: %v", err)
+	}
+	failDBOperation(t, "update", "users", 0)
+
+	body := `{"mfa_token":"` + challenge + `","code":"` + totpCodeFor(t, secret) + `"}`
+	code, parsed := runJSONHandler(APIValidateMFA, "POST", "/api/open/tokens/mfa", body, nil, nil)
+	if code != 500 || parsed["error"] != "Failed to verify code." {
+		t.Errorf("status = %d body=%v, want 500 'Failed to verify code.'", code, parsed)
+	}
+}
+
+func TestVerifySecondFactorRecoveryChallengeConsumeFails(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	mfaKeepRecoveryCodesSetting(t)
+	user := createTestUser(t)
+	_, recoveryCodes := activateTestUser(t, user.ID)
+	challengeID := uuid.New()
+	if err := database.SetMFAChallenge(user.ID, challengeID); err != nil {
+		t.Fatal(err)
+	}
+	failDBOperation(t, "update", "users", 0)
+
+	if ok, err := verifySecondFactor(user, recoveryCodes[0], &challengeID); ok || err == nil {
+		t.Errorf("verifySecondFactor = (%v, %v), want (false, error)", ok, err)
+	}
+	active, err := database.GetActiveRecoveryCodes(user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(active) != len(recoveryCodes) {
+		t.Errorf("unused recovery codes = %d, want all %d", len(active), len(recoveryCodes))
+	}
+}
+
+func TestActivateMFARecordStepFails(t *testing.T) {
+	setupControllersDB(t)
+	enableTOTPEncryption(t)
+	user := createTestUser(t)
+	secret := enrollTestUser(t, user.ID)
+	failDBOperation(t, "update", "users", 0)
+
+	body := `{"code":"` + totpCodeFor(t, secret) + `"}`
+	code, parsed := runJSONHandler(APIActivateMFA, "POST", "/api/mfa/activate", body, map[string]string{"Authorization": authHeader(t, user.ID, false)}, nil)
 	if code != 500 || parsed["error"] != "Failed to verify code." {
 		t.Errorf("status = %d body=%v, want 500 'Failed to verify code.'", code, parsed)
 	}
