@@ -8,6 +8,7 @@ import (
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
 	"errors"
+	"image"
 	"net/http"
 	"strings"
 	"time"
@@ -533,6 +534,16 @@ func UpdateUser(context *gin.Context) {
 		return
 	}
 
+	// Decoded before anything is written, so a refused image changes nothing.
+	var profileImage image.Image
+	if userUpdateRequest.ProfileImage != "" {
+		profileImage, err = decodeImageUpload(context.Request.Context(), userID, userUpdateRequest.ProfileImage)
+		if err != nil {
+			respondImageUploadError(context, err)
+			return
+		}
+	}
+
 	// Email changes are only allowed for local accounts; an OIDC account's email
 	// is owned by the identity provider and used for linking, so it is left as-is.
 	// The request's email arrives lowercased, so compare ignoring case: an
@@ -581,8 +592,8 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// Update profile image
-	if userUpdateRequest.ProfileImage != "" {
-		err = UpdateUserProfileImage(userOriginal.ID, userUpdateRequest.ProfileImage)
+	if profileImage != nil {
+		err = storeImage(profileImageDir, userOriginal.ID, profileImage)
 		if err != nil {
 			logger.Log.Error("Failed to update profile image. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile image."})

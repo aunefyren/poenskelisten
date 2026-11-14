@@ -380,8 +380,60 @@ func TestRegisterWish_InvalidImageData(t *testing.T) {
 	w, ctx := wishCtx("POST", "/api/wishes?wishlist="+wishlist.ID.String(), `{"name":"A nice gift","image_data":"not-valid-base64-image-data"}`)
 	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
 	RegisterWish(ctx)
-	if w.Code != 500 {
-		t.Fatalf("status = %d, want 500 for invalid image data; body=%s", w.Code, w.Body.String())
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400 for invalid image data; body=%s", w.Code, w.Body.String())
+	}
+	if found, _, err := database.GetWishesFromWishlist(wishlist.ID); err != nil || found {
+		t.Errorf("a wish was created despite its image being refused (found=%v, err=%v)", found, err)
+	}
+}
+
+// An image over the pixel limit is refused before the wish is created, so the
+// wishlist doesn't end up with a wish missing its image.
+func TestRegisterWish_OversizedImageCreatesNothing(t *testing.T) {
+	setupControllersDB(t)
+	wishTestImageDir(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+
+	body := `{"name":"A nice gift","image_data":"` + imageTestDataURI("image/png", imageTestPNGHeader(6000, 4001)) + `"}`
+	w, ctx := wishCtx("POST", "/api/wishes?wishlist="+wishlist.ID.String(), body)
+	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	RegisterWish(ctx)
+	if w.Code != 400 || !strings.Contains(w.Body.String(), "megapixels") {
+		t.Fatalf("status = %d, want 400 naming the pixel limit; body=%s", w.Code, w.Body.String())
+	}
+	if found, _, err := database.GetWishesFromWishlist(wishlist.ID); err != nil || found {
+		t.Errorf("a wish was created despite its image being refused (found=%v, err=%v)", found, err)
+	}
+}
+
+// A refused image leaves the wish as it was, without creating the category
+// named in the same request.
+func TestAPIUpdateWish_OversizedImageChangesNothing(t *testing.T) {
+	setupControllersDB(t)
+	wishTestImageDir(t)
+	req := wishTestUpdateFixture(`{"name":"Renamed %s","category_name":"Books","image_data":"` + imageTestDataURI("image/png", imageTestPNGHeader(6000, 4001)) + `"}`)(t)
+	wishID := uuid.MustParse(req.params.ByName("wish_id"))
+	before, err := database.GetWishByWishID(wishID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w := wishTestSend(t, req, authHeader(t, req.userID, false))
+	if w.Code != 400 || !strings.Contains(w.Body.String(), "megapixels") {
+		t.Fatalf("status = %d, want 400 naming the pixel limit; body=%s", w.Code, w.Body.String())
+	}
+	after, err := database.GetWishByWishID(wishID)
+	if err != nil || after.Name != before.Name {
+		t.Errorf("wish name = %q (err %v), want it unchanged as %q", after.Name, err, before.Name)
+	}
+	categories, err := database.GetWishCategoriesFromWishlist(before.WishlistID)
+	if err != nil || len(categories) != 0 {
+		t.Errorf("categories = %v (err %v), want none created", categories, err)
+	}
+	if exists, err := CheckIfWishImageExists(wishID); err != nil || exists {
+		t.Errorf("image stored = %v (err %v), want none", exists, err)
 	}
 }
 
@@ -2045,11 +2097,11 @@ func TestAPIUpdateWish_InvalidImageData(t *testing.T) {
 	req := wishTestUpdateFixture(`{"name":%q,"image_data":"not-valid-base64-image-data"}`)(t)
 
 	w := wishTestSend(t, req, authHeader(t, req.userID, false))
-	if w.Code != 500 {
-		t.Fatalf("status = %d, want 500; body=%s", w.Code, w.Body.String())
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
 	}
-	if got := parseWishBody(t, w)["error"]; got != "Failed to save wish image." {
-		t.Errorf("error = %v, want %q", got, "Failed to save wish image.")
+	if got := parseWishBody(t, w)["error"]; got != "Invalid Base64 string." {
+		t.Errorf("error = %v, want %q", got, "Invalid Base64 string.")
 	}
 }
 

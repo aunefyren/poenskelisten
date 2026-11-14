@@ -1142,8 +1142,33 @@ func TestUpdateUserProfileImageFailure(t *testing.T) {
 	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
 	body := `{"email":"` + *user.Email + `","password_original":"CorrectHorse1!","profile_image":"not-valid-base64-image-data"}`
 	code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil)
-	if code != 500 {
-		t.Fatalf("status = %d, want 500 for an unparseable profile image; body=%v", code, resp)
+	if code != 400 {
+		t.Fatalf("status = %d, want 400 for an unparseable profile image; body=%v", code, resp)
+	}
+}
+
+// A refused profile image is checked before anything is written: the e-mail
+// change in the same request is not applied and the account stays verified.
+func TestUpdateUserOversizedProfileImageChangesNothing(t *testing.T) {
+	setupControllersDB(t)
+	imageTestSetup(t)
+	user := newUserWithPassword(t, "CorrectHorse1!")
+	if err := database.SetUserVerification(user.ID, true); err != nil {
+		t.Fatal(err)
+	}
+
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	body := `{"email":"changed@example.com","password_original":"CorrectHorse1!","profile_image":"` + imageTestDataURI("image/png", imageTestPNGHeader(6000, 4001)) + `"}`
+	code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil)
+	if code != 400 {
+		t.Fatalf("status = %d, want 400 for a profile image over the pixel limit; body=%v", code, resp)
+	}
+	after, err := database.GetAllUserInformation(user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *after.Email != *user.Email || after.Verified == nil || !*after.Verified {
+		t.Errorf("e-mail = %q, verified = %v, want %q and still verified", *after.Email, after.Verified, *user.Email)
 	}
 }
 
