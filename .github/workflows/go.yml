@@ -15,10 +15,10 @@ jobs:
     env:
       GIST_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26.x'
           cache: true
@@ -68,7 +68,7 @@ jobs:
       # match the badge URL in README.md.
       - name: Update coverage badge
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && env.GIST_TOKEN != '' }}
-        uses: schneegans/dynamic-badges-action@v1.7.0
+        uses: schneegans/dynamic-badges-action@e9a478b16159b4d31420099ba146cdc50f134483 # v1.7.0
         with:
           auth: ${{ secrets.GIT_HUB_TOKEN }}
           gistID: c6b71770c9d068fecac9a809568ae9e6

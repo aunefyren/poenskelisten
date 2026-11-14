@@ -21,8 +21,12 @@ jobs:
           - goarch: arm
             goos: windows
     steps:
-    - uses: actions/checkout@v7
-    - uses: wangyoucao577/go-release-action@v1.55
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        # Keep the release token out of .git/config, where every later step
+        # could read it; nothing here runs git with it.
+        persist-credentials: false
+    - uses: wangyoucao577/go-release-action@279495102627de7960cbc33434ab01a12bae144b # v1.55
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         goos: ${{ matrix.goos }}
