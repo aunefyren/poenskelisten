@@ -761,6 +761,10 @@ func TestGetUserAdminCanViewOthers(t *testing.T) {
 func TestGetUserSelfAndAdminResponsesAreRedacted(t *testing.T) {
 	setupControllersDB(t)
 	admin := createTestUser(t)
+	admin.Admin = true
+	if _, err := database.UpdateUserInDB(admin); err != nil {
+		t.Fatalf("failed to make admin: %v", err)
+	}
 	target := createTestUser(t)
 
 	cases := []struct {
@@ -866,8 +870,8 @@ func TestGetUsersIncludeDisabledIgnoredForNonAdmin(t *testing.T) {
 func TestGetUsersNotACollaboratorOfWishlist(t *testing.T) {
 	setupControllersDB(t)
 	requester := createTestUser(t)
-	owner := createTestUser(t)
-	wishlist := createTestWishlist(t, owner.ID)
+	createTestUser(t)
+	wishlist := createTestWishlist(t, requester.ID)
 
 	header := map[string]string{"Authorization": authHeader(t, requester.ID, false)}
 	code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users?notACollaboratorOfWishlistID="+wishlist.ID.String(), "", header, nil)
@@ -895,14 +899,30 @@ func TestGetUsersNotACollaboratorBadWishlistID(t *testing.T) {
 	}
 }
 
-func TestGetUsersNotACollaboratorUnknownWishlist(t *testing.T) {
+// The filters tell who is in a group or edits a wishlist, so they are only
+// for the group's members and the wishlist's owner. Anyone else, and anyone
+// naming a group or wishlist that doesn't exist, gets the same refusal.
+func TestGetUsersFiltersRequireAccess(t *testing.T) {
 	setupControllersDB(t)
 	requester := createTestUser(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+	wishlist := createTestWishlist(t, owner.ID)
+	addWishlistMembership(t, wishlist.ID, group.ID)
+	addWishCollaborator(t, wishlist.ID, requester.ID)
 
 	header := map[string]string{"Authorization": authHeader(t, requester.ID, false)}
-	code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users?notACollaboratorOfWishlistID="+uuid.NewString(), "", header, nil)
-	if code != 400 {
-		t.Fatalf("status = %d, want 400; body=%v", code, resp)
+	for _, query := range []string{
+		"notAMemberOfGroupID=" + group.ID.String(),
+		"notAMemberOfGroupID=" + uuid.NewString(),
+		"notACollaboratorOfWishlistID=" + wishlist.ID.String(),
+		"notACollaboratorOfWishlistID=" + uuid.NewString(),
+	} {
+		code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users?"+query, "", header, nil)
+		if code != 403 || resp["users"] != nil {
+			t.Errorf("%s: status = %d, want 403 and no users; body=%v", query, code, resp)
+		}
 	}
 }
 
@@ -911,7 +931,8 @@ func TestGetUsersNotACollaboratorWishlistLookupFailure(t *testing.T) {
 	requester := createTestUser(t)
 	wishlist := createTestWishlist(t, requester.ID)
 	header := map[string]string{"Authorization": authHeader(t, requester.ID, false)}
-	failDBOperation(t, "query", "wishlists", 0)
+	// The first query on wishlists is the ownership check.
+	failDBOperation(t, "query", "wishlists", 1)
 
 	code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users?notACollaboratorOfWishlistID="+wishlist.ID.String(), "", header, nil)
 	if code != 500 {
@@ -1451,8 +1472,10 @@ func TestGetUsersNotAMemberOfGroupMembershipLookupFailure(t *testing.T) {
 	setupControllersDB(t)
 	user := createTestUser(t)
 	group := createTestGroup(t, user.ID)
+	addGroupMembership(t, group.ID, user.ID)
 	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
-	failDBOperation(t, "query", "group_memberships", 0)
+	// The first query on group_memberships is the caller's own membership.
+	failDBOperation(t, "query", "group_memberships", 1)
 
 	code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users?notAMemberOfGroupID="+group.ID.String(), "", header, nil)
 	if code != 500 {
@@ -1466,8 +1489,8 @@ func TestGetUsersNotAMemberOfGroupMembershipLookupFailure(t *testing.T) {
 func TestGetUsersNotACollaboratorWishlistConversionFailure(t *testing.T) {
 	setupControllersDB(t)
 	requester := createTestUser(t)
-	owner := createTestUser(t)
-	wishlist := createTestWishlist(t, owner.ID)
+	createTestUser(t)
+	wishlist := createTestWishlist(t, requester.ID)
 	header := map[string]string{"Authorization": authHeader(t, requester.ID, false)}
 	failDBOperation(t, "query", "wishlist_collaborators", 0)
 
@@ -1483,9 +1506,9 @@ func TestGetUsersNotACollaboratorWishlistConversionFailure(t *testing.T) {
 func TestGetUsersNotACollaboratorExcludesCollaborators(t *testing.T) {
 	setupControllersDB(t)
 	requester := createTestUser(t)
-	owner := createTestUser(t)
+	createTestUser(t)
 	collaborator := createTestUser(t)
-	wishlist := createTestWishlist(t, owner.ID)
+	wishlist := createTestWishlist(t, requester.ID)
 
 	collab := models.WishlistCollaborator{UserID: collaborator.ID, WishlistID: wishlist.ID, Enabled: true}
 	collab.ID = uuid.New()
@@ -1995,4 +2018,61 @@ func setUserEmail(t *testing.T, user models.User, email string) models.User {
 		t.Fatalf("failed to set e-mail: %v", err)
 	}
 	return updated
+}
+
+func TestGetUsersHidesOtherEmailsFromNonAdmins(t *testing.T) {
+	setupControllersDB(t)
+	requester := createTestUser(t)
+	other := createTestUser(t)
+	admin := createTestUser(t)
+	admin.Admin = true
+	if _, err := database.UpdateUserInDB(admin); err != nil {
+		t.Fatalf("failed to make admin: %v", err)
+	}
+
+	emails := func(callerID uuid.UUID) map[string]interface{} {
+		t.Helper()
+		header := map[string]string{"Authorization": authHeader(t, callerID, callerID == admin.ID)}
+		code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users", "", header, nil)
+		if code != 200 {
+			t.Fatalf("status = %d, want 200; body=%v", code, resp)
+		}
+		users, _ := resp["users"].([]interface{})
+		byID := map[string]interface{}{}
+		for _, entry := range users {
+			user := entry.(map[string]interface{})
+			byID[user["id"].(string)] = user["email"]
+		}
+		return byID
+	}
+
+	seen := emails(requester.ID)
+	if seen[requester.ID.String()] != *requester.Email {
+		t.Errorf("own email = %v, want %s", seen[requester.ID.String()], *requester.Email)
+	}
+	if seen[other.ID.String()] != nil || seen[admin.ID.String()] != nil {
+		t.Errorf("a non-admin saw other users' emails: %v", seen)
+	}
+
+	seen = emails(admin.ID)
+	if seen[other.ID.String()] != *other.Email {
+		t.Errorf("admin sees other email = %v, want %s", seen[other.ID.String()], *other.Email)
+	}
+}
+
+func TestGetUserHidesEmailFromOtherUsers(t *testing.T) {
+	setupControllersDB(t)
+	requester := createTestUser(t)
+	target := createTestUser(t)
+
+	header := map[string]string{"Authorization": authHeader(t, requester.ID, false)}
+	params := gin.Params{{Key: "user_id", Value: target.ID.String()}}
+	code, resp, _ := doRequest(GetUser, "GET", "/api/auth/users/"+target.ID.String(), "", header, params)
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	user, _ := resp["user"].(map[string]interface{})
+	if user["email"] != nil || user["first_name"] != "Test" {
+		t.Errorf("user = %v, want the name without the email", user)
+	}
 }

@@ -128,7 +128,7 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 
 	wishObject := models.WishObject{}
 
-	user_object, err := database.GetUserInformation(wish.OwnerID)
+	user_object, err := database.GetUserProfile(wish.OwnerID)
 	if err != nil {
 		logger.Log.Error("Failed to get information about wish owner for wish'" + wish.ID.String() + "' and user '" + wish.OwnerID.String() + "'. Returning. Error: " + err.Error())
 		return models.WishObject{}, err
@@ -149,7 +149,7 @@ func ConvertWishToWishObject(wish models.Wish, requestUserID *uuid.UUID) (models
 		return models.WishObject{}, errors.New("wishlist not found for wish")
 	}
 
-	wishlistOwnerUser, err := database.GetUserInformation(wishlist.OwnerID)
+	wishlistOwnerUser, err := database.GetUserProfile(wishlist.OwnerID)
 	if err != nil {
 		logger.Log.Error("Failed to get information about wishlist owner for wish'" + wish.ID.String() + "' and user '" + wishlist.OwnerID.String() + "'. Returning. Error: " + err.Error())
 		return models.WishObject{}, err

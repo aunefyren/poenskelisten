@@ -767,7 +767,7 @@ func GetGroupMembers(context *gin.Context) {
 	// Add user information to each membership
 	for _, membership := range groupMemberships {
 
-		userObject, err := database.GetUserInformation(membership.MemberID)
+		userObject, err := database.GetUserProfile(membership.MemberID)
 		if errors.Is(err, database.ErrUserNotFound) {
 			// A disabled account keeps its membership row; leave it out of the
 			// listing rather than failing the whole request.
@@ -917,7 +917,7 @@ func ConvertGroupToGroupObject(group models.Group) (groupObject models.GroupUser
 	groupObject = models.GroupUser{}
 
 	// Add owner information to group
-	userObject, err := database.GetUserInformation(group.OwnerID)
+	userObject, err := database.GetUserProfile(group.OwnerID)
 	if err != nil {
 		logger.Log.Error("Failed to get user object for user ID " + group.ID.String() + ". Returning. Error: " + err.Error())
 		return models.GroupUser{}, errors.New("Failed to get user object for user ID " + group.ID.String() + ".")
@@ -942,7 +942,7 @@ func ConvertGroupToGroupObject(group models.Group) (groupObject models.GroupUser
 
 	// Add user information to each membership
 	for _, membership := range groupMemberships {
-		userObject, err := database.GetUserInformation(membership.MemberID)
+		userObject, err := database.GetUserProfile(membership.MemberID)
 		if err != nil {
 			logger.Log.Error("Failed to get user information for group '" + group.ID.String() + "' member '" + membership.MemberID.String() + "'. Returning. Error: " + err.Error())
 			return models.GroupUser{}, errors.New("Failed to get user information for group '" + group.ID.String() + "' member '" + membership.MemberID.String() + "'.")

@@ -229,6 +229,7 @@ func GetUser(context *gin.Context) {
 			context.Abort()
 			return
 		}
+		userObject = database.UserProfile(userObject)
 	}
 
 	// Reply
@@ -285,6 +286,20 @@ func GetUsers(context *gin.Context) {
 			return
 		}
 
+		// The filtered list tells who is in the group, which only its members
+		// may know.
+		isMember, err := database.VerifyUserMembershipToGroup(userID, notAMemberOfGroupID)
+		if err != nil {
+			logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
+			context.Abort()
+			return
+		} else if !isMember {
+			context.JSON(http.StatusForbidden, gin.H{"error": "You are not a member of this group."})
+			context.Abort()
+			return
+		}
+
 		for _, user := range users {
 			member, err := database.VerifyUserMembershipToGroup(user.ID, notAMemberOfGroupID)
 			if err != nil {
@@ -309,6 +324,20 @@ func GetUsers(context *gin.Context) {
 		if err != nil {
 			logger.Log.Error("Failed to parse wishlist ID. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
+			context.Abort()
+			return
+		}
+
+		// The filter is for the owner choosing collaborators; to anyone else
+		// it would tell who edits a list they may not even see.
+		owns, err := database.VerifyUserOwnershipToWishlist(userID, notACollaboratorOfWishlistID)
+		if err != nil {
+			logger.Log.Error("Failed to verify ownership of wishlist. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of wishlist."})
+			context.Abort()
+			return
+		} else if !owns {
+			context.JSON(http.StatusForbidden, gin.H{"error": "Only the owner of a wishlist can choose its collaborators."})
 			context.Abort()
 			return
 		}
@@ -349,6 +378,14 @@ func GetUsers(context *gin.Context) {
 		}
 
 		users = newUsers
+	}
+
+	if !requestingUserObject.Admin {
+		for i := range users {
+			if users[i].ID != userID {
+				users[i] = database.UserProfile(users[i])
+			}
+		}
 	}
 
 	// Reply

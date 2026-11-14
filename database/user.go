@@ -237,6 +237,23 @@ func GetAmountOfEnabledUsers() (int, error) {
 	return int(userRecords.RowsAffected), nil
 }
 
+// UserProfile keeps what other users may see of a user: their ID and name.
+// The e-mail address and the account's flags are for the user and admins
+// only; a group or a collaboration can be set up without the user's say, so
+// sharing one is no reason to see them.
+func UserProfile(user models.User) models.User {
+	return models.User{GormModel: models.GormModel{ID: user.ID}, FirstName: user.FirstName, LastName: user.LastName}
+}
+
+// GetUserProfile is the UserProfile of an enabled user.
+func GetUserProfile(userID uuid.UUID) (models.User, error) {
+	user, err := GetUserInformation(userID)
+	if err != nil {
+		return models.User{}, err
+	}
+	return UserProfile(user), nil
+}
+
 func RedactUserObject(user models.User) (userObject models.User) {
 	userObject = user
 
