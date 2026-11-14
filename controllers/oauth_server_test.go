@@ -307,17 +307,7 @@ func TestOAuthAuthorizeUnsupportedResponseType(t *testing.T) {
 		"response_type": {"token"}, "scope": {"openid"},
 		"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "state": {"s1"},
 	}
-	w := getAuthorize(q, oauthServerTestSSOCookie(t, user.ID))
-	if w.Code != http.StatusFound {
-		t.Fatalf("status = %d, want 302; body=%s", w.Code, w.Body.String())
-	}
-	loc, _ := url.Parse(w.Header().Get("Location"))
-	if loc.Query().Get("error") != "unsupported_response_type" {
-		t.Errorf("error = %q, want unsupported_response_type", loc.Query().Get("error"))
-	}
-	if loc.Query().Get("state") != "s1" {
-		t.Errorf("state = %q, want s1 echoed back", loc.Query().Get("state"))
-	}
+	oauthServerTestRefusedHere(t, getAuthorize(q, oauthServerTestSSOCookie(t, user.ID)), "unsupported_response_type")
 }
 
 func TestOAuthAuthorizeMissingPKCEChallenge(t *testing.T) {
@@ -330,11 +320,7 @@ func TestOAuthAuthorizeMissingPKCEChallenge(t *testing.T) {
 		"client_id": {client.ClientID}, "redirect_uri": {client.RedirectURIs[0]},
 		"response_type": {"code"}, "scope": {"openid"},
 	}
-	w := getAuthorize(q, oauthServerTestSSOCookie(t, user.ID))
-	loc, _ := url.Parse(w.Header().Get("Location"))
-	if loc.Query().Get("error") != "invalid_request" {
-		t.Errorf("error = %q, want invalid_request; status=%d", loc.Query().Get("error"), w.Code)
-	}
+	oauthServerTestRefusedHere(t, getAuthorize(q, oauthServerTestSSOCookie(t, user.ID)), "invalid_request")
 }
 
 func TestOAuthAuthorizeInvalidScope(t *testing.T) {
@@ -349,11 +335,7 @@ func TestOAuthAuthorizeInvalidScope(t *testing.T) {
 		"response_type": {"code"}, "scope": {"mcp:wishlists.write"},
 		"code_challenge": {challenge}, "code_challenge_method": {"S256"},
 	}
-	w := getAuthorize(q, oauthServerTestSSOCookie(t, user.ID))
-	loc, _ := url.Parse(w.Header().Get("Location"))
-	if loc.Query().Get("error") != "invalid_scope" {
-		t.Errorf("error = %q, want invalid_scope", loc.Query().Get("error"))
-	}
+	oauthServerTestRefusedHere(t, getAuthorize(q, oauthServerTestSSOCookie(t, user.ID)), "invalid_scope")
 }
 
 func TestOAuthAuthorizeInvalidTargetResource(t *testing.T) {
@@ -369,10 +351,35 @@ func TestOAuthAuthorizeInvalidTargetResource(t *testing.T) {
 		"code_challenge": {challenge}, "code_challenge_method": {"S256"},
 		"resource": {"https://not-a-real-resource.example"},
 	}
-	w := getAuthorize(q, oauthServerTestSSOCookie(t, user.ID))
+	oauthServerTestRefusedHere(t, getAuthorize(q, oauthServerTestSSOCookie(t, user.ID)), "invalid_target")
+}
+
+// oauthServerTestRefusedHere checks that an authorization request was refused
+// on this server's page rather than by redirecting to the client: anyone can
+// register a client, so its redirect URI is not to be followed blindly.
+func oauthServerTestRefusedHere(t *testing.T, w *httptest.ResponseRecorder, code string) {
+	t.Helper()
+	if w.Code != http.StatusBadRequest || w.Header().Get("Location") != "" || !strings.Contains(w.Body.String(), code) {
+		t.Errorf("status = %d location=%q body=%q, want 400 here naming %s", w.Code, w.Header().Get("Location"), w.Body.String(), code)
+	}
+}
+
+// The web app's redirect URIs come from the configuration, so its errors
+// still go back to it.
+func TestOAuthAuthorizeFirstPartyErrorsRedirect(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	client := oauthServerTestNewClient(t, true, true, []string{"openid"}, "https://wishlist.example.com/oauth/callback")
+	_, challenge := oauthServerTestPKCE()
+
+	w := getAuthorize(url.Values{
+		"client_id": {client.ClientID}, "redirect_uri": {client.RedirectURIs[0]},
+		"response_type": {"token"}, "scope": {"openid"},
+		"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "state": {"s1"},
+	})
 	loc, _ := url.Parse(w.Header().Get("Location"))
-	if loc.Query().Get("error") != "invalid_target" {
-		t.Errorf("error = %q, want invalid_target", loc.Query().Get("error"))
+	if w.Code != http.StatusFound || loc.Query().Get("error") != "unsupported_response_type" || loc.Query().Get("state") != "s1" {
+		t.Errorf("status = %d location=%q, want a redirect with the error and the state", w.Code, w.Header().Get("Location"))
 	}
 }
 
@@ -1372,9 +1379,7 @@ func TestOAuthAuthorizeThirdPartyAPIResourceRefused(t *testing.T) {
 		"scope": {"openid"}, "state": {"s"}, "code_challenge": {challenge}, "code_challenge_method": {"S256"},
 		"resource": {config.APIResource()},
 	})
-	if w.Code != http.StatusFound || !strings.Contains(w.Header().Get("Location"), "error=invalid_target") {
-		t.Errorf("status = %d location=%q, want a redirect with error=invalid_target", w.Code, w.Header().Get("Location"))
-	}
+	oauthServerTestRefusedHere(t, w, "invalid_target")
 }
 
 // The consent form round-trips through the browser, so a tampered resource

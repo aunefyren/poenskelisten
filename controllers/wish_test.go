@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
 	"encoding/json"
@@ -1048,8 +1049,8 @@ func TestConvertWishToWishObject_HideClaimersAnonymizes(t *testing.T) {
 		t.Fatalf("failed to seed claim: %v", err)
 	}
 
-	// A stranger (not owner) still sees the claim exists, but claimer identity
-	// should be anonymized when hide_claimers is on.
+	// A stranger (not owner) still sees the claim exists, but not who made
+	// it: not even the claimer's ID, which the group's member list resolves.
 	stranger := createTestUser(t)
 	wishObject, err := ConvertWishToWishObject(wish, &stranger.ID)
 	if err != nil {
@@ -1058,8 +1059,17 @@ func TestConvertWishToWishObject_HideClaimersAnonymizes(t *testing.T) {
 	if len(wishObject.WishClaim) != 1 {
 		t.Fatalf("expected 1 claim, got %v", wishObject.WishClaim)
 	}
-	if wishObject.WishClaim[0].User.FirstName != "Hidden" {
-		t.Errorf("FirstName = %q, want Hidden", wishObject.WishClaim[0].User.FirstName)
+	if user := wishObject.WishClaim[0].User; user.FirstName != "Hidden" || user.ID != uuid.Nil || user.Email != nil {
+		t.Errorf("claimer = %+v, want an anonymous Hidden User", user)
+	}
+
+	// The claimer still recognises their own claim.
+	wishObject, err = ConvertWishToWishObject(wish, &claimant.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(wishObject.WishClaim) != 1 || wishObject.WishClaim[0].User.ID != claimant.ID || wishObject.WishClaim[0].User.FirstName != "Hidden" {
+		t.Errorf("claimer's own view = %+v, want their ID under the hidden name", wishObject.WishClaim)
 	}
 }
 
@@ -1313,21 +1323,80 @@ func TestRegisterWishClaim_WishNotFound(t *testing.T) {
 	}
 }
 
-func TestRegisterWishClaim_OwnerCanClaimOthersWish(t *testing.T) {
+// The owner can't claim on their own wishlist, even a collaborator's wish and
+// even as a member of a group the list is shared with. They get the same
+// answer whether or not the wish is claimed, so it tells them nothing.
+func TestRegisterWishClaim_OwnerRefusedWhateverTheClaim(t *testing.T) {
 	setupControllersDB(t)
-	owner := createTestUser(t)
-	contributor := createTestUser(t)
-	wishlist := createTestWishlist(t, owner.ID)
-	wishlist = makeClaimable(t, wishlist)
-	// A wish added by someone else (e.g. via a group) on the owner's own wishlist.
-	wish := createTestWish(t, contributor.ID, wishlist.ID)
+	owner, claimant, wishlist, _ := claimSetup(t)
+	collaborator := createTestUser(t)
+	addWishCollaborator(t, wishlist.ID, collaborator.ID)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+	addWishlistMembership(t, wishlist.ID, group.ID)
+	free := createTestWish(t, collaborator.ID, wishlist.ID)
+	claimed := createTestWish(t, collaborator.ID, wishlist.ID)
+	wishTestSeedClaim(t, claimed.ID, claimant.ID)
+
+	bodies := []string{}
+	for _, wish := range []models.Wish{free, claimed} {
+		w, ctx := wishCtx("POST", "/api/wishes/"+wish.ID.String()+"/claim", `{}`)
+		ctx.Params = gin.Params{{Key: "wish_id", Value: wish.ID.String()}}
+		ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+		RegisterWishClaim(ctx)
+		if w.Code != 400 {
+			t.Fatalf("status = %d, want 400 for the wishlist owner; body=%s", w.Code, w.Body.String())
+		}
+		bodies = append(bodies, w.Body.String())
+	}
+	if bodies[0] != bodies[1] {
+		t.Errorf("answers differ between a free and a claimed wish: %s / %s", bodies[0], bodies[1])
+	}
+	if mine, err := database.VerifyUserOwnershipToWishClaimByWish(owner.ID, free.ID); err != nil || mine {
+		t.Errorf("the owner's claim was stored (mine=%v, err=%v)", mine, err)
+	}
+}
+
+// Two claims sent at once both found the wish free and were both stored. Here
+// a rival's claim lands between this request's check and its insert.
+func TestRegisterWishClaim_LosingARaceIsAlreadyClaimed(t *testing.T) {
+	setupControllersDB(t)
+	_, claimant, wishlist, wish := claimSetup(t)
+	rival := createTestUser(t)
+	group := createTestGroup(t, rival.ID)
+	addGroupMembership(t, group.ID, rival.ID)
+	addWishlistMembership(t, wishlist.ID, group.ID)
+	// Hooked before the insert's own transaction, so the rival claim is
+	// committed on its own, as it would be from another request.
+	raced := false
+	err := database.Instance.Callback().Create().Before("gorm:begin_transaction").Register("test:rival-claim", func(db *gorm.DB) {
+		if raced || db.Statement.Table != "wish_claims" {
+			return
+		}
+		raced = true
+		rivalClaim := models.WishClaim{WishID: wish.ID, UserID: rival.ID, Enabled: true}
+		rivalClaim.ID = uuid.New()
+		if err := db.Session(&gorm.Session{NewDB: true}).Create(&rivalClaim).Error; err != nil {
+			t.Errorf("failed to store the rival claim: %v", err)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	w, ctx := wishCtx("POST", "/api/wishes/"+wish.ID.String()+"/claim", `{}`)
 	ctx.Params = gin.Params{{Key: "wish_id", Value: wish.ID.String()}}
-	ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+	ctx.Request.Header.Set("Authorization", authHeader(t, claimant.ID, false))
 	RegisterWishClaim(ctx)
-	if w.Code != 201 {
-		t.Fatalf("status = %d, want 201 (wishlist owner claiming another user's wish); body=%s", w.Code, w.Body.String())
+	if w.Code != 400 || parseWishBody(t, w)["error"] != "Wish is already claimed." {
+		t.Fatalf("status = %d, want 400 'Wish is already claimed.'; body=%s", w.Code, w.Body.String())
+	}
+	var live []models.WishClaim
+	if err := database.Instance.Where("wish_id = ? AND enabled = ?", wish.ID, true).Find(&live).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(live) != 1 || live[0].UserID != rival.ID {
+		t.Errorf("live claims = %+v, want only the rival's", live)
 	}
 }
 
@@ -1870,10 +1939,10 @@ func TestDeleteWish_InjectedFailures(t *testing.T) {
 		return wishTestReq{handler: DeleteWish, method: "DELETE", path: "/api/wishes/" + wish.ID.String(), params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}, userID: owner.ID}
 	}
 	wishTestRunFailures(t, []wishTestFailCase{
-		// ConvertWishToWishObject makes the first collaborator and wishlist
-		// queries; the handler's own checks are the second.
-		{name: "collaborator check", fixture: fixture, op: "query", table: "wishlist_collaborators", skip: 1, want: 500, wantErr: "Failed to verify wishlist collaborator status."},
-		{name: "ownership check", fixture: fixture, op: "query", table: "wishlists", skip: 1, want: 500, wantErr: "Failed to verify ownership of wishlist."},
+		// The handler's own checks are the first collaborator and wishlist
+		// queries.
+		{name: "collaborator check", fixture: fixture, op: "query", table: "wishlist_collaborators", skip: 0, want: 500, wantErr: "Failed to verify wishlist collaborator status."},
+		{name: "ownership check", fixture: fixture, op: "query", table: "wishlists", skip: 0, want: 500, wantErr: "Failed to verify ownership of wishlist."},
 		{name: "disable wish", fixture: fixture, op: "update", table: "wishes", want: 500, wantErr: "Failed to delete wish."},
 		{name: "list wishes", fixture: fixture, op: "query", table: "wishes", skip: 1, want: 500, wantErr: "Failed to get wishes from database."},
 	})
@@ -1914,37 +1983,83 @@ func TestDeleteWish_ReturnsRemainingWishesNewestFirst(t *testing.T) {
 	}
 }
 
-// The claimant notification runs after the response is written, so its
-// failures are only logged: the delete must still succeed.
-func TestDeleteWish_ClaimNotificationFailuresAreNotFatal(t *testing.T) {
+// Claimers are notified once the delete has answered, and the notification
+// starts whether or not the wish was claimed, so the time a delete takes
+// can't tell the owner or a collaborator which wishes were claimed.
+func TestDeleteWish_NotifiesClaimersAfterAnsweringWhateverTheClaims(t *testing.T) {
+	setupControllersDB(t)
+	restoreConfig(t)
+	config.ConfigFile.SMTPEnabled = true
+	owner, claimant, wishlist, claimed := claimSetup(t)
+	free := createTestWish(t, owner.ID, wishlist.ID)
+	wishTestSeedClaim(t, claimed.ID, claimant.ID)
+
+	started := make(chan uuid.UUID, 2)
+	release := make(chan struct{})
+	original := deletedWishNotifier
+	t.Cleanup(func() { deletedWishNotifier = original })
+	deletedWishNotifier = func(wish models.Wish) {
+		started <- wish.ID
+		<-release
+	}
+	defer close(release)
+
+	header := authHeader(t, owner.ID, false)
+	for _, wish := range []models.Wish{free, claimed} {
+		w := wishTestSend(t, wishTestReq{handler: DeleteWish, method: "DELETE", params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}}, header)
+		if w.Code != 201 {
+			t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+		}
+		select {
+		case id := <-started:
+			if id != wish.ID {
+				t.Errorf("notified wish %s, want %s", id, wish.ID)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no notification started for %s", wish.Name)
+		}
+	}
+}
+
+// Only the claimer of a deleted wish is e-mailed, hidden claimers included.
+func TestNotifyDeletedWishClaimersEmailsTheClaimer(t *testing.T) {
+	setupControllersDB(t)
+	srv := startFakeSMTPServer(t)
+	configureTestSMTP(t, srv)
+	owner, claimant, wishlist, claimed := claimSetup(t)
+	wishlistTestSave(t, wishlist, func(w *models.Wishlist) { w.HideClaimers = boolPtr(true) })
+	free := createTestWish(t, owner.ID, wishlist.ID)
+	wishTestSeedClaim(t, claimed.ID, claimant.ID)
+
+	notifyDeletedWishClaimers(free)
+	if got := srv.messageCount(); got != 0 {
+		t.Errorf("a free wish sent %d e-mails, want none", got)
+	}
+	notifyDeletedWishClaimers(claimed)
+	if got := srv.messageCount(); got != 1 {
+		t.Errorf("a claimed wish sent %d e-mails, want one to its claimer", got)
+	}
+}
+
+// The notification runs on its own after the answer, so its failures are
+// only logged.
+func TestNotifyDeletedWishClaimersFailuresAreNotFatal(t *testing.T) {
 	cases := []struct {
 		name  string
 		op    string
 		table string
-		skip  int
 	}{
-		// wishlists: ConvertWishToWishObject, ownership check, then GetWishlist.
-		{name: "wishlist lookup", op: "query", table: "wishlists", skip: 2},
-		{name: "wishlist conversion", op: "query", table: "groups", skip: 0},
-		// users: wish owner, claimant, wishlist owner, the wishlist
-		// conversion's owner lookup, then the claimant's full record.
-		{name: "claimant lookup", op: "query", table: "users", skip: 4},
+		{name: "claims lookup", op: "query", table: "wish_claims"},
+		{name: "wishlist lookup", op: "query", table: "wishlists"},
+		{name: "claimant lookup", op: "query", table: "users"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			setupControllersDB(t)
-			owner, claimant, _, wish := claimSetup(t)
+			_, claimant, _, wish := claimSetup(t)
 			wishTestSeedClaim(t, wish.ID, claimant.ID)
-			header := authHeader(t, owner.ID, false)
-			failDBOperation(t, c.op, c.table, c.skip)
-
-			w := wishTestSend(t, wishTestReq{handler: DeleteWish, method: "DELETE", params: gin.Params{{Key: "wish_id", Value: wish.ID.String()}}}, header)
-			if w.Code != 201 {
-				t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
-			}
-			if msg := parseWishBody(t, w)["message"]; msg != "Wish deleted." {
-				t.Errorf("message = %v, want %q", msg, "Wish deleted.")
-			}
+			failDBOperation(t, c.op, c.table, 0)
+			notifyDeletedWishClaimers(wish)
 		})
 	}
 }

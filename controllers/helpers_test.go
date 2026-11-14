@@ -76,13 +76,19 @@ func setupControllersDB(t *testing.T, tables ...interface{}) {
 	if err != nil {
 		t.Fatalf("failed to open gorm: %v", err)
 	}
-	if len(tables) == 0 {
+	fullSchema := len(tables) == 0
+	if fullSchema {
 		tables = allControllersTestModels()
 	}
 	if err := instance.AutoMigrate(tables...); err != nil {
 		t.Fatalf("failed to migrate: %v", err)
 	}
 	database.Instance = instance
+	if fullSchema {
+		if err := database.EnsureOneClaimPerWish(); err != nil {
+			t.Fatalf("failed to add the claim index: %v", err)
+		}
+	}
 }
 
 // createTestUser inserts an enabled, verified user with a unique e-mail.

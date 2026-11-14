@@ -445,6 +445,46 @@ func TestRemoveFromGroupSuccess(t *testing.T) {
 	}
 }
 
+// A member who leaves, or is removed, takes their wishlists out of the group:
+// the others stop seeing them, and the member could no longer withdraw them.
+func TestLeavingAGroupWithdrawsTheMembersWishlists(t *testing.T) {
+	for _, removed := range []bool{false, true} {
+		setupControllersDB(t)
+		owner, member := createTestUser(t), createTestUser(t)
+		group := createTestGroup(t, owner.ID)
+		addGroupMembership(t, group.ID, owner.ID)
+		addGroupMembership(t, group.ID, member.ID)
+		memberList, ownerList := createTestWishlist(t, member.ID), createTestWishlist(t, owner.ID)
+		addWishlistMembership(t, memberList.ID, group.ID)
+		addWishlistMembership(t, ownerList.ID, group.ID)
+
+		var ctx *gin.Context
+		var w *httptest.ResponseRecorder
+		if removed {
+			ctx, w = groupTestContext("POST", "/api/groups/"+group.ID.String()+"/remove", `{"member_id":"`+member.ID.String()+`"}`)
+			ctx.Request.Header.Set("Authorization", authHeader(t, owner.ID, false))
+			ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+			RemoveFromGroup(ctx)
+		} else {
+			ctx, w = groupTestContext("POST", "/api/groups/"+group.ID.String()+"/leave", "")
+			ctx.Request.Header.Set("Authorization", authHeader(t, member.ID, false))
+			ctx.Params = gin.Params{{Key: "group_id", Value: group.ID.String()}}
+			RemoveSelfFromGroup(ctx)
+		}
+		if w.Code != 201 {
+			t.Fatalf("removed=%v: status = %d, want 201; body=%s", removed, w.Code, w.Body.String())
+		}
+
+		lists, err := database.GetWishlistsFromGroup(group.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(lists) != 1 || lists[0].ID != ownerList.ID {
+			t.Errorf("removed=%v: the group still sees %d lists, want only the owner's", removed, len(lists))
+		}
+	}
+}
+
 func TestRemoveFromGroupNotOwner(t *testing.T) {
 	setupControllersDB(t)
 	owner := createTestUser(t)
