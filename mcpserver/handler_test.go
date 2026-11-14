@@ -4,18 +4,21 @@ import (
 	pauth "aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/sirupsen/logrus"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	_ "modernc.org/sqlite"
@@ -23,6 +26,9 @@ import (
 
 func init() {
 	gin.SetMode(gin.TestMode)
+	if logger.Log == nil {
+		logger.Log = logrus.New()
+	}
 }
 
 // setupMCPDB points database.Instance at a fresh in-memory SQLite DB with the
@@ -346,6 +352,36 @@ func createMCPTestUser(t *testing.T, firstName string) models.User {
 		t.Fatalf("failed to create user: %v", r.Error)
 	}
 	return user
+}
+
+// The SDK runs each request on a goroutine of its own, out of reach of gin's
+// recovery: a tool that panics must answer with an error and leave the
+// server, and the app, running.
+func TestPanickingToolLeavesTheServerRunning(t *testing.T) {
+	ctx := context.Background()
+	server := buildServer()
+	sdkmcp.AddTool(server, &sdkmcp.Tool{Name: "panics"}, func(context.Context, *sdkmcp.CallToolRequest, noArgs) (*sdkmcp.CallToolResult, any, error) {
+		panic("boom")
+	})
+	clientTransport, serverTransport := sdkmcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server.Connect failed: %v", err)
+	}
+	t.Cleanup(func() { serverSession.Close() })
+	client := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client.Connect failed: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	if _, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "panics"}); err == nil || !strings.Contains(err.Error(), "internal error") {
+		t.Errorf("panicking tool error = %v, want an internal error", err)
+	}
+	if _, err := session.ListTools(ctx, nil); err != nil {
+		t.Errorf("the server stopped answering after the panic: %v", err)
+	}
 }
 
 func TestBuildServerRegistersTools(t *testing.T) {
