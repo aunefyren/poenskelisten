@@ -188,6 +188,7 @@ func TestParseFlagsOverridesEveryField(t *testing.T) {
 		"-mfarecoverycodes", "true",
 		"-accesstokenminutes", "30",
 		"-refreshtokendays", "14",
+		"-maximagepixels", "12000000",
 		"-oidcenabled", "true",
 		"-oidcprovidername", "Authentik",
 		"-oidcissuerurl", "https://idp.example.com",
@@ -242,6 +243,7 @@ func TestParseFlagsOverridesEveryField(t *testing.T) {
 		MFARecoveryCodesEnabled:     true,
 		AccessTokenMinutes:          30,
 		RefreshTokenDays:            14,
+		MaxImagePixels:              12000000,
 		OIDCEnabled:                 true,
 		OIDCProviderName:            "Authentik",
 		OIDCIssuerURL:               "https://idp.example.com",
@@ -307,6 +309,17 @@ func TestParseFlagsZeroTokenLifetimeResetsToDefault(t *testing.T) {
 	}
 	if out.AccessTokenMinutes != 0 || out.RefreshTokenDays != 0 {
 		t.Errorf("lifetimes = %d min / %d days, want 0 / 0 (the defaults)", out.AccessTokenMinutes, out.RefreshTokenDays)
+	}
+}
+
+func TestParseFlagsOutOfRangeMaxImagePixelsFails(t *testing.T) {
+	for _, value := range []string{"999999", "50000001", "-1"} {
+		withArgs(t, "-maximagepixels", value)
+
+		_, _, _, err := parseFlags(models.ConfigStruct{})
+		if err == nil || !strings.Contains(err.Error(), "maximagepixels") {
+			t.Errorf("parseFlags with -maximagepixels %s error = %v, want an invalid -maximagepixels error", value, err)
+		}
 	}
 }
 

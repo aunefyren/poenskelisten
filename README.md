@@ -115,6 +115,7 @@ You can configure Pønskelisten in **three different ways**:
 | mfa_recovery_codes_enabled | mfarecoverycodes | mfarecoverycodes | bool | Issue single-use recovery codes on MFA enrollment (default off; when off, an admin must remove MFA for locked-out users) |
 | access_token_minutes | accesstokenminutes | accesstokenminutes | int | Minutes an access token is valid, `1`–`60` (default: `15`). Signing out (or "sign out everywhere") takes effect once the current access token expires, so a longer lifetime delays it |
 | refresh_token_days | refreshtokendays | refreshtokendays | int | Days a login lasts before users must sign in again, `1`–`365` (default: `7`). Also applies to connected apps (MCP clients) |
+| max_image_pixels | maximagepixels | maximagepixels | int | Most pixels (width × height) an uploaded image may have, `1000000`–`50000000` (default: `24000000`, enough for a 12-megapixel phone photo). Checked before the image is decoded; progressive JPEGs and interlaced PNGs are held to fewer pixels. See [Images and memory](#images-and-memory) |
 | oidc_enabled | oidcenabled | oidcenabled | bool | Enable OpenID Connect single sign-on |
 | oidc_provider_name | oidcprovidername | oidcprovidername | string | Display name on the SSO login button (e.g. "Authelia") |
 | oidc_issuer_url | oidcissuerurl | oidcissuerurl | string | OIDC issuer URL used for discovery (e.g. https://auth.example.com) |
@@ -136,6 +137,16 @@ Pønskelisten keeps its state in `files/` (config, log and, with SQLite, the dat
 - `config.json` is created on the first run. Values given as startup flags or environment variables are **written back into it** whenever they differ from what's there, so it's always the full picture of your configuration.
 - It holds secrets: the auto-generated `oauth_signing_key` and `private_key`, plus any database, SMTP and OIDC passwords you configure, including ones passed as environment variables. Treat it as sensitive and restrict who can read it.
 - Keep the signing keys. If `config.json` is lost or replaced, new keys are generated: everyone is logged out, and connected apps (MCP clients) have to be authorised again.
+
+### Images and memory
+
+Uploaded images (JPG or PNG, up to 10 MB) are stored scaled down to at most 1000x1000, with a 250x250 thumbnail. Their width and height are read from the file before it is decoded, and an image with more pixels than `max_image_pixels` (default 24 million, such as 6000x4000, which covers 12-megapixel phone photos) is refused.
+
+Decoding an image takes memory in proportion to its pixel count, not its file size, and how much per pixel depends on its format. Before decoding, the memory an image needs is estimated from its header, and one image may take at most what a 16-bit PNG at the pixel limit takes: about 380 MB at the default. For standard JPEGs, most progressive JPEGs and 8-bit PNGs the pixel limit is then the only limit. A few rarer kinds need more memory per pixel and are refused at fewer pixels, with a message suggesting a smaller image or a standard JPEG. At the default that is about 16 MP for a progressive JPEG without chroma subsampling, 15 MP for an interlaced 16-bit PNG and 11 MP for a progressive CMYK JPEG. An image stored by an earlier version that is over these limits is served as it is, without being resized.
+
+Images being decoded share a budget of twice that amount, so decoding takes at most about 760 MB above the app's usual use at the default. Allow a little more in practice, since Go reuses freed memory rather than returning it to the system immediately. Further uploads wait for their turn for up to 30 seconds, then get a "server busy" error, and each account can have one upload being decoded at a time. Lowering `max_image_pixels` lowers all of this roughly in proportion, at the cost of refusing larger photos.
+
+In a container with a memory limit, also set the `GOMEMLIMIT` environment variable a little below that limit, for example `GOMEMLIMIT=900MiB` for a 1 GiB limit, which is enough at the default `max_image_pixels`. Go then collects garbage harder as memory use nears that amount, rather than letting the container be killed for running out of memory. It cannot free memory that is still in use, so it complements a suitable limit rather than replacing it.
 
 ---
 

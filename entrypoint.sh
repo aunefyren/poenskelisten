@@ -39,6 +39,7 @@ argCount=$#
 [ -n "$mfarecoverycodes" ] && set -- "$@" --mfarecoverycodes "$mfarecoverycodes"
 [ -n "$accesstokenminutes" ] && set -- "$@" --accesstokenminutes "$accesstokenminutes"
 [ -n "$refreshtokendays" ] && set -- "$@" --refreshtokendays "$refreshtokendays"
+[ -n "$maximagepixels" ] && set -- "$@" --maximagepixels "$maximagepixels"
 
 # Add OIDC single sign-on flags if those environment variables are set
 [ -n "$oidcenabled" ] && set -- "$@" --oidcenabled "$oidcenabled"

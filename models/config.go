@@ -28,6 +28,7 @@ type ConfigStruct struct {
 	MFARecoveryCodesEnabled     bool   `json:"mfa_recovery_codes_enabled"`
 	AccessTokenMinutes          int    `json:"access_token_minutes"`
 	RefreshTokenDays            int    `json:"refresh_token_days"`
+	MaxImagePixels              int    `json:"max_image_pixels"`
 	OIDCEnabled                 bool   `json:"oidc_enabled"`
 	OIDCProviderName            string `json:"oidc_provider_name"`
 	OIDCIssuerURL               string `json:"oidc_issuer_url"`

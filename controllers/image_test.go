@@ -1,14 +1,17 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"image"
 	"image/jpeg"
@@ -19,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -59,8 +63,8 @@ func imageTestSetup(t *testing.T) {
 // pixels (so JPEG/PNG compression can't shrink it well below its raw size) and
 // encodes it, returning the raw (non-base64) encoded file bytes. Business logic
 // in image.go rejects encoded images under 10000 bytes; callers that exercise
-// that success path (e.g. UpdateUserProfileImage/SaveWishImage) need to pick a
-// width/height large enough to clear it - 200x200 comfortably does.
+// that success path (e.g. storeUploadedImage) need to pick a width/height
+// large enough to clear it - 200x200 comfortably does.
 func imageTestRandomImageBytes(t *testing.T, width, height int, asPNG bool) []byte {
 	t.Helper()
 
@@ -201,7 +205,7 @@ func TestGetUserProfileImageSavedFile(t *testing.T) {
 	user := createTestUser(t)
 
 	raw := imageTestRandomImageBytes(t, 200, 200, false)
-	if err := UpdateUserProfileImage(user.ID, imageTestDataURI("image/jpeg", raw)); err != nil {
+	if err := storeUploadedImage(profileImageDir, user.ID, imageTestDataURI("image/jpeg", raw)); err != nil {
 		t.Fatalf("failed to seed profile image: %v", err)
 	}
 
@@ -288,7 +292,7 @@ func TestGetWishImageSavedFile(t *testing.T) {
 	wish := createTestWish(t, owner.ID, wishlist.ID)
 
 	raw := imageTestRandomImageBytes(t, 200, 200, true)
-	if err := SaveWishImage(wish.ID, imageTestDataURI("image/png", raw)); err != nil {
+	if err := storeUploadedImage(wishImageDir, wish.ID, imageTestDataURI("image/png", raw)); err != nil {
 		t.Fatalf("failed to seed wish image: %v", err)
 	}
 
@@ -375,7 +379,7 @@ func TestUpdateUserProfileImageSmallImageAccepted(t *testing.T) {
 	user := createTestUser(t)
 
 	raw := imageTestRandomImageBytes(t, 16, 16, true)
-	if err := UpdateUserProfileImage(user.ID, imageTestDataURI("image/png", raw)); err != nil {
+	if err := storeUploadedImage(profileImageDir, user.ID, imageTestDataURI("image/png", raw)); err != nil {
 		t.Errorf("expected a small but valid image to be accepted, got: %v", err)
 	}
 }
@@ -385,7 +389,7 @@ func TestUpdateUserProfileImageGarbageRejected(t *testing.T) {
 	imageTestSetup(t)
 	user := createTestUser(t)
 
-	if err := UpdateUserProfileImage(user.ID, imageTestDataURI("image/jpeg", []byte("short"))); err == nil {
+	if err := storeUploadedImage(profileImageDir, user.ID, imageTestDataURI("image/jpeg", []byte("short"))); err == nil {
 		t.Error("expected an error for bytes that aren't a decodable image")
 	}
 }
@@ -397,7 +401,7 @@ func TestUpdateUserProfileImageInvalidMimeType(t *testing.T) {
 
 	raw := imageTestRandomImageBytes(t, 200, 200, false)
 	uri := imageTestDataURI("image/gif", raw)
-	if err := UpdateUserProfileImage(user.ID, uri); err == nil {
+	if err := storeUploadedImage(profileImageDir, user.ID, uri); err == nil {
 		t.Error("expected an error for an unsupported mime type")
 	}
 }
@@ -408,8 +412,8 @@ func TestUpdateUserProfileImagePNGSuccess(t *testing.T) {
 	user := createTestUser(t)
 
 	raw := imageTestRandomImageBytes(t, 200, 200, true)
-	if err := UpdateUserProfileImage(user.ID, imageTestDataURI("image/png", raw)); err != nil {
-		t.Fatalf("UpdateUserProfileImage failed for a valid png: %v", err)
+	if err := storeUploadedImage(profileImageDir, user.ID, imageTestDataURI("image/png", raw)); err != nil {
+		t.Fatalf("storeUploadedImage failed for a valid png: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(profileImageDir, user.ID.String()+".jpg")); err != nil {
 		t.Errorf("expected the profile image file to be saved to disk: %v", err)
@@ -426,7 +430,7 @@ func TestCheckIfWishImageExists(t *testing.T) {
 	}
 
 	raw := imageTestRandomImageBytes(t, 200, 200, false)
-	if err := SaveWishImage(wishID, imageTestDataURI("image/jpeg", raw)); err != nil {
+	if err := storeUploadedImage(wishImageDir, wishID, imageTestDataURI("image/jpeg", raw)); err != nil {
 		t.Fatalf("failed to save wish image: %v", err)
 	}
 
@@ -446,7 +450,7 @@ func TestDeleteWishImage(t *testing.T) {
 	}
 
 	raw := imageTestRandomImageBytes(t, 200, 200, false)
-	if err := SaveWishImage(wishID, imageTestDataURI("image/jpeg", raw)); err != nil {
+	if err := storeUploadedImage(wishImageDir, wishID, imageTestDataURI("image/jpeg", raw)); err != nil {
 		t.Fatalf("failed to save wish image: %v", err)
 	}
 	if err := DeleteWishImage(wishID); err != nil {
@@ -465,7 +469,7 @@ func TestUpdateUserProfileImageTooLarge(t *testing.T) {
 
 	huge := make([]byte, 10_000_001)
 	uri := imageTestDataURI("image/jpeg", huge)
-	if err := UpdateUserProfileImage(user.ID, uri); err == nil {
+	if err := storeUploadedImage(profileImageDir, user.ID, uri); err == nil {
 		t.Error("expected an error for an image over the maximum size")
 	}
 }
@@ -474,7 +478,7 @@ func TestSaveWishImageTooLarge(t *testing.T) {
 	imageTestSetup(t)
 	huge := make([]byte, 10_000_001)
 	uri := imageTestDataURI("image/jpeg", huge)
-	if err := SaveWishImage(uuid.New(), uri); err == nil {
+	if err := storeUploadedImage(wishImageDir, uuid.New(), uri); err == nil {
 		t.Error("expected an error for an image over the maximum size")
 	}
 }
@@ -547,7 +551,7 @@ func TestDeleteWishImageRemoveFailure(t *testing.T) {
 	wishID := uuid.New()
 
 	raw := imageTestRandomImageBytes(t, 200, 200, false)
-	if err := SaveWishImage(wishID, imageTestDataURI("image/jpeg", raw)); err != nil {
+	if err := storeUploadedImage(wishImageDir, wishID, imageTestDataURI("image/jpeg", raw)); err != nil {
 		t.Fatalf("failed to save wish image: %v", err)
 	}
 
@@ -607,8 +611,8 @@ func TestSaveWishImageAppliesOrientationAndStripsMetadata(t *testing.T) {
 	wishID := uuid.New()
 
 	raw := imageTestWithOrientation(imageTestRandomImageBytes(t, 300, 200, false), 6)
-	if err := SaveWishImage(wishID, imageTestDataURI("image/jpeg", raw)); err != nil {
-		t.Fatalf("SaveWishImage failed: %v", err)
+	if err := storeUploadedImage(wishImageDir, wishID, imageTestDataURI("image/jpeg", raw)); err != nil {
+		t.Fatalf("storeUploadedImage failed: %v", err)
 	}
 
 	stored, err := os.ReadFile(filepath.Join(wishImageDir, wishID.String()+".jpg"))
@@ -676,7 +680,7 @@ func TestGetWishImageNonCanonicalUUIDServesSameFile(t *testing.T) {
 	wishlist := imageTestPublicWishlist(t, owner.ID)
 	wish := createTestWish(t, owner.ID, wishlist.ID)
 
-	if err := SaveWishImage(wish.ID, imageTestDataURI("image/png", imageTestRandomImageBytes(t, 50, 50, true))); err != nil {
+	if err := storeUploadedImage(wishImageDir, wish.ID, imageTestDataURI("image/png", imageTestRandomImageBytes(t, 50, 50, true))); err != nil {
 		t.Fatalf("failed to seed wish image: %v", err)
 	}
 
@@ -690,24 +694,283 @@ func TestGetWishImageNonCanonicalUUIDServesSameFile(t *testing.T) {
 
 // --- upload processing ---
 
-func TestSaveWishImageRejectsOversizedDimensions(t *testing.T) {
-	imageTestSetup(t)
-
-	// A PNG header declaring 10000x10000 (100 MP). Only the header is needed:
-	// the upload must be rejected before any pixel data is decoded.
+// imageTestPNGHeader returns the signature and IHDR chunk of a width x height
+// 8-bit RGB PNG, with no pixel data: enough for its dimensions to be read,
+// but decoding it fails.
+func imageTestPNGHeader(width, height int) []byte {
 	ihdr := make([]byte, 13)
-	binary.BigEndian.PutUint32(ihdr[0:4], 10000)
-	binary.BigEndian.PutUint32(ihdr[4:8], 10000)
+	binary.BigEndian.PutUint32(ihdr[0:4], uint32(width))
+	binary.BigEndian.PutUint32(ihdr[4:8], uint32(height))
 	ihdr[8], ihdr[9] = 8, 2 // 8-bit RGB
 	chunk := append([]byte("IHDR"), ihdr...)
 	header := []byte("\x89PNG\r\n\x1a\n")
 	header = binary.BigEndian.AppendUint32(header, 13)
 	header = append(header, chunk...)
-	header = binary.BigEndian.AppendUint32(header, crc32.ChecksumIEEE(chunk))
+	return binary.BigEndian.AppendUint32(header, crc32.ChecksumIEEE(chunk))
+}
 
-	err := SaveWishImage(uuid.New(), imageTestDataURI("image/png", header))
+// imageTestPlainPNG encodes a uniform width x height grayscale PNG.
+func imageTestPlainPNG(t *testing.T, width, height int) []byte {
+	t.Helper()
+	buf := new(bytes.Buffer)
+	if err := png.Encode(buf, image.NewGray(image.Rect(0, 0, width, height))); err != nil {
+		t.Fatalf("failed to encode fixture: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// imageTestPixelLimit sets max_image_pixels for the test.
+func imageTestPixelLimit(t *testing.T, pixels int) {
+	t.Helper()
+	original := config.ConfigFile.MaxImagePixels
+	t.Cleanup(func() { config.ConfigFile.MaxImagePixels = original })
+	config.ConfigFile.MaxImagePixels = pixels
+}
+
+// storeUploadedImage decodes and stores an upload the way the handlers do.
+func storeUploadedImage(dir string, id uuid.UUID, base64String string) error {
+	img, err := decodeImageUpload(context.Background(), uuid.New(), base64String)
+	if err != nil {
+		return err
+	}
+	return storeImage(dir, id, img)
+}
+
+func TestSaveWishImageRejectsOversizedDimensions(t *testing.T) {
+	imageTestSetup(t)
+
+	err := storeUploadedImage(wishImageDir, uuid.New(), imageTestDataURI("image/png", imageTestPNGHeader(10000, 10000)))
 	if err == nil || !strings.Contains(err.Error(), "dimensions") {
 		t.Errorf("err = %v, want a dimensions error", err)
+	}
+}
+
+// The pixel limit is checked on the header alone: an image over it is refused
+// with the limit, never reaching the decoder, while one within it is decoded
+// (and these fail to decode, having no pixel data).
+func TestDecodeImageUploadChecksDefaultPixelLimitBeforeDecoding(t *testing.T) {
+	imageTestPixelLimit(t, 0)
+
+	for _, c := range []struct {
+		width, height int
+		refused       bool
+	}{
+		{4000, 3000, false},
+		{6000, 4000, false},
+		{6000, 4001, true},
+		{10000, 10000, true},
+	} {
+		_, err := decodeImageUpload(context.Background(), uuid.New(), imageTestDataURI("image/png", imageTestPNGHeader(c.width, c.height)))
+		refused := err != nil && strings.Contains(err.Error(), "at most 24 megapixels")
+		if refused != c.refused {
+			t.Errorf("%dx%d: err = %v, want refused by the pixel limit: %v", c.width, c.height, err, c.refused)
+		}
+		if err == nil {
+			t.Errorf("%dx%d: decoded an image with no pixel data", c.width, c.height)
+		}
+	}
+}
+
+func TestDecodeImageUploadUsesConfiguredPixelLimit(t *testing.T) {
+	imageTestPixelLimit(t, 1_500_000)
+
+	img, err := decodeImageUpload(context.Background(), uuid.New(), imageTestDataURI("image/png", imageTestPlainPNG(t, 1500, 1000)))
+	if err != nil {
+		t.Fatalf("1500x1000 refused with a 1.5 megapixel limit: %v", err)
+	}
+	if bounds := img.Bounds(); bounds.Dx() != 1000 || bounds.Dy() != 667 {
+		t.Errorf("decoded image is %dx%d, want it scaled down to 1000x667", bounds.Dx(), bounds.Dy())
+	}
+
+	_, err = decodeImageUpload(context.Background(), uuid.New(), imageTestDataURI("image/png", imageTestPlainPNG(t, 1501, 1000)))
+	if err == nil || !strings.Contains(err.Error(), "at most 1.5 megapixels") {
+		t.Errorf("1501x1000 err = %v, want the 1.5 megapixel limit", err)
+	}
+}
+
+// imageTestHoldDecodeBudget takes the whole decode budget until the test ends
+// or the returned function is called.
+func imageTestHoldDecodeBudget(t *testing.T) (release func()) {
+	t.Helper()
+	if err := decodeBudget.Acquire(context.Background(), worstCaseConcurrentDecodes*decodeSharesPerImage); err != nil {
+		t.Fatal(err)
+	}
+	var once sync.Once
+	release = func() {
+		once.Do(func() { decodeBudget.Release(worstCaseConcurrentDecodes * decodeSharesPerImage) })
+	}
+	t.Cleanup(release)
+	return release
+}
+
+// imageTestWaitsForBudget runs fn while the decode budget is taken, checks
+// that it waits, then frees the budget and checks that it completes.
+func imageTestWaitsForBudget(t *testing.T, fn func()) {
+	t.Helper()
+	release := imageTestHoldDecodeBudget(t)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fn()
+	}()
+	select {
+	case <-done:
+		t.Fatal("decoded an image while the decode budget was taken")
+	case <-time.After(100 * time.Millisecond):
+	}
+	release()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("decoding did not resume once the budget was free")
+	}
+}
+
+func TestDecodeImageUploadWaitsForDecodeBudget(t *testing.T) {
+	uri := imageTestDataURI("image/png", imageTestPlainPNG(t, 50, 50))
+	imageTestWaitsForBudget(t, func() {
+		if _, err := decodeImageUpload(context.Background(), uuid.New(), uri); err != nil {
+			t.Errorf("decodeImageUpload: %v", err)
+		}
+	})
+}
+
+// An upload stops waiting for budget when its request ends, and is refused as
+// busy rather than decoded later for nobody.
+func TestDecodeImageUploadGivesUpWhenRequestEnds(t *testing.T) {
+	imageTestHoldDecodeBudget(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err := decodeImageUpload(ctx, uuid.New(), imageTestDataURI("image/png", imageTestPlainPNG(t, 50, 50)))
+	if !errors.Is(err, errImageBusy) {
+		t.Errorf("err = %v, want errImageBusy", err)
+	}
+}
+
+// One account decodes one upload at a time; others are not held up by it.
+func TestDecodeImageUploadOneAtATimePerAccount(t *testing.T) {
+	userID := uuid.New()
+	imageUploadsInProgress.Store(userID, struct{}{})
+	t.Cleanup(func() { imageUploadsInProgress.Delete(userID) })
+	uri := imageTestDataURI("image/png", imageTestPlainPNG(t, 50, 50))
+
+	if _, err := decodeImageUpload(context.Background(), userID, uri); !errors.Is(err, errImageUploadInProgress) {
+		t.Errorf("second upload of an account: err = %v, want errImageUploadInProgress", err)
+	}
+	if _, err := decodeImageUpload(context.Background(), uuid.New(), uri); err != nil {
+		t.Errorf("upload of another account: %v", err)
+	}
+
+	imageUploadsInProgress.Delete(userID)
+	if _, err := decodeImageUpload(context.Background(), userID, uri); err != nil {
+		t.Errorf("upload once the account's previous one finished: %v", err)
+	}
+	if _, busy := imageUploadsInProgress.Load(userID); busy {
+		t.Error("the account is still marked as uploading after its upload finished")
+	}
+}
+
+func TestRespondImageUploadError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, c := range []struct {
+		err    error
+		status int
+		body   string
+	}{
+		{fmt.Errorf("%w (%w)", errImageBusy, context.DeadlineExceeded), 503, errImageBusy.Error()},
+		{errImageUploadInProgress, 429, errImageUploadInProgress.Error()},
+		{errImageTooCostly, 400, errImageTooCostly.Error()},
+		{errors.New("Image is too large."), 400, "Image is too large."},
+	} {
+		w := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(w)
+		respondImageUploadError(ctx, c.err)
+		var body map[string]string
+		_ = json.Unmarshal(w.Body.Bytes(), &body)
+		if w.Code != c.status || body["error"] != c.body || !ctx.IsAborted() {
+			t.Errorf("%v: got %d %q (aborted %v), want %d %q", c.err, w.Code, body["error"], ctx.IsAborted(), c.status, c.body)
+		}
+	}
+}
+
+// imageTestWriteLegacyFile stores raw as id's full-size image, as an older
+// version would have.
+func imageTestWriteLegacyFile(t *testing.T, id uuid.UUID, raw []byte) {
+	t.Helper()
+	if err := os.MkdirAll(wishImageDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(imageFilePath(wishImageDir, id, false), raw, 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLoadStoredImageWaitsForDecodeBudget(t *testing.T) {
+	imageTestSetup(t)
+	id := uuid.New()
+	imageTestWriteLegacyFile(t, id, imageTestPlainPNG(t, 1200, 800))
+	imageTestWaitsForBudget(t, func() {
+		if _, found, err := loadStoredImage(context.Background(), wishImageDir, id, true); err != nil || !found {
+			t.Errorf("loadStoredImage = (%v, %v), want the thumbnail", found, err)
+		}
+	})
+}
+
+// A legacy image that would need resizing is served as stored, without being
+// resized or written back, when the decoder stays busy for the whole request.
+func TestLoadStoredImageServesAsStoredWhileBusy(t *testing.T) {
+	imageTestSetup(t)
+	id := uuid.New()
+	stored := imageTestPlainPNG(t, 1200, 800)
+	imageTestWriteLegacyFile(t, id, stored)
+	imageTestHoldDecodeBudget(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	served, found, err := loadStoredImage(ctx, wishImageDir, id, true)
+	if err != nil || !found || !bytes.Equal(served, stored) {
+		t.Errorf("loadStoredImage = (%d bytes, %v, %v), want the stored file", len(served), found, err)
+	}
+	if _, err := os.Stat(imageFilePath(wishImageDir, id, true)); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("thumbnail written while busy: stat err = %v", err)
+	}
+}
+
+// A legacy image within the pixel limit whose decode would cost more than one
+// upload may (here a very tall, narrow one) is served as stored too.
+func TestLoadStoredImageServesCostlyFileAsStored(t *testing.T) {
+	imageTestSetup(t)
+	imageTestPixelLimit(t, 1_000_000)
+	id := uuid.New()
+	stored := imageTestPlainPNG(t, 1, 1_000_000)
+	imageTestWriteLegacyFile(t, id, stored)
+
+	served, found, err := loadStoredImage(context.Background(), wishImageDir, id, true)
+	if err != nil || !found || !bytes.Equal(served, stored) {
+		t.Errorf("loadStoredImage = (%d bytes, %v, %v), want the stored file", len(served), found, err)
+	}
+}
+
+// A stored file over the pixel limit is served as stored, thumbnail or not,
+// rather than decoded to resize it.
+func TestLoadStoredImageServesFileOverPixelLimitAsStored(t *testing.T) {
+	imageTestSetup(t)
+	imageTestPixelLimit(t, 0)
+	id := uuid.New()
+	stored := imageTestPNGHeader(6000, 4001)
+	if err := os.MkdirAll(wishImageDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(imageFilePath(wishImageDir, id, false), stored, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, thumbnail := range []bool{false, true} {
+		served, found, err := loadStoredImage(context.Background(), wishImageDir, id, thumbnail)
+		if err != nil || !found || !bytes.Equal(served, stored) {
+			t.Errorf("thumbnail=%v: loadStoredImage = (%d bytes, %v, %v), want the stored file", thumbnail, len(served), found, err)
+		}
 	}
 }
 
@@ -719,8 +982,8 @@ func TestSaveWishImageFlattensTransparencyOnWhite(t *testing.T) {
 	if err := png.Encode(buf, image.NewNRGBA(image.Rect(0, 0, 20, 20))); err != nil { // fully transparent
 		t.Fatalf("failed to encode fixture: %v", err)
 	}
-	if err := SaveWishImage(wishID, imageTestDataURI("image/png", buf.Bytes())); err != nil {
-		t.Fatalf("SaveWishImage failed: %v", err)
+	if err := storeUploadedImage(wishImageDir, wishID, imageTestDataURI("image/png", buf.Bytes())); err != nil {
+		t.Fatalf("storeUploadedImage failed: %v", err)
 	}
 
 	stored, err := os.ReadFile(imageFilePath(wishImageDir, wishID, false))
@@ -742,8 +1005,8 @@ func TestSaveWishImageStoresResizedVariants(t *testing.T) {
 	wishID := uuid.New()
 
 	raw := imageTestRandomImageBytes(t, 1600, 800, false)
-	if err := SaveWishImage(wishID, imageTestDataURI("image/jpeg", raw)); err != nil {
-		t.Fatalf("SaveWishImage failed: %v", err)
+	if err := storeUploadedImage(wishImageDir, wishID, imageTestDataURI("image/jpeg", raw)); err != nil {
+		t.Fatalf("storeUploadedImage failed: %v", err)
 	}
 
 	for _, c := range []struct {
@@ -779,7 +1042,7 @@ func TestLoadStoredImageMigratesLegacyFullResolutionFile(t *testing.T) {
 		t.Fatalf("failed to seed legacy image: %v", err)
 	}
 
-	thumbnailBytes, found, err := loadStoredImage(wishImageDir, wishID, true)
+	thumbnailBytes, found, err := loadStoredImage(context.Background(), wishImageDir, wishID, true)
 	if err != nil || !found {
 		t.Fatalf("found = %v err = %v, want the legacy image to be served", found, err)
 	}
@@ -839,7 +1102,7 @@ func TestDeleteWishRemovesImage(t *testing.T) {
 	owner := createTestUser(t)
 	wishlist := createTestWishlist(t, owner.ID)
 	wish := createTestWish(t, owner.ID, wishlist.ID)
-	if err := SaveWishImage(wish.ID, imageTestDataURI("image/png", imageTestRandomImageBytes(t, 50, 50, true))); err != nil {
+	if err := storeUploadedImage(wishImageDir, wish.ID, imageTestDataURI("image/png", imageTestRandomImageBytes(t, 50, 50, true))); err != nil {
 		t.Fatalf("failed to seed wish image: %v", err)
 	}
 
@@ -861,7 +1124,7 @@ func TestDeleteWishlistRemovesWishImages(t *testing.T) {
 	wishlist := createTestWishlist(t, owner.ID)
 	wishes := []models.Wish{createTestWish(t, owner.ID, wishlist.ID), createTestWish(t, owner.ID, wishlist.ID)}
 	for _, wish := range wishes {
-		if err := SaveWishImage(wish.ID, imageTestDataURI("image/png", imageTestRandomImageBytes(t, 50, 50, true))); err != nil {
+		if err := storeUploadedImage(wishImageDir, wish.ID, imageTestDataURI("image/png", imageTestRandomImageBytes(t, 50, 50, true))); err != nil {
 			t.Fatalf("failed to seed wish image: %v", err)
 		}
 	}
@@ -882,7 +1145,7 @@ func TestAPIDeleteUserRemovesProfileImage(t *testing.T) {
 	imageTestSetup(t)
 	admin := createTestUser(t)
 	target := createTestUser(t)
-	if err := UpdateUserProfileImage(target.ID, imageTestDataURI("image/png", imageTestRandomImageBytes(t, 50, 50, true))); err != nil {
+	if err := storeUploadedImage(profileImageDir, target.ID, imageTestDataURI("image/png", imageTestRandomImageBytes(t, 50, 50, true))); err != nil {
 		t.Fatalf("failed to seed profile image: %v", err)
 	}
 
@@ -1016,7 +1279,7 @@ func TestLoadStoredImageReadErrors(t *testing.T) {
 				t.Fatalf("failed to create blocking directory: %v", err)
 			}
 
-			data, found, err := loadStoredImage(dir, id, c.thumbnail)
+			data, found, err := loadStoredImage(context.Background(), dir, id, c.thumbnail)
 			if err == nil || found || data != nil {
 				t.Errorf("loadStoredImage = (%d bytes, %v, %v), want a read error", len(data), found, err)
 			}
@@ -1031,7 +1294,7 @@ func TestLoadStoredImageTruncatedFile(t *testing.T) {
 	// Keep the header (so DecodeConfig passes) but cut off the scan data.
 	imageTestSeedFile(t, imageFilePath(dir, id, false), full[:len(full)/2])
 
-	_, found, err := loadStoredImage(dir, id, true)
+	_, found, err := loadStoredImage(context.Background(), dir, id, true)
 	if err == nil || found {
 		t.Errorf("found = %v err = %v, want a decode error for a truncated image", found, err)
 	}
@@ -1055,7 +1318,7 @@ func TestLoadStoredImageWriteBackFailuresStillServe(t *testing.T) {
 			imageTestSeedFile(t, imageFilePath(dir, id, false), original)
 			imageTestReadOnlyDir(t, dir)
 
-			data, found, err := loadStoredImage(dir, id, c.thumbnail)
+			data, found, err := loadStoredImage(context.Background(), dir, id, c.thumbnail)
 			if err != nil || !found {
 				t.Fatalf("found = %v err = %v, want the image served despite the failed write-back", found, err)
 			}
@@ -1106,7 +1369,7 @@ func TestDecodeUploadedImageTruncated(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.mime, func(t *testing.T) {
 			raw := imageTestRandomImageBytes(t, 200, 200, c.asPNG)
-			img, err := decodeUploadedImage(raw[:len(raw)/2], c.mime)
+			img, err := decodeUploadedImage(context.Background(), raw[:len(raw)/2], c.mime)
 			if err == nil || img != nil || err.Error() != "Failed to create image from byte array." {
 				t.Errorf("decodeUploadedImage = (%v, %v), want the decode error", img, err)
 			}
@@ -1149,7 +1412,7 @@ func TestSaveWishImageWriteFails(t *testing.T) {
 	wishImageDir = blocker
 
 	raw := imageTestRandomImageBytes(t, 200, 200, false)
-	err := SaveWishImage(uuid.New(), imageTestDataURI("image/jpeg", raw))
+	err := storeUploadedImage(wishImageDir, uuid.New(), imageTestDataURI("image/jpeg", raw))
 	if err == nil || err.Error() != "Failed to save image to disk." {
 		t.Errorf("err = %v, want 'Failed to save image to disk.'", err)
 	}
@@ -1185,7 +1448,7 @@ func TestDeleteUserProfileImageRemoveFailure(t *testing.T) {
 	imageTestSetup(t)
 	userID := uuid.New()
 	raw := imageTestRandomImageBytes(t, 200, 200, false)
-	if err := UpdateUserProfileImage(userID, imageTestDataURI("image/jpeg", raw)); err != nil {
+	if err := storeUploadedImage(profileImageDir, userID, imageTestDataURI("image/jpeg", raw)); err != nil {
 		t.Fatalf("failed to save profile image: %v", err)
 	}
 	imageTestReadOnlyDir(t, profileImageDir)

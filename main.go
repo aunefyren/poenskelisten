@@ -99,6 +99,9 @@ func run(serve func(router *gin.Engine, address string) error) error {
 	if err := config.ValidateRefreshTokenDays(config.ConfigFile.RefreshTokenDays); err != nil {
 		logger.Log.Warn("ignoring refresh_token_days, using the default: " + err.Error())
 	}
+	if err := config.ValidateMaxImagePixels(config.ConfigFile.MaxImagePixels); err != nil {
+		logger.Log.Warn("ignoring max_image_pixels, using the default: " + err.Error())
+	}
 	if strings.TrimSpace(config.ConfigFile.PoenskelistenExternalURL) == "" {
 		logger.Log.Warn("externalurl is not set, so " + config.OAuthIssuer() + " is used for links, single sign-on and as the main login address. Set externalurl to the address users open Pønskelisten on, and additionalurls for any others.")
 	}
@@ -500,6 +503,7 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, startupAct
 	var mfaRecoveryCodes = flag.String("mfarecoverycodes", strconv.FormatBool(configFile.MFARecoveryCodesEnabled), "If users are issued single-use recovery codes when enrolling in MFA.")
 	var accessTokenMinutes = flag.Int("accesstokenminutes", configFile.AccessTokenMinutes, "Minutes an access token is valid (1-60, default 15). A signed-out session's access token keeps working until it expires.")
 	var refreshTokenDays = flag.Int("refreshtokendays", configFile.RefreshTokenDays, "Days a login session lasts before signing in again (1-365, default 7).")
+	var maxImagePixels = flag.Int("maximagepixels", configFile.MaxImagePixels, "The most pixels (width x height) an uploaded image may have (1000000-50000000, default 24000000).")
 
 	// OIDC values
 	var oidcEnabled = flag.String("oidcenabled", strconv.FormatBool(configFile.OIDCEnabled), "If OpenID Connect single sign-on is enabled.")
@@ -681,6 +685,13 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, startupAct
 			return configFile, actions, flagsProvided, errors.New("invalid -refreshtokendays value: " + err.Error())
 		}
 		configFile.RefreshTokenDays = *refreshTokenDays
+	}
+
+	if provided["maximagepixels"] {
+		if err := config.ValidateMaxImagePixels(*maxImagePixels); err != nil {
+			return configFile, actions, flagsProvided, errors.New("invalid -maximagepixels value: " + err.Error())
+		}
+		configFile.MaxImagePixels = *maxImagePixels
 	}
 
 	if provided["oidcenabled"] {
