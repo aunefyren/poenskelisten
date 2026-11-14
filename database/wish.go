@@ -107,11 +107,11 @@ func GetWishClaimFromWish(WishID uuid.UUID) ([]models.WishClaimObject, error) {
 		return []models.WishClaimObject{}, err
 	}
 
+	profile := UserProfile(userObject)
 	userObjectMinimal := models.UserMinimal{
-		GormModel: userObject.GormModel,
-		FirstName: userObject.FirstName,
-		LastName:  userObject.LastName,
-		Email:     userObject.Email,
+		GormModel: profile.GormModel,
+		FirstName: profile.FirstName,
+		LastName:  profile.LastName,
 	}
 
 	wishWithUser.User = userObjectMinimal
