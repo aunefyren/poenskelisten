@@ -3,3 +3,7 @@
 poenskelisten
 poenskelisten.exe
 /.claude/worktrees/
+*.sql
+*.db
+*.sqlite*
+.env*
