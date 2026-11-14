@@ -1,11 +1,13 @@
 package controllers
 
 import (
+	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/utilities"
 	"bytes"
+	stdcontext "context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -19,6 +21,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -35,12 +38,20 @@ const (
 	maxThumbnailWidth  = 250
 	maxThumbnailHeight = 250
 	maxUploadBytes     = 10_000_000
-	// Caps the decoded size of an upload. The byte limit alone doesn't bound
-	// memory: a small, highly compressible PNG can declare enormous dimensions.
-	// 50 MP covers any current phone camera's default output.
-	maxUploadPixels = 50_000_000
-	jpegQuality     = 85
+	jpegQuality        = 85
 )
+
+// imageUploadsInProgress holds the accounts with an upload being decoded, so
+// one account can't take the whole decode budget (see imagecost.go).
+var imageUploadsInProgress sync.Map
+
+// imagePixelsAllowed reports whether a width x height image may be decoded.
+// The pixel limit (config.MaxImagePixels) bounds the memory one decode takes,
+// since the byte limit doesn't: a small, highly compressible file can declare
+// a very large image.
+func imagePixelsAllowed(header image.Config) bool {
+	return int64(header.Width)*int64(header.Height) <= config.MaxImagePixels()
+}
 
 // imageFilePath is the only place image paths are built. It takes a parsed
 // UUID rather than the raw route param, so user input never reaches the
@@ -76,7 +87,7 @@ func APIGetUserProfileImage(context *gin.Context) {
 		return
 	}
 
-	imageBytes, found, err := loadStoredImage(profileImageDir, userID, thumbnail)
+	imageBytes, found, err := loadStoredImage(context.Request.Context(), profileImageDir, userID, thumbnail)
 	if err != nil {
 		logger.Log.Error("Failed to load profile image. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load profile image."})
@@ -152,7 +163,7 @@ func APIGetWishImage(context *gin.Context) {
 		}
 	}
 
-	imageBytes, found, err := loadStoredImage(wishImageDir, wishID, thumbnail)
+	imageBytes, found, err := loadStoredImage(context.Request.Context(), wishImageDir, wishID, thumbnail)
 	if err != nil {
 		logger.Log.Error("Failed to load wish image. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load wish image."})
@@ -223,7 +234,7 @@ func notModified(context *gin.Context, imageBytes []byte) bool {
 // but images stored by older versions are full-resolution originals without
 // a thumbnail; those are resized here once and written back, so each legacy
 // file pays the cost a single time.
-func loadStoredImage(dir string, id uuid.UUID, thumbnail bool) ([]byte, bool, error) {
+func loadStoredImage(ctx stdcontext.Context, dir string, id uuid.UUID, thumbnail bool) ([]byte, bool, error) {
 	fullPath := imageFilePath(dir, id, false)
 
 	if thumbnail {
@@ -242,24 +253,38 @@ func loadStoredImage(dir string, id uuid.UUID, thumbnail bool) ([]byte, bool, er
 		return nil, false, err
 	}
 
-	config, _, err := image.DecodeConfig(bytes.NewReader(fullBytes))
+	header, format, err := image.DecodeConfig(bytes.NewReader(fullBytes))
 	if err != nil {
 		return nil, false, errors.New("Stored image is not decodable: " + err.Error())
 	}
-	oversized := config.Width > maxImageWidth || config.Height > maxImageHeight
+	oversized := header.Width > maxImageWidth || header.Height > maxImageHeight
 	if !thumbnail && !oversized {
 		return fullBytes, true, nil
 	}
+	// Over the limits uploads are held to: served as stored, even as a
+	// thumbnail, rather than decoded.
+	cost := decodeCost(fullBytes, format, header)
+	if !imagePixelsAllowed(header) || cost > maxDecodeCost() {
+		return fullBytes, true, nil
+	}
 
-	original, _, err := image.Decode(bytes.NewReader(fullBytes))
+	// Served as stored too while the decoder is busy, rather than failing;
+	// the resize is done by a later request.
+	release, err := acquireDecodeBudget(ctx, cost)
 	if err != nil {
-		return nil, false, errors.New("Stored image is not decodable: " + err.Error())
+		logger.Log.Warn("Serving a legacy image without resizing it. Error: " + err.Error())
+		return fullBytes, true, nil
+	}
+	resized, err := decodeStoredImage(fullBytes)
+	release()
+	if err != nil {
+		return nil, false, err
 	}
 
 	// Write-back failures are only logged: the image is still served, and the
 	// resize is simply redone on the next request.
 	if oversized {
-		fullBytes, err = encodeJPEG(fitWithin(original, maxImageWidth, maxImageHeight))
+		fullBytes, err = encodeJPEG(resized)
 		if err != nil {
 			return nil, false, err
 		}
@@ -271,7 +296,7 @@ func loadStoredImage(dir string, id uuid.UUID, thumbnail bool) ([]byte, bool, er
 		return fullBytes, true, nil
 	}
 
-	thumbnailBytes, err := encodeJPEG(fitWithin(original, maxThumbnailWidth, maxThumbnailHeight))
+	thumbnailBytes, err := encodeJPEG(fitWithin(resized, maxThumbnailWidth, maxThumbnailHeight))
 	if err != nil {
 		return nil, false, err
 	}
@@ -279,6 +304,17 @@ func loadStoredImage(dir string, id uuid.UUID, thumbnail bool) ([]byte, bool, er
 		logger.Log.Warn("Failed to write back legacy image thumbnail. Error: " + err.Error())
 	}
 	return thumbnailBytes, true, nil
+}
+
+// decodeStoredImage decodes a stored image scaled down to the stored size. The
+// full-size image is out of reach once it returns, so the decode budget can
+// be released.
+func decodeStoredImage(fullBytes []byte) (image.Image, error) {
+	original, _, err := image.Decode(bytes.NewReader(fullBytes))
+	if err != nil {
+		return nil, errors.New("Stored image is not decodable: " + err.Error())
+	}
+	return fitWithin(original, maxImageWidth, maxImageHeight), nil
 }
 
 func CheckIfWishImageExists(wishID uuid.UUID) (bool, error) {
@@ -343,10 +379,7 @@ func fitWithin(img image.Image, maxWidth int, maxHeight int) image.Image {
 		return img
 	}
 
-	scale := min(float64(maxWidth)/float64(width), float64(maxHeight)/float64(height))
-	newWidth := max(1, int(float64(width)*scale+0.5))
-	newHeight := max(1, int(float64(height)*scale+0.5))
-
+	newWidth, newHeight := fittedSize(width, height, maxWidth, maxHeight)
 	resized := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
 	draw.CatmullRom.Scale(resized, resized.Bounds(), img, bounds, draw.Src, nil)
 	return resized
@@ -371,15 +404,18 @@ func flattenOnWhite(img image.Image) image.Image {
 // metadata, which is what keeps EXIF (GPS, camera serial, timestamps) out of
 // stored and served images - but it also drops the orientation tag, so it has
 // to be applied here or phone photos end up sideways.
-func decodeUploadedImage(imageBytes []byte, mimeType string) (image.Image, error) {
+func decodeUploadedImage(ctx stdcontext.Context, imageBytes []byte, mimeType string) (image.Image, error) {
 	var decodeConfig func([]byte) (image.Config, error)
 	var decode func([]byte) (image.Image, error)
+	var format string
 
 	switch mimeType {
 	case "image/jpeg":
+		format = "jpeg"
 		decodeConfig = func(b []byte) (image.Config, error) { return jpeg.DecodeConfig(bytes.NewReader(b)) }
 		decode = func(b []byte) (image.Image, error) { return jpeg.Decode(bytes.NewReader(b)) }
 	case "image/png":
+		format = "png"
 		decodeConfig = func(b []byte) (image.Config, error) { return png.DecodeConfig(bytes.NewReader(b)) }
 		decode = func(b []byte) (image.Image, error) { return png.Decode(bytes.NewReader(b)) }
 	default:
@@ -387,20 +423,36 @@ func decodeUploadedImage(imageBytes []byte, mimeType string) (image.Image, error
 		return nil, errors.New("Invalid image type.")
 	}
 
-	config, err := decodeConfig(imageBytes)
+	header, err := decodeConfig(imageBytes)
 	if err != nil {
 		logger.Log.Error("Failed to read image header. Returning. Error: " + err.Error())
 		return nil, errors.New("Failed to create image from byte array.")
 	}
-	if int64(config.Width)*int64(config.Height) > maxUploadPixels {
-		return nil, errors.New("Image dimensions are too large.")
+	if !imagePixelsAllowed(header) {
+		megapixels := strconv.FormatFloat(float64(config.MaxImagePixels())/1_000_000, 'f', -1, 64)
+		return nil, errors.New("Image dimensions are too large: at most " + megapixels + " megapixels.")
 	}
+
+	cost := decodeCost(imageBytes, format, header)
+	if cost > maxDecodeCost() {
+		return nil, errImageTooCostly
+	}
+
+	release, err := acquireDecodeBudget(ctx, cost)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 
 	imageObject, err := decode(imageBytes)
 	if err != nil {
 		logger.Log.Error("Failed to create image from byte array. Returning. Error: " + err.Error())
 		return nil, errors.New("Failed to create image from byte array.")
 	}
+
+	// Scaled down to the stored size first, so the steps below work on a
+	// small copy and the full-size image can be released.
+	imageObject = fitWithin(imageObject, maxImageWidth, maxImageHeight)
 
 	if mimeType == "image/jpeg" {
 		imageObject = utilities.ApplyOrientation(imageObject, utilities.JPEGOrientation(imageBytes))
@@ -409,30 +461,53 @@ func decodeUploadedImage(imageBytes []byte, mimeType string) (image.Image, error
 	return flattenOnWhite(imageObject), nil
 }
 
-// storeUploadedImage validates a base64 data-URI upload and stores it as a
-// full-size and a thumbnail JPEG, so serving never has to resize.
-func storeUploadedImage(dir string, id uuid.UUID, base64String string) error {
+// decodeImageUpload checks and decodes a base64 data-URI upload by userID,
+// scaled down to the stored size. Its errors are worded for the user; see
+// respondImageUploadError.
+func decodeImageUpload(ctx stdcontext.Context, userID uuid.UUID, base64String string) (image.Image, error) {
+	if _, busy := imageUploadsInProgress.LoadOrStore(userID, struct{}{}); busy {
+		return nil, errImageUploadInProgress
+	}
+	defer imageUploadsInProgress.Delete(userID)
+
 	imageBytes, mimeType, err := Base64ToImageBytes(base64String)
 	if err != nil {
 		logger.Log.Error("Failed to convert Base64 String to bytes. Error: " + err.Error())
-		return errors.New("Invalid Base64 string.")
+		return nil, errors.New("Invalid Base64 string.")
 	}
 
 	if len(imageBytes) > maxUploadBytes {
-		return errors.New("Image is too large.")
+		return nil, errors.New("Image is too large.")
 	}
 
-	imageObject, err := decodeUploadedImage(imageBytes, mimeType)
-	if err != nil {
-		return err
-	}
+	return decodeUploadedImage(ctx, imageBytes, mimeType)
+}
 
-	err = writeImageVariants(dir, id, imageObject)
+// respondImageUploadError answers an upload decodeImageUpload refused: 503
+// while the server is busy decoding other images, 429 while the account has
+// another upload being decoded, and 400 otherwise, the image itself being at
+// fault.
+func respondImageUploadError(context *gin.Context, err error) {
+	logger.Log.Error("Failed to process uploaded image. Error: " + err.Error())
+	switch {
+	case errors.Is(err, errImageBusy):
+		context.JSON(http.StatusServiceUnavailable, gin.H{"error": errImageBusy.Error()})
+	case errors.Is(err, errImageUploadInProgress):
+		context.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
+	default:
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
+	context.Abort()
+}
+
+// storeImage stores a decoded upload as a full-size and a thumbnail JPEG, so
+// serving never has to resize.
+func storeImage(dir string, id uuid.UUID, img image.Image) error {
+	err := writeImageVariants(dir, id, img)
 	if err != nil {
 		logger.Log.Error("Failed to save image to disk. Returning. Error: " + err.Error())
 		return errors.New("Failed to save image to disk.")
 	}
-
 	return nil
 }
 
@@ -504,10 +579,6 @@ func deleteImageFiles(dir string, id uuid.UUID) error {
 	return nil
 }
 
-func UpdateUserProfileImage(userID uuid.UUID, base64String string) error {
-	return storeUploadedImage(profileImageDir, userID, base64String)
-}
-
 func DeleteUserProfileImage(userID uuid.UUID) error {
 	err := deleteImageFiles(profileImageDir, userID)
 	if err != nil {
@@ -515,10 +586,6 @@ func DeleteUserProfileImage(userID uuid.UUID) error {
 		return errors.New("Failed to delete profile image.")
 	}
 	return nil
-}
-
-func SaveWishImage(wishID uuid.UUID, base64String string) error {
-	return storeUploadedImage(wishImageDir, wishID, base64String)
 }
 
 func DeleteWishImage(wishID uuid.UUID) error {

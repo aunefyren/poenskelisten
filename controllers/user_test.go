@@ -635,6 +635,73 @@ func TestAPIChangePasswordSuccess(t *testing.T) {
 	}
 }
 
+// userTestPendingChallenge gives the user a pending MFA sign-in and returns
+// its ID.
+func userTestPendingChallenge(t *testing.T, userID uuid.UUID) uuid.UUID {
+	t.Helper()
+	challengeID := uuid.New()
+	if err := database.SetMFAChallenge(userID, challengeID); err != nil {
+		t.Fatalf("failed to store MFA challenge: %v", err)
+	}
+	return challengeID
+}
+
+func userTestAssertNoChallenge(t *testing.T, userID uuid.UUID) {
+	t.Helper()
+	user, err := database.GetAllUserInformation(userID)
+	if err != nil {
+		t.Fatalf("failed to reload user: %v", err)
+	}
+	if user.MFAChallengeID != nil {
+		t.Errorf("MFA challenge = %v, want it dropped with the password change", *user.MFAChallengeID)
+	}
+}
+
+// A sign-in begun with the old password can't be finished after a reset.
+func TestAPIChangePasswordClearsMFAChallenge(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+	userTestPendingChallenge(t, user.ID)
+	resetCode, err := database.GenerateRandomResetCodeForUser(user.ID, true)
+	if err != nil {
+		t.Fatalf("failed to generate reset code: %v", err)
+	}
+
+	body := `{"reset_code":"` + resetCode + `","password":"NewPassword1!","password_repeat":"NewPassword1!"}`
+	if code, resp, _ := doRequest(APIChangePassword, "POST", "/api/open/users/password", body, nil, nil); code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	userTestAssertNoChallenge(t, user.ID)
+}
+
+// Nor after the user changes it on their profile.
+func TestUpdateUserPasswordChangeClearsMFAChallenge(t *testing.T) {
+	setupControllersDB(t)
+	user := newUserWithPassword(t, "CorrectHorse1!")
+	userTestPendingChallenge(t, user.ID)
+
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	body := `{"email":"` + *user.Email + `","password_original":"CorrectHorse1!","password":"NewPassword1!","password_repeat":"NewPassword1!"}`
+	if code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil); code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	userTestAssertNoChallenge(t, user.ID)
+}
+
+func TestUpdateUserClearMFAChallengeFails(t *testing.T) {
+	setupControllersDB(t)
+	user := newUserWithPassword(t, "CorrectHorse1!")
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	// The first users update is the profile save; fail the one after it.
+	failDBOperation(t, "update", "users", 1)
+
+	body := `{"email":"` + *user.Email + `","password_original":"CorrectHorse1!","password":"NewPassword1!","password_repeat":"NewPassword1!"}`
+	code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil)
+	if code != 500 || resp["error"] != "Failed to update user." {
+		t.Errorf("status = %d body=%v, want 500 'Failed to update user.'", code, resp)
+	}
+}
+
 func TestAPIDeleteUserCannotDeleteSelf(t *testing.T) {
 	setupControllersDB(t)
 	user := createTestUser(t)
@@ -668,6 +735,31 @@ func TestAPIDeleteUserSuccess(t *testing.T) {
 	}
 	if updated.Enabled == nil || *updated.Enabled {
 		t.Error("expected the deleted user to be disabled")
+	}
+}
+
+// A deleted account's claims are released, so someone else can claim the
+// wish: one live claim per wish would otherwise keep it taken.
+func TestAPIDeleteUserReleasesTheirClaims(t *testing.T) {
+	setupControllersDB(t)
+	admin := createTestUser(t)
+	_, claimant, wishlist, wish := claimSetup(t)
+	wishTestSeedClaim(t, wish.ID, claimant.ID)
+
+	header := map[string]string{"Authorization": authHeader(t, admin.ID, true)}
+	params := gin.Params{{Key: "user_id", Value: claimant.ID.String()}}
+	if code, resp, _ := doRequest(APIDeleteUser, "DELETE", "/api/admin/users/"+claimant.ID.String(), "", header, params); code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+
+	other := createTestUser(t)
+	group := createTestGroup(t, other.ID)
+	addGroupMembership(t, group.ID, other.ID)
+	addWishlistMembership(t, wishlist.ID, group.ID)
+	claim := models.WishClaim{WishID: wish.ID, UserID: other.ID, Enabled: true}
+	claim.ID = uuid.New()
+	if _, err := database.CreateWishClaimInDB(claim); err != nil {
+		t.Errorf("the wish can't be claimed after its claimer was deleted: %v", err)
 	}
 }
 
@@ -761,6 +853,10 @@ func TestGetUserAdminCanViewOthers(t *testing.T) {
 func TestGetUserSelfAndAdminResponsesAreRedacted(t *testing.T) {
 	setupControllersDB(t)
 	admin := createTestUser(t)
+	admin.Admin = true
+	if _, err := database.UpdateUserInDB(admin); err != nil {
+		t.Fatalf("failed to make admin: %v", err)
+	}
 	target := createTestUser(t)
 
 	cases := []struct {
@@ -866,8 +962,8 @@ func TestGetUsersIncludeDisabledIgnoredForNonAdmin(t *testing.T) {
 func TestGetUsersNotACollaboratorOfWishlist(t *testing.T) {
 	setupControllersDB(t)
 	requester := createTestUser(t)
-	owner := createTestUser(t)
-	wishlist := createTestWishlist(t, owner.ID)
+	createTestUser(t)
+	wishlist := createTestWishlist(t, requester.ID)
 
 	header := map[string]string{"Authorization": authHeader(t, requester.ID, false)}
 	code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users?notACollaboratorOfWishlistID="+wishlist.ID.String(), "", header, nil)
@@ -895,14 +991,30 @@ func TestGetUsersNotACollaboratorBadWishlistID(t *testing.T) {
 	}
 }
 
-func TestGetUsersNotACollaboratorUnknownWishlist(t *testing.T) {
+// The filters tell who is in a group or edits a wishlist, so they are only
+// for the group's members and the wishlist's owner. Anyone else, and anyone
+// naming a group or wishlist that doesn't exist, gets the same refusal.
+func TestGetUsersFiltersRequireAccess(t *testing.T) {
 	setupControllersDB(t)
 	requester := createTestUser(t)
+	owner := createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+	wishlist := createTestWishlist(t, owner.ID)
+	addWishlistMembership(t, wishlist.ID, group.ID)
+	addWishCollaborator(t, wishlist.ID, requester.ID)
 
 	header := map[string]string{"Authorization": authHeader(t, requester.ID, false)}
-	code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users?notACollaboratorOfWishlistID="+uuid.NewString(), "", header, nil)
-	if code != 400 {
-		t.Fatalf("status = %d, want 400; body=%v", code, resp)
+	for _, query := range []string{
+		"notAMemberOfGroupID=" + group.ID.String(),
+		"notAMemberOfGroupID=" + uuid.NewString(),
+		"notACollaboratorOfWishlistID=" + wishlist.ID.String(),
+		"notACollaboratorOfWishlistID=" + uuid.NewString(),
+	} {
+		code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users?"+query, "", header, nil)
+		if code != 403 || resp["users"] != nil {
+			t.Errorf("%s: status = %d, want 403 and no users; body=%v", query, code, resp)
+		}
 	}
 }
 
@@ -911,7 +1023,8 @@ func TestGetUsersNotACollaboratorWishlistLookupFailure(t *testing.T) {
 	requester := createTestUser(t)
 	wishlist := createTestWishlist(t, requester.ID)
 	header := map[string]string{"Authorization": authHeader(t, requester.ID, false)}
-	failDBOperation(t, "query", "wishlists", 0)
+	// The first query on wishlists is the ownership check.
+	failDBOperation(t, "query", "wishlists", 1)
 
 	code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users?notACollaboratorOfWishlistID="+wishlist.ID.String(), "", header, nil)
 	if code != 500 {
@@ -1142,8 +1255,33 @@ func TestUpdateUserProfileImageFailure(t *testing.T) {
 	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
 	body := `{"email":"` + *user.Email + `","password_original":"CorrectHorse1!","profile_image":"not-valid-base64-image-data"}`
 	code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil)
-	if code != 500 {
-		t.Fatalf("status = %d, want 500 for an unparseable profile image; body=%v", code, resp)
+	if code != 400 {
+		t.Fatalf("status = %d, want 400 for an unparseable profile image; body=%v", code, resp)
+	}
+}
+
+// A refused profile image is checked before anything is written: the e-mail
+// change in the same request is not applied and the account stays verified.
+func TestUpdateUserOversizedProfileImageChangesNothing(t *testing.T) {
+	setupControllersDB(t)
+	imageTestSetup(t)
+	user := newUserWithPassword(t, "CorrectHorse1!")
+	if err := database.SetUserVerification(user.ID, true); err != nil {
+		t.Fatal(err)
+	}
+
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	body := `{"email":"changed@example.com","password_original":"CorrectHorse1!","profile_image":"` + imageTestDataURI("image/png", imageTestPNGHeader(6000, 4001)) + `"}`
+	code, resp, _ := doRequest(UpdateUser, "PUT", "/api/auth/users", body, header, nil)
+	if code != 400 {
+		t.Fatalf("status = %d, want 400 for a profile image over the pixel limit; body=%v", code, resp)
+	}
+	after, err := database.GetAllUserInformation(user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *after.Email != *user.Email || after.Verified == nil || !*after.Verified {
+		t.Errorf("e-mail = %q, verified = %v, want %q and still verified", *after.Email, after.Verified, *user.Email)
 	}
 }
 
@@ -1426,8 +1564,10 @@ func TestGetUsersNotAMemberOfGroupMembershipLookupFailure(t *testing.T) {
 	setupControllersDB(t)
 	user := createTestUser(t)
 	group := createTestGroup(t, user.ID)
+	addGroupMembership(t, group.ID, user.ID)
 	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
-	failDBOperation(t, "query", "group_memberships", 0)
+	// The first query on group_memberships is the caller's own membership.
+	failDBOperation(t, "query", "group_memberships", 1)
 
 	code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users?notAMemberOfGroupID="+group.ID.String(), "", header, nil)
 	if code != 500 {
@@ -1441,8 +1581,8 @@ func TestGetUsersNotAMemberOfGroupMembershipLookupFailure(t *testing.T) {
 func TestGetUsersNotACollaboratorWishlistConversionFailure(t *testing.T) {
 	setupControllersDB(t)
 	requester := createTestUser(t)
-	owner := createTestUser(t)
-	wishlist := createTestWishlist(t, owner.ID)
+	createTestUser(t)
+	wishlist := createTestWishlist(t, requester.ID)
 	header := map[string]string{"Authorization": authHeader(t, requester.ID, false)}
 	failDBOperation(t, "query", "wishlist_collaborators", 0)
 
@@ -1458,9 +1598,9 @@ func TestGetUsersNotACollaboratorWishlistConversionFailure(t *testing.T) {
 func TestGetUsersNotACollaboratorExcludesCollaborators(t *testing.T) {
 	setupControllersDB(t)
 	requester := createTestUser(t)
-	owner := createTestUser(t)
+	createTestUser(t)
 	collaborator := createTestUser(t)
-	wishlist := createTestWishlist(t, owner.ID)
+	wishlist := createTestWishlist(t, requester.ID)
 
 	collab := models.WishlistCollaborator{UserID: collaborator.ID, WishlistID: wishlist.ID, Enabled: true}
 	collab.ID = uuid.New()
@@ -1810,7 +1950,8 @@ func TestAPIChangePasswordDatabaseFailures(t *testing.T) {
 		wantMessage interface{}
 	}{
 		{"save password", 0, "Failed to update user.", nil},
-		{"rotate reset code", 1, nil, "Error."},
+		{"clear MFA challenge", 1, "Failed to update user.", nil},
+		{"rotate reset code", 2, nil, "Error."},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1970,4 +2111,61 @@ func setUserEmail(t *testing.T, user models.User, email string) models.User {
 		t.Fatalf("failed to set e-mail: %v", err)
 	}
 	return updated
+}
+
+func TestGetUsersHidesOtherEmailsFromNonAdmins(t *testing.T) {
+	setupControllersDB(t)
+	requester := createTestUser(t)
+	other := createTestUser(t)
+	admin := createTestUser(t)
+	admin.Admin = true
+	if _, err := database.UpdateUserInDB(admin); err != nil {
+		t.Fatalf("failed to make admin: %v", err)
+	}
+
+	emails := func(callerID uuid.UUID) map[string]interface{} {
+		t.Helper()
+		header := map[string]string{"Authorization": authHeader(t, callerID, callerID == admin.ID)}
+		code, resp, _ := doRequest(GetUsers, "GET", "/api/auth/users", "", header, nil)
+		if code != 200 {
+			t.Fatalf("status = %d, want 200; body=%v", code, resp)
+		}
+		users, _ := resp["users"].([]interface{})
+		byID := map[string]interface{}{}
+		for _, entry := range users {
+			user := entry.(map[string]interface{})
+			byID[user["id"].(string)] = user["email"]
+		}
+		return byID
+	}
+
+	seen := emails(requester.ID)
+	if seen[requester.ID.String()] != *requester.Email {
+		t.Errorf("own email = %v, want %s", seen[requester.ID.String()], *requester.Email)
+	}
+	if seen[other.ID.String()] != nil || seen[admin.ID.String()] != nil {
+		t.Errorf("a non-admin saw other users' emails: %v", seen)
+	}
+
+	seen = emails(admin.ID)
+	if seen[other.ID.String()] != *other.Email {
+		t.Errorf("admin sees other email = %v, want %s", seen[other.ID.String()], *other.Email)
+	}
+}
+
+func TestGetUserHidesEmailFromOtherUsers(t *testing.T) {
+	setupControllersDB(t)
+	requester := createTestUser(t)
+	target := createTestUser(t)
+
+	header := map[string]string{"Authorization": authHeader(t, requester.ID, false)}
+	params := gin.Params{{Key: "user_id", Value: target.ID.String()}}
+	code, resp, _ := doRequest(GetUser, "GET", "/api/auth/users/"+target.ID.String(), "", header, params)
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	user, _ := resp["user"].(map[string]interface{})
+	if user["email"] != nil || user["first_name"] != "Test" {
+		t.Errorf("user = %v, want the name without the email", user)
+	}
 }

@@ -4,12 +4,15 @@ import (
 	"aunefyren/poenskelisten/config"
 	"bytes"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base32"
 	"encoding/base64"
 	"errors"
 	"image/png"
 	"strings"
+	"time"
 
+	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -59,10 +62,24 @@ func GenerateTOTPSecret(accountName string) (secret string, otpauthURL string, q
 	return key.Secret(), key.URL(), qrCodeDataURI, nil
 }
 
-// ValidateTOTPCode reports whether the provided 6-digit code is currently valid
-// for the given base32 secret.
-func ValidateTOTPCode(secret string, code string) bool {
-	return totp.Validate(strings.TrimSpace(code), secret)
+// totpPeriod is how long, in seconds, each TOTP code lasts.
+const totpPeriod = 30
+
+// TOTPStep reports whether the 6-digit code is valid for the base32 secret
+// at now, and for which 30-second step. Like totp.Validate, it accepts the
+// steps just before and after now, for clocks slightly off. Callers use the
+// step to accept each code once.
+func TOTPStep(secret string, code string, now time.Time) (int64, bool) {
+	code = strings.TrimSpace(code)
+	opts := totp.ValidateOpts{Period: totpPeriod, Digits: otp.DigitsSix, Algorithm: otp.AlgorithmSHA1}
+	current := now.Unix() / totpPeriod
+	for _, step := range []int64{current - 1, current, current + 1} {
+		expected, err := totp.GenerateCodeCustom(secret, time.Unix(step*totpPeriod, 0), opts)
+		if err == nil && subtle.ConstantTimeCompare([]byte(expected), []byte(code)) == 1 {
+			return step, true
+		}
+	}
+	return 0, false
 }
 
 // GenerateRecoveryCodes returns n human-friendly single-use recovery codes. The

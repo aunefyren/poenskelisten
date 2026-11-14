@@ -237,6 +237,23 @@ func GetAmountOfEnabledUsers() (int, error) {
 	return int(userRecords.RowsAffected), nil
 }
 
+// UserProfile keeps what other users may see of a user: their ID and name.
+// The e-mail address and the account's flags are for the user and admins
+// only; a group or a collaboration can be set up without the user's say, so
+// sharing one is no reason to see them.
+func UserProfile(user models.User) models.User {
+	return models.User{GormModel: models.GormModel{ID: user.ID}, FirstName: user.FirstName, LastName: user.LastName}
+}
+
+// GetUserProfile is the UserProfile of an enabled user.
+func GetUserProfile(userID uuid.UUID) (models.User, error) {
+	user, err := GetUserInformation(userID)
+	if err != nil {
+		return models.User{}, err
+	}
+	return UserProfile(user), nil
+}
+
 func RedactUserObject(user models.User) (userObject models.User) {
 	userObject = user
 
@@ -296,11 +313,16 @@ func GetAllUsers() (usersRedacted []models.User, err error) {
 	return
 }
 
+// UpdateUserInDB saves the whole user record, except the one-time MFA state
+// (the last TOTP step used and the pending sign-in challenge): the record was
+// read earlier, and writing those back could undo a code or challenge used
+// in between, making it usable again. They change only through their own
+// conditional updates in mfa.go.
 func UpdateUserInDB(userOriginal models.User) (user models.User, err error) {
 	err = nil
 	user = userOriginal
 
-	record := Instance.Save(&user)
+	record := Instance.Omit("mfa_last_step", "mfa_challenge_id").Save(&user)
 
 	if record.Error != nil {
 		return user, record.Error

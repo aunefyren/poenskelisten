@@ -216,11 +216,15 @@ func RevokeConsent(userID uuid.UUID, clientID string) error {
 }
 
 // SetUserSessionsInvalidatedAt stamps the global logout marker so SSO and access
-// tokens issued before now are rejected.
+// tokens issued before now are rejected. It also drops a pending MFA
+// challenge, so a sign-in started before the logout can't be finished after.
 func SetUserSessionsInvalidatedAt(userID uuid.UUID, at time.Time) error {
 	record := Instance.
 		Model(&models.User{}).
 		Where("id = ?", userID).
-		Update("sessions_invalidated_at", at)
+		Updates(map[string]interface{}{
+			"sessions_invalidated_at": at,
+			"mfa_challenge_id":        nil,
+		})
 	return record.Error
 }

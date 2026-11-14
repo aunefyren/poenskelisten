@@ -188,6 +188,7 @@ func TestParseFlagsOverridesEveryField(t *testing.T) {
 		"-mfarecoverycodes", "true",
 		"-accesstokenminutes", "30",
 		"-refreshtokendays", "14",
+		"-maximagepixels", "12000000",
 		"-oidcenabled", "true",
 		"-oidcprovidername", "Authentik",
 		"-oidcissuerurl", "https://idp.example.com",
@@ -242,6 +243,7 @@ func TestParseFlagsOverridesEveryField(t *testing.T) {
 		MFARecoveryCodesEnabled:     true,
 		AccessTokenMinutes:          30,
 		RefreshTokenDays:            14,
+		MaxImagePixels:              12000000,
 		OIDCEnabled:                 true,
 		OIDCProviderName:            "Authentik",
 		OIDCIssuerURL:               "https://idp.example.com",
@@ -307,6 +309,17 @@ func TestParseFlagsZeroTokenLifetimeResetsToDefault(t *testing.T) {
 	}
 	if out.AccessTokenMinutes != 0 || out.RefreshTokenDays != 0 {
 		t.Errorf("lifetimes = %d min / %d days, want 0 / 0 (the defaults)", out.AccessTokenMinutes, out.RefreshTokenDays)
+	}
+}
+
+func TestParseFlagsOutOfRangeMaxImagePixelsFails(t *testing.T) {
+	for _, value := range []string{"999999", "50000001", "-1"} {
+		withArgs(t, "-maximagepixels", value)
+
+		_, _, _, err := parseFlags(models.ConfigStruct{})
+		if err == nil || !strings.Contains(err.Error(), "maximagepixels") {
+			t.Errorf("parseFlags with -maximagepixels %s error = %v, want an invalid -maximagepixels error", value, err)
+		}
 	}
 }
 
@@ -1382,5 +1395,85 @@ func TestRunStartupFailures(t *testing.T) {
 				t.Error("serve was called despite the startup failure")
 			}
 		})
+	}
+}
+
+// Any account can put any other in a group or make it a collaborator, without
+// its say. Other users, wherever they show up, are only an ID and a name: no
+// e-mail address, no admin or MFA flag.
+func TestResponsesShowOtherUsersOnlyByName(t *testing.T) {
+	router, token := setupRouterTest(t)
+	now := time.Now()
+	truth := true
+
+	erin := createRouterUser(t, "Erin", false)
+	erin.MFAEnabled = new(bool)
+	if err := database.Instance.Save(&erin).Error; err != nil {
+		t.Fatal(err)
+	}
+	dave := createRouterUser(t, "Dave", true)
+	alice := createRouterUser(t, "Alice", true)
+
+	family := models.Group{Name: "Family", Enabled: true, OwnerID: alice.ID}
+	family.ID = uuid.New()
+	createRouterRecord(t, &family)
+	for _, memberID := range []uuid.UUID{alice.ID, erin.ID, dave.ID} {
+		membership := models.GroupMembership{GroupID: family.ID, MemberID: memberID, Enabled: true}
+		membership.ID = uuid.New()
+		createRouterRecord(t, &membership)
+	}
+	shared := models.Wishlist{Name: "Alice list", Enabled: true, OwnerID: alice.ID, Date: &now, Claimable: &truth}
+	shared.ID = uuid.New()
+	createRouterRecord(t, &shared)
+	share := models.WishlistMembership{GroupID: family.ID, WishlistID: shared.ID, Enabled: true}
+	share.ID = uuid.New()
+	createRouterRecord(t, &share)
+	wish := models.Wish{Name: "Alice wish", Enabled: true, OwnerID: alice.ID, WishlistID: shared.ID}
+	wish.ID = uuid.New()
+	createRouterRecord(t, &wish)
+	claim := models.WishClaim{WishID: wish.ID, UserID: dave.ID, Enabled: true}
+	claim.ID = uuid.New()
+	createRouterRecord(t, &claim)
+	own := models.Wishlist{Name: "Erin list", Enabled: true, OwnerID: erin.ID, Date: &now}
+	own.ID = uuid.New()
+	createRouterRecord(t, &own)
+
+	erinToken := token(erin.ID, false)
+	send := func(method, path, body string) string {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", erinToken)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code >= 300 {
+			t.Fatalf("%s %s = %d: %s", method, path, w.Code, w.Body.String())
+		}
+		return w.Body.String()
+	}
+	created := send("POST", "/api/auth/groups", `{"name":"Throwaway group","members":["`+dave.ID.String()+`"]}`)
+	var groups struct {
+		Groups []struct{ ID string } `json:"groups"`
+	}
+	if err := json.Unmarshal([]byte(created), &groups); err != nil || len(groups.Groups) == 0 {
+		t.Fatalf("no group in %s", created)
+	}
+	responses := map[string]string{
+		"new group":       created,
+		"collaborator":    send("POST", "/api/auth/wishlists/"+own.ID.String()+"/collaborate", `{"users":["`+dave.ID.String()+`"]}`),
+		"group members":   send("GET", "/api/auth/groups/"+family.ID.String()+"/members", ""),
+		"groups":          send("GET", "/api/auth/groups", ""),
+		"directory":       send("GET", "/api/auth/users", ""),
+		"user":            send("GET", "/api/auth/users/"+dave.ID.String(), ""),
+		"shared wishlist": send("GET", "/api/auth/wishlists/"+shared.ID.String(), ""),
+		"wishlists":       send("GET", "/api/auth/wishlists", ""),
+		"wishes":          send("GET", "/api/auth/wishes?wishlist="+shared.ID.String(), ""),
+		"wish":            send("GET", "/api/auth/wishes/"+wish.ID.String(), ""),
+	}
+	for name, body := range responses {
+		for _, leak := range []string{*dave.Email, *alice.Email, `"admin":true`, `"mfa_enabled":true`} {
+			if strings.Contains(body, leak) {
+				t.Errorf("%s response carries %s: %s", name, leak, body)
+			}
+		}
 	}
 }

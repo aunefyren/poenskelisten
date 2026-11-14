@@ -287,6 +287,53 @@ func TestCollaboratorsCanReadTheirWishlist(t *testing.T) {
 	}
 }
 
+// A list shared with two groups shows a member of one of them who is in the
+// other only by its name, as GetGroup and GetGroupMembers would refuse it.
+func TestGetWishlistHidesTheMembersOfOtherGroups(t *testing.T) {
+	setupControllersDB(t)
+	owner, viewer, outsider := createTestUser(t), createTestUser(t), createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	mine := createTestGroup(t, owner.ID)
+	other := createTestGroup(t, owner.ID)
+	for _, membership := range []struct{ group, member uuid.UUID }{
+		{mine.ID, owner.ID}, {mine.ID, viewer.ID}, {other.ID, owner.ID}, {other.ID, outsider.ID},
+	} {
+		addGroupMembership(t, membership.group, membership.member)
+	}
+	addWishlistMembership(t, wishlist.ID, mine.ID)
+	addWishlistMembership(t, wishlist.ID, other.ID)
+
+	code, resp := wlDo(GetWishlist, "GET", "/api/auth/wishlists/"+wishlist.ID.String(), "", authHeader(t, viewer.ID, false),
+		gin.Params{{Key: "wishlist_id", Value: wishlist.ID.String()}})
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	groups, _ := resp["wishlist"].(map[string]interface{})["members"].([]interface{})
+	if len(groups) != 2 {
+		t.Fatalf("groups = %v, want both", groups)
+	}
+	for _, raw := range groups {
+		group := raw.(map[string]interface{})
+		members, _ := group["members"].([]interface{})
+		switch group["name"] {
+		case mine.Name:
+			if len(members) != 2 || group["id"] != mine.ID.String() {
+				t.Errorf("own group = %v, want its ID and two members", group)
+			}
+		case other.Name:
+			if len(members) != 0 || group["id"] != uuid.Nil.String() || group["description"] != "" {
+				t.Errorf("other group = %v, want its name only", group)
+			}
+		default:
+			t.Errorf("unexpected group %v", group)
+		}
+	}
+	raw, _ := json.Marshal(resp)
+	if strings.Contains(string(raw), outsider.ID.String()) || strings.Contains(string(raw), other.ID.String()) {
+		t.Error("the response names a group the viewer isn't in, or one of its members")
+	}
+}
+
 func TestGetWishlistForbidden(t *testing.T) {
 	setupControllersDB(t)
 	owner := createTestUser(t)
@@ -422,6 +469,7 @@ func TestJoinWishlistSuccess(t *testing.T) {
 	owner := createTestUser(t)
 	wishlist := createTestWishlist(t, owner.ID)
 	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
 
 	body := `{"groups":["` + group.ID.String() + `"]}`
 	code, resp := wlDo(JoinWishlist, "POST", "/api/auth/wishlists/"+wishlist.ID.String()+"/join", body, authHeader(t, owner.ID, false),
@@ -504,6 +552,10 @@ func TestRemoveFromWishlistNotMemberOfQueriedGroup(t *testing.T) {
 		gin.Params{{Key: "wishlist_id", Value: wishlist.ID.String()}})
 	if code != 400 {
 		t.Fatalf("status = %d, want 400 for a group the caller isn't a member of; body=%v", code, resp)
+	}
+	// The refusal comes before the write, so the list stays in the group.
+	if shared, err := database.VerifyGroupMembershipToWishlist(wishlist.ID, group.ID); err != nil || !shared {
+		t.Errorf("the list was taken out of the group anyway (shared=%v, err=%v)", shared, err)
 	}
 }
 
@@ -789,6 +841,33 @@ func TestRegisterWishlistWithGroupContextID(t *testing.T) {
 	}
 }
 
+// Creating a list "from" a group answers with the group's wishlists, claims
+// included, so it is refused to anyone outside the group, before the list
+// is created.
+func TestRegisterWishlistGroupContextNeedsMembership(t *testing.T) {
+	setupControllersDB(t)
+	owner, claimant, outsider := createTestUser(t), createTestUser(t), createTestUser(t)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+	addGroupMembership(t, group.ID, claimant.ID)
+	shared := makeClaimable(t, createTestWishlist(t, owner.ID))
+	addWishlistMembership(t, shared.ID, group.ID)
+	wish := createTestWish(t, owner.ID, shared.ID)
+	wishTestSeedClaim(t, wish.ID, claimant.ID)
+
+	body := `{"name":"Outsider list","expires":false}`
+	code, resp := wlDo(RegisterWishlist, "POST", "/api/auth/wishlists?groupContextID="+group.ID.String(), body, authHeader(t, outsider.ID, false), nil)
+	if code != 400 {
+		t.Fatalf("status = %d, want 400 for a non-member; body=%v", code, resp)
+	}
+	if raw, _ := json.Marshal(resp); strings.Contains(string(raw), shared.Name) || strings.Contains(string(raw), claimant.ID.String()) {
+		t.Errorf("the refusal carries the group's lists: %s", raw)
+	}
+	if owned, err := database.GetOwnedWishlists(outsider.ID); err != nil || len(owned) != 0 {
+		t.Errorf("the outsider's list was created anyway (%d lists, err=%v)", len(owned), err)
+	}
+}
+
 func TestRegisterWishlistBadGroupContextID(t *testing.T) {
 	setupControllersDB(t)
 	owner := createTestUser(t)
@@ -824,6 +903,10 @@ func TestDeleteWishlistGroupQueryNotMember(t *testing.T) {
 		gin.Params{{Key: "wishlist_id", Value: wishlist.ID.String()}})
 	if code != 400 {
 		t.Fatalf("status = %d, want 400 for a group the caller isn't a member of; body=%v", code, resp)
+	}
+	// The refusal comes before the write, so the list is still there.
+	if _, err := database.GetWishlist(wishlist.ID); err != nil {
+		t.Errorf("the list was deleted anyway: %v", err)
 	}
 }
 
@@ -937,16 +1020,35 @@ func TestJoinWishlistBadUUID(t *testing.T) {
 	}
 }
 
-func TestJoinWishlistUnknownGroup(t *testing.T) {
+// A wishlist is only shared with groups its owner is in. A group the owner
+// isn't in, has left, or that doesn't exist gets the same refusal, and when
+// one group of several is refused none is shared.
+func TestJoinWishlistOnlyIntoTheOwnersGroups(t *testing.T) {
 	setupControllersDB(t)
-	owner := createTestUser(t)
+	owner, other := createTestUser(t), createTestUser(t)
 	wishlist := createTestWishlist(t, owner.ID)
+	mine := createTestGroup(t, owner.ID)
+	addGroupMembership(t, mine.ID, owner.ID)
+	foreign := createTestGroup(t, other.ID)
+	addGroupMembership(t, foreign.ID, other.ID)
+	left := createTestGroup(t, other.ID)
+	addGroupMembership(t, left.ID, other.ID)
+	membership := addGroupMembership(t, left.ID, owner.ID)
+	if err := database.DeleteGroupMembership(membership.ID); err != nil {
+		t.Fatal(err)
+	}
 
-	body := `{"groups":["` + uuid.NewString() + `"]}`
-	code, resp := wlDo(JoinWishlist, "POST", "/api/auth/wishlists/"+wishlist.ID.String()+"/join", body, authHeader(t, owner.ID, false),
-		gin.Params{{Key: "wishlist_id", Value: wishlist.ID.String()}})
-	if code != 500 {
-		t.Fatalf("status = %d, want 500 when the group doesn't exist; body=%v", code, resp)
+	for _, groupID := range []uuid.UUID{foreign.ID, left.ID, uuid.New()} {
+		body := `{"groups":["` + mine.ID.String() + `","` + groupID.String() + `"]}`
+		code, resp := wlDo(JoinWishlist, "POST", "/api/auth/wishlists/"+wishlist.ID.String()+"/join", body, authHeader(t, owner.ID, false), wishlistTestParams(wishlist.ID))
+		if code != 400 || resp["error"] != "You must be a member of the group." {
+			t.Errorf("group %s: status = %d, want 400; body=%v", groupID, code, resp)
+		}
+	}
+	for _, groupID := range []uuid.UUID{mine.ID, foreign.ID, left.ID} {
+		if shared, err := database.VerifyGroupMembershipToWishlist(wishlist.ID, groupID); err != nil || shared {
+			t.Errorf("the wishlist was shared with group %s (err=%v)", groupID, err)
+		}
 	}
 }
 
@@ -1456,6 +1558,7 @@ func TestRegisterWishlistGroupContextListDBFailure(t *testing.T) {
 	setupControllersDB(t)
 	owner := createTestUser(t)
 	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
 	// First wishlists query is the unique-name check; the second is the
 	// group-context re-list.
 	failDBOperation(t, "query", "wishlists", 1)
@@ -1816,6 +1919,8 @@ func TestJoinWishlistDBFailures(t *testing.T) {
 		table string
 		skip  int
 	}{
+		{"group lookup", "query", "groups", 0},
+		{"group membership check", "query", "group_memberships", 0},
 		{"membership check", "query", "wishlist_memberships", 0},
 		{"ownership check", "query", "wishlists", 0},
 		{"membership create", "create", "wishlist_memberships", 0},
@@ -1827,6 +1932,7 @@ func TestJoinWishlistDBFailures(t *testing.T) {
 			owner := createTestUser(t)
 			wishlist := createTestWishlist(t, owner.ID)
 			group := createTestGroup(t, owner.ID)
+			addGroupMembership(t, group.ID, owner.ID)
 			failDBOperation(t, c.op, c.table, c.skip)
 
 			body := `{"groups":["` + group.ID.String() + `"]}`
@@ -1845,6 +1951,7 @@ func TestJoinWishlistReturnsNewestFirst(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 	newer := createTestWishlist(t, owner.ID)
 	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
 
 	body := `{"groups":["` + group.ID.String() + `"]}`
 	code, resp := wlDo(JoinWishlist, "POST", "/api/auth/wishlists/"+older.ID.String()+"/join", body, authHeader(t, owner.ID, false), wishlistTestParams(older.ID))
@@ -2274,6 +2381,77 @@ func TestGetPublicWishlistWishesNewestFirst(t *testing.T) {
 	wishes, _ := obj["wishes"].([]interface{})
 	if len(wishes) != 2 || wishes[0].(map[string]interface{})["id"] != latest.ID.String() {
 		t.Errorf("wishes = %v, want 2 with the latest first", wishes)
+	}
+}
+
+// A claim made while the list was claimable stays when it is made public. The
+// link holder may be the owner or a collaborator, so the public view carries
+// no claim, with or without hidden claimers.
+func TestGetPublicWishlistCarriesNoClaims(t *testing.T) {
+	for _, hideClaimers := range []bool{false, true} {
+		setupControllersDB(t)
+		owner, claimant := createTestUser(t), createTestUser(t)
+		wishlist := wishlistTestPublic(t, owner.ID)
+		wishlist = wishlistTestSave(t, wishlist, func(w *models.Wishlist) { w.HideClaimers = boolPtr(hideClaimers) })
+		wish := createTestWish(t, owner.ID, wishlist.ID)
+		wishTestSeedClaim(t, wish.ID, claimant.ID)
+
+		code, resp := wlDo(GetPublicWishlist, "GET", "/api/open/wishlists/public/"+wishlist.PublicHash.String(), "", "",
+			gin.Params{{Key: "wishlist_hash", Value: wishlist.PublicHash.String()}})
+		if code != 200 {
+			t.Fatalf("hide_claimers=%v: status = %d, want 200; body=%v", hideClaimers, code, resp)
+		}
+		obj, _ := resp["wishlist"].(map[string]interface{})
+		wishes, _ := obj["wishes"].([]interface{})
+		if len(wishes) != 1 {
+			t.Fatalf("hide_claimers=%v: wishes = %v, want one", hideClaimers, wishes)
+		}
+		if claims, _ := wishes[0].(map[string]interface{})["wishclaim"].([]interface{}); len(claims) != 0 {
+			t.Errorf("hide_claimers=%v: public wish carries claims %v", hideClaimers, claims)
+		}
+		if raw, _ := json.Marshal(resp); strings.Contains(string(raw), claimant.ID.String()) {
+			t.Errorf("hide_claimers=%v: the claimer's ID is in the public response", hideClaimers)
+		}
+	}
+}
+
+// The public link shows the list, its wishes and the owner's name, and no
+// one else: not the groups it is shared with, nor collaborators, nor any
+// user ID or e-mail address.
+func TestGetPublicWishlistShowsOnlyTheOwnersName(t *testing.T) {
+	setupControllersDB(t)
+	owner, member, collaborator := createTestUser(t), createTestUser(t), createTestUser(t)
+	wishlist := wishlistTestPublic(t, owner.ID)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, owner.ID)
+	addGroupMembership(t, group.ID, member.ID)
+	addWishlistMembership(t, wishlist.ID, group.ID)
+	addWishCollaborator(t, wishlist.ID, collaborator.ID)
+	createTestWish(t, collaborator.ID, wishlist.ID)
+
+	code, resp := wlDo(GetPublicWishlist, "GET", "/api/open/wishlists/public/"+wishlist.PublicHash.String(), "", "",
+		gin.Params{{Key: "wishlist_hash", Value: wishlist.PublicHash.String()}})
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	obj, _ := resp["wishlist"].(map[string]interface{})
+	if members, _ := obj["members"].([]interface{}); len(members) != 0 {
+		t.Errorf("members = %v, want none", members)
+	}
+	if collaborators, _ := obj["collaborators"].([]interface{}); len(collaborators) != 0 {
+		t.Errorf("collaborators = %v, want none", collaborators)
+	}
+	if ownerObj, _ := obj["owner"].(map[string]interface{}); ownerObj["first_name"] != owner.FirstName {
+		t.Errorf("owner = %v, want the owner's name", ownerObj)
+	}
+	if wishes, _ := obj["wishes"].([]interface{}); len(wishes) != 1 {
+		t.Errorf("wishes = %v, want the one wish", wishes)
+	}
+	raw, _ := json.Marshal(resp)
+	for _, user := range []models.User{owner, member, collaborator} {
+		if strings.Contains(string(raw), user.ID.String()) || strings.Contains(string(raw), *user.Email) {
+			t.Errorf("the public response names user %s", user.ID)
+		}
 	}
 }
 

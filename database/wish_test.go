@@ -3,6 +3,7 @@ package database
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"aunefyren/poenskelisten/models"
 
@@ -183,6 +184,108 @@ func TestDeleteWishClaimAfterReclaim(t *testing.T) {
 		if claimed, err := VerifyWishIsClaimed(wish.ID); err != nil || claimed {
 			t.Fatalf("round %d: expected wish to be unclaimed (claimed=%v err=%v)", round, claimed, err)
 		}
+	}
+}
+
+// Two claims checked at once both find the wish free; the second insert is
+// turned away by the index rather than stored next to the first.
+func TestCreateWishClaimInDBRefusesASecondLiveClaim(t *testing.T) {
+	setupTestDB(t)
+	owner, first, second := createTestUser(t), createTestUser(t), createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wish := createWishForOwner(t, wishlist.ID, owner.ID, "Contested")
+
+	claim := models.WishClaim{WishID: wish.ID, UserID: first.ID, Enabled: true}
+	claim.ID = uuid.New()
+	if _, err := CreateWishClaimInDB(claim); err != nil {
+		t.Fatalf("first claim: %v", err)
+	}
+	rival := models.WishClaim{WishID: wish.ID, UserID: second.ID, Enabled: true}
+	rival.ID = uuid.New()
+	if _, err := CreateWishClaimInDB(rival); !errors.Is(err, ErrWishAlreadyClaimed) {
+		t.Fatalf("second claim err = %v, want ErrWishAlreadyClaimed", err)
+	}
+
+	// Once released, the wish can be claimed again.
+	if err := DeleteWishClaimByUserAndWish(wish.ID, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	rival.ID = uuid.New()
+	if _, err := CreateWishClaimInDB(rival); err != nil {
+		t.Errorf("claim after release: %v", err)
+	}
+}
+
+// The index can only be added once the claims that would break it are gone:
+// all but the oldest live claim of a wish, and those of disabled accounts.
+func TestEnsureOneClaimPerWishReleasesConflictingClaims(t *testing.T) {
+	setupTestDB(t)
+	if err := Instance.Exec("DROP INDEX idx_wish_claims_one_live").Error; err != nil {
+		t.Fatalf("failed to drop the index: %v", err)
+	}
+	owner, first, second, gone := createTestUser(t), createTestUser(t), createTestUser(t), createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	twice := createWishForOwner(t, wishlist.ID, owner.ID, "Claimed twice")
+	orphaned := createWishForOwner(t, wishlist.ID, owner.ID, "Claimed by a deleted account")
+
+	seed := func(wishID, userID uuid.UUID, at time.Time) uuid.UUID {
+		claim := models.WishClaim{WishID: wishID, UserID: userID, Enabled: true}
+		claim.ID = uuid.New()
+		claim.CreatedAt = at
+		if err := Instance.Create(&claim).Error; err != nil {
+			t.Fatalf("failed to seed claim: %v", err)
+		}
+		return claim.ID
+	}
+	now := time.Now()
+	oldest := seed(twice.ID, first.ID, now.Add(-time.Hour))
+	newer := seed(twice.ID, second.ID, now)
+	ofDeleted := seed(orphaned.ID, gone.ID, now)
+	if err := Instance.Model(&models.User{}).Where("id = ?", gone.ID).Update("enabled", false).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	for round := 1; round <= 2; round++ {
+		if err := EnsureOneClaimPerWish(); err != nil {
+			t.Fatalf("round %d: %v", round, err)
+		}
+	}
+	for id, want := range map[uuid.UUID]bool{oldest: true, newer: false, ofDeleted: false} {
+		var claim models.WishClaim
+		if err := Instance.Where("id = ?", id).First(&claim).Error; err != nil {
+			t.Fatal(err)
+		}
+		if claim.Enabled != want {
+			t.Errorf("claim %s enabled = %v, want %v", id, claim.Enabled, want)
+		}
+	}
+	claim := models.WishClaim{WishID: orphaned.ID, UserID: second.ID, Enabled: true}
+	claim.ID = uuid.New()
+	if _, err := CreateWishClaimInDB(claim); err != nil {
+		t.Errorf("the deleted account's wish can't be claimed: %v", err)
+	}
+	claim = models.WishClaim{WishID: twice.ID, UserID: second.ID, Enabled: true}
+	claim.ID = uuid.New()
+	if _, err := CreateWishClaimInDB(claim); !errors.Is(err, ErrWishAlreadyClaimed) {
+		t.Errorf("claim on a claimed wish err = %v, want ErrWishAlreadyClaimed", err)
+	}
+}
+
+func TestDisableWishClaimsOfUser(t *testing.T) {
+	setupTestDB(t)
+	owner, claimer := createTestUser(t), createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wish := createWishForOwner(t, wishlist.ID, owner.ID, "Released")
+	claim := models.WishClaim{WishID: wish.ID, UserID: claimer.ID, Enabled: true}
+	claim.ID = uuid.New()
+	if _, err := CreateWishClaimInDB(claim); err != nil {
+		t.Fatal(err)
+	}
+	if err := DisableWishClaimsOfUser(claimer.ID); err != nil {
+		t.Fatal(err)
+	}
+	if mine, err := VerifyUserOwnershipToWishClaimByWish(claimer.ID, wish.ID); err != nil || mine {
+		t.Errorf("claim still live (mine=%v, err=%v)", mine, err)
 	}
 }
 

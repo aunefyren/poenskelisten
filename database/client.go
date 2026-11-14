@@ -150,6 +150,15 @@ func Migrate() {
 	if err := SeedFirstPartyClient(); err != nil {
 		panic(err)
 	}
+	if err := WithdrawWishlistsFromOutsideGroups(); err != nil {
+		logger.Log.Error("failed to withdraw wishlists from the groups their owners aren't in. error: " + err.Error())
+	}
+
+	// Without it two claims sent at once can both be stored, but nothing else
+	// depends on it, so a failure is reported rather than stopping startup.
+	if err := EnsureOneClaimPerWish(); err != nil {
+		logger.Log.Error("failed to make the database refuse a second claim on a wish. error: " + err.Error())
+	}
 
 	logger.Log.Debug("database migration completed")
 }
@@ -321,22 +330,45 @@ func DeleteGroup(GroupID uuid.UUID) error {
 	return nil
 }
 
-// Set group membership to disabled
+// DeleteGroupMembership disables a group membership and stops sharing the
+// member's wishlists with the group: a wishlist is only shared with groups
+// its owner is in, and the member no longer sees the group to withdraw them.
 func DeleteGroupMembership(GroupMembershipID uuid.UUID) error {
-	var groupMembership models.GroupMembership
+	return Instance.Transaction(func(tx *gorm.DB) error {
+		var groupMembership models.GroupMembership
+		if err := tx.Where("id = ?", GroupMembershipID).Take(&groupMembership).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("failed to delete group membership in database")
+		} else if err != nil {
+			return err
+		}
 
-	groupRecords := Instance.
-		Model(groupMembership).
-		Where("id = ?", GroupMembershipID).
-		Update("enabled", false)
+		groupRecords := tx.
+			Model(&models.GroupMembership{}).
+			Where("id = ?", GroupMembershipID).
+			Update("enabled", false)
+		if groupRecords.Error != nil {
+			return groupRecords.Error
+		}
+		if groupRecords.RowsAffected != 1 {
+			return errors.New("failed to delete group membership in database")
+		}
 
-	if groupRecords.Error != nil {
-		return groupRecords.Error
-	}
-	if groupRecords.RowsAffected != 1 {
-		return errors.New("failed to delete group membership in database")
-	}
-	return nil
+		return tx.Model(&models.WishlistMembership{}).
+			Where("group_id = ? AND enabled = ? AND wishlist_id IN (?)", groupMembership.GroupID, true,
+				tx.Model(&models.Wishlist{}).Select("id").Where("owner_id = ?", groupMembership.MemberID)).
+			Update("enabled", false).Error
+	})
+}
+
+// WithdrawWishlistsFromOutsideGroups stops sharing each wishlist with the
+// groups its owner isn't in: shared by an owner who has since left, or by
+// one who never was a member, through a route that didn't check it.
+func WithdrawWishlistsFromOutsideGroups() error {
+	return Instance.Exec(`UPDATE wishlist_memberships SET enabled = ? WHERE enabled = ? AND NOT EXISTS (
+		SELECT 1 FROM wishlists JOIN group_memberships ON group_memberships.member_id = wishlists.owner_id
+		WHERE wishlists.id = wishlist_memberships.wishlist_id
+		AND group_memberships.group_id = wishlist_memberships.group_id
+		AND group_memberships.enabled = ? AND group_memberships.deleted_at IS NULL)`, false, true, true).Error
 }
 
 // Set wishlist to disabled

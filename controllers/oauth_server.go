@@ -112,25 +112,35 @@ func APIOAuthAuthorize(ctx *gin.Context) {
 		return
 	}
 
-	// From here, protocol errors are reported by redirecting back to the client.
+	// Anyone can register a client with any redirect URI, so errors found
+	// before the user has signed in and approved it are shown here instead
+	// of redirecting there (RFC 9700 section 4.11.2): otherwise this endpoint
+	// would send anyone anywhere. The web app's URIs come from the config.
+	authError := func(code string) {
+		if client.IsFirstParty {
+			redirectAuthError(ctx, redirectURI, state, code)
+			return
+		}
+		ctx.String(http.StatusBadRequest, "Invalid authorization request ("+code+").")
+	}
 	if responseType != "code" {
-		redirectAuthError(ctx, redirectURI, state, "unsupported_response_type")
+		authError("unsupported_response_type")
 		return
 	}
 	if challenge == "" || challengeMethod != "S256" {
-		redirectAuthError(ctx, redirectURI, state, "invalid_request")
+		authError("invalid_request")
 		return
 	}
 
 	requested := oauth.FilterValid(oauth.Parse(scopeParam))
 	if len(requested) == 0 || !client.AllowsScopes(requested) {
-		redirectAuthError(ctx, redirectURI, state, "invalid_scope")
+		authError("invalid_scope")
 		return
 	}
 
 	resource, ok := resolveResource(client, resource)
 	if !ok {
-		redirectAuthError(ctx, redirectURI, state, "invalid_target")
+		authError("invalid_target")
 		return
 	}
 

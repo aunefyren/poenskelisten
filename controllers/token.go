@@ -46,7 +46,10 @@ func GenerateToken(context *gin.Context) {
 	// challenge token and require the second factor via /open/tokens/mfa instead
 	// of handing out a session token here.
 	if user.IsMFAEnabled() {
-		challengeToken, err := auth.GenerateMFAChallengeToken(user.ID)
+		challengeToken, challengeID, err := auth.GenerateMFAChallengeToken(user.ID)
+		if err == nil {
+			err = database.SetMFAChallenge(user.ID, challengeID)
+		}
 		if err != nil {
 			logger.Log.Error("Failed to generate MFA challenge token. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid credentials."})

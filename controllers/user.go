@@ -8,6 +8,7 @@ import (
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
 	"errors"
+	"image"
 	"net/http"
 	"strings"
 	"time"
@@ -228,6 +229,7 @@ func GetUser(context *gin.Context) {
 			context.Abort()
 			return
 		}
+		userObject = database.UserProfile(userObject)
 	}
 
 	// Reply
@@ -284,6 +286,20 @@ func GetUsers(context *gin.Context) {
 			return
 		}
 
+		// The filtered list tells who is in the group, which only its members
+		// may know.
+		isMember, err := database.VerifyUserMembershipToGroup(userID, notAMemberOfGroupID)
+		if err != nil {
+			logger.Log.Error("Failed to verify membership to group. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify membership to group."})
+			context.Abort()
+			return
+		} else if !isMember {
+			context.JSON(http.StatusForbidden, gin.H{"error": "You are not a member of this group."})
+			context.Abort()
+			return
+		}
+
 		for _, user := range users {
 			member, err := database.VerifyUserMembershipToGroup(user.ID, notAMemberOfGroupID)
 			if err != nil {
@@ -308,6 +324,20 @@ func GetUsers(context *gin.Context) {
 		if err != nil {
 			logger.Log.Error("Failed to parse wishlist ID. Error: " + err.Error())
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse wishlist ID."})
+			context.Abort()
+			return
+		}
+
+		// The filter is for the owner choosing collaborators; to anyone else
+		// it would tell who edits a list they may not even see.
+		owns, err := database.VerifyUserOwnershipToWishlist(userID, notACollaboratorOfWishlistID)
+		if err != nil {
+			logger.Log.Error("Failed to verify ownership of wishlist. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify ownership of wishlist."})
+			context.Abort()
+			return
+		} else if !owns {
+			context.JSON(http.StatusForbidden, gin.H{"error": "Only the owner of a wishlist can choose its collaborators."})
 			context.Abort()
 			return
 		}
@@ -348,6 +378,14 @@ func GetUsers(context *gin.Context) {
 		}
 
 		users = newUsers
+	}
+
+	if !requestingUserObject.Admin {
+		for i := range users {
+			if users[i].ID != userID {
+				users[i] = database.UserProfile(users[i])
+			}
+		}
 	}
 
 	// Reply
@@ -533,6 +571,16 @@ func UpdateUser(context *gin.Context) {
 		return
 	}
 
+	// Decoded before anything is written, so a refused image changes nothing.
+	var profileImage image.Image
+	if userUpdateRequest.ProfileImage != "" {
+		profileImage, err = decodeImageUpload(context.Request.Context(), userID, userUpdateRequest.ProfileImage)
+		if err != nil {
+			respondImageUploadError(context, err)
+			return
+		}
+	}
+
 	// Email changes are only allowed for local accounts; an OIDC account's email
 	// is owned by the identity provider and used for linking, so it is left as-is.
 	// The request's email arrives lowercased, so compare ignoring case: an
@@ -581,8 +629,8 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// Update profile image
-	if userUpdateRequest.ProfileImage != "" {
-		err = UpdateUserProfileImage(userOriginal.ID, userUpdateRequest.ProfileImage)
+	if profileImage != nil {
+		err = storeImage(profileImageDir, userOriginal.ID, profileImage)
 		if err != nil {
 			logger.Log.Error("Failed to update profile image. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile image."})
@@ -598,6 +646,16 @@ func UpdateUser(context *gin.Context) {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user."})
 		context.Abort()
 		return
+	}
+
+	// A sign-in begun with the old password can't be finished with the new one.
+	if userUpdateRequest.Password != "" && userOriginal.HasPassword() {
+		if err := database.ClearMFAChallenge(userOriginal.ID); err != nil {
+			logger.Log.Error("Failed to clear the MFA challenge. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user."})
+			context.Abort()
+			return
+		}
 	}
 
 	// Get updated user object
@@ -803,6 +861,14 @@ func APIChangePassword(context *gin.Context) {
 		return
 	}
 
+	// A sign-in begun with the old password can't be finished with the new one.
+	if err := database.ClearMFAChallenge(user.ID); err != nil {
+		logger.Log.Error("Failed to clear the MFA challenge. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user."})
+		context.Abort()
+		return
+	}
+
 	// Change the reset code
 	_, err = database.GenerateRandomResetCodeForUser(user.ID, false)
 	if err != nil {
@@ -863,6 +929,12 @@ func APIDeleteUser(context *gin.Context) {
 	// The user is already deleted, so a leftover file is logged, not fatal.
 	if err := DeleteUserProfileImage(user.ID); err != nil {
 		logger.Log.Error("Failed to delete profile image of deleted user. Error: " + err.Error())
+	}
+
+	// Their claims already count as free; releasing them lets others claim
+	// those wishes, which the one-claim-per-wish index would otherwise refuse.
+	if err := database.DisableWishClaimsOfUser(user.ID); err != nil {
+		logger.Log.Error("Failed to release the claims of deleted user. Error: " + err.Error())
 	}
 
 	user = database.RedactUserObject(user)

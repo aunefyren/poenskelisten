@@ -138,47 +138,59 @@ func ValidateTokenGetClaims(signedToken string, admin bool) (*JWTClaim, error) {
 
 // GenerateMFAChallengeToken mints a short-lived token that stands in for a
 // successful password check while the user completes the TOTP step. It carries
-// only the user ID and a purpose marker; it cannot be used as a session token.
-func GenerateMFAChallengeToken(userID uuid.UUID) (string, error) {
+// the user ID, a purpose marker and a random challenge ID, which the caller
+// stores so the challenge can be completed only once; it cannot be used as a
+// session token.
+func GenerateMFAChallengeToken(userID uuid.UUID) (string, uuid.UUID, error) {
 	now := time.Now()
+	challengeID := uuid.New()
 	claims := &JWTClaim{
 		UserID:  userID,
 		Purpose: PurposeMFAChallenge,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        challengeID.String(),
 			ExpiresAt: jwt.NewNumericDate(now.Add(MFAChallengeValidDuration)),
 			NotBefore: jwt.NewNumericDate(now),
 			IssuedAt:  jwt.NewNumericDate(now),
 			Issuer:    config.ConfigFile.PoenskelistenName,
 		},
 	}
-	return GenerateJWTFromClaims(claims)
+	token, err := GenerateJWTFromClaims(claims)
+	if err != nil {
+		return "", uuid.Nil, err
+	}
+	return token, challengeID, nil
 }
 
 // ValidateMFAChallengeToken parses and validates an MFA challenge token, returning
-// the user ID it was issued for. It rejects expired, not-yet-valid, and
-// wrong-purpose tokens.
-func ValidateMFAChallengeToken(signedToken string) (uuid.UUID, error) {
+// the user ID it was issued for and its challenge ID. It rejects expired,
+// not-yet-valid, and wrong-purpose tokens.
+func ValidateMFAChallengeToken(signedToken string) (uuid.UUID, uuid.UUID, error) {
 	claims, err := ParseToken(signedToken)
 	if err != nil {
-		return uuid.UUID{}, err
+		return uuid.Nil, uuid.Nil, err
 	}
 	if claims.ExpiresAt == nil || claims.NotBefore == nil {
-		return uuid.UUID{}, errors.New("claims not present")
+		return uuid.Nil, uuid.Nil, errors.New("claims not present")
 	}
 	now := time.Now()
 	if claims.ExpiresAt.Time.Before(now) {
-		return uuid.UUID{}, errors.New("challenge token has expired")
+		return uuid.Nil, uuid.Nil, errors.New("challenge token has expired")
 	}
 	if claims.NotBefore.Time.After(now) {
-		return uuid.UUID{}, errors.New("challenge token has not begun")
+		return uuid.Nil, uuid.Nil, errors.New("challenge token has not begun")
 	}
 	if claims.Purpose != PurposeMFAChallenge {
-		return uuid.UUID{}, errors.New("token is not an MFA challenge token")
+		return uuid.Nil, uuid.Nil, errors.New("token is not an MFA challenge token")
 	}
 	if claims.UserID == uuid.Nil {
-		return uuid.UUID{}, errors.New("challenge token has no user")
+		return uuid.Nil, uuid.Nil, errors.New("challenge token has no user")
 	}
-	return claims.UserID, nil
+	challengeID, err := uuid.Parse(claims.ID)
+	if err != nil || challengeID == uuid.Nil {
+		return uuid.Nil, uuid.Nil, errors.New("challenge token has no challenge ID")
+	}
+	return claims.UserID, challengeID, nil
 }
 
 func ParseToken(signedToken string) (*JWTClaim, error) {
