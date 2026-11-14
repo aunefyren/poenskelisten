@@ -8,19 +8,27 @@ import (
 	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
+	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // verifySecondFactor checks a user-supplied code against the user's TOTP secret
-// or their unused recovery codes. A matching recovery code is consumed. It
+// or their unused recovery codes, and uses the code up when it is accepted. It
 // returns true when the code is accepted.
+//
+// For a sign-in, challengeID is the pending challenge, which is completed
+// along with the code: false then also means the challenge was already
+// completed or replaced. A losing sign-in in a race leaves a TOTP code unused;
+// a recovery code it matched may be the one the winner used.
 //
 // TOTP codes (6 digits) and recovery codes (16 base32 chars) are disjoint, so we
 // branch strictly on the input shape. This avoids running a bcrypt comparison per
 // recovery code on every TOTP attempt.
-func verifySecondFactor(user models.User, code string) (bool, error) {
+func verifySecondFactor(user models.User, code string, challengeID *uuid.UUID) (bool, error) {
 	if utilities.LooksLikeTOTPCode(code) {
 		if user.MFASecret == nil {
 			return false, utilities.ErrNoTOTPSecret
@@ -29,7 +37,14 @@ func verifySecondFactor(user models.User, code string) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		return utilities.ValidateTOTPCode(secret, code), nil
+		step, valid := utilities.TOTPStep(secret, code, time.Now())
+		if !valid {
+			return false, nil
+		}
+		if challengeID != nil {
+			return database.CompleteMFAChallengeWithTOTP(user.ID, *challengeID, step)
+		}
+		return database.UseTOTPStep(user.ID, step)
 	}
 
 	// Recovery-code path: only available when the administrator has enabled
@@ -46,7 +61,16 @@ func verifySecondFactor(user models.User, code string) (bool, error) {
 	}
 	for _, recoveryCode := range activeCodes {
 		if utilities.CheckRecoveryCode(recoveryCode.CodeHash, code) {
-			if err := database.MarkRecoveryCodeUsed(recoveryCode.ID); err != nil {
+			// The challenge is claimed first, so a sign-in that loses it
+			// leaves the code unused.
+			if challengeID != nil {
+				if consumed, err := database.ConsumeMFAChallenge(user.ID, *challengeID); err != nil || !consumed {
+					return false, err
+				}
+			}
+			if err := database.MarkRecoveryCodeUsed(recoveryCode.ID); errors.Is(err, database.ErrRecoveryCodeUsed) {
+				return false, nil
+			} else if err != nil {
 				return false, err
 			}
 			return true, nil
@@ -150,7 +174,18 @@ func APIActivateMFA(context *gin.Context) {
 		return
 	}
 
-	if !utilities.ValidateTOTPCode(secret, request.Code) {
+	// The code that turns MFA on is used up too, so it can't sign in next.
+	step, valid := utilities.TOTPStep(secret, request.Code, time.Now())
+	if valid {
+		valid, err = database.UseTOTPStep(userID, step)
+		if err != nil {
+			logger.Log.Error("Failed to record the TOTP code. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify code."})
+			context.Abort()
+			return
+		}
+	}
+	if !valid {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Invalid code. Please try again."})
 		context.Abort()
 		return
@@ -244,7 +279,7 @@ func APIDisableMFA(context *gin.Context) {
 		return
 	}
 
-	verified, err := verifySecondFactor(user, request.Code)
+	verified, err := verifySecondFactor(user, request.Code, nil)
 	if err != nil {
 		logger.Log.Error("Failed to verify second factor. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify code."})
@@ -276,7 +311,7 @@ func APIValidateMFA(context *gin.Context) {
 		return
 	}
 
-	userID, err := auth.ValidateMFAChallengeToken(request.MFAToken)
+	userID, challengeID, err := auth.ValidateMFAChallengeToken(request.MFAToken)
 	if err != nil {
 		logger.Log.Error("Failed to validate MFA challenge token. Error: " + err.Error())
 		context.JSON(http.StatusUnauthorized, gin.H{"error": "Your login attempt expired. Please log in again."})
@@ -299,7 +334,17 @@ func APIValidateMFA(context *gin.Context) {
 		return
 	}
 
-	verified, err := verifySecondFactor(user, request.Code)
+	// A challenge serves once: completed, or replaced by a newer sign-in, it
+	// can't be completed again.
+	if user.MFAChallengeID == nil || *user.MFAChallengeID != challengeID {
+		context.JSON(http.StatusUnauthorized, gin.H{"error": "Your login attempt expired. Please log in again."})
+		context.Abort()
+		return
+	}
+
+	// Completes the challenge along with the code, atomically, so two
+	// requests completing the same challenge at once don't both get a session.
+	verified, err := verifySecondFactor(user, request.Code, &challengeID)
 	if err != nil {
 		logger.Log.Error("Failed to verify second factor. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify code."})

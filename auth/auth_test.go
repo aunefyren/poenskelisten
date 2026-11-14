@@ -364,28 +364,53 @@ func TestMFAChallengeTokenRoundTrip(t *testing.T) {
 	setupAuthTestConfig(t)
 
 	userID := uuid.New()
-	tokenString, err := GenerateMFAChallengeToken(userID)
+	tokenString, challengeID, err := GenerateMFAChallengeToken(userID)
 	if err != nil {
 		t.Fatalf("GenerateMFAChallengeToken returned error: %v", err)
 	}
 
-	gotID, err := ValidateMFAChallengeToken(tokenString)
+	gotID, gotChallenge, err := ValidateMFAChallengeToken(tokenString)
 	if err != nil {
 		t.Fatalf("ValidateMFAChallengeToken returned error: %v", err)
 	}
-	if gotID != userID {
-		t.Errorf("UserID = %v, want %v", gotID, userID)
+	if gotID != userID || gotChallenge != challengeID || challengeID == uuid.Nil {
+		t.Errorf("got (%v, %v), want (%v, %v)", gotID, gotChallenge, userID, challengeID)
+	}
+
+	// Each challenge has its own ID, which the server stores to accept it once.
+	if _, other, err := GenerateMFAChallengeToken(userID); err != nil || other == challengeID {
+		t.Errorf("a second challenge got ID %v (err %v), want a new one", other, err)
+	}
+}
+
+func TestMFAChallengeTokenWithoutChallengeIDRejected(t *testing.T) {
+	setupAuthTestConfig(t)
+
+	now := time.Now()
+	tokenString, err := GenerateJWTFromClaims(&JWTClaim{
+		UserID:  uuid.New(),
+		Purpose: PurposeMFAChallenge,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Minute)),
+			NotBefore: jwt.NewNumericDate(now),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ValidateMFAChallengeToken(tokenString); err == nil {
+		t.Error("ValidateMFAChallengeToken accepted a challenge without an ID")
 	}
 }
 
 func TestMFAChallengeTokenWithoutUserRejected(t *testing.T) {
 	setupAuthTestConfig(t)
 
-	tokenString, err := GenerateMFAChallengeToken(uuid.Nil)
+	tokenString, _, err := GenerateMFAChallengeToken(uuid.Nil)
 	if err != nil {
 		t.Fatalf("GenerateMFAChallengeToken returned error: %v", err)
 	}
-	if _, err := ValidateMFAChallengeToken(tokenString); err == nil {
+	if _, _, err := ValidateMFAChallengeToken(tokenString); err == nil {
 		t.Error("ValidateMFAChallengeToken accepted a token for the nil UUID")
 	}
 }
@@ -393,7 +418,7 @@ func TestMFAChallengeTokenWithoutUserRejected(t *testing.T) {
 func TestMFAChallengeTokenRejectedAsSession(t *testing.T) {
 	setupAuthTestConfig(t)
 
-	tokenString, err := GenerateMFAChallengeToken(uuid.New())
+	tokenString, _, err := GenerateMFAChallengeToken(uuid.New())
 	if err != nil {
 		t.Fatalf("GenerateMFAChallengeToken returned error: %v", err)
 	}
@@ -413,7 +438,7 @@ func TestSessionTokenRejectedAsMFAChallenge(t *testing.T) {
 		t.Fatalf("GenerateJWT returned error: %v", err)
 	}
 
-	if _, err := ValidateMFAChallengeToken(sessionToken); err == nil {
+	if _, _, err := ValidateMFAChallengeToken(sessionToken); err == nil {
 		t.Error("ValidateMFAChallengeToken accepted a session token, want error")
 	}
 }
@@ -436,7 +461,7 @@ func TestMFAChallengeTokenExpired(t *testing.T) {
 		t.Fatalf("GenerateJWTFromClaims returned error: %v", err)
 	}
 
-	if _, err := ValidateMFAChallengeToken(tokenString); err == nil {
+	if _, _, err := ValidateMFAChallengeToken(tokenString); err == nil {
 		t.Error("ValidateMFAChallengeToken accepted an expired token, want error")
 	}
 }
@@ -495,13 +520,13 @@ func TestTokenFunctionsFailWithoutPrivateKey(t *testing.T) {
 	if token, err := GenerateJWTFromClaims(&JWTClaim{UserID: uuid.New()}); err == nil || token != "" {
 		t.Errorf("GenerateJWTFromClaims = (%q, %v), want empty token and an error", token, err)
 	}
-	if _, err := GenerateMFAChallengeToken(uuid.New()); err == nil {
+	if _, _, err := GenerateMFAChallengeToken(uuid.New()); err == nil {
 		t.Error("GenerateMFAChallengeToken succeeded without a private key")
 	}
 	if claims, err := ParseToken("any.token.value"); err == nil || claims != nil {
 		t.Errorf("ParseToken = (%v, %v), want nil claims and an error", claims, err)
 	}
-	if _, err := ValidateMFAChallengeToken("any.token.value"); err == nil {
+	if _, _, err := ValidateMFAChallengeToken("any.token.value"); err == nil {
 		t.Error("ValidateMFAChallengeToken succeeded without a private key")
 	}
 }
@@ -519,7 +544,7 @@ func TestMFAChallengeTokenMissingClaims(t *testing.T) {
 		t.Fatalf("GenerateJWTFromClaims returned error: %v", err)
 	}
 
-	userID, err := ValidateMFAChallengeToken(tokenString)
+	userID, _, err := ValidateMFAChallengeToken(tokenString)
 	if err == nil || !strings.Contains(err.Error(), "claims not present") {
 		t.Errorf("ValidateMFAChallengeToken error = %v, want 'claims not present'", err)
 	}

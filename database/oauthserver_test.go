@@ -238,6 +238,23 @@ func TestSetUserSessionsInvalidatedAt(t *testing.T) {
 	}
 }
 
+// Signing out everywhere also drops a sign-in still waiting for its second
+// factor.
+func TestSetUserSessionsInvalidatedAtClearsMFAChallenge(t *testing.T) {
+	setupTestDB(t)
+	user := createTestUser(t)
+	challenge := uuid.New()
+	if err := SetMFAChallenge(user.ID, challenge); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetUserSessionsInvalidatedAt(user.ID, time.Now()); err != nil {
+		t.Fatalf("SetUserSessionsInvalidatedAt error: %v", err)
+	}
+	if consumed, err := ConsumeMFAChallenge(user.ID, challenge); err != nil || consumed {
+		t.Errorf("challenge after signing out everywhere: consumed = %v (err %v), want false", consumed, err)
+	}
+}
+
 func TestGetOAuthClientDatabaseFailure(t *testing.T) {
 	setupTestDB(t)
 	if err := Instance.Migrator().DropTable(&models.OAuthClient{}); err != nil {

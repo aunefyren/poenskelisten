@@ -648,6 +648,16 @@ func UpdateUser(context *gin.Context) {
 		return
 	}
 
+	// A sign-in begun with the old password can't be finished with the new one.
+	if userUpdateRequest.Password != "" && userOriginal.HasPassword() {
+		if err := database.ClearMFAChallenge(userOriginal.ID); err != nil {
+			logger.Log.Error("Failed to clear the MFA challenge. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user."})
+			context.Abort()
+			return
+		}
+	}
+
 	// Get updated user object
 	user, err = database.GetAllUserInformation(userID)
 	if err != nil {
@@ -846,6 +856,14 @@ func APIChangePassword(context *gin.Context) {
 	user, err = database.UpdateUserInDB(user)
 	if err != nil {
 		logger.Log.Error("Failed to update user. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user."})
+		context.Abort()
+		return
+	}
+
+	// A sign-in begun with the old password can't be finished with the new one.
+	if err := database.ClearMFAChallenge(user.ID); err != nil {
+		logger.Log.Error("Failed to clear the MFA challenge. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user."})
 		context.Abort()
 		return

@@ -36,13 +36,32 @@ func TestGenerateAndValidateTOTP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("totp.GenerateCode error: %v", err)
 	}
-	if !ValidateTOTPCode(secret, code) {
-		t.Error("ValidateTOTPCode rejected a freshly generated code")
+	if _, valid := TOTPStep(secret, code, time.Now()); !valid {
+		t.Error("TOTPStep rejected a freshly generated code")
 	}
+}
 
-	// A wrong code must not validate.
-	if ValidateTOTPCode(secret, "000000") && code != "000000" {
-		t.Error("ValidateTOTPCode accepted an incorrect code")
+// TOTPStep tells which 30-second step a code belongs to, accepting the steps
+// next to now as totp.Validate does, so a caller can accept each code once.
+func TestTOTPStep(t *testing.T) {
+	key, err := totp.Generate(totp.GenerateOpts{Issuer: "Test", AccountName: "ada@example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1_800_000_015, 0)
+	current := now.Unix() / 30
+	for offset, want := range map[int64]bool{-2: false, -1: true, 0: true, 1: true, 2: false} {
+		code, err := totp.GenerateCode(key.Secret(), time.Unix((current+offset)*30, 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		step, valid := TOTPStep(key.Secret(), " "+code+" ", now)
+		if valid != want || (valid && step != current+offset) {
+			t.Errorf("offset %d: TOTPStep = (%d, %v), want step %d valid %v", offset, step, valid, current+offset, want)
+		}
+	}
+	if _, valid := TOTPStep(key.Secret(), "not-a-code", now); valid {
+		t.Error("TOTPStep accepted a malformed code")
 	}
 }
 
