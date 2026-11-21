@@ -10,6 +10,7 @@ import (
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
+	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
 	"context"
 	"encoding/json"
@@ -121,6 +122,8 @@ func buildServer() *mcp.Server {
 		Description: "List the groups you are a member of.",
 	}, listGroups)
 
+	registerWriteTools(server)
+
 	return server
 }
 
@@ -184,9 +187,13 @@ func listWishes(ctx context.Context, _ *mcp.CallToolRequest, args listWishesArgs
 
 	out := make([]wishOut, 0, len(wishes))
 	for _, w := range wishes {
-		out = append(out, wishOut{ID: w.ID.String(), Name: w.Name, Note: w.Note, URL: w.URL, Price: w.Price})
+		out = append(out, newWishOut(w))
 	}
 	return jsonResult(out), nil, nil
+}
+
+func newWishOut(w models.Wish) wishOut {
+	return wishOut{ID: w.ID.String(), Name: w.Name, Note: w.Note, URL: w.URL, Price: w.Price}
 }
 
 func listGroups(ctx context.Context, _ *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
