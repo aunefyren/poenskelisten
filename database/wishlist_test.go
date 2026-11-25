@@ -306,6 +306,36 @@ func TestWishlistCollaborators(t *testing.T) {
 	}
 }
 
+func TestVerifyWishlistCollaboratorToWishlist_DisabledWishlist(t *testing.T) {
+	setupTestDB(t)
+
+	owner := createTestUser(t)
+	collaborator := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+
+	collab := models.WishlistCollaborator{
+		UserID:     collaborator.ID,
+		WishlistID: wishlist.ID,
+		Enabled:    true,
+	}
+	collab.ID = uuid.New()
+	if err := CreateWishlistCollaboratorInDB(collab); err != nil {
+		t.Fatalf("failed to create collaborator: %v", err)
+	}
+
+	if ok, err := VerifyWishlistCollaboratorToWishlist(wishlist.ID, collaborator.ID); err != nil || !ok {
+		t.Fatalf("expected collaborator to be verified on enabled wishlist (ok=%v err=%v)", ok, err)
+	}
+
+	if err := DeleteWishlist(wishlist.ID); err != nil {
+		t.Fatalf("failed to delete wishlist: %v", err)
+	}
+
+	if ok, err := VerifyWishlistCollaboratorToWishlist(wishlist.ID, collaborator.ID); err != nil || ok {
+		t.Fatalf("expected collaborator verification to fail on deleted wishlist (ok=%v err=%v)", ok, err)
+	}
+}
+
 func TestVerifyUniqueWishNameInWishlistExcludingWish(t *testing.T) {
 	setupTestDB(t)
 

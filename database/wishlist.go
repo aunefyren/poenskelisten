@@ -122,6 +122,8 @@ func VerifyWishlistCollaboratorToWishlist(WishlistID uuid.UUID, UserID uuid.UUID
 		Where("wishlist_collaborators.enabled = ? AND wishlist_collaborators.wishlist_id = ? AND wishlist_collaborators.user_id = ?", true, WishlistID, UserID).
 		Joins("JOIN users ON wishlist_collaborators.user_id = users.id").
 		Where("users.enabled = ?", true).
+		Joins("JOIN wishlists ON wishlist_collaborators.wishlist_id = wishlists.id").
+		Where("wishlists.enabled = ?", true).
 		Find(&WishlistCollaborator)
 
 	if wishlistMembershipRecord.Error != nil {

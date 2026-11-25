@@ -2310,3 +2310,59 @@ func TestAPIGetWish_WishDisappearsMidRequest(t *testing.T) {
 		t.Errorf("error = %v, want %q", got, "Failed to find wish in the database.")
 	}
 }
+
+func TestCollaboratorCannotModifyWishesOnDeletedWishlist(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	collaborator := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	addWishCollaborator(t, wishlist.ID, collaborator.ID)
+	wish := createTestWish(t, owner.ID, wishlist.ID)
+
+	if err := database.DeleteWishlist(wishlist.ID); err != nil {
+		t.Fatalf("failed to delete wishlist: %v", err)
+	}
+
+	collabHeader := authHeader(t, collaborator.ID, false)
+
+	t.Run("RegisterWish", func(t *testing.T) {
+		w, ctx := wishCtx("POST", "/api/wishes?wishlist="+wishlist.ID.String(), `{"name":"Should fail wish"}`)
+		ctx.Request.Header.Set("Authorization", collabHeader)
+		RegisterWish(ctx)
+		if w.Code != 400 {
+			t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+		}
+		unique, err := database.VerifyUniqueWishNameInWishlist("Should fail wish", wishlist.ID)
+		if err != nil || !unique {
+			t.Errorf("expected no wish to be created on deleted wishlist (unique=%v, err=%v)", unique, err)
+		}
+	})
+
+	t.Run("APIUpdateWish", func(t *testing.T) {
+		w, ctx := wishCtx("POST", "/api/wishes/"+wish.ID.String(), `{"name":"Renamed wish"}`)
+		ctx.Params = gin.Params{{Key: "wish_id", Value: wish.ID.String()}}
+		ctx.Request.Header.Set("Authorization", collabHeader)
+		APIUpdateWish(ctx)
+		if w.Code != 400 {
+			t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+		}
+		after, err := database.GetWishByWishID(wish.ID)
+		if err != nil || after == nil || after.Name != wish.Name {
+			t.Errorf("wish after rejected update = %+v (err=%v), want name %q", after, err, wish.Name)
+		}
+	})
+
+	t.Run("DeleteWish", func(t *testing.T) {
+		w, ctx := wishCtx("DELETE", "/api/wishes/"+wish.ID.String(), "")
+		ctx.Params = gin.Params{{Key: "wish_id", Value: wish.ID.String()}}
+		ctx.Request.Header.Set("Authorization", collabHeader)
+		DeleteWish(ctx)
+		if w.Code != 400 {
+			t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+		}
+		after, err := database.GetWishByWishID(wish.ID)
+		if err != nil || after == nil || !after.Enabled {
+			t.Errorf("wish after rejected delete = %+v (err=%v), want enabled", after, err)
+		}
+	})
+}
