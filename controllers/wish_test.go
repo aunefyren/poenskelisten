@@ -970,7 +970,7 @@ func TestAPIGetWish_MembershipCheckDBFailure(t *testing.T) {
 	}
 }
 
-// --- isValidWishURL ---
+// --- IsValidWishURL ---
 
 func TestIsValidWishURL(t *testing.T) {
 	cases := []struct {
@@ -997,8 +997,8 @@ func TestIsValidWishURL(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.raw, func(t *testing.T) {
-			if got := isValidWishURL(c.raw); got != c.want {
-				t.Errorf("isValidWishURL(%q) = %v, want %v", c.raw, got, c.want)
+			if got := IsValidWishURL(c.raw); got != c.want {
+				t.Errorf("IsValidWishURL(%q) = %v, want %v", c.raw, got, c.want)
 			}
 		})
 	}
@@ -2308,6 +2308,38 @@ func TestAPIGetWish_WishDisappearsMidRequest(t *testing.T) {
 	}
 	if got := parseWishBody(t, w)["error"]; got != "Failed to find wish in the database." {
 		t.Errorf("error = %v, want %q", got, "Failed to find wish in the database.")
+	}
+}
+
+// NotifyWishDeleted is shared by the web app and the MCP server's delete_wish,
+// and only tells claimers when e-mail is set up.
+func TestNotifyWishDeletedOnlyWithSMTP(t *testing.T) {
+	for _, smtpEnabled := range []bool{false, true} {
+		restoreConfig(t)
+		config.ConfigFile.SMTPEnabled = smtpEnabled
+
+		started := make(chan uuid.UUID, 1)
+		original := deletedWishNotifier
+		t.Cleanup(func() { deletedWishNotifier = original })
+		deletedWishNotifier = func(wish models.Wish) { started <- wish.ID }
+
+		wish := models.Wish{}
+		wish.ID = uuid.New()
+		NotifyWishDeleted(wish)
+
+		select {
+		case id := <-started:
+			if !smtpEnabled {
+				t.Errorf("notified %s with e-mail off", id)
+			} else if id != wish.ID {
+				t.Errorf("notified %s, want %s", id, wish.ID)
+			}
+		case <-time.After(time.Second):
+			if smtpEnabled {
+				t.Error("no notification with e-mail on")
+			}
+		}
+		deletedWishNotifier = original
 	}
 }
 

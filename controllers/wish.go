@@ -339,7 +339,7 @@ func RegisterWish(context *gin.Context) {
 	}
 
 	// Validate valid URL
-	if wish.URL != "" && !isValidWishURL(wish.URL) {
+	if wish.URL != "" && !IsValidWishURL(wish.URL) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL given."})
 		context.Abort()
 		return
@@ -528,8 +528,15 @@ func DeleteWish(context *gin.Context) {
 
 	// Whoever claimed the wish is told by e-mail, after the answer and whether
 	// or not it was claimed, so how long a delete takes says nothing about it.
+	NotifyWishDeleted(*wish)
+}
+
+// NotifyWishDeleted e-mails whoever claimed a deleted wish, in the background
+// and only when e-mail is set up. Every way of deleting a wish (the web app and
+// the MCP server's delete_wish) calls it, so claimers are always told.
+func NotifyWishDeleted(wish models.Wish) {
 	if config.ConfigFile.SMTPEnabled {
-		go deletedWishNotifier(*wish)
+		go deletedWishNotifier(wish)
 	}
 }
 
@@ -573,12 +580,12 @@ func notifyDeletedWishClaimers(wish models.Wish) {
 	}
 }
 
-// isValidWishURL reports whether rawURL is safe to store as a wish link. The
+// IsValidWishURL reports whether rawURL is safe to store as a wish link. The
 // frontend hands the stored value to window.open, so anything other than an
 // absolute http(s) URL with a host is refused: a javascript: (or data:, vbscript:,
 // ...) URL would execute in the viewer's session when the link is clicked, and
 // a value without a scheme would be resolved relative to the app's own origin.
-func isValidWishURL(rawURL string) bool {
+func IsValidWishURL(rawURL string) bool {
 	if strings.ContainsFunc(rawURL, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
 		return false
 	}
@@ -1013,7 +1020,7 @@ func APIUpdateWish(context *gin.Context) {
 	}
 
 	if wish.URL != wishOriginal.URL {
-		if wish.URL != "" && !isValidWishURL(wish.URL) {
+		if wish.URL != "" && !IsValidWishURL(wish.URL) {
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL given."})
 			context.Abort()
 			return

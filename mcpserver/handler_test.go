@@ -50,6 +50,7 @@ func setupMCPDB(t *testing.T) {
 	if err := instance.AutoMigrate(
 		&models.User{}, &models.Wishlist{}, &models.Wish{},
 		&models.Group{}, &models.GroupMembership{},
+		&models.WishlistCollaborator{}, &models.WishCategory{},
 	); err != nil {
 		t.Fatalf("failed to migrate: %v", err)
 	}

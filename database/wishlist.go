@@ -291,6 +291,25 @@ func VerifyUniqueWishNameInWishlistExcludingWish(WishName string, WishlistID uui
 	return true, nil
 }
 
+// VerifyUniqueWishNameInWishlistIgnoringCase reports whether no enabled wish
+// on the wishlist other than excludeWishID has the name, ignoring case, so
+// "Lego set" and "lego set" can't both be on one list. Pass uuid.Nil to exclude
+// nothing: no wish has that ID. Only the MCP tools use it so far; the web app
+// still compares names exactly (#174). SQLite's LOWER only folds ASCII.
+func VerifyUniqueWishNameInWishlistIgnoringCase(wishName string, wishlistID uuid.UUID, excludeWishID uuid.UUID) (bool, error) {
+	var count int64
+
+	record := Instance.
+		Model(&models.Wish{}).
+		Where("wishes.enabled = ? AND wishes.wishlist_id = ? AND LOWER(wishes.name) = LOWER(?) AND wishes.id <> ?", true, wishlistID, wishName, excludeWishID).
+		Count(&count)
+
+	if record.Error != nil {
+		return false, record.Error
+	}
+	return count == 0, nil
+}
+
 // Verify if a wishlist name in group is unique
 func VerifyUniqueWishlistNameForUser(WishlistName string, UserID uuid.UUID) (bool, error) {
 	var wishlist models.Wishlist
