@@ -31,8 +31,8 @@ func createMCPTestWish(t *testing.T, ownerID uuid.UUID, wishlistID uuid.UUID, na
 	price := 10.0
 	wish := models.Wish{Name: name, Note: "Blue", URL: "https://example.com/item", Price: &price, Enabled: true, OwnerID: ownerID, WishlistID: wishlistID}
 	wish.ID = uuid.New()
-	if r := database.Instance.Create(&wish); r.Error != nil {
-		t.Fatalf("failed to create wish: %v", r.Error)
+	if _, err := database.CreateWishInDB(wish); err != nil {
+		t.Fatalf("failed to create wish: %v", err)
 	}
 	return wish
 }

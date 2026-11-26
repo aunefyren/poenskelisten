@@ -264,7 +264,8 @@ func VerifyUniqueWishNameInWishlist(WishName string, WishlistID uuid.UUID) (bool
 	var wish models.Wish
 
 	wishesRecord := Instance.
-		Where("enabled = ? AND wishlist_id = ? AND name = ?", true, WishlistID, WishName).
+		Joins("JOIN wishlist_wishes ON wishlist_wishes.wish_id = wishes.id AND wishlist_wishes.deleted_at IS NULL").
+		Where("wishes.enabled = ? AND wishlist_wishes.wishlist_id = ? AND wishes.name = ?", true, WishlistID, WishName).
 		Find(&wish)
 
 	if wishesRecord.Error != nil {
@@ -280,7 +281,8 @@ func VerifyUniqueWishNameInWishlistExcludingWish(WishName string, WishlistID uui
 	var wish models.Wish
 
 	wishesRecord := Instance.
-		Where("enabled = ? AND wishlist_id = ? AND name = ? AND id <> ?", true, WishlistID, WishName, WishID).
+		Joins("JOIN wishlist_wishes ON wishlist_wishes.wish_id = wishes.id AND wishlist_wishes.deleted_at IS NULL").
+		Where("wishes.enabled = ? AND wishlist_wishes.wishlist_id = ? AND wishes.name = ? AND wishes.id <> ?", true, WishlistID, WishName, WishID).
 		Find(&wish)
 
 	if wishesRecord.Error != nil {
@@ -301,7 +303,8 @@ func VerifyUniqueWishNameInWishlistIgnoringCase(wishName string, wishlistID uuid
 
 	record := Instance.
 		Model(&models.Wish{}).
-		Where("wishes.enabled = ? AND wishes.wishlist_id = ? AND LOWER(wishes.name) = LOWER(?) AND wishes.id <> ?", true, wishlistID, wishName, excludeWishID).
+		Joins("JOIN wishlist_wishes ON wishlist_wishes.wish_id = wishes.id AND wishlist_wishes.deleted_at IS NULL").
+		Where("wishes.enabled = ? AND wishlist_wishes.wishlist_id = ? AND LOWER(wishes.name) = LOWER(?) AND wishes.id <> ?", true, wishlistID, wishName, excludeWishID).
 		Count(&count)
 
 	if record.Error != nil {

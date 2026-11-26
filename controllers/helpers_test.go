@@ -48,6 +48,7 @@ func allControllersTestModels() []interface{} {
 		&models.WishlistCollaborator{},
 		&models.WishCategory{},
 		&models.Wish{},
+		&models.WishlistWish{},
 		&models.WishClaim{},
 		&models.News{},
 		&models.MFARecoveryCode{},
@@ -79,6 +80,15 @@ func setupControllersDB(t *testing.T, tables ...interface{}) {
 	fullSchema := len(tables) == 0
 	if fullSchema {
 		tables = allControllersTestModels()
+	} else {
+		// Wishes are read through their placements, so a schema with wishes
+		// has placements too.
+		for _, table := range tables {
+			if _, ok := table.(*models.Wish); ok {
+				tables = append(tables, &models.WishlistWish{})
+				break
+			}
+		}
 	}
 	if err := instance.AutoMigrate(tables...); err != nil {
 		t.Fatalf("failed to migrate: %v", err)

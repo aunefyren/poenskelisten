@@ -26,6 +26,7 @@ func allModels() []interface{} {
 		&models.WishlistCollaborator{},
 		&models.WishCategory{},
 		&models.Wish{},
+		&models.WishlistWish{},
 		&models.WishClaim{},
 		&models.News{},
 		&models.MFARecoveryCode{},
@@ -190,7 +191,7 @@ func runClosedDBCases(t *testing.T, cases map[string]func() error) {
 var errInjected = errors.New("injected database fault")
 
 // injectFault registers a GORM callback that fails the statements of the given
-// kind ("create", "query", "update" or "delete") against table, skipping the
+// kind ("create", "query", "update", "delete" or "raw") against table, skipping the
 // first `skip` matching statements. That reaches a function's second or third
 // "query failed" return, which closing the whole connection can't single out.
 func injectFault(t *testing.T, kind, table string, skip int) {
@@ -252,6 +253,12 @@ func registerCallback(kind string, after bool, fn func(*gorm.DB)) error {
 			return cb.Delete().After(anchor).Register(name, fn)
 		}
 		return cb.Delete().Before(anchor).Register(name, fn)
+	case "raw":
+		// Exec statements name no table, so match them with table "".
+		if after {
+			return cb.Raw().After(anchor).Register(name, fn)
+		}
+		return cb.Raw().Before(anchor).Register(name, fn)
 	}
 	return errors.New("unknown callback kind: " + kind)
 }

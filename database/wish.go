@@ -11,21 +11,25 @@ import (
 	sqlite3 "modernc.org/sqlite/lib"
 )
 
-// Get wishlist id from wish id
-func GetWishlistIDFromWish(WishID uuid.UUID) (*uuid.UUID, error) {
-	var wish models.Wish
+// GetWishlistIDFromWish returns the wishlist an enabled wish was first placed
+// on, or nil when the wish doesn't exist or isn't on any list.
+func GetWishlistIDFromWish(wishID uuid.UUID) (*uuid.UUID, error) {
+	var placement models.WishlistWish
 
-	wishRecord := Instance.
-		Where("id = ? AND enabled = ?", WishID, true).
-		Find(&wish)
+	record := Instance.
+		Joins("JOIN wishes ON wishes.id = wishlist_wishes.wish_id").
+		Where("wishlist_wishes.wish_id = ? AND wishes.enabled = ? AND wishes.deleted_at IS NULL", wishID, true).
+		Order("wishlist_wishes.created_at ASC").
+		Limit(1).
+		Find(&placement)
 
-	if wishRecord.Error != nil {
-		return nil, wishRecord.Error
-	} else if wishRecord.RowsAffected != 1 {
+	if record.Error != nil {
+		return nil, record.Error
+	} else if record.RowsAffected != 1 {
 		return nil, nil
 	}
 
-	return &wish.WishlistID, nil
+	return &placement.WishlistID, nil
 }
 
 // Get wish by wish ID
@@ -45,17 +49,21 @@ func GetWishByWishID(wishID uuid.UUID) (*models.Wish, error) {
 	return &wish, nil
 }
 
+// UpdateWishInDB saves the wish and copies its category onto its placement on
+// Wish.WishlistID, the one list callers can name until a wish can be on several.
 func UpdateWishInDB(wishOriginal models.Wish) (wish models.Wish, err error) {
 	wish = wishOriginal
-	err = nil
 
-	wishRecord := Instance.Save(wish)
+	err = Instance.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(&wish).Error; err != nil {
+			return err
+		}
+		return tx.Model(&models.WishlistWish{}).
+			Where("wishlist_wishes.wish_id = ? AND wishlist_wishes.wishlist_id = ?", wish.ID, wish.WishlistID).
+			Update("category_id", wish.CategoryID).Error
+	})
 
-	if wishRecord.Error != nil {
-		return wish, wishRecord.Error
-	}
-
-	return
+	return wish, err
 }
 
 // Get wishes from wishlist
@@ -64,9 +72,9 @@ func UpdateWishInDB(wishOriginal models.Wish) (wish models.Wish, err error) {
 func GetWishIDsFromWishlist(wishlistID uuid.UUID) ([]uuid.UUID, error) {
 	var wishIDs []uuid.UUID
 	err := Instance.
-		Model(&models.Wish{}).
-		Where("wishlist_id = ?", wishlistID).
-		Pluck("id", &wishIDs).Error
+		Model(&models.WishlistWish{}).
+		Where("wishlist_wishes.wishlist_id = ?", wishlistID).
+		Pluck("wishlist_wishes.wish_id", &wishIDs).Error
 	return wishIDs, err
 }
 
@@ -74,7 +82,8 @@ func GetWishesFromWishlist(WishlistID uuid.UUID) (bool, []models.Wish, error) {
 	var wishes []models.Wish
 	wishRecords := Instance.
 		Order("wishes.created_at ASC").
-		Where("wishes.enabled = ? AND wishes.wishlist_id = ?", true, WishlistID).
+		Joins("JOIN wishlist_wishes ON wishlist_wishes.wish_id = wishes.id AND wishlist_wishes.deleted_at IS NULL").
+		Where("wishes.enabled = ? AND wishlist_wishes.wishlist_id = ?", true, WishlistID).
 		Joins("JOIN users ON users.id = wishes.owner_id").
 		Where("users.enabled = ?", true).
 		Find(&wishes)
@@ -205,7 +214,8 @@ func GetWishlistByWishID(wishID uuid.UUID) (bool, models.Wishlist, error) {
 
 	wishlistRecords := Instance.
 		Where("wishlists.enabled = ?", true).
-		Joins("JOIN wishes ON wishlists.id = wishes.wishlist_id").
+		Joins("JOIN wishlist_wishes ON wishlist_wishes.wishlist_id = wishlists.id AND wishlist_wishes.deleted_at IS NULL").
+		Joins("JOIN wishes ON wishes.id = wishlist_wishes.wish_id").
 		Where("wishes.enabled = ? AND wishes.id = ?", true, wishID).
 		Find(&wishlist)
 
@@ -218,18 +228,61 @@ func GetWishlistByWishID(wishID uuid.UUID) (bool, models.Wishlist, error) {
 	return true, wishlist, nil
 }
 
+// CreateWishInDB stores the wish and places it on Wish.WishlistID, with
+// Wish.CategoryID as its category there.
 func CreateWishInDB(wishDB models.Wish) (wish models.Wish, err error) {
-	record := Instance.Create(&wishDB)
+	err = Instance.Transaction(func(tx *gorm.DB) error {
+		record := tx.Create(&wishDB)
+		if record.Error != nil {
+			return record.Error
+		} else if record.RowsAffected != 1 {
+			return errors.New("Wish not added to database.")
+		}
 
-	if record.Error != nil {
-		return models.Wish{}, record.Error
-	}
-
-	if record.RowsAffected != 1 {
-		return models.Wish{}, errors.New("Wish not added to database.")
+		placement := models.WishlistWish{WishlistID: wishDB.WishlistID, WishID: wishDB.ID, CategoryID: wishDB.CategoryID}
+		placement.ID = uuid.New()
+		return tx.Create(&placement).Error
+	})
+	if err != nil {
+		return models.Wish{}, err
 	}
 
 	return wishDB, nil
+}
+
+// EnsureWishPlacements places every wish on the list in wishes.wishlist_id
+// that isn't on it yet: wishes from before a wish could be on several lists,
+// and wishes an older version created after a downgrade. It also copies
+// wishes.category_id onto that placement, which an older version may have
+// changed. ON CONFLICT DO NOTHING lets two instances start at once.
+func EnsureWishPlacements() error {
+	var wishes []models.Wish
+	err := Instance.
+		Select("wishes.id", "wishes.wishlist_id", "wishes.category_id").
+		Where("wishes.wishlist_id IS NOT NULL AND wishes.wishlist_id NOT IN (?, ?)", "", uuid.Nil.String()).
+		Where("NOT EXISTS (SELECT 1 FROM wishlist_wishes WHERE wishlist_wishes.wish_id = wishes.id AND wishlist_wishes.wishlist_id = wishes.wishlist_id)").
+		Find(&wishes).Error
+	if err != nil {
+		return err
+	}
+
+	placements := make([]models.WishlistWish, 0, len(wishes))
+	for _, wish := range wishes {
+		placement := models.WishlistWish{WishlistID: wish.WishlistID, WishID: wish.ID, CategoryID: wish.CategoryID}
+		placement.ID = uuid.New()
+		placements = append(placements, placement)
+	}
+	if len(placements) > 0 {
+		if err := Instance.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(&placements, 500).Error; err != nil {
+			return err
+		}
+	}
+
+	return Instance.Exec(`UPDATE wishlist_wishes SET category_id = (
+		SELECT wishes.category_id FROM wishes WHERE wishes.id = wishlist_wishes.wish_id
+	) WHERE EXISTS (
+		SELECT 1 FROM wishes WHERE wishes.id = wishlist_wishes.wish_id AND wishes.wishlist_id = wishlist_wishes.wishlist_id
+	)`).Error
 }
 
 // ErrWishAlreadyClaimed means the wish got a live claim before this one was

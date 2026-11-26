@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // Create a wish category
@@ -102,8 +103,9 @@ func CountEnabledWishesInCategory(categoryID uuid.UUID) (int64, error) {
 	var count int64
 
 	record := Instance.
-		Model(&models.Wish{}).
-		Where("enabled = ? AND category_id = ?", true, categoryID).
+		Model(&models.WishlistWish{}).
+		Joins("JOIN wishes ON wishes.id = wishlist_wishes.wish_id AND wishes.deleted_at IS NULL").
+		Where("wishes.enabled = ? AND wishlist_wishes.category_id = ?", true, categoryID).
 		Count(&count)
 
 	if record.Error != nil {
@@ -113,14 +115,19 @@ func CountEnabledWishesInCategory(categoryID uuid.UUID) (int64, error) {
 	return count, nil
 }
 
-// Detach every wish from a category by nulling their CategoryID.
+// Detach every wish from a category, on its placements and on the
+// wishes.category_id column they mirror.
 func ClearWishCategoryFromWishes(categoryID uuid.UUID) error {
-	record := Instance.
-		Model(&models.Wish{}).
-		Where("category_id = ?", categoryID).
-		Update("category_id", nil)
-
-	return record.Error
+	return Instance.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.WishlistWish{}).
+			Where("wishlist_wishes.category_id = ?", categoryID).
+			Update("category_id", nil).Error; err != nil {
+			return err
+		}
+		return tx.Model(&models.Wish{}).
+			Where("wishes.category_id = ?", categoryID).
+			Update("category_id", nil).Error
+	})
 }
 
 // Soft-delete a category and detach any wishes still pointing at it.

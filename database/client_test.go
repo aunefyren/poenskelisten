@@ -101,6 +101,9 @@ func TestMigrate(t *testing.T) {
 	if !Instance.Migrator().HasTable(&models.OAuthClient{}) {
 		t.Error("expected the o_auth_clients table to exist after Migrate()")
 	}
+	if !Instance.Migrator().HasTable(&models.WishlistWish{}) {
+		t.Error("expected the wishlist_wishes table to exist after Migrate()")
+	}
 
 	clients, err := GetAllOAuthClients()
 	if err != nil {
@@ -313,6 +316,26 @@ func TestMigratePanicsWhenSeedingFails(t *testing.T) {
 		r := recover()
 		if err, ok := r.(error); !ok || !errors.Is(err, errInjected) {
 			t.Errorf("Migrate() recovered %v, want a panic carrying the seeding error", r)
+		}
+	}()
+	Migrate()
+}
+
+// Wishes are read through their placements, so starting without them would
+// show every unplaced wish's list as empty.
+func TestMigratePanicsWhenPlacingWishesFails(t *testing.T) {
+	setupTestDB(t)
+	legacy := models.Wish{Name: "Legacy wish", Enabled: true, OwnerID: uuid.New(), WishlistID: uuid.New()}
+	legacy.ID = uuid.New()
+	if err := Instance.Create(&legacy).Error; err != nil {
+		t.Fatalf("failed to create legacy wish: %v", err)
+	}
+	injectFault(t, "create", "wishlist_wishes", 0)
+
+	defer func() {
+		r := recover()
+		if err, ok := r.(error); !ok || !errors.Is(err, errInjected) {
+			t.Errorf("Migrate() recovered %v, want a panic carrying the placement error", r)
 		}
 	}()
 	Migrate()

@@ -2074,10 +2074,9 @@ func TestRegisterWishClaim_InjectedFailures(t *testing.T) {
 		{name: "ownership check", fixture: fixture, op: "query", table: "wishlists", skip: 1, want: 500, wantErr: "Failed to verify ownership of wishlist."},
 		{name: "membership check", fixture: fixture, op: "query", table: "wishlist_memberships", want: 500, wantErr: "Failed to verify membership to wishlist."},
 		{name: "collaborator check", fixture: fixture, op: "query", table: "wishlist_collaborators", want: 500, wantErr: "Failed to verify wishlist collaborator status."},
-		// The first wishes query resolves the wishlist ID.
-		{name: "wish ownership check", fixture: fixture, op: "query", table: "wishes", skip: 1, want: 500, wantErr: "Failed to verify ownership of wishlist."},
+		{name: "wish ownership check", fixture: fixture, op: "query", table: "wishes", want: 500, wantErr: "Failed to verify ownership of wishlist."},
 		{name: "create claim", fixture: fixture, op: "create", table: "wish_claims", want: 500, wantErr: "Failed to create claim."},
-		{name: "list wishes", fixture: fixture, op: "query", table: "wishes", skip: 2, want: 500, wantErr: "Failed to get wishes from database."},
+		{name: "list wishes", fixture: fixture, op: "query", table: "wishes", skip: 1, want: 500, wantErr: "Failed to get wishes from database."},
 	})
 }
 
@@ -2111,7 +2110,7 @@ func TestRemoveWishClaim_InjectedFailures(t *testing.T) {
 		{name: "membership check", fixture: fixture, op: "query", table: "wishlist_memberships", want: 500, wantErr: "Failed to verify membership to wishlist."},
 		{name: "collaborator check", fixture: fixture, op: "query", table: "wishlist_collaborators", want: 500, wantErr: "Failed to verify wishlist collaborator status."},
 		{name: "delete claim", fixture: fixture, op: "update", table: "wish_claims", want: 500, wantErr: "Failed to delete claim."},
-		{name: "list wishes", fixture: fixture, op: "query", table: "wishes", skip: 1, want: 500, wantErr: "Failed to get wishes from database."},
+		{name: "list wishes", fixture: fixture, op: "query", table: "wishes", want: 500, wantErr: "Failed to get wishes from database."},
 	})
 }
 
@@ -2281,8 +2280,7 @@ func TestAPIGetWish_InjectedFailures(t *testing.T) {
 	}
 	wishTestRunFailures(t, []wishTestFailCase{
 		{name: "access check", fixture: fixture, op: "query", table: "wishlists", want: 500, wantErr: "Failed to verify access to wishlist."},
-		// The first wishes query resolves the wishlist ID.
-		{name: "wish lookup", fixture: fixture, op: "query", table: "wishes", skip: 1, want: 500, wantErr: "Failed to get wish from database."},
+		{name: "wish lookup", fixture: fixture, op: "query", table: "wishes", want: 500, wantErr: "Failed to get wish from database."},
 		{name: "convert wish", fixture: fixture, op: "query", table: "users", want: 500, wantErr: "Failed to convert wish to wish object."},
 	})
 }
