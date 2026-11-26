@@ -337,7 +337,7 @@ func GetWishlistOwner(WishlistID uuid.UUID) (uuid.UUID, error) {
 	if wishlistRecord.Error != nil {
 		return uuid.UUID{}, wishlistRecord.Error
 	} else if wishlistRecord.RowsAffected != 1 {
-		return uuid.UUID{}, errors.New("Failed to find correct wishlist in DB.")
+		return uuid.UUID{}, ErrWishlistNotFound
 	}
 
 	return wishlist.OwnerID, nil
@@ -353,6 +353,8 @@ func VerifyUserMembershipToGroupMembershipToWishlist(UserID uuid.UUID, WishlistI
 		Where("groups.enabled = ?", true).
 		Joins("JOIN group_memberships ON group_memberships.group_id = groups.id").
 		Where("group_memberships.enabled = ? AND group_memberships.member_id = ?", true, UserID).
+		Joins("JOIN wishlists ON wishlists.id = wishlist_memberships.wishlist_id").
+		Where("wishlists.enabled = ?", true).
 		Find(&wishlistMembership)
 
 	if wishlistMembershipRecord.Error != nil {

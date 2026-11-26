@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -306,6 +307,31 @@ func TestWishlistCollaborators(t *testing.T) {
 	}
 }
 
+// A wishlist its owner has deleted is no longer shared with the members of
+// its groups, even though the group and wishlist memberships stay enabled.
+func TestVerifyUserMembershipToGroupMembershipToWishlist_DisabledWishlist(t *testing.T) {
+	setupTestDB(t)
+
+	owner := createTestUser(t)
+	member := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	group := createTestGroup(t, owner.ID)
+	addGroupMember(t, group.ID, member.ID)
+	addWishlistMembership(t, wishlist.ID, group.ID)
+
+	if ok, err := VerifyUserMembershipToGroupMembershipToWishlist(member.ID, wishlist.ID); err != nil || !ok {
+		t.Fatalf("expected member to have access on enabled wishlist (ok=%v err=%v)", ok, err)
+	}
+
+	if err := DeleteWishlist(wishlist.ID); err != nil {
+		t.Fatalf("failed to delete wishlist: %v", err)
+	}
+
+	if ok, err := VerifyUserMembershipToGroupMembershipToWishlist(member.ID, wishlist.ID); err != nil || ok {
+		t.Fatalf("expected membership verification to fail on deleted wishlist (ok=%v err=%v)", ok, err)
+	}
+}
+
 func TestVerifyWishlistCollaboratorToWishlist_DisabledWishlist(t *testing.T) {
 	setupTestDB(t)
 
@@ -566,8 +592,8 @@ func TestWishlistLookupsWithNoMatch(t *testing.T) {
 	if wishlists, err := GetWishlistsFromGroup(missing); err != nil || wishlists == nil || len(wishlists) != 0 {
 		t.Errorf("GetWishlistsFromGroup = (%v, %v), want an empty non-nil slice", wishlists, err)
 	}
-	if owner, err := GetWishlistOwner(missing); err == nil || owner != uuid.Nil {
-		t.Errorf("GetWishlistOwner = (%v, %v), want an error and no owner", owner, err)
+	if owner, err := GetWishlistOwner(missing); !errors.Is(err, ErrWishlistNotFound) || owner != uuid.Nil {
+		t.Errorf("GetWishlistOwner = (%v, %v), want ErrWishlistNotFound and no owner", owner, err)
 	}
 	if found, _, err := GetMembershipIDForGroupToWishlist(missing, uuid.New()); err != nil || found {
 		t.Errorf("GetMembershipIDForGroupToWishlist = (found=%v, %v), want not found and no error", found, err)
@@ -606,5 +632,21 @@ func TestWishlistWritesRejectWrongRowCount(t *testing.T) {
 	membership.ID = uuid.New()
 	if _, err := CreateWishlistMembershipInDB(membership); err == nil || err.Error() != "Wishlist not added to database." {
 		t.Errorf("CreateWishlistMembershipInDB error = %v, want \"Wishlist not added to database.\"", err)
+	}
+}
+
+// A deleted wishlist has no owner as far as callers are concerned: the lookup
+// reports ErrWishlistNotFound, so handlers can answer 400 rather than 500.
+func TestGetWishlistOwner_DisabledWishlist(t *testing.T) {
+	setupTestDB(t)
+
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	if err := DeleteWishlist(wishlist.ID); err != nil {
+		t.Fatalf("failed to delete wishlist: %v", err)
+	}
+
+	if got, err := GetWishlistOwner(wishlist.ID); !errors.Is(err, ErrWishlistNotFound) || got != uuid.Nil {
+		t.Errorf("GetWishlistOwner = (%v, %v), want ErrWishlistNotFound and no owner", got, err)
 	}
 }

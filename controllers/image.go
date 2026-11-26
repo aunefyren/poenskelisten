@@ -190,11 +190,8 @@ func APIGetWishImage(context *gin.Context) {
 // userCanViewWishlist is who may see a live wishlist and its wishes: its
 // owner, members of a group it is shared with, and its collaborators.
 func userCanViewWishlist(userID uuid.UUID, wishlistID uuid.UUID) (bool, error) {
-	// The membership and collaboration checks don't look at the wishlist
-	// itself, which may have been deleted.
-	if found, _, err := database.GetWishlistByWishlistID(wishlistID); err != nil || !found {
-		return false, err
-	}
+	// Each check requires the wishlist itself to be enabled, so a deleted
+	// wishlist is refused without a separate lookup.
 	checks := []func() (bool, error){
 		func() (bool, error) { return database.VerifyUserOwnershipToWishlist(userID, wishlistID) },
 		func() (bool, error) {
