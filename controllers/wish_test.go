@@ -1786,8 +1786,8 @@ func TestGetWishesFromWishlist_InjectedFailures(t *testing.T) {
 	}
 	wishTestRunFailures(t, []wishTestFailCase{
 		{name: "access check", fixture: fixture, op: "query", table: "wishlists", want: 500, wantErr: "Failed to verify access to wishlist."},
-		// The access check reads wishlists twice (the list, then its owner).
-		{name: "owner lookup", fixture: fixture, op: "query", table: "wishlists", skip: 2, want: 500, wantErr: "Failed to get wishlist owner."},
+		// The caller is the owner, so the access check reads wishlists once.
+		{name: "owner lookup", fixture: fixture, op: "query", table: "wishlists", skip: 1, want: 500, wantErr: "Failed to get wishlist owner."},
 	})
 }
 
@@ -2397,4 +2397,62 @@ func TestCollaboratorCannotModifyWishesOnDeletedWishlist(t *testing.T) {
 			t.Errorf("wish after rejected delete = %+v (err=%v), want enabled", after, err)
 		}
 	})
+}
+
+// A deleted wishlist's wishes are hidden from everyone who could see them while
+// it was live. Each access check refuses a deleted wishlist on its own, with no
+// separate lookup in userCanViewWishlist.
+func TestGetWishesFromWishlist_DeletedWishlistRefusesEveryViewer(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	member := createTestUser(t)
+	collaborator := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	group := createTestGroup(t, owner.ID)
+	addGroupMembership(t, group.ID, member.ID)
+	addWishlistMembership(t, wishlist.ID, group.ID)
+	addWishCollaborator(t, wishlist.ID, collaborator.ID)
+	createTestWish(t, owner.ID, wishlist.ID)
+
+	viewers := map[string]uuid.UUID{"owner": owner.ID, "group member": member.ID, "collaborator": collaborator.ID}
+	req := wishTestReq{handler: GetWishesFromWishlist, method: "GET", path: "/api/wishes?wishlist=" + wishlist.ID.String()}
+	for name, userID := range viewers {
+		if w := wishTestSend(t, req, authHeader(t, userID, false)); w.Code != 200 {
+			t.Fatalf("%s before delete: status = %d, want 200; body=%s", name, w.Code, w.Body.String())
+		}
+	}
+
+	if err := database.DeleteWishlist(wishlist.ID); err != nil {
+		t.Fatalf("failed to delete wishlist: %v", err)
+	}
+
+	for name, userID := range viewers {
+		w := wishTestSend(t, req, authHeader(t, userID, false))
+		if w.Code != 400 {
+			t.Errorf("%s after delete: status = %d, want 400; body=%s", name, w.Code, w.Body.String())
+		}
+	}
+}
+
+// A wishlist deleted between the access check and the owner lookup is a 400,
+// not a 500.
+func TestGetWishesFromWishlist_WishlistDeletedMidRequest(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	// The owner's access check is the first wishlists query; the owner lookup
+	// is the second.
+	onDBOperation(t, "query", "wishlists", 1, func(tx *gorm.DB) {
+		if err := tx.Exec("UPDATE wishlists SET enabled = ? WHERE id = ?", false, wishlist.ID).Error; err != nil {
+			t.Errorf("failed to disable wishlist: %v", err)
+		}
+	})
+
+	w := wishTestSend(t, wishTestReq{handler: GetWishesFromWishlist, method: "GET", path: "/api/wishes?wishlist=" + wishlist.ID.String()}, authHeader(t, owner.ID, false))
+	if w.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+	}
+	if got := parseWishBody(t, w)["error"]; got != "Failed to find wishlist." {
+		t.Errorf("error = %v", got)
+	}
 }

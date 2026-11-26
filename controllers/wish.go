@@ -78,7 +78,12 @@ func GetWishesFromWishlist(context *gin.Context) {
 	}
 
 	owner_id, err := database.GetWishlistOwner(wishlist_id_int)
-	if err != nil {
+	if errors.Is(err, database.ErrWishlistNotFound) {
+		// The wishlist was deleted after the access check.
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
+		context.Abort()
+		return
+	} else if err != nil {
 		logger.Log.Error("Failed to get wishlist owner. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get wishlist owner."})
 		context.Abort()

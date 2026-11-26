@@ -1208,7 +1208,11 @@ func APICollaborateWishlist(context *gin.Context) {
 		}
 
 		wishlistOwnerID, err := database.GetWishlistOwner(wishlist_id_int)
-		if err != nil {
+		if errors.Is(err, database.ErrWishlistNotFound) {
+			context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
+			context.Abort()
+			return
+		} else if err != nil {
 			logger.Log.Error("Failed to verify wishlist owner. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wishlist owner."})
 			context.Abort()
@@ -1302,7 +1306,11 @@ func APIUnCollaborateWishlist(context *gin.Context) {
 
 	// Verify wishlist is owned by requester
 	wishlistOwnerID, err := database.GetWishlistOwner(wishlist_id_int)
-	if err != nil {
+	if errors.Is(err, database.ErrWishlistNotFound) {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find wishlist."})
+		context.Abort()
+		return
+	} else if err != nil {
 		logger.Log.Error("Failed to verify wishlist owner. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify wishlist owner."})
 		context.Abort()

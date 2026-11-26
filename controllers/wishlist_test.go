@@ -2542,3 +2542,54 @@ func TestRemoveFromWishlistMembershipVanishes(t *testing.T) {
 		t.Errorf("error = %v", resp["error"])
 	}
 }
+
+// An owner adding a collaborator to their own deleted wishlist, or anyone
+// naming a wishlist that doesn't exist, gets a 400 rather than a 500.
+func TestAPICollaborateWishlistDeletedOrMissing(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	collaborator := createTestUser(t)
+	deleted := createTestWishlist(t, owner.ID)
+	if err := database.DeleteWishlist(deleted.ID); err != nil {
+		t.Fatalf("failed to delete wishlist: %v", err)
+	}
+
+	body := `{"users":["` + collaborator.ID.String() + `"]}`
+	for name, wishlistID := range map[string]uuid.UUID{"deleted": deleted.ID, "missing": uuid.New()} {
+		code, resp := wlDo(APICollaborateWishlist, "POST", "/api/auth/wishlists/"+wishlistID.String()+"/collaborators", body, authHeader(t, owner.ID, false), wishlistTestParams(wishlistID))
+		if code != 400 {
+			t.Errorf("%s: status = %d, want 400; body=%v", name, code, resp)
+		} else if resp["error"] != "Failed to find wishlist." {
+			t.Errorf("%s: error = %v", name, resp["error"])
+		}
+	}
+	if ok, err := database.VerifyWishlistCollaboratorToWishlist(deleted.ID, collaborator.ID); err != nil || ok {
+		t.Errorf("collaboration on deleted wishlist = (%v, %v), want none", ok, err)
+	}
+}
+
+// A wishlist deleted between the collaborator check and the owner lookup is a
+// 400, not a 500.
+func TestAPIUnCollaborateWishlistDeletedMidRequest(t *testing.T) {
+	setupControllersDB(t)
+	owner := createTestUser(t)
+	collaborator := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	addWishCollaborator(t, wishlist.ID, collaborator.ID)
+	// The collaborator check queries wishlist_collaborators, so the owner
+	// lookup is the first query on wishlists.
+	onDBOperation(t, "query", "wishlists", 0, func(tx *gorm.DB) {
+		if err := tx.Exec("UPDATE wishlists SET enabled = ? WHERE id = ?", false, wishlist.ID).Error; err != nil {
+			t.Errorf("failed to disable wishlist: %v", err)
+		}
+	})
+
+	body := `{"user_id":"` + collaborator.ID.String() + `"}`
+	code, resp := wlDo(APIUnCollaborateWishlist, "POST", "/api/auth/wishlists/"+wishlist.ID.String()+"/collaborators/remove", body, authHeader(t, owner.ID, false), wishlistTestParams(wishlist.ID))
+	if code != 400 {
+		t.Fatalf("status = %d, want 400; body=%v", code, resp)
+	}
+	if resp["error"] != "Failed to find wishlist." {
+		t.Errorf("error = %v", resp["error"])
+	}
+}
