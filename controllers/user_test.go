@@ -1311,6 +1311,23 @@ func TestAPIResetPasswordAnswersBeforeSending(t *testing.T) {
 	}
 }
 
+// A panic in a background task is logged and doesn't spread past the
+// deferred logPanic.
+func TestLogPanic(t *testing.T) {
+	hook := logrusTest.NewLocal(logger.Log)
+	t.Cleanup(func() { logger.Log.ReplaceHooks(make(logrus.LevelHooks)) })
+
+	func() {
+		defer logPanic("testing")
+		panic("boom")
+	}()
+
+	entry := hook.LastEntry()
+	if entry == nil || entry.Level != logrus.ErrorLevel || entry.Message != "Panic while testing: boom" {
+		t.Errorf("last log entry = %v, want the panic logged as an error", entry)
+	}
+}
+
 func TestAPIChangePasswordWeakPassword(t *testing.T) {
 	setupControllersDB(t)
 	user := createTestUser(t)

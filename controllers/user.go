@@ -8,6 +8,7 @@ import (
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
 	"errors"
+	"fmt"
 	"image"
 	"net/http"
 	"strings"
@@ -732,11 +733,20 @@ func APIResetPassword(context *gin.Context) {
 	passwordResets.Add(1)
 	go func() {
 		defer passwordResets.Done()
+		defer logPanic("sending a password reset")
 		sendPasswordReset(resetRequestVar.Email)
 	}()
 
 	context.JSON(http.StatusOK, gin.H{"message": "If the user exists, an email with a password reset has been sent."})
+}
 
+// logPanic, deferred at the top of a goroutine, logs a panic instead of
+// letting it end the process: gin's recovery only covers the request's own
+// goroutine.
+func logPanic(task string) {
+	if recovered := recover(); recovered != nil {
+		logger.Log.Error(fmt.Sprintf("Panic while %s: %v", task, recovered))
+	}
 }
 
 // passwordResets counts the reset e-mails still being sent; tests wait on it.

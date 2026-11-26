@@ -677,7 +677,7 @@ These parts of the plan below were built differently. Open gaps are tracked in
   third-party clients have nothing else to use.
 - **Rate limiting.** Per client IP, in memory: `/oauth/register` 10/hour,
   `/oauth/authorize` 60/min, `/oauth/token` 120/min, password login 20 per 15 min,
-  and one shared budget of 10 per 15 min across the MFA code checks (login step,
+  password reset requests 5 per 15 min, and one shared budget of 10 per 15 min across the MFA code checks (login step,
   enrollment, disabling).
 - **Key storage.** The signing key lives in `config.json`. Since v2.5.0 it's written
   `0600`, and an older world-readable file is tightened on load.
