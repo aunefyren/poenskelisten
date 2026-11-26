@@ -160,6 +160,10 @@ func TestDeleteWishCategoryDetachesWishes(t *testing.T) {
 	if refreshed.CategoryID != nil {
 		t.Fatalf("expected wish category to be detached, still points at %v", refreshed.CategoryID)
 	}
+	// The count reads placements, so it also shows they were detached.
+	if count, err := CountEnabledWishesInCategory(category.ID); err != nil || count != 0 {
+		t.Fatalf("CountEnabledWishesInCategory = (%d, %v), want no placements left in the category", count, err)
+	}
 }
 
 func TestCreateWishCategoryInDBFailure(t *testing.T) {
@@ -228,6 +232,22 @@ func TestDeleteWishCategoryFailures(t *testing.T) {
 			t.Fatalf("error = %v, want \"failed to delete wish category in database\"", err)
 		}
 	})
+
+	for _, table := range []string{"wishlist_wishes", "wishes"} {
+		t.Run("detaching "+table+" fails", func(t *testing.T) {
+			setupTestDB(t)
+			wishlistID := uuid.New()
+			category := createTestCategory(t, wishlistID, "Games", 1)
+			createTestWish(t, wishlistID, &category.ID)
+			injectFault(t, "update", table, 0)
+			if err := DeleteWishCategory(category.ID); !errors.Is(err, errInjected) {
+				t.Fatalf("error = %v, want the injected fault", err)
+			}
+			if count, err := CountEnabledWishesInCategory(category.ID); err != nil || count != 1 {
+				t.Fatalf("CountEnabledWishesInCategory = (%d, %v), want the detach rolled back", count, err)
+			}
+		})
+	}
 
 	t.Run("disable fails", func(t *testing.T) {
 		setupTestDB(t)

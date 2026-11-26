@@ -16,6 +16,20 @@ type Wish struct {
 	CategoryID *uuid.UUID `json:"" gorm:"type:varchar(100);default:null"`
 }
 
+// WishlistWish places a wish on a wishlist, so one wish can be shown on
+// several of its owner's lists while sharing one claim (#183). The category
+// lives here rather than on the wish because a WishCategory belongs to a
+// single wishlist. Wish.WishlistID and Wish.CategoryID still mirror the wish's
+// first placement, so an older version can run against the same database.
+// Placements are removed with a hard delete: the unique index would otherwise
+// keep a soft-deleted row from ever being placed on that list again.
+type WishlistWish struct {
+	GormModel
+	WishlistID uuid.UUID  `json:"wishlist_id" gorm:"type:varchar(100);not null;uniqueIndex:idx_wishlist_wishes_placement"`
+	WishID     uuid.UUID  `json:"wish_id" gorm:"type:varchar(100);not null;uniqueIndex:idx_wishlist_wishes_placement;index"`
+	CategoryID *uuid.UUID `json:"category_id" gorm:"type:varchar(100);default:null"`
+}
+
 type WishCreationRequest struct {
 	Name         string     `json:"name" sanitize:"trim,text"`
 	Note         string     `json:"note" sanitize:"trim,text"`

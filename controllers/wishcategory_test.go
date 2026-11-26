@@ -173,8 +173,8 @@ func TestCleanupWishCategoryIfEmptyKeepsNonEmpty(t *testing.T) {
 	category := createTestWishCategory(t, wishlist.ID, user.ID)
 	wish := createTestWish(t, user.ID, wishlist.ID)
 	wish.CategoryID = &category.ID
-	if result := database.Instance.Save(&wish); result.Error != nil {
-		t.Fatalf("failed to assign category to wish: %v", result.Error)
+	if _, err := database.UpdateWishInDB(wish); err != nil {
+		t.Fatalf("failed to assign category to wish: %v", err)
 	}
 
 	CleanupWishCategoryIfEmpty(category.ID)

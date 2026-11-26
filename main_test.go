@@ -753,7 +753,7 @@ func TestInitRouterEscapesAppText(t *testing.T) {
 var routerTestModels = []interface{}{
 	&models.User{}, &models.Invite{}, &models.Group{}, &models.GroupMembership{},
 	&models.Wishlist{}, &models.WishlistMembership{}, &models.WishlistCollaborator{},
-	&models.WishCategory{}, &models.Wish{}, &models.WishClaim{}, &models.News{},
+	&models.WishCategory{}, &models.Wish{}, &models.WishlistWish{}, &models.WishClaim{}, &models.News{},
 	&models.MFARecoveryCode{}, &models.Session{}, &models.OAuthClient{},
 	&models.AuthorizationCode{}, &models.OAuthConsent{},
 }
@@ -827,6 +827,15 @@ func createRouterRecord(t *testing.T, record interface{}) {
 	}
 }
 
+// createRouterWish stores a wish through the database layer, which also
+// places it on its wishlist.
+func createRouterWish(t *testing.T, wish models.Wish) {
+	t.Helper()
+	if _, err := database.CreateWishInDB(wish); err != nil {
+		t.Fatalf("failed to create wish: %v", err)
+	}
+}
+
 func createRouterUser(t *testing.T, name string, admin bool) models.User {
 	t.Helper()
 	email := strings.ToLower(name) + "-" + uuid.NewString() + "@example.com"
@@ -861,7 +870,7 @@ func TestRoutesRefuseNilID(t *testing.T) {
 	createRouterRecord(t, &publicList)
 	otherWish := models.Wish{Name: "Other wish", Enabled: true, OwnerID: other.ID, WishlistID: otherList.ID}
 	otherWish.ID = uuid.New()
-	createRouterRecord(t, &otherWish)
+	createRouterWish(t, otherWish)
 	otherCategory := models.WishCategory{Name: "Other category", Enabled: true, OwnerID: other.ID, WishlistID: otherList.ID}
 	otherCategory.ID = uuid.New()
 	createRouterRecord(t, &otherCategory)
@@ -907,7 +916,7 @@ func TestRoutesRefuseNilID(t *testing.T) {
 	createRouterRecord(t, &callerList)
 	callerWish := models.Wish{Name: "Caller wish", Enabled: true, OwnerID: caller.ID, WishlistID: callerList.ID}
 	callerWish.ID = uuid.New()
-	createRouterRecord(t, &callerWish)
+	createRouterWish(t, callerWish)
 
 	nilID := uuid.Nil.String()
 	future := now.AddDate(1, 0, 0).Format("2006-01-02")
@@ -1432,7 +1441,7 @@ func TestResponsesShowOtherUsersOnlyByName(t *testing.T) {
 	createRouterRecord(t, &share)
 	wish := models.Wish{Name: "Alice wish", Enabled: true, OwnerID: alice.ID, WishlistID: shared.ID}
 	wish.ID = uuid.New()
-	createRouterRecord(t, &wish)
+	createRouterWish(t, wish)
 	claim := models.WishClaim{WishID: wish.ID, UserID: dave.ID, Enabled: true}
 	claim.ID = uuid.New()
 	createRouterRecord(t, &claim)

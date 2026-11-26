@@ -133,6 +133,7 @@ func Migrate() {
 	errWishlistCollaborator := Instance.AutoMigrate(&models.WishlistCollaborator{})
 	errWishCategory := Instance.AutoMigrate(&models.WishCategory{})
 	errWish := Instance.AutoMigrate(&models.Wish{})
+	errWishlistWish := Instance.AutoMigrate(&models.WishlistWish{})
 	errWishClaim := Instance.AutoMigrate(&models.WishClaim{})
 	errNews := Instance.AutoMigrate(&models.News{})
 	errMFARecoveryCode := Instance.AutoMigrate(&models.MFARecoveryCode{})
@@ -141,8 +142,14 @@ func Migrate() {
 	errAuthorizationCode := Instance.AutoMigrate(&models.AuthorizationCode{})
 	errOAuthConsent := Instance.AutoMigrate(&models.OAuthConsent{})
 
-	err := errors.Join(errUser, errInvite, errGroup, errGroupMembership, errWishlist, errWishlistMembership, errWishlistCollaborator, errWishCategory, errWish, errWishClaim, errNews, errMFARecoveryCode, errSession, errOAuthClient, errAuthorizationCode, errOAuthConsent)
+	err := errors.Join(errUser, errInvite, errGroup, errGroupMembership, errWishlist, errWishlistMembership, errWishlistCollaborator, errWishCategory, errWish, errWishlistWish, errWishClaim, errNews, errMFARecoveryCode, errSession, errOAuthClient, errAuthorizationCode, errOAuthConsent)
 	if err != nil {
+		panic(err)
+	}
+
+	// Wishes are read through their placements, so a wish without one would
+	// vanish from its list.
+	if err := EnsureWishPlacements(); err != nil {
 		panic(err)
 	}
 

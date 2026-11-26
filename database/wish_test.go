@@ -494,3 +494,213 @@ func TestWishCreatesRejectWrongRowCount(t *testing.T) {
 		t.Errorf("CreateWishClaimInDB error = %v, want \"WishClaim not added to database.\"", err)
 	}
 }
+
+// wishPlacements returns every placement of a wish, so tests can check the
+// rows themselves rather than what the read functions make of them.
+func wishPlacements(t *testing.T, wishID uuid.UUID) []models.WishlistWish {
+	t.Helper()
+	var placements []models.WishlistWish
+	if err := Instance.Where("wishlist_wishes.wish_id = ?", wishID).Find(&placements).Error; err != nil {
+		t.Fatalf("failed to read placements: %v", err)
+	}
+	return placements
+}
+
+func TestCreateWishInDBPlacesTheWish(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	categoryID := uuid.New()
+
+	wish := models.Wish{Name: "Placed", Enabled: true, OwnerID: owner.ID, WishlistID: wishlist.ID, CategoryID: &categoryID}
+	wish.ID = uuid.New()
+	if _, err := CreateWishInDB(wish); err != nil {
+		t.Fatalf("CreateWishInDB error: %v", err)
+	}
+
+	placements := wishPlacements(t, wish.ID)
+	if len(placements) != 1 {
+		t.Fatalf("got %d placements, want 1", len(placements))
+	}
+	if placements[0].WishlistID != wishlist.ID || placements[0].CategoryID == nil || *placements[0].CategoryID != categoryID {
+		t.Errorf("placement = %+v, want wishlist %v with category %v", placements[0], wishlist.ID, categoryID)
+	}
+}
+
+// A wish that couldn't be placed would be on no list, so the wish itself
+// must not be stored either.
+func TestCreateWishInDBRollsBackWithoutPlacement(t *testing.T) {
+	setupTestDB(t)
+	injectFault(t, "create", "wishlist_wishes", 0)
+
+	wish := models.Wish{Name: "Unplaced", Enabled: true, OwnerID: uuid.New(), WishlistID: uuid.New()}
+	wish.ID = uuid.New()
+	if _, err := CreateWishInDB(wish); !errors.Is(err, errInjected) {
+		t.Fatalf("CreateWishInDB error = %v, want the injected fault", err)
+	}
+	if found, err := GetWishByWishID(wish.ID); err != nil || found != nil {
+		t.Errorf("GetWishByWishID = (%v, %v), want the wish rolled back", found, err)
+	}
+}
+
+func TestUpdateWishInDBMovesThePlacementCategory(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wish := createWishForOwner(t, wishlist.ID, owner.ID, "Recategorised")
+
+	categoryID := uuid.New()
+	wish.CategoryID = &categoryID
+	if _, err := UpdateWishInDB(wish); err != nil {
+		t.Fatalf("UpdateWishInDB error: %v", err)
+	}
+	if placements := wishPlacements(t, wish.ID); len(placements) != 1 || placements[0].CategoryID == nil || *placements[0].CategoryID != categoryID {
+		t.Fatalf("placements = %+v, want one in category %v", placements, categoryID)
+	}
+
+	wish.CategoryID = nil
+	if _, err := UpdateWishInDB(wish); err != nil {
+		t.Fatalf("UpdateWishInDB error: %v", err)
+	}
+	if placements := wishPlacements(t, wish.ID); len(placements) != 1 || placements[0].CategoryID != nil {
+		t.Errorf("placements = %+v, want one without a category", placements)
+	}
+}
+
+func TestUpdateWishInDBFailures(t *testing.T) {
+	for _, table := range []string{"wishes", "wishlist_wishes"} {
+		t.Run(table, func(t *testing.T) {
+			setupTestDB(t)
+			owner := createTestUser(t)
+			wishlist := createTestWishlist(t, owner.ID)
+			wish := createWishForOwner(t, wishlist.ID, owner.ID, "Original name")
+			injectFault(t, "update", table, 0)
+
+			wish.Name = "Changed name"
+			if _, err := UpdateWishInDB(wish); !errors.Is(err, errInjected) {
+				t.Fatalf("UpdateWishInDB error = %v, want the injected fault", err)
+			}
+			if stored, err := GetWishByWishID(wish.ID); err != nil || stored == nil || stored.Name != "Original name" {
+				t.Errorf("stored wish = (%v, %v), want the original name kept", stored, err)
+			}
+		})
+	}
+}
+
+// The lists read placements, not wishes.wishlist_id: a wish whose placement
+// is gone is on no list, whatever the column says.
+func TestWishlistReadsGoThroughPlacements(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wish := createWishForOwner(t, wishlist.ID, owner.ID, "Unplaced later")
+
+	if err := Instance.Unscoped().Where("wishlist_wishes.wish_id = ?", wish.ID).Delete(&models.WishlistWish{}).Error; err != nil {
+		t.Fatalf("failed to remove placement: %v", err)
+	}
+
+	if _, wishes, err := GetWishesFromWishlist(wishlist.ID); err != nil || len(wishes) != 0 {
+		t.Errorf("GetWishesFromWishlist = (%v, %v), want no wishes", wishes, err)
+	}
+	if ids, err := GetWishIDsFromWishlist(wishlist.ID); err != nil || len(ids) != 0 {
+		t.Errorf("GetWishIDsFromWishlist = (%v, %v), want no IDs", ids, err)
+	}
+	if wishlistID, err := GetWishlistIDFromWish(wish.ID); err != nil || wishlistID != nil {
+		t.Errorf("GetWishlistIDFromWish = (%v, %v), want nil", wishlistID, err)
+	}
+	if found, _, err := GetWishlistByWishID(wish.ID); err != nil || found {
+		t.Errorf("GetWishlistByWishID found = %v (err %v), want not found", found, err)
+	}
+	if unique, err := VerifyUniqueWishNameInWishlist(wish.Name, wishlist.ID); err != nil || !unique {
+		t.Errorf("VerifyUniqueWishNameInWishlist = (%v, %v), want the name free", unique, err)
+	}
+	if unique, err := VerifyUniqueWishNameInWishlistExcludingWish(wish.Name, wishlist.ID, uuid.New()); err != nil || !unique {
+		t.Errorf("VerifyUniqueWishNameInWishlistExcludingWish = (%v, %v), want the name free", unique, err)
+	}
+	if unique, err := VerifyUniqueWishNameInWishlistIgnoringCase(wish.Name, wishlist.ID, uuid.Nil); err != nil || !unique {
+		t.Errorf("VerifyUniqueWishNameInWishlistIgnoringCase = (%v, %v), want the name free", unique, err)
+	}
+}
+
+func TestWishPlacementIsUniquePerWishlist(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	wish := createWishForOwner(t, wishlist.ID, owner.ID, "Placed once")
+
+	duplicate := models.WishlistWish{WishlistID: wishlist.ID, WishID: wish.ID}
+	duplicate.ID = uuid.New()
+	if err := Instance.Create(&duplicate).Error; err == nil {
+		t.Error("expected a second placement on the same wishlist to be refused")
+	}
+}
+
+func TestEnsureWishPlacements(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	categoryID := uuid.New()
+
+	// Stored the way an older version stored wishes: no placement.
+	legacy := models.Wish{Name: "Legacy wish", Enabled: true, OwnerID: owner.ID, WishlistID: wishlist.ID, CategoryID: &categoryID}
+	legacy.ID = uuid.New()
+	if err := Instance.Create(&legacy).Error; err != nil {
+		t.Fatalf("failed to create legacy wish: %v", err)
+	}
+	listless := models.Wish{Name: "Listless wish", Enabled: true, OwnerID: owner.ID}
+	listless.ID = uuid.New()
+	if err := Instance.Create(&listless).Error; err != nil {
+		t.Fatalf("failed to create listless wish: %v", err)
+	}
+	// Placed already, but an older version has since moved its category.
+	current := createWishForOwner(t, wishlist.ID, owner.ID, "Current wish")
+	if err := Instance.Exec("UPDATE wishes SET category_id = ? WHERE id = ?", categoryID, current.ID).Error; err != nil {
+		t.Fatalf("failed to move category: %v", err)
+	}
+
+	for run := 1; run <= 2; run++ {
+		if err := EnsureWishPlacements(); err != nil {
+			t.Fatalf("run %d: EnsureWishPlacements error: %v", run, err)
+		}
+		for _, wish := range []models.Wish{legacy, current} {
+			placements := wishPlacements(t, wish.ID)
+			if len(placements) != 1 || placements[0].WishlistID != wishlist.ID || placements[0].CategoryID == nil || *placements[0].CategoryID != categoryID {
+				t.Errorf("run %d: placements of %q = %+v, want one on %v in category %v", run, wish.Name, placements, wishlist.ID, categoryID)
+			}
+		}
+		if placements := wishPlacements(t, listless.ID); len(placements) != 0 {
+			t.Errorf("run %d: wish without a wishlist got placements %+v", run, placements)
+		}
+	}
+
+	if _, wishes, err := GetWishesFromWishlist(wishlist.ID); err != nil || len(wishes) != 2 {
+		t.Errorf("GetWishesFromWishlist = (%d wishes, %v), want both placed wishes", len(wishes), err)
+	}
+}
+
+func TestEnsureWishPlacementsFailures(t *testing.T) {
+	cases := []struct {
+		name  string
+		kind  string
+		table string
+	}{
+		{name: "find unplaced wishes", kind: "query", table: "wishes"},
+		{name: "store placements", kind: "create", table: "wishlist_wishes"},
+		{name: "copy categories", kind: "raw", table: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			setupTestDB(t)
+			legacy := models.Wish{Name: "Legacy wish", Enabled: true, OwnerID: uuid.New(), WishlistID: uuid.New()}
+			legacy.ID = uuid.New()
+			if err := Instance.Create(&legacy).Error; err != nil {
+				t.Fatalf("failed to create legacy wish: %v", err)
+			}
+			injectFault(t, tc.kind, tc.table, 0)
+
+			if err := EnsureWishPlacements(); !errors.Is(err, errInjected) {
+				t.Errorf("EnsureWishPlacements error = %v, want the injected fault", err)
+			}
+		})
+	}
+}

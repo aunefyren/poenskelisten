@@ -48,7 +48,7 @@ func setupMCPDB(t *testing.T) {
 		t.Fatalf("failed to open gorm: %v", err)
 	}
 	if err := instance.AutoMigrate(
-		&models.User{}, &models.Wishlist{}, &models.Wish{},
+		&models.User{}, &models.Wishlist{}, &models.Wish{}, &models.WishlistWish{},
 		&models.Group{}, &models.GroupMembership{},
 		&models.WishlistCollaborator{}, &models.WishCategory{},
 	); err != nil {
@@ -190,8 +190,8 @@ func TestListWishesTool(t *testing.T) {
 	}
 	wish := models.Wish{Name: "Headphones", Enabled: true, OwnerID: owner.ID, WishlistID: wishlist.ID}
 	wish.ID = uuid.New()
-	if r := database.Instance.Create(&wish); r.Error != nil {
-		t.Fatalf("failed to create wish: %v", r.Error)
+	if _, err := database.CreateWishInDB(wish); err != nil {
+		t.Fatalf("failed to create wish: %v", err)
 	}
 
 	session := startMCPTestServer(t, owner.ID, "mcp:wishlists.read")
@@ -250,8 +250,8 @@ func TestListWishesToolNilWishlistID(t *testing.T) {
 		}
 		wish := models.Wish{Name: user.FirstName + " wish", Enabled: true, OwnerID: user.ID, WishlistID: wishlist.ID}
 		wish.ID = uuid.New()
-		if r := database.Instance.Create(&wish); r.Error != nil {
-			t.Fatalf("failed to create wish: %v", r.Error)
+		if _, err := database.CreateWishInDB(wish); err != nil {
+			t.Fatalf("failed to create wish: %v", err)
 		}
 	}
 
