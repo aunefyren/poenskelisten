@@ -537,6 +537,52 @@ func TestOAuthConsentAllowIssuesCode(t *testing.T) {
 	}
 }
 
+// Verifying one's e-mail and enrolling in MFA where it is enforced were only
+// checked by /oauth/authorize. The consent form and both token grants could
+// still hand out tokens to an account that hadn't, and the consent form
+// accepted the web app, which never asks for consent.
+func TestLoginGatesHoldOutsideAuthorize(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	firstParty := oauthServerTestNewClient(t, true, true, []string{"openid"}, "https://wishlist.example.com/oauth/callback")
+	app := oauthServerTestNewClient(t, false, true, []string{"openid"}, "https://client.example/cb")
+	user := createTestUser(t)
+	_, exchange := oauthServerTestExchange(t, firstParty, user)
+	refreshCookie := oauthServerTestCookie(exchange, refreshCookieName)
+	appCode, appVerifier := oauthServerTestIssueCode(t, app, user)
+
+	// MFA becomes enforced after the account signed in.
+	config.ConfigFile.MFAEnforced = true
+
+	consent := func(client models.OAuthClient) (int, string) {
+		form := url.Values{"client_id": {client.ClientID}, "redirect_uri": {client.RedirectURIs[0]}, "scope": {"openid"},
+			"state": {"s"}, "code_challenge": {"challenge"}, "action": {"allow"}}
+		code, _, w := postForm(APIOAuthConsent, "/oauth/consent", form, oauthServerTestSSOCookie(t, user.ID))
+		return code, w.Header().Get("Location")
+	}
+	if code, location := consent(firstParty); code != http.StatusBadRequest {
+		t.Errorf("consent for the web app = %d (%s), want 400", code, location)
+	}
+	if code, location := consent(app); code != http.StatusFound || location != "/enroll" {
+		t.Errorf("consent for an app = %d %q, want a redirect to /enroll", code, location)
+	}
+
+	if code, body, _ := postForm(APIOAuthToken, "/oauth/token", url.Values{
+		"grant_type": {"authorization_code"}, "code": {appCode},
+		"redirect_uri": {app.RedirectURIs[0]}, "client_id": {app.ClientID}, "code_verifier": {appVerifier},
+	}); code != http.StatusBadRequest || body["error"] != "invalid_grant" {
+		t.Errorf("code grant = %d %v, want invalid_grant", code, body)
+	}
+	code, body, w := postForm(APIOAuthToken, "/oauth/token", url.Values{"grant_type": {"refresh_token"}, "client_id": {firstParty.ClientID}},
+		&http.Cookie{Name: refreshCookieName, Value: refreshCookie.Value})
+	if code != http.StatusBadRequest || body["error"] != "invalid_grant" {
+		t.Errorf("refresh grant = %d %v, want invalid_grant", code, body)
+	}
+	if cleared := oauthServerTestCookie(w, refreshCookieName); cleared == nil || cleared.Value != "" {
+		t.Error("the refused refresh left the web app's refresh cookie in place")
+	}
+}
+
 func TestOAuthConsentInvalidClient(t *testing.T) {
 	setupControllersDB(t)
 	oauthServerTestSetup(t)
@@ -558,6 +604,67 @@ func TestOAuthTokenUnsupportedGrantType(t *testing.T) {
 	code, body, _ := postForm(APIOAuthToken, "/oauth/token", url.Values{"grant_type": {"password"}})
 	if code != http.StatusBadRequest || body["error"] != "unsupported_grant_type" {
 		t.Errorf("status=%d body=%v, want 400 unsupported_grant_type", code, body)
+	}
+}
+
+// The ID token carries the e-mail address only with the email scope and the
+// name only with the profile scope, on the code and the refresh grants alike.
+func TestOAuthTokenIDTokenClaimsFollowScopes(t *testing.T) {
+	setupControllersDB(t)
+	oauthServerTestSetup(t)
+	user := createTestUser(t)
+
+	idTokenClaims := func(body map[string]interface{}) map[string]interface{} {
+		t.Helper()
+		raw, _ := body["id_token"].(string)
+		parts := strings.Split(raw, ".")
+		if len(parts) != 3 {
+			t.Fatalf("id_token = %q, want a JWT", raw)
+		}
+		payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		claims := map[string]interface{}{}
+		if err := json.Unmarshal(payload, &claims); err != nil {
+			t.Fatal(err)
+		}
+		return claims
+	}
+
+	for _, c := range []struct {
+		scopes          []string
+		wantEmail, name bool
+	}{
+		{[]string{"openid"}, false, false},
+		{[]string{"openid", "email"}, true, false},
+		{[]string{"openid", "profile"}, false, true},
+	} {
+		client := oauthServerTestNewClient(t, false, true, c.scopes, "https://client.example/cb")
+		authCode, verifier := oauthServerTestIssueCode(t, client, user)
+		code, body, _ := postForm(APIOAuthToken, "/oauth/token", url.Values{
+			"grant_type": {"authorization_code"}, "code": {authCode},
+			"redirect_uri": {client.RedirectURIs[0]}, "client_id": {client.ClientID},
+			"code_verifier": {verifier},
+		})
+		if code != http.StatusOK {
+			t.Fatalf("%v: status = %d; body=%v", c.scopes, code, body)
+		}
+		refreshCode, refreshed, _ := postForm(APIOAuthToken, "/oauth/token", url.Values{
+			"grant_type": {"refresh_token"}, "refresh_token": {body["refresh_token"].(string)}, "client_id": {client.ClientID},
+		})
+		if refreshCode != http.StatusOK {
+			t.Fatalf("%v: refresh status = %d; body=%v", c.scopes, refreshCode, refreshed)
+		}
+		for grant, response := range map[string]map[string]interface{}{"code": body, "refresh": refreshed} {
+			claims := idTokenClaims(response)
+			if _, has := claims["email"]; has != c.wantEmail {
+				t.Errorf("%v %s grant: email present = %v, want %v", c.scopes, grant, has, c.wantEmail)
+			}
+			if _, has := claims["name"]; has != c.name {
+				t.Errorf("%v %s grant: name present = %v, want %v", c.scopes, grant, has, c.name)
+			}
+		}
 	}
 }
 

@@ -276,13 +276,18 @@ func TestAdminRevokeOAuthClientRejectsFirstParty(t *testing.T) {
 
 func TestIsValidRedirectURI(t *testing.T) {
 	cases := map[string]bool{
-		"https://client.example/cb": true,
-		"http://localhost:1234/cb":  true,
-		"not-a-url":                 false,
-		"ftp://x/y":                 false,
-		"":                          false,
-		"/relative/path":            false,
-		"http://[::1":               false, // unparseable
+		"https://client.example/cb":           true,
+		"http://localhost:1234/cb":            true,
+		"not-a-url":                           false,
+		"ftp://x/y":                           false,
+		"":                                    false,
+		"/relative/path":                      false,
+		"http://[::1":                         false, // unparseable
+		"https://client.example/cb#frag":      false,
+		"https://client.example/cb#":          false,
+		"https://user:pass@client.example/cb": false,
+		"https://chatgpt.com/connector_platform_oauth_redirect": true,
+		"https://client.example/" + strings.Repeat("a", 2000):   false,
 	}
 	for uri, want := range cases {
 		if got := isValidRedirectURI(uri); got != want {
@@ -339,5 +344,52 @@ func TestOAuthRegisterRejectsMarkupInClientName(t *testing.T) {
 	code, body := postRegister(`{"redirect_uris":["https://client.example/cb"],"client_name":"<script>alert(1)</script>"}`)
 	if code != http.StatusBadRequest || body["error"] != "invalid_client_metadata" {
 		t.Errorf("got %d %v, want 400 invalid_client_metadata", code, body)
+	}
+}
+
+func TestOAuthRegisterBoundsMetadata(t *testing.T) {
+	setupControllersDB(t)
+	enableRegistration(t)
+
+	tooMany := make([]string, maxRegisteredRedirectURIs+1)
+	for i := range tooMany {
+		tooMany[i] = `"https://client.example/cb` + strings.Repeat("x", i) + `"`
+	}
+	cases := map[string]string{
+		"too many redirect_uris":    `{"redirect_uris":[` + strings.Join(tooMany, ",") + `]}`,
+		"long client_name":          `{"redirect_uris":["https://client.example/cb"],"client_name":"` + strings.Repeat("n", maxClientNameLength+1) + `"}`,
+		"multi-line client_name":    `{"redirect_uris":["https://client.example/cb"],"client_name":"Claude\nPønskelisten"}`,
+		"redirect_uri with a frag":  `{"redirect_uris":["https://client.example/cb#x"]}`,
+		"redirect_uri with a login": `{"redirect_uris":["https://poenskelisten.example@evil.example/cb"]}`,
+		"line separator in name":    `{"redirect_uris":["https://client.example/cb"],"client_name":"Claude\u2028Pønskelisten"}`,
+		"bidi override in name":     `{"redirect_uris":["https://client.example/cb"],"client_name":"Claude\u202eppa"}`,
+		"zero-width space in name":  `{"redirect_uris":["https://client.example/cb"],"client_name":"Cl\u200baude"}`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			if code, resp := postRegister(body); code != 400 {
+				t.Errorf("status = %d, want 400; body=%v", code, resp)
+			}
+		})
+	}
+
+	// Names up to the limit, in any script, are fine.
+	name := strings.Repeat("ø", maxClientNameLength)
+	if code, resp := postRegister(`{"redirect_uris":["https://client.example/cb"],"client_name":"` + name + `"}`); code != 201 {
+		t.Errorf("status = %d, want 201 for a %d-character name; body=%v", code, maxClientNameLength, resp)
+	}
+}
+
+func TestOAuthRegisterStoresEachGrantTypeOnce(t *testing.T) {
+	setupControllersDB(t)
+	enableRegistration(t)
+
+	code, resp := postRegister(`{"redirect_uris":["https://client.example/cb"],"grant_types":["refresh_token","authorization_code","refresh_token","refresh_token"]}`)
+	if code != 201 {
+		t.Fatalf("status = %d, want 201; body=%v", code, resp)
+	}
+	grants, _ := resp["grant_types"].([]interface{})
+	if len(grants) != 2 {
+		t.Errorf("grant_types = %v, want each listed once", grants)
 	}
 }
