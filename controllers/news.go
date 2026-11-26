@@ -51,8 +51,8 @@ func GetNews(context *gin.Context) {
 
 // visibleNewsPosts drops expired posts, and for non-admins also posts dated
 // in the future (scheduled but not yet published), then sorts newest first.
-// Every handler that returns the news list goes through this so they can't
-// disagree about what a caller gets to see.
+// Every handler that returns news, the list or one post, goes through this so
+// they can't disagree about what a caller gets to see.
 func visibleNewsPosts(newsPosts []models.News, admin bool, now time.Time) []models.News {
 	visible := []models.News{}
 	for _, newsPost := range newsPosts {
@@ -82,9 +82,31 @@ func GetNewsPost(context *gin.Context) {
 		return
 	}
 
-	// Get the newspost by id
-	newsPost, err := database.GetNewsPostByNewsID(newsID)
+	userID, err := middlewares.GetAuthUsername(context.GetHeader("Authorization"))
 	if err != nil {
+		logger.Log.Error("Failed to get user ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get user ID."})
+		context.Abort()
+		return
+	}
+
+	userObject, err := database.GetUserInformation(userID)
+	if err != nil {
+		logger.Log.Error("Failed to get user. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
+		context.Abort()
+		return
+	}
+
+	// A post the news list wouldn't show the caller, scheduled or expired,
+	// is answered as one that doesn't exist.
+	newsPost, err := database.GetNewsPostByNewsID(newsID)
+	if errors.Is(err, database.ErrNewsPostNotFound) || (err == nil && len(visibleNewsPosts([]models.News{newsPost}, userObject.Admin, time.Now())) == 0) {
+		logger.Log.Error("Failed to find news post visible to the user. News ID: " + newsID.String())
+		context.JSON(http.StatusNotFound, gin.H{"error": "News post not found."})
+		context.Abort()
+		return
+	} else if err != nil {
 		// If there is an error getting the news, return an internal server error
 		logger.Log.Error("Failed to get news post. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed get news post."})
