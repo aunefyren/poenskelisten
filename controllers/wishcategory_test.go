@@ -236,6 +236,53 @@ func TestGetWishlistCategoriesForbidden(t *testing.T) {
 	}
 }
 
+// A collaborator gets the category picker, until the owner deletes the
+// wishlist: deleting leaves the collaboration in place, so the collaborator
+// check must refuse the deleted wishlist itself (#173).
+func TestGetWishlistCategoriesAsCollaborator(t *testing.T) {
+	for _, deleted := range []bool{false, true} {
+		name := "live wishlist"
+		if deleted {
+			name = "deleted wishlist"
+		}
+		t.Run(name, func(t *testing.T) {
+			setupControllersDB(t)
+			owner := createTestUser(t)
+			collaborator := createTestUser(t)
+			wishlist := createTestWishlist(t, owner.ID)
+			addWishCollaborator(t, wishlist.ID, collaborator.ID)
+			createTestWishCategory(t, wishlist.ID, owner.ID)
+			if deleted {
+				if err := database.DeleteWishlist(wishlist.ID); err != nil {
+					t.Fatalf("failed to delete wishlist: %v", err)
+				}
+			}
+
+			w := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(w)
+			ctx.Request = httptest.NewRequest("GET", "/api/auth/wishlists/"+wishlist.ID.String()+"/categories", nil)
+			ctx.Request.Header.Set("Authorization", authHeader(t, collaborator.ID, false))
+			ctx.Params = gin.Params{{Key: "wishlist_id", Value: wishlist.ID.String()}}
+			APIGetWishlistCategories(ctx)
+
+			var body struct {
+				Error      string                   `json:"error"`
+				Categories []map[string]interface{} `json:"categories"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatalf("failed to parse response: %v", err)
+			}
+			if deleted {
+				if w.Code != 400 || body.Error != "You are not an owner or collaborator of this wishlist." || body.Categories != nil {
+					t.Errorf("status = %d body=%s, want 400 and no categories", w.Code, w.Body.String())
+				}
+			} else if w.Code != 200 || len(body.Categories) != 1 {
+				t.Errorf("status = %d body=%s, want 200 and the one category", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
 func TestGetWishlistCategoriesSuccess(t *testing.T) {
 	setupControllersDB(t)
 	owner := createTestUser(t)

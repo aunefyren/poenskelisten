@@ -248,7 +248,8 @@ func deleteWish(ctx context.Context, _ *mcp.CallToolRequest, args deleteWishArgs
 }
 
 // requireWishlistEditor checks that the user may change the wishes on a
-// wishlist: its owner or one of its collaborators, as in the web app.
+// wishlist: its owner or one of its collaborators, as in the web app. Both
+// checks only match a wishlist that hasn't been deleted.
 func requireWishlistEditor(userID uuid.UUID, wishlistID uuid.UUID) error {
 	owns, err := database.VerifyUserOwnershipToWishlist(userID, wishlistID)
 	if err != nil {
@@ -264,16 +265,6 @@ func requireWishlistEditor(userID uuid.UUID, wishlistID uuid.UUID) error {
 		return errors.New("failed to check access to the wishlist")
 	} else if !collaborates {
 		return errWishlistNotAccessible
-	}
-
-	// Deleting a wishlist leaves its collaborators in place, and the check above
-	// doesn't look at the wishlist itself (#173), so a deleted wishlist is
-	// refused here, as the owner check already does.
-	if _, err := database.GetWishlist(wishlistID); errors.Is(err, database.ErrWishlistNotFound) {
-		return errWishlistNotAccessible
-	} else if err != nil {
-		logger.Log.Error("Failed to get wishlist. Error: " + err.Error())
-		return errors.New("failed to check access to the wishlist")
 	}
 	return nil
 }

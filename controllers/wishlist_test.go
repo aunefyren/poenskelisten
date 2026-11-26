@@ -636,6 +636,52 @@ func TestAPIUpdateWishlistForbidden(t *testing.T) {
 	}
 }
 
+// A collaborator can edit a wishlist's details, until the owner deletes it:
+// deleting leaves the collaboration in place, so the collaborator check must
+// refuse the deleted wishlist itself (#173).
+func TestAPIUpdateWishlistAsCollaborator(t *testing.T) {
+	for _, deleted := range []bool{false, true} {
+		name := "live wishlist"
+		if deleted {
+			name = "deleted wishlist"
+		}
+		t.Run(name, func(t *testing.T) {
+			setupControllersDB(t)
+			owner := createTestUser(t)
+			collaborator := createTestUser(t)
+			wishlist := createTestWishlist(t, owner.ID)
+			addWishCollaborator(t, wishlist.ID, collaborator.ID)
+			if deleted {
+				if err := database.DeleteWishlist(wishlist.ID); err != nil {
+					t.Fatalf("failed to delete wishlist: %v", err)
+				}
+			}
+
+			body := `{"name":"Renamed List","expires":false}`
+			code, resp := wlDo(APIUpdateWishlist, "PUT", "/api/auth/wishlists/"+wishlist.ID.String(), body, authHeader(t, collaborator.ID, false),
+				gin.Params{{Key: "wishlist_id", Value: wishlist.ID.String()}})
+
+			wantCode, wantName := 201, "Renamed List"
+			if deleted {
+				wantCode, wantName = 400, wishlist.Name
+				if resp["error"] != "You can only edit wishlists you own or collaborate on." {
+					t.Errorf("error = %v, want the not owner or collaborator answer", resp["error"])
+				}
+			}
+			if code != wantCode {
+				t.Fatalf("status = %d, want %d; body=%v", code, wantCode, resp)
+			}
+			var stored models.Wishlist
+			if r := database.Instance.Where("wishlists.id = ?", wishlist.ID).First(&stored); r.Error != nil {
+				t.Fatalf("failed to load wishlist: %v", r.Error)
+			}
+			if stored.Name != wantName {
+				t.Errorf("stored name = %q, want %q", stored.Name, wantName)
+			}
+		})
+	}
+}
+
 func TestAPIUpdateWishlistNameTooShort(t *testing.T) {
 	setupControllersDB(t)
 	owner := createTestUser(t)
