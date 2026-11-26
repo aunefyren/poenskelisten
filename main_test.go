@@ -28,6 +28,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	logrusTest "github.com/sirupsen/logrus/hooks/test"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	_ "modernc.org/sqlite"
@@ -1255,6 +1256,67 @@ func readSavedConfig(t *testing.T) models.ConfigStruct {
 		t.Fatalf("failed to parse config.json: %v", err)
 	}
 	return saved
+}
+
+// A page of another site can make a visitor's browser post the attacker's
+// password to the sign-in endpoint, the JSON in a text/plain body so no
+// preflight stops it, and leave the visitor signed in to the attacker's
+// account. The sign-in, MFA and consent entry points take requests only from
+// Pønskelisten's own pages, which keep signing in.
+func TestInitRouterRefusesSignInFromOtherSites(t *testing.T) {
+	setupRouterTest(t)
+	key, err := config.GenerateSecureKey(64)
+	if err != nil {
+		t.Fatalf("failed to generate private key: %v", err)
+	}
+	config.ConfigFile.PrivateKey = key
+	router := initRouter(config.ConfigFile)
+	cost := models.BcryptCost
+	t.Cleanup(func() { models.BcryptCost = cost })
+	models.BcryptCost = bcrypt.MinCost
+
+	email := "mallory-" + uuid.NewString() + "@example.com"
+	enabled, mfa := true, false
+	user := models.User{FirstName: "Mallory", LastName: "Test", Email: &email, Password: new(string), Enabled: &enabled, Verified: &enabled, MFAEnabled: &mfa}
+	user.ID = uuid.New()
+	if err := user.HashPassword("correct horse battery"); err != nil {
+		t.Fatalf("failed to hash password: %v", err)
+	}
+	createRouterRecord(t, &user)
+
+	post := func(path, origin, fetchSite string) *httptest.ResponseRecorder {
+		body := `{"email":"` + email + `","password":"correct horse battery"}`
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
+		req.Header.Set("Origin", origin)
+		req.Header.Set("Sec-Fetch-Site", fetchSite)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+
+	for _, path := range []string{
+		"/api/open/tokens/register",
+		"/api/open/tokens/mfa",
+		"/api/open/users/mfa/enroll",
+		"/api/open/users/mfa/activate",
+		"/api/open/users/verify/123456",
+		"/oauth/consent",
+	} {
+		w := post(path, "https://evil.example", "cross-site")
+		if w.Code != http.StatusForbidden || w.Header().Get("Set-Cookie") != "" {
+			t.Errorf("POST %s from another site = %d, Set-Cookie %q, want 403 and no cookie", path, w.Code, w.Header().Get("Set-Cookie"))
+		}
+	}
+	// Refused requests don't spend the visitor's sign-in budget.
+	for i := 0; i < 20; i++ {
+		post("/api/open/tokens/register", "https://evil.example", "cross-site")
+	}
+
+	w := post("/api/open/tokens/register", "https://wishlist.example.com", "same-origin")
+	if w.Code != http.StatusOK || !strings.Contains(w.Header().Get("Set-Cookie"), "poenskelisten_sso=") {
+		t.Errorf("sign-in from the app = %d, Set-Cookie %q, want 200 and the sign-in cookie", w.Code, w.Header().Get("Set-Cookie"))
+	}
 }
 
 // TestRunFirstStartServesFrontend is a first start in an empty directory: run
