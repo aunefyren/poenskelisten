@@ -276,6 +276,31 @@ func TestGetNewsPostHidesWhatTheListHides(t *testing.T) {
 	}
 }
 
+func TestGetNewsPostRequiresAuth(t *testing.T) {
+	setupControllersDB(t)
+	news := createTestNews(t)
+
+	code, body, _ := doRequest(GetNewsPost, "GET", "/api/auth/news/"+news.ID.String(), "", nil, gin.Params{{Key: "news_id", Value: news.ID.String()}})
+	if code != 400 {
+		t.Fatalf("status = %d %v, want 400 without auth", code, body)
+	}
+}
+
+// The user lookup runs before the news lookup, so the generic database-error
+// case only reaches the former; this fails the news query on its own.
+func TestGetNewsPostLookupFails(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+	news := createTestNews(t)
+	failDBOperation(t, "query", "news", 0)
+
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	code, body, _ := doRequest(GetNewsPost, "GET", "/api/auth/news/"+news.ID.String(), "", header, gin.Params{{Key: "news_id", Value: news.ID.String()}})
+	if code != 500 {
+		t.Fatalf("status = %d %v, want 500", code, body)
+	}
+}
+
 func postNewsPost(t *testing.T, authHeaderValue string, body string) (int, map[string]interface{}) {
 	t.Helper()
 	w := httptest.NewRecorder()

@@ -102,6 +102,7 @@ func GetNewsPost(context *gin.Context) {
 	// is answered as one that doesn't exist.
 	newsPost, err := database.GetNewsPostByNewsID(newsID)
 	if errors.Is(err, database.ErrNewsPostNotFound) || (err == nil && len(visibleNewsPosts([]models.News{newsPost}, userObject.Admin, time.Now())) == 0) {
+		logger.Log.Error("Failed to find news post visible to the user. News ID: " + newsID.String())
 		context.JSON(http.StatusNotFound, gin.H{"error": "News post not found."})
 		context.Abort()
 		return
