@@ -297,12 +297,7 @@ func activateTestUser(t *testing.T, userID uuid.UUID) (secret string, recoveryCo
 	config.ConfigFile.MFARecoveryCodesEnabled = true
 	secret = enrollTestUser(t, userID)
 
-	// Activation uses up its code: take the previous step, still accepted, and
-	// leave the current one to the test.
-	body := `{"code":"` + totpCodeAt(t, secret, time.Now().Add(-30*time.Second)) + `"}`
-	code, parsed := runJSONHandler(APIActivateMFA, "POST", "/api/mfa/activate", body, map[string]string{
-		"Authorization": authHeader(t, userID, false),
-	}, nil)
+	_, code, parsed := activateWithPreviousStep(t, userID, secret)
 	if code != 200 {
 		t.Fatalf("activation failed: status = %d, body=%v", code, parsed)
 	}
@@ -313,6 +308,32 @@ func activateTestUser(t *testing.T, userID uuid.UUID) (secret string, recoveryCo
 		}
 	}
 	return secret, recoveryCodes
+}
+
+// activateWithPreviousStep turns MFA on with the code for the step before now
+// and returns that code. Activation uses up its code, so taking the previous
+// step, which is still accepted, leaves the current one to the test. If a
+// 30-second step ends between making the code and the handler checking it,
+// that code is two steps old and refused, which made tests fail now and then
+// (more often under -race). So it tries once more with the new previous step;
+// a refused code changes nothing, and the next step boundary is 30 seconds away.
+func activateWithPreviousStep(t *testing.T, userID uuid.UUID, secret string) (activationCode string, status int, parsed map[string]interface{}) {
+	t.Helper()
+	for attempt := 1; ; attempt++ {
+		before := time.Now()
+		activationCode = totpCodeAt(t, secret, before.Add(-30*time.Second))
+		status, parsed = runJSONHandler(APIActivateMFA, "POST", "/api/mfa/activate", `{"code":"`+activationCode+`"}`, map[string]string{
+			"Authorization": authHeader(t, userID, false),
+		}, nil)
+		if status == 200 || attempt == 2 || totpStepOf(time.Now()) == totpStepOf(before) {
+			return activationCode, status, parsed
+		}
+	}
+}
+
+// totpStepOf returns which 30-second TOTP step a time falls in.
+func totpStepOf(at time.Time) int64 {
+	return at.Unix() / 30
 }
 
 func TestDisableMFASuccess(t *testing.T) {
@@ -930,8 +951,8 @@ func TestTOTPCodesWorkOnce(t *testing.T) {
 	enableTOTPEncryption(t)
 	user := mfaTestUserWithPassword(t, "correct horse battery staple")
 	secret := enrollTestUser(t, user.ID)
-	activation := totpCodeAt(t, secret, time.Now().Add(-30*time.Second))
-	if code, parsed := runJSONHandler(APIActivateMFA, "POST", "/api/mfa/activate", `{"code":"`+activation+`"}`, map[string]string{"Authorization": authHeader(t, user.ID, false)}, nil); code != 200 {
+	activation, code, parsed := activateWithPreviousStep(t, user.ID, secret)
+	if code != 200 {
 		t.Fatalf("activation = %d %v, want 200", code, parsed)
 	}
 

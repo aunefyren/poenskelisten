@@ -29,7 +29,7 @@ Share gift ideas, see which ones are already taken, and avoid the awkward “oh�
 - Organise wishes into categories, and sort or group them on a wishlist
 - Share a wishlist publicly with people who don't have an account
 - Sign in with a password, optionally with MFA (authenticator app), or through single sign-on (OpenID Connect)
-- Let an AI assistant read your wishlists through the built-in MCP server (optional)
+- Let an AI assistant read your wishlists and add, change or delete wishes through the built-in MCP server (optional)
 - Installable as a web app (PWA)
 
 ### Known Limitations
@@ -212,7 +212,7 @@ password login back.
 ## 🤖 MCP server (AI assistants)
 
 Pønskelisten can expose an authenticated **MCP (Model Context Protocol)** endpoint
-so an AI client (e.g. Claude) can read your wishlists on your behalf. It is a full
+so an AI client (e.g. Claude) can read and edit your wishlists on your behalf. It is a full
 OAuth 2.1 setup: the app is its own authorization server, and the MCP endpoint is a
 resource server that only accepts audience-scoped tokens.
 
@@ -222,9 +222,18 @@ Enable it with `mcp_enabled: true` (it's off by default). The endpoint lives at
 (`/oauth/register`), and runs the browser login + consent flow — no manual client
 setup. Set `external_url` to the public HTTPS address the client connects to, since the OAuth issuer and the MCP resource identifier are derived from it.
 
-Current tools are **read-only**: `list_wishlists`, `list_wishes`, `list_groups`
-(gated by the `mcp:wishlists.read` / `mcp:groups.read` scopes you approve on the
-consent screen). Connected apps only ever get access to the MCP endpoint, never to
+Tools, each gated by a scope you approve on the consent screen:
+
+| Tool | Scope | What it does |
+|------|-------|--------------|
+| `list_wishlists` | `mcp:wishlists.read` | Lists the wishlists you own |
+| `list_wishes` | `mcp:wishlists.read` | Lists the wishes on one of your wishlists |
+| `list_groups` | `mcp:groups.read` | Lists the groups you belong to |
+| `add_wish` | `mcp:wishlists.write` | Adds a wish (name, and optionally a note, link and price) to a wishlist you own or collaborate on |
+| `update_wish` | `mcp:wishlists.write` | Changes a wish's name, note, link or price |
+| `delete_wish` | `mcp:wishlists.write` | Deletes a wish; whoever claimed it is told by e-mail when SMTP is set up |
+
+The write tools follow the same rules as the web app: only a wishlist's owner and its collaborators can change its wishes, names must be at least five characters and unique on the wishlist (ignoring case), prices can't be negative, and links must be `http`/`https`. An app connected before the write tools existed may hold a token without `mcp:wishlists.write`; disconnect and reconnect it to approve the new scope. Connected apps only ever get access to the MCP endpoint, never to
 the rest of Pønskelisten's API, and app registration is switched off along with MCP. Users can disconnect an app under "Connected apps" on their account page, and admins can revoke any registered client from the admin panel.
 
 ## 🐳 Docker Setup
