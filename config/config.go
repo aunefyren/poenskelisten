@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -238,22 +239,47 @@ func CreateConfigFile() error {
 // by versions before 2.5.0.
 const configFileMode os.FileMode = 0600
 
-// restrictConfigFilePermissions removes group and other access from an existing
-// config file. Owner bits are left alone, so an operator's read-only file stays
-// read-only. A failure is only reported: the file is still usable, and refusing
-// to start over its permissions would be worse.
+// OwnerOnlyDirMode is for the files/ directory, which holds config.json, the
+// log and, with SQLite, the database with every password hash.
+const OwnerOnlyDirMode os.FileMode = 0700
+
+// restrictConfigFilePermissions removes from an existing config file every
+// permission bit configFileMode doesn't grant. It never adds any, so an
+// operator's read-only file stays read-only. A failure is only reported: the
+// file is still usable, and refusing to start over its permissions would be
+// worse.
 func restrictConfigFilePermissions() {
-	info, err := os.Stat(configFilePath)
-	if err != nil {
+	changed, err := RestrictPermissions(configFilePath, configFileMode)
+	if errors.Is(err, os.ErrNotExist) {
 		return
-	}
-	mode := info.Mode().Perm()
-	if mode&0077 == 0 {
-		return
-	}
-	if err := os.Chmod(configFilePath, mode&^0077); err != nil {
+	} else if err != nil {
 		fmt.Println("failed to restrict config file permissions. error: " + err.Error())
+	} else if changed {
+		fmt.Println("config.json was readable by other users; restricted it to its owner.")
 	}
+}
+
+// RestrictPermissions removes the permission bits of path that mode doesn't
+// grant (it never adds any), and reports whether it had to change anything.
+// On Windows it only checks that path exists: Go reports every directory there
+// as 0777 and every writable file as 0666, and os.Chmod can only toggle the
+// read-only flag, so it would "change" the same path on every call.
+func RestrictPermissions(path string, mode os.FileMode) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	if runtime.GOOS == "windows" {
+		return false, nil
+	}
+	current := info.Mode().Perm()
+	if current&^mode == 0 {
+		return false, nil
+	}
+	if err := os.Chmod(path, current&mode); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func SaveConfig() error {
@@ -269,6 +295,9 @@ func SaveConfig() error {
 		fmt.Println("failed to save config file to disk. error: " + err.Error())
 		return errors.New("failed to save config file to disk")
 	}
+
+	// os.WriteFile only applies the mode when it creates the file.
+	restrictConfigFilePermissions()
 
 	return nil
 }

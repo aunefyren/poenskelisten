@@ -680,7 +680,8 @@ These parts of the plan below were built differently. Open gaps are tracked in
   and one shared budget of 10 per 15 min across the MFA code checks (login step,
   enrollment, disabling).
 - **Key storage.** The signing key lives in `config.json`. Since v2.5.0 it's written
-  `0600`, and an older world-readable file is tightened on load.
+  `0600`, and an older world-readable file is tightened on load. The `files/`
+  directory holding it is kept `0700`.
 
 ### Phase 4 security posture
 PKCE required (S256 only); exact `redirect_uri` matching; single-use ≤60s codes;

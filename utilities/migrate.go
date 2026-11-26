@@ -338,7 +338,7 @@ func MigrateDBToV2() {
 	}
 
 	// Write the modified content back to the file
-	err = os.WriteFile("./files/db_modified_sql_file.sql", []byte(modifiedSQL), 0644)
+	err = os.WriteFile("./files/db_modified_sql_file.sql", []byte(modifiedSQL), 0600)
 	if err != nil {
 		panic(err)
 	}
