@@ -4,6 +4,8 @@ import (
 	"aunefyren/poenskelisten/models"
 	"bytes"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -120,6 +122,7 @@ func TestFormatterLeavesEntryUntouched(t *testing.T) {
 // -resetpassword, so a new log file is readable by its owner only.
 func TestInitLoggerCreatesOwnerOnlyLogFile(t *testing.T) {
 	ensureLogFilesDir(t)
+	skipIfModesNotKept(t, "files")
 
 	InitLogger(models.ConfigStruct{PoenskelistenLogLevel: "info"})
 
@@ -129,5 +132,27 @@ func TestInitLoggerCreatesOwnerOnlyLogFile(t *testing.T) {
 	}
 	if mode := info.Mode().Perm(); mode != 0600 {
 		t.Errorf("mode = %o, want 600", mode)
+	}
+}
+
+// skipIfModesNotKept skips a test that checks permission bits when dir can't
+// store them: on Windows, or on a filesystem such as a WSL mount of a Windows
+// drive, where every file reads back as 0777 whatever it was created with.
+func skipIfModesNotKept(t *testing.T, dir string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits don't apply on Windows")
+	}
+	probe := filepath.Join(dir, "mode-probe")
+	if err := os.WriteFile(probe, nil, 0600); err != nil {
+		t.Fatalf("failed to create probe file: %v", err)
+	}
+	defer os.Remove(probe)
+	info, err := os.Stat(probe)
+	if err != nil {
+		t.Fatalf("failed to stat probe file: %v", err)
+	}
+	if mode := info.Mode().Perm(); mode != 0600 {
+		t.Skipf("%s doesn't keep permission bits (a 0600 file reads back as %o)", dir, mode)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -260,10 +261,16 @@ func restrictConfigFilePermissions() {
 
 // RestrictPermissions removes the permission bits of path that mode doesn't
 // grant (it never adds any), and reports whether it had to change anything.
+// On Windows it only checks that path exists: Go reports every directory there
+// as 0777 and every writable file as 0666, and os.Chmod can only toggle the
+// read-only flag, so it would "change" the same path on every call.
 func RestrictPermissions(path string, mode os.FileMode) (bool, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return false, err
+	}
+	if runtime.GOOS == "windows" {
+		return false, nil
 	}
 	current := info.Mode().Perm()
 	if current&^mode == 0 {
