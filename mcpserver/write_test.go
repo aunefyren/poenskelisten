@@ -5,12 +5,14 @@ import (
 	"aunefyren/poenskelisten/models"
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+	"gorm.io/gorm"
 )
 
 const writeScope = "mcp:wishlists.read mcp:wishlists.write"
@@ -201,6 +203,27 @@ func TestAddWishToolRefuses(t *testing.T) {
 				return map[string]any{"wishlist_id": w.ID.String(), "name": "Existing wish"}
 			},
 			want: "there is already a wish with that name on this wishlist",
+		},
+		{
+			name: "name already on the wishlist in other capitals",
+			args: func(w models.Wishlist) map[string]any {
+				return map[string]any{"wishlist_id": w.ID.String(), "name": "existing WISH"}
+			},
+			want: "there is already a wish with that name on this wishlist",
+		},
+		{
+			name: "name of two characters that take more than five bytes",
+			args: func(w models.Wishlist) map[string]any {
+				return map[string]any{"wishlist_id": w.ID.String(), "name": "🎁🎁"}
+			},
+			want: "the name of the wish must be five or more characters",
+		},
+		{
+			name: "negative price",
+			args: func(w models.Wishlist) map[string]any {
+				return map[string]any{"wishlist_id": w.ID.String(), "name": "Headphones", "price": -50}
+			},
+			want: "invalid price: it can't be negative",
 		},
 		{
 			name: "markup in the name",
@@ -397,6 +420,18 @@ func TestUpdateWishToolRefuses(t *testing.T) {
 			want: "there is already a wish with that name on this wishlist",
 		},
 		{
+			name: "name of another wish in other capitals",
+			args: func(w models.Wish) map[string]any {
+				return map[string]any{"wish_id": w.ID.String(), "name": "OTHER wish"}
+			},
+			want: "there is already a wish with that name on this wishlist",
+		},
+		{
+			name: "negative price",
+			args: func(w models.Wish) map[string]any { return map[string]any{"wish_id": w.ID.String(), "price": -0.01} },
+			want: "invalid price: it can't be negative",
+		},
+		{
 			name: "markup in the note",
 			args: func(w models.Wish) map[string]any {
 				return map[string]any{"wish_id": w.ID.String(), "note": "<i>Black</i>"}
@@ -444,6 +479,94 @@ func TestUpdateWishToolRefuses(t *testing.T) {
 				t.Errorf("stored wish = %+v, want it unchanged", stored)
 			}
 		})
+	}
+}
+
+// A name's length counts characters, so five letters outside ASCII are
+// enough, and a free wish is not a negative price.
+func TestAddWishToolCountsCharactersAndAllowsAFreeWish(t *testing.T) {
+	setupMCPDB(t)
+	owner := createMCPTestUser(t, "Ada")
+	wishlist := createMCPTestWishlist(t, owner.ID)
+	session := startMCPTestServer(t, owner.ID, writeScope)
+
+	got := decodeWishOut(t, callMCPTool(t, session, "add_wish", map[string]any{
+		"wishlist_id": wishlist.ID.String(),
+		"name":        "Ærøgå",
+		"price":       0,
+	}))
+	if got.Name != "Ærøgå" || got.Price == nil || *got.Price != 0 {
+		t.Errorf("returned wish = %+v, want the name and a price of 0", got)
+	}
+}
+
+// Names are unique ignoring case, but that doesn't stop a wish from being
+// renamed to a different capitalisation of its own name.
+func TestUpdateWishToolChangesTheCaseOfItsName(t *testing.T) {
+	setupMCPDB(t)
+	owner := createMCPTestUser(t, "Ada")
+	wishlist := createMCPTestWishlist(t, owner.ID)
+	wish := createMCPTestWish(t, owner.ID, wishlist.ID, "Headphones")
+	session := startMCPTestServer(t, owner.ID, writeScope)
+
+	got := decodeWishOut(t, callMCPTool(t, session, "update_wish", map[string]any{"wish_id": wish.ID.String(), "name": "HEADPHONES"}))
+	if got.Name != "HEADPHONES" || loadMCPTestWish(t, wish.ID).Name != "HEADPHONES" {
+		t.Errorf("returned wish = %+v, want it renamed to HEADPHONES", got)
+	}
+}
+
+// Deleting a wishlist leaves its collaborators and wishes enabled (#173), so
+// every write tool must refuse a deleted wishlist itself, for its collaborators
+// as well as its owner.
+func TestWriteToolsRefuseADeletedWishlist(t *testing.T) {
+	for _, role := range []string{"owner", "collaborator"} {
+		calls := []struct {
+			tool string
+			args func(wishlist models.Wishlist, wish models.Wish) map[string]any
+			want string
+		}{
+			{"add_wish", func(wl models.Wishlist, _ models.Wish) map[string]any {
+				return map[string]any{"wishlist_id": wl.ID.String(), "name": "Headphones"}
+			}, "wishlist not found or not accessible"},
+			{"update_wish", func(_ models.Wishlist, w models.Wish) map[string]any {
+				return map[string]any{"wish_id": w.ID.String(), "note": "Black"}
+			}, "wish not found or not accessible"},
+			{"delete_wish", func(_ models.Wishlist, w models.Wish) map[string]any {
+				return map[string]any{"wish_id": w.ID.String()}
+			}, "wish not found or not accessible"},
+		}
+		for _, call := range calls {
+			t.Run(role+" "+call.tool, func(t *testing.T) {
+				setupMCPDB(t)
+				owner := createMCPTestUser(t, "Ada")
+				collaborator := createMCPTestUser(t, "Bob")
+				wishlist := createMCPTestWishlist(t, owner.ID)
+				addMCPTestCollaborator(t, wishlist.ID, collaborator.ID)
+				wish := createMCPTestWish(t, owner.ID, wishlist.ID, "Existing wish")
+				if r := database.Instance.Model(&models.Wishlist{}).Where("wishlists.id = ?", wishlist.ID).Update("enabled", false); r.Error != nil {
+					t.Fatalf("failed to delete wishlist: %v", r.Error)
+				}
+				notified := replaceWishDeletedNotifier(t)
+
+				caller := owner.ID
+				if role == "collaborator" {
+					caller = collaborator.ID
+				}
+				session := startMCPTestServer(t, caller, writeScope)
+
+				result := callMCPTool(t, session, call.tool, call.args(wishlist, wish))
+				if !result.IsError || firstText(t, result) != call.want {
+					t.Errorf("result = (error %v) %q, want error %q", result.IsError, firstText(t, result), call.want)
+				}
+				stored := loadMCPTestWish(t, wish.ID)
+				if !stored.Enabled || stored.Note != wish.Note || countMCPTestWishes(t, wishlist.ID) != 1 {
+					t.Errorf("stored wish = %+v and %d wishes, want the wishlist unchanged", stored, countMCPTestWishes(t, wishlist.ID))
+				}
+				if len(*notified) != 0 {
+					t.Errorf("claimers notified for %v", *notified)
+				}
+			})
+		}
 	}
 }
 
@@ -618,6 +741,32 @@ func TestWriteToolsSurfaceDatabaseFailures(t *testing.T) {
 		dropTable(t, &models.WishlistCollaborator{})
 		res, _, err := addWish(ctx, nil, addWishArgs{WishlistID: uuid.NewString(), Name: "Headphones 2"})
 		wantError(t, res, err, "failed to check access to the wishlist")
+	})
+
+	t.Run("add_wish wishlist lookup for a collaborator", func(t *testing.T) {
+		_, wishlist, _, _ := setup(t)
+		collaborator := createMCPTestUser(t, "Bob")
+		addMCPTestCollaborator(t, wishlist.ID, collaborator.ID)
+		ctx := contextWithTokenInfo(t, &mcpauth.TokenInfo{UserID: collaborator.ID.String(), Scopes: []string{scopeWishlistsWrite}, Expiration: time.Now().Add(time.Hour)})
+		// The ownership check is the first query on wishlists; fail the second,
+		// the lookup that refuses a deleted wishlist.
+		queries := 0
+		if err := database.Instance.Callback().Query().Before("gorm:query").Register("test:fail-wishlist-lookup", func(db *gorm.DB) {
+			if db.Statement.Table == "wishlists" {
+				if queries++; queries == 2 {
+					db.AddError(errors.New("injected failure"))
+				}
+			}
+		}); err != nil {
+			t.Fatalf("failed to register callback: %v", err)
+		}
+		t.Cleanup(func() { _ = database.Instance.Callback().Query().Remove("test:fail-wishlist-lookup") })
+
+		res, _, err := addWish(ctx, nil, addWishArgs{WishlistID: wishlist.ID.String(), Name: "Headphones 2"})
+		wantError(t, res, err, "failed to check access to the wishlist")
+		if queries != 2 {
+			t.Errorf("wishlists queried %d times, want 2", queries)
+		}
 	})
 
 	t.Run("update_wish wish lookup", func(t *testing.T) {

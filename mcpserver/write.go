@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -20,16 +21,18 @@ import (
 // app would have refused: only the wishlist's owner or a collaborator may change
 // it, a name has at least five characters and is unique on its wishlist, a link
 // is an absolute http(s) URL, and text shown to other users carries no markup
-// characters.
+// characters. They are stricter than the web app in a few places, where the
+// web app is to follow (#174): a name's length counts characters rather than
+// bytes, names are unique ignoring case, and a price can't be negative.
 
 const scopeWishlistsWrite = "mcp:wishlists.write"
 
 type addWishArgs struct {
 	WishlistID string   `json:"wishlist_id" jsonschema:"the ID of the wishlist to add the wish to (from list_wishlists)"`
-	Name       string   `json:"name" jsonschema:"the name of the wish: at least five characters, and not already used on this wishlist"`
+	Name       string   `json:"name" jsonschema:"the name of the wish: at least five characters, and not already used on this wishlist (ignoring case)"`
 	Note       string   `json:"note,omitempty" jsonschema:"an optional note, such as a size or a colour"`
 	URL        string   `json:"url,omitempty" jsonschema:"an optional http or https link to the item"`
-	Price      *float64 `json:"price,omitempty" jsonschema:"an optional price"`
+	Price      *float64 `json:"price,omitempty" jsonschema:"an optional price, zero or more"`
 }
 
 type updateWishArgs struct {
@@ -37,7 +40,7 @@ type updateWishArgs struct {
 	Name       *string  `json:"name,omitempty" jsonschema:"a new name; leave it out to keep the current one"`
 	Note       *string  `json:"note,omitempty" jsonschema:"a new note; an empty string removes the note"`
 	URL        *string  `json:"url,omitempty" jsonschema:"a new http or https link; an empty string removes the link"`
-	Price      *float64 `json:"price,omitempty" jsonschema:"a new price"`
+	Price      *float64 `json:"price,omitempty" jsonschema:"a new price, zero or more"`
 	ClearPrice bool     `json:"clear_price,omitempty" jsonschema:"true removes the price; can't be combined with price"`
 }
 
@@ -106,8 +109,11 @@ func addWish(ctx context.Context, _ *mcp.CallToolRequest, args addWishArgs) (*mc
 	if err := validateWishURL(wishURL); err != nil {
 		return nil, nil, err
 	}
+	if err := validateWishPrice(args.Price); err != nil {
+		return nil, nil, err
+	}
 
-	unique, err := database.VerifyUniqueWishNameInWishlist(name, wishlistID)
+	unique, err := database.VerifyUniqueWishNameInWishlistIgnoringCase(name, wishlistID, uuid.Nil)
 	if err != nil {
 		logger.Log.Error("Failed to verify unique wish name. Error: " + err.Error())
 		return nil, nil, errors.New("failed to check the wish name")
@@ -147,6 +153,9 @@ func updateWish(ctx context.Context, _ *mcp.CallToolRequest, args updateWishArgs
 	if args.ClearPrice && args.Price != nil {
 		return nil, nil, errors.New("give either price or clear_price, not both")
 	}
+	if err := validateWishPrice(args.Price); err != nil {
+		return nil, nil, err
+	}
 
 	wish, err := loadEditableWish(userID, wishID)
 	if err != nil {
@@ -159,7 +168,7 @@ func updateWish(ctx context.Context, _ *mcp.CallToolRequest, args updateWishArgs
 			if err := validateWishName(name); err != nil {
 				return nil, nil, err
 			}
-			unique, err := database.VerifyUniqueWishNameInWishlistExcludingWish(name, wish.WishlistID, wish.ID)
+			unique, err := database.VerifyUniqueWishNameInWishlistIgnoringCase(name, wish.WishlistID, wish.ID)
 			if err != nil {
 				logger.Log.Error("Failed to verify unique wish name. Error: " + err.Error())
 				return nil, nil, errors.New("failed to check the wish name")
@@ -256,6 +265,16 @@ func requireWishlistEditor(userID uuid.UUID, wishlistID uuid.UUID) error {
 	} else if !collaborates {
 		return errWishlistNotAccessible
 	}
+
+	// Deleting a wishlist leaves its collaborators in place, and the check above
+	// doesn't look at the wishlist itself (#173), so a deleted wishlist is
+	// refused here, as the owner check already does.
+	if _, err := database.GetWishlist(wishlistID); errors.Is(err, database.ErrWishlistNotFound) {
+		return errWishlistNotAccessible
+	} else if err != nil {
+		logger.Log.Error("Failed to get wishlist. Error: " + err.Error())
+		return errors.New("failed to check access to the wishlist")
+	}
 	return nil
 }
 
@@ -280,7 +299,7 @@ func loadEditableWish(userID uuid.UUID, wishID uuid.UUID) (*models.Wish, error) 
 }
 
 func validateWishName(name string) error {
-	if len(name) < 5 {
+	if utf8.RuneCountInString(name) < 5 {
 		return errors.New("the name of the wish must be five or more characters")
 	}
 	return validateWishText("name", name)
@@ -291,6 +310,13 @@ func validateWishName(name string) error {
 func validateWishText(field string, value string) error {
 	if valid, requirements := utilities.ValidateTextCharacters(value); !valid {
 		return fmt.Errorf("invalid %s: %s", field, requirements)
+	}
+	return nil
+}
+
+func validateWishPrice(price *float64) error {
+	if price != nil && *price < 0 {
+		return errors.New("invalid price: it can't be negative")
 	}
 	return nil
 }

@@ -345,6 +345,45 @@ func TestVerifyUniqueWishNameInWishlistExcludingWish(t *testing.T) {
 	})
 }
 
+func TestVerifyUniqueWishNameInWishlistIgnoringCase(t *testing.T) {
+	setupTestDB(t)
+
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	otherWishlist := createTestWishlist(t, owner.ID)
+	wish := createWishForOwner(t, wishlist.ID, owner.ID, "Headphones")
+	deleted := createWishForOwner(t, wishlist.ID, owner.ID, "Old watch")
+	if r := Instance.Model(&models.Wish{}).Where("wishes.id = ?", deleted.ID).Update("enabled", false); r.Error != nil {
+		t.Fatalf("failed to delete wish: %v", r.Error)
+	}
+
+	cases := []struct {
+		name       string
+		wishName   string
+		wishlistID uuid.UUID
+		exclude    uuid.UUID
+		want       bool
+	}{
+		{"a new name", "Something else", wishlist.ID, uuid.Nil, true},
+		{"the same name", "Headphones", wishlist.ID, uuid.Nil, false},
+		{"the same name in other capitals", "hEADPHONES", wishlist.ID, uuid.Nil, false},
+		{"the wish's own name, excluding itself", "headphones", wishlist.ID, wish.ID, true},
+		{"the name on another wishlist", "Headphones", otherWishlist.ID, uuid.Nil, true},
+		{"the name of a deleted wish", "old watch", wishlist.ID, uuid.Nil, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := VerifyUniqueWishNameInWishlistIgnoringCase(c.wishName, c.wishlistID, c.exclude)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != c.want {
+				t.Errorf("unique = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
 func TestCreateWishlistInDBFailure(t *testing.T) {
 	setupTestDB(t)
 	owner := createTestUser(t)
@@ -450,6 +489,10 @@ func TestWishlistQueriesFailOnClosedDB(t *testing.T) {
 		},
 		"VerifyUniqueWishNameInWishlistExcludingWish": func() error {
 			_, err := VerifyUniqueWishNameInWishlistExcludingWish("x", uuid.New(), uuid.New())
+			return err
+		},
+		"VerifyUniqueWishNameInWishlistIgnoringCase": func() error {
+			_, err := VerifyUniqueWishNameInWishlistIgnoringCase("x", uuid.New(), uuid.Nil)
 			return err
 		},
 		"VerifyUniqueWishlistNameForUser": func() error {
