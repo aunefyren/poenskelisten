@@ -197,6 +197,9 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 	// and separate budgets would multiply the guesses an attacker gets.
 	passwordLoginLimit := middlewares.RateLimitAPI(20, 15*time.Minute)
 	mfaCodeLimit := middlewares.RateLimitAPI(10, 15*time.Minute)
+	// A reset request checks no secret, but each one sends an e-mail after the
+	// answer, so without a limit one client could flood an inbox or the relay.
+	passwordResetLimit := middlewares.RateLimitAPI(5, 15*time.Minute)
 
 	// API endpoint
 	api := router.Group("/api")
@@ -209,7 +212,7 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 			open.POST("/tokens/register", passwordLoginLimit, localLogin, controllers.GenerateToken)
 
 			open.POST("/users", localLogin, controllers.RegisterUser)
-			open.POST("/users/reset", localLogin, controllers.APIResetPassword)
+			open.POST("/users/reset", passwordResetLimit, localLogin, controllers.APIResetPassword)
 			open.GET("/users/reset/:resetCode", localLogin, controllers.APIVerifyResetCode)
 			open.POST("/users/password", localLogin, controllers.APIChangePassword)
 			open.POST("/users/verify/:code", controllers.VerifyUser)

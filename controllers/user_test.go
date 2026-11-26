@@ -3,6 +3,7 @@ package controllers
 import (
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"bufio"
 	"encoding/json"
@@ -12,13 +13,17 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
+	logrusTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 // fakeSMTPServer speaks just enough SMTP to satisfy github.com/go-mail/mail's
@@ -1204,12 +1209,19 @@ func TestAPIResetPasswordBadJSON(t *testing.T) {
 	}
 }
 
+// requestPasswordReset asks for a reset e-mail and waits until it is sent.
+func requestPasswordReset(email string) (int, map[string]interface{}) {
+	code, resp, _ := doRequest(APIResetPassword, "POST", "/api/open/users/reset", `{"email":"`+email+`"}`, nil, nil)
+	passwordResets.Wait()
+	return code, resp
+}
+
 func TestAPIResetPasswordUnknownEmail(t *testing.T) {
 	setupControllersDB(t)
 	srv := startFakeSMTPServer(t)
 	configureTestSMTP(t, srv)
 
-	code, resp, _ := doRequest(APIResetPassword, "POST", "/api/open/users/reset", `{"email":"nobody@example.com"}`, nil, nil)
+	code, resp := requestPasswordReset("nobody@example.com")
 	if code != 200 {
 		t.Fatalf("status = %d, want 200 (must not reveal whether the e-mail exists); body=%v", code, resp)
 	}
@@ -1224,12 +1236,95 @@ func TestAPIResetPasswordSuccess(t *testing.T) {
 	srv := startFakeSMTPServer(t)
 	configureTestSMTP(t, srv)
 
-	code, resp, _ := doRequest(APIResetPassword, "POST", "/api/open/users/reset", `{"email":"`+*user.Email+`"}`, nil, nil)
+	code, resp := requestPasswordReset(*user.Email)
 	if code != 200 {
 		t.Fatalf("status = %d, want 200; body=%v", code, resp)
 	}
 	if srv.messageCount() != 1 {
 		t.Errorf("messageCount = %d, want 1", srv.messageCount())
+	}
+}
+
+// stalledSMTPServer accepts connections and never answers, like a relay that
+// hangs. Closing it ends the connections it holds.
+func stalledSMTPServer(t *testing.T) (*fakeSMTPServer, func()) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to start stalled SMTP listener: %v", err)
+	}
+	var mu sync.Mutex
+	conns := []net.Conn{}
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			conns = append(conns, conn)
+			mu.Unlock()
+		}
+	}()
+	stop := func() {
+		ln.Close()
+		mu.Lock()
+		defer mu.Unlock()
+		for _, conn := range conns {
+			conn.Close()
+		}
+	}
+	t.Cleanup(stop)
+	return &fakeSMTPServer{host: "127.0.0.1", port: ln.Addr().(*net.TCPAddr).Port}, stop
+}
+
+// The answer, and how long it takes, must be the same whether the address
+// has an account or not: the e-mail is sent after replying, so a slow or
+// failing relay shows in neither.
+func TestAPIResetPasswordAnswersBeforeSending(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+	srv, stop := stalledSMTPServer(t)
+	configureTestSMTP(t, srv)
+	t.Cleanup(passwordResets.Wait)
+
+	answered := make(chan []interface{}, 2)
+	go func() {
+		for _, email := range []string{*user.Email, "nobody@example.com"} {
+			code, resp, _ := doRequest(APIResetPassword, "POST", "/api/open/users/reset", `{"email":"`+email+`"}`, nil, nil)
+			answered <- []interface{}{code, resp}
+		}
+	}()
+	answers := [][]interface{}{}
+	for len(answers) < 2 {
+		select {
+		case answer := <-answered:
+			answers = append(answers, answer)
+		case <-time.After(5 * time.Second):
+			stop()
+			t.Fatal("the request waited for the stalled relay")
+		}
+	}
+	stop()
+	if answers[0][0] != 200 || !reflect.DeepEqual(answers[0], answers[1]) {
+		t.Errorf("account %v, no account %v: want the same 200", answers[0], answers[1])
+	}
+}
+
+// A panic in a background task is logged and doesn't spread past the
+// deferred logPanic.
+func TestLogPanic(t *testing.T) {
+	hook := logrusTest.NewLocal(logger.Log)
+	t.Cleanup(func() { logger.Log.ReplaceHooks(make(logrus.LevelHooks)) })
+
+	func() {
+		defer logPanic("testing")
+		panic("boom")
+	}()
+
+	entry := hook.LastEntry()
+	if entry == nil || entry.Level != logrus.ErrorLevel || entry.Message != "Panic while testing: boom" {
+		t.Errorf("last log entry = %v, want the panic logged as an error", entry)
 	}
 }
 
@@ -1822,34 +1917,20 @@ func TestUpdateUserUnverifiedSMTPFailure(t *testing.T) {
 	}
 }
 
-func TestAPIResetPasswordReloadFailureStillReportsOkay(t *testing.T) {
-	setupControllersDB(t)
-	user := createTestUser(t)
-	srv := startFakeSMTPServer(t)
-	configureTestSMTP(t, srv)
-	// The e-mail lookup succeeds; the unredacted reload after it fails.
-	failDBOperation(t, "query", "users", 1)
-
-	code, resp, _ := doRequest(APIResetPassword, "POST", "/api/open/users/reset", `{"email":"`+*user.Email+`"}`, nil, nil)
-	if code != 200 {
-		t.Fatalf("status = %d, want 200 (must not reveal whether the e-mail exists); body=%v", code, resp)
-	}
-	if srv.messageCount() != 0 {
-		t.Errorf("messageCount = %d, want 0", srv.messageCount())
-	}
-}
-
+// A failure after replying can't change the answer: it is logged, and no
+// e-mail goes out.
 func TestAPIResetPasswordFailures(t *testing.T) {
 	cases := []struct {
-		name        string
-		op          string
-		skip        int
-		smtpDown    bool
-		wantMessage string
+		name     string
+		op       string
+		skip     int
+		smtpDown bool
+		wantLog  string
 	}{
-		{"generate reset code", "update", 0, false, "Error."},
-		{"reload user", "query", 2, false, "Error."},
-		{"send e-mail", "", 0, true, "Error. Failed to send e-mail."},
+		{"find user", "query", 0, false, "Failed to find user"},
+		{"generate reset code", "update", 0, false, "Failed to generate reset code"},
+		{"reload user", "query", 1, false, "Failed to retrieve data"},
+		{"send e-mail", "", 0, true, "Failed to send email"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1863,13 +1944,22 @@ func TestAPIResetPasswordFailures(t *testing.T) {
 			if c.op != "" {
 				failDBOperation(t, c.op, "users", c.skip)
 			}
+			hook := logrusTest.NewLocal(logger.Log)
+			t.Cleanup(func() { logger.Log.ReplaceHooks(make(logrus.LevelHooks)) })
 
-			code, resp, _ := doRequest(APIResetPassword, "POST", "/api/open/users/reset", `{"email":"`+*user.Email+`"}`, nil, nil)
-			if code != 500 {
-				t.Fatalf("status = %d, want 500; body=%v", code, resp)
+			code, resp := requestPasswordReset(*user.Email)
+			if code != 200 || resp["message"] != "If the user exists, an email with a password reset has been sent." {
+				t.Fatalf("answer = %d %v, want the usual 200", code, resp)
 			}
-			if resp["message"] != c.wantMessage {
-				t.Errorf("message = %v, want %q", resp["message"], c.wantMessage)
+			if srv.messageCount() != 0 {
+				t.Errorf("messageCount = %d, want 0", srv.messageCount())
+			}
+			logged := false
+			for _, entry := range hook.AllEntries() {
+				logged = logged || (entry.Level == logrus.ErrorLevel && strings.Contains(entry.Message, c.wantLog))
+			}
+			if !logged {
+				t.Errorf("no error logged containing %q", c.wantLog)
 			}
 		})
 	}

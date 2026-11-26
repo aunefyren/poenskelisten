@@ -1101,8 +1101,9 @@ func TestFrontendHasNoInlineScript(t *testing.T) {
 	}
 }
 
-// The endpoints that check a secret are each rate-limited per client IP, and
-// every MFA code check draws on one shared budget. httptest gives every
+// The endpoints that check a secret, or send an e-mail, are each
+// rate-limited per client IP, and every MFA code check draws on one shared
+// budget. httptest gives every
 // request the same RemoteAddr, so they all count against one client.
 func TestInitRouterRateLimitsSecretChecks(t *testing.T) {
 	cases := []struct {
@@ -1112,6 +1113,7 @@ func TestInitRouterRateLimitsSecretChecks(t *testing.T) {
 	}{
 		{http.MethodPost, "/api/open/tokens/register", 20},
 		{http.MethodPost, "/api/open/tokens/mfa", 10},
+		{http.MethodPost, "/api/open/users/reset", 5},
 		{http.MethodPost, "/api/open/users/mfa/activate", 10},
 		{http.MethodPost, "/api/auth/users/mfa/disable", 10},
 		{http.MethodGet, "/oauth/authorize", 60},

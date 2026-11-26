@@ -312,7 +312,7 @@ Remove `generateinvite` after first run to stop generating codes on start up.
 
 ### Behind a reverse proxy
 
-Login, MFA and the OAuth endpoints are rate-limited per visitor IP. Behind a
+Login, MFA, password reset and the OAuth endpoints are rate-limited per visitor IP. Behind a
 reverse proxy, every request reaches Pønskelisten from the proxy's address, so
 set `trustedproxies` to that address for the real visitor IP to be used:
 
