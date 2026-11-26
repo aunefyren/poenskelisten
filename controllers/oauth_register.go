@@ -85,8 +85,11 @@ func APIOAuthRegister(ctx *gin.Context) {
 	}
 
 	// client_name is shown on the consent page and in the admin's connected
-	// apps, so it is kept to a short, single line.
-	if utf8.RuneCountInString(request.ClientName) > maxClientNameLength || strings.ContainsFunc(request.ClientName, unicode.IsControl) {
+	// apps, so it is kept to a short, single line. Besides control characters
+	// that rules out line and paragraph separators, and invisible format
+	// characters such as bidi overrides, which can make a name read as
+	// something it isn't.
+	if utf8.RuneCountInString(request.ClientName) > maxClientNameLength || strings.ContainsFunc(request.ClientName, isDisallowedClientNameRune) {
 		registrationError(ctx, "invalid_client_metadata", "client_name must be a single line of at most "+strconv.Itoa(maxClientNameLength)+" characters.")
 		return
 	}
@@ -140,6 +143,13 @@ const (
 	maxRedirectURILength      = 2000
 	maxClientNameLength       = 100
 )
+
+// isDisallowedClientNameRune reports whether r may not appear in a
+// client_name: control characters, line and paragraph separators, and
+// invisible format characters (bidi overrides, zero-width spaces and joiners).
+func isDisallowedClientNameRune(r rune) bool {
+	return unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Cf)
+}
 
 // isValidRedirectURI accepts an absolute http(s) URL of bounded length. A
 // fragment is refused (RFC 6749 §3.1.2: the code is appended as a query, and

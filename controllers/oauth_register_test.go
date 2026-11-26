@@ -360,7 +360,10 @@ func TestOAuthRegisterBoundsMetadata(t *testing.T) {
 		"long client_name":          `{"redirect_uris":["https://client.example/cb"],"client_name":"` + strings.Repeat("n", maxClientNameLength+1) + `"}`,
 		"multi-line client_name":    `{"redirect_uris":["https://client.example/cb"],"client_name":"Claude\nPønskelisten"}`,
 		"redirect_uri with a frag":  `{"redirect_uris":["https://client.example/cb#x"]}`,
-		"redirect_uri with a login": `{"redirect_uris":["https://pønskelisten.example@evil.example/cb"]}`,
+		"redirect_uri with a login": `{"redirect_uris":["https://poenskelisten.example@evil.example/cb"]}`,
+		"line separator in name":    `{"redirect_uris":["https://client.example/cb"],"client_name":"Claude\u2028Pønskelisten"}`,
+		"bidi override in name":     `{"redirect_uris":["https://client.example/cb"],"client_name":"Claude\u202eppa"}`,
+		"zero-width space in name":  `{"redirect_uris":["https://client.example/cb"],"client_name":"Cl\u200baude"}`,
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
