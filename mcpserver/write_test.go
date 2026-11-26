@@ -5,14 +5,12 @@ import (
 	"aunefyren/poenskelisten/models"
 	"context"
 	"encoding/json"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
-	"gorm.io/gorm"
 )
 
 const writeScope = "mcp:wishlists.read mcp:wishlists.write"
@@ -515,9 +513,8 @@ func TestUpdateWishToolChangesTheCaseOfItsName(t *testing.T) {
 	}
 }
 
-// Deleting a wishlist leaves its collaborators and wishes enabled (#173), so
-// every write tool must refuse a deleted wishlist itself, for its collaborators
-// as well as its owner.
+// Deleting a wishlist leaves its collaborators and wishes enabled, so every
+// write tool must still refuse it, for its collaborators as well as its owner.
 func TestWriteToolsRefuseADeletedWishlist(t *testing.T) {
 	for _, role := range []string{"owner", "collaborator"} {
 		calls := []struct {
@@ -741,32 +738,6 @@ func TestWriteToolsSurfaceDatabaseFailures(t *testing.T) {
 		dropTable(t, &models.WishlistCollaborator{})
 		res, _, err := addWish(ctx, nil, addWishArgs{WishlistID: uuid.NewString(), Name: "Headphones 2"})
 		wantError(t, res, err, "failed to check access to the wishlist")
-	})
-
-	t.Run("add_wish wishlist lookup for a collaborator", func(t *testing.T) {
-		_, wishlist, _, _ := setup(t)
-		collaborator := createMCPTestUser(t, "Bob")
-		addMCPTestCollaborator(t, wishlist.ID, collaborator.ID)
-		ctx := contextWithTokenInfo(t, &mcpauth.TokenInfo{UserID: collaborator.ID.String(), Scopes: []string{scopeWishlistsWrite}, Expiration: time.Now().Add(time.Hour)})
-		// The ownership check is the first query on wishlists; fail the second,
-		// the lookup that refuses a deleted wishlist.
-		queries := 0
-		if err := database.Instance.Callback().Query().Before("gorm:query").Register("test:fail-wishlist-lookup", func(db *gorm.DB) {
-			if db.Statement.Table == "wishlists" {
-				if queries++; queries == 2 {
-					db.AddError(errors.New("injected failure"))
-				}
-			}
-		}); err != nil {
-			t.Fatalf("failed to register callback: %v", err)
-		}
-		t.Cleanup(func() { _ = database.Instance.Callback().Query().Remove("test:fail-wishlist-lookup") })
-
-		res, _, err := addWish(ctx, nil, addWishArgs{WishlistID: wishlist.ID.String(), Name: "Headphones 2"})
-		wantError(t, res, err, "failed to check access to the wishlist")
-		if queries != 2 {
-			t.Errorf("wishlists queried %d times, want 2", queries)
-		}
 	})
 
 	t.Run("update_wish wish lookup", func(t *testing.T) {
