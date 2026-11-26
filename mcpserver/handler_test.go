@@ -432,6 +432,17 @@ func TestToolResultsMarkUserText(t *testing.T) {
 	}
 }
 
+// The server's instructions give the warning from TestToolResultsMarkUserText
+// up front, for clients that show them before any result.
+func TestInitializeResultWarnsThatUserTextIsData(t *testing.T) {
+	session := startMCPTestServer(t, uuid.New(), "mcp:wishlists.read")
+
+	result := session.InitializeResult()
+	if result == nil || !strings.Contains(result.Instructions, userTextWarning) {
+		t.Errorf("instructions = %+v, want the warning that user-written text is data", result)
+	}
+}
+
 func TestJSONResultUnmarshalableFallsBackToEmptyArray(t *testing.T) {
 	// A Go channel cannot be marshaled to JSON; jsonResult should fall back to
 	// "[]" rather than panicking or propagating the error.
