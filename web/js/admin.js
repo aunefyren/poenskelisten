@@ -62,6 +62,12 @@ function load_page(result) {
             
             </div>
 
+            <div class="sso-users-module" id="sso-users-module" style="display: none;">
+                <h3 id="sso-users-title">Single sign-on users:</h3>
+                <div class="invite-list" id="sso-user-list">
+                </div>
+            </div>
+
             <div class="currency-module" id="currency-module">
 
                 <h3 id="currency-module-title">Currency:</h3>
@@ -116,6 +122,7 @@ function load_page(result) {
         } else {
             get_server_info();
             get_invites();
+            get_sso_users();
             get_currency();
             get_oauth_clients();
         }
@@ -281,6 +288,9 @@ function place_server_info(server_info) {
     groups.push(serverInfoGroup("AI assistants (MCP)", mcp));
 
     document.getElementById("server-info-body").innerHTML = groups.join("");
+
+    ssoEnabled = server_info.oidc_enabled === true;
+    place_sso_users();
 
     // Keep the editable security toggles in sync with the reported state.
     document.getElementById('mfa-enforced').checked = server_info.mfa_enforced === true
@@ -641,6 +651,105 @@ function revoke_oauth_client(clientID) {
     return false;
 }
 
+// Accounts that sign in through the identity provider: created by single
+// sign-on, or local accounts their owners have linked to it. Invites already
+// lead to the local accounts; these may have no invite at all.
+var ssoUsers = null;
+var ssoEnabled = false;
+
+function isSSOUser(user_object) {
+    return user_object.auth_source === "oidc" || user_object.oidc_linked === true;
+}
+
+function signInMethodLabel(user_object) {
+    if(user_object.auth_source === "oidc") {
+        return "Single sign-on";
+    } else if(user_object.oidc_linked) {
+        return "Password and single sign-on";
+    }
+    return "Password";
+}
+
+function identityProviderName() {
+    return (typeof OIDC_PROVIDER_NAME === "string" && OIDC_PROVIDER_NAME.trim() !== "") ? OIDC_PROVIDER_NAME : "the identity provider";
+}
+
+function get_sso_users() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4) {
+            try {
+                result = JSON.parse(this.responseText);
+            } catch(e) {
+                console.log(e +' - Response: ' + this.responseText);
+                error("Could not reach API.");
+                return;
+            }
+
+            if(result.error) {
+                error(result.error);
+            } else {
+                ssoUsers = result.users.filter(isSSOUser);
+                place_sso_users();
+            }
+        }
+    };
+    xhttp.withCredentials = true;
+    xhttp.open("get", api_url + "admin/users");
+    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhttp.setRequestHeader("Authorization", jwt);
+    xhttp.send();
+    return false;
+}
+
+// Shown once the list is in, unless single sign-on is off and no account uses
+// it: then there is nothing to manage here.
+function place_sso_users() {
+    var module = document.getElementById("sso-users-module");
+    if(!module || ssoUsers === null) {
+        return;
+    }
+    if(ssoUsers.length === 0 && !ssoEnabled) {
+        module.style.display = "none";
+        return;
+    }
+    module.style.display = "flex";
+
+    var html = "";
+    if(ssoUsers.length === 0) {
+        html = `<div class="invitation-object"><p style="margin: 0.5em; text-align: center;">No one has signed in with single sign-on yet.</p></div>`;
+    }
+
+    for(var i = 0; i < ssoUsers.length; i++) {
+        var user_object = ssoUsers[i];
+        var labels = `<div class="server-info-value is-off">${escapeServerInfo(signInMethodLabel(user_object))}</div>`;
+        if(user_object.admin) {
+            labels += `<div class="server-info-value">Administrator</div>`;
+        }
+
+        html += `
+            <button type="button" class="invitation-object admin-user" ${onClick('GetUserData', String(user_object.id))} title="Show account">
+                <div class="admin-user-row">
+                    <div class="profile-icon icon-border icon-background" id="sso_user_image_${escapeServerInfo(user_object.id)}">
+                        <img class="icon-img" src="/assets/user.svg" alt="">
+                    </div>
+                    <div class="admin-user-text">
+                        <div>${escapeServerInfo(user_object.first_name + " " + user_object.last_name)}</div>
+                        <div class="admin-user-email">${escapeServerInfo(user_object.email)}</div>
+                    </div>
+                </div>
+                <div class="admin-user-labels">${labels}</div>
+            </button>
+        `;
+    }
+
+    document.getElementById("sso-user-list").innerHTML = html;
+
+    for(var j = 0; j < ssoUsers.length; j++) {
+        GetProfileImage(ssoUsers[j].id, "sso_user_image_" + ssoUsers[j].id);
+    }
+}
+
 function GetUserData(userID) {
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -661,7 +770,7 @@ function GetUserData(userID) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("get", api_url + "auth/users/" + userID);
+    xhttp.open("get", api_url + "admin/users/" + userID);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send();
@@ -670,9 +779,6 @@ function GetUserData(userID) {
 }
 
 function PlaceUserDataInModal(user_object) {
-    displayName = "Name:  " + user_object.first_name + " " + user_object.last_name
-    email = "Email: " + user_object.email
-
     // parse date object
     try {
         var date = new Date(Date.parse(user_object.created_at));
@@ -682,50 +788,56 @@ function PlaceUserDataInModal(user_object) {
         console.log("Join date error: " + e)
     }
 
-    joinedDate = "Joined: " + date_string
+    var ssoAccount = isSSOUser(user_object);
+    // Two-factor authentication guards password sign-ins; an account that only
+    // signs in through the identity provider has none to manage here.
+    var passwordAccount = user_object.auth_source !== "oidc";
 
-    if(user_object.admin) {
-        var admin_string = "Yes"
-    } else {
-        var admin_string = "No"
+    var details = [
+        "Name: " + user_object.first_name + " " + user_object.last_name,
+        "Email: " + user_object.email,
+        "Joined: " + date_string,
+        "Administrator: " + (user_object.admin ? "Yes" : "No"),
+        "Sign-in: " + signInMethodLabel(user_object)
+    ];
+    if(passwordAccount) {
+        details.push("Two-factor: " + (user_object.mfa_enabled ? "Enabled" : "Disabled"));
     }
+    details.push("Status: " + (user_object.enabled ? "Active" : "Deleted"));
 
-    adminString = "Administrator: " + admin_string
-
-    if(user_object.mfa_enabled) {
-        var mfa_string = "Two-factor: Enabled"
-    } else {
-        var mfa_string = "Two-factor: Disabled"
-    }
-
-    var mfaButton = ""
-    if(user_object.mfa_enabled) {
-        mfaButton = `<button id="delete-mfa-button" ${onClick('adminDeleteUserMFA', String(user_object.id))} type="button" style="margin-top: 0.5em; padding: 0.75em 1em;">Delete two-factor authentication</button>`
+    // A deleted account has nothing left to sign out of or delete.
+    var actions = "";
+    if(user_object.enabled) {
+        actions += `<button id="revoke-sessions-button" ${onClick('adminRevokeUserSessions', String(user_object.id), ssoAccount)} type="button" style="margin-top: 0.5em; padding: 0.75em 1em;">Sign out everywhere</button>`;
+        if(passwordAccount && user_object.mfa_enabled) {
+            actions += `<button id="delete-mfa-button" ${onClick('adminDeleteUserMFA', String(user_object.id))} type="button" style="margin-top: 0.5em; padding: 0.75em 1em;">Delete two-factor authentication</button>`;
+        }
+        actions += `<button id="delete-user-button" class="button-danger" ${onClick('deleteUser', String(user_object.id), ssoAccount)} type="button" style="margin-top: 0.5em; padding: 0.75em 1em;">Delete user</button>`;
+        if(ssoAccount) {
+            actions += `<p class="admin-user-note">Deleting the user removes their {{.appName}} account only. Their account at ${escapeServerInfo(identityProviderName())} is not deleted.</p>`;
+        }
     }
 
     html = `
         <div class="user-wrapper">
-            <div class="profile-icon icon-border icon-background" id="wishlist_owner_image_${user_object.id}" style="width: 5em; height: 5em;">
-                <img class="icon-img " src="/assets/user.svg" id="wishlist_owner_image_img_${user_object.id}">
+            <div class="profile-icon icon-border icon-background" id="wishlist_owner_image_${escapeServerInfo(user_object.id)}" style="width: 5em; height: 5em;">
+                <img class="icon-img " src="/assets/user.svg" id="wishlist_owner_image_img_${escapeServerInfo(user_object.id)}">
             </div>
             <div class="user-infolist">
-                ${displayName}<br>
-                ${email}<br>
-                ${joinedDate}<br>
-                ${adminString}<br>
-                ${mfa_string}<br>
+                ${details.map(escapeServerInfo).join("<br>")}
             </div>
         </div>
 
         <div id="user-input" class="user-input" style="width: 100%;">
-            <button id="register-button" ${onClick('deleteUser', String(user_object.id))} type="" href="/">Delete user</button>
-            ${mfaButton}
-            <button id="revoke-sessions-button" ${onClick('adminRevokeUserSessions', String(user_object.id))} type="button" style="margin-top: 0.5em; padding: 0.75em 1em;">Sign out everywhere</button>
+            ${actions}
         </div>
     `;
 
     toggleModal(html);
-    GetProfileImage(user_object.id, `wishlist_owner_image_${user_object.id}`)
+    // A deleted account's picture is no longer served.
+    if(user_object.enabled) {
+        GetProfileImage(user_object.id, `wishlist_owner_image_${user_object.id}`)
+    }
 }
 
 function GetProfileImage(userID, divID) {
@@ -797,8 +909,12 @@ function adminDeleteUserMFA(userID) {
     return;
 }
 
-function adminRevokeUserSessions(userID) {
-    if(!confirm("Sign this user out of all their sessions? They will need to log in again everywhere.")) {
+function adminRevokeUserSessions(userID, ssoAccount) {
+    var message = "Sign this user out of all their sessions? They will need to log in again everywhere.";
+    if(ssoAccount) {
+        message += "\n\nThis signs them out of {{.appName}} only, not out of " + identityProviderName() + ".";
+    }
+    if(!confirm(message)) {
         return;
     }
 
@@ -829,8 +945,12 @@ function adminRevokeUserSessions(userID) {
     return;
 }
 
-function deleteUser(userID) {
-    if(!confirm("Are you sure you want to delete this user?")) {
+function deleteUser(userID, ssoAccount) {
+    var message = "Are you sure you want to delete this user?";
+    if(ssoAccount) {
+        message += "\n\nThis deletes their {{.appName}} account only. Their account at " + identityProviderName() + " is not deleted.";
+    }
+    if(!confirm(message)) {
         return;
     }
 
@@ -849,7 +969,9 @@ function deleteUser(userID) {
                 error(result.error);
             } else {
                 toggleModal(false);
+                success(result.message);
                 get_invites();
+                get_sso_users();
             }
         }
     };

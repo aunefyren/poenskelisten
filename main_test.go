@@ -504,7 +504,7 @@ func TestInitRouterRendersOIDCLoginURL(t *testing.T) {
 func TestInitRouterProtectsAuthAndAdminGroups(t *testing.T) {
 	router := initRouter(models.ConfigStruct{})
 
-	for _, path := range []string{"/api/auth/me", "/api/admin/invites"} {
+	for _, path := range []string{"/api/auth/me", "/api/admin/invites", "/api/admin/users"} {
 		w := serve(router, http.MethodGet, path)
 		if w.Code != http.StatusUnauthorized {
 			t.Errorf("GET %s without a token = %d, want 401", path, w.Code)
@@ -1087,6 +1087,7 @@ func TestRoutesRefuseNilID(t *testing.T) {
 		{callerToken, "GET", "/api/auth/users/" + nilID + "/image", ""},
 		{callerToken, "GET", "/api/auth/users?notAMemberOfGroupID=" + nilID, ""},
 		{callerToken, "GET", "/api/auth/users?notACollaboratorOfWishlistID=" + nilID, ""},
+		{adminToken, "GET", "/api/admin/users/" + nilID, ""},
 		{adminToken, "DELETE", "/api/admin/users/" + nilID, ""},
 		{adminToken, "DELETE", "/api/admin/users/" + nilID + "/mfa", ""},
 		{adminToken, "DELETE", "/api/admin/users/" + nilID + "/sessions", ""},
@@ -1607,6 +1608,36 @@ func TestRunStartupFailures(t *testing.T) {
 				t.Error("serve was called despite the startup failure")
 			}
 		})
+	}
+}
+
+// The admin user list names every account with its e-mail address and how it
+// signs in, so only admins may read it, whichever account a token is for.
+func TestAdminUserListIsForAdminsOnly(t *testing.T) {
+	router, token := setupRouterTest(t)
+	member := createRouterUser(t, "Member", false)
+	admin := createRouterUser(t, "Admin", true)
+
+	get := func(token, path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+
+	for _, path := range []string{"/api/admin/users", "/api/admin/users/" + admin.ID.String()} {
+		w := get(token(member.ID, false), path)
+		if w.Code != http.StatusForbidden {
+			t.Errorf("GET %s as a member = %d, want 403: %s", path, w.Code, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), *admin.Email) {
+			t.Errorf("GET %s as a member leaked an e-mail address: %s", path, w.Body.String())
+		}
+	}
+
+	if w := get(token(admin.ID, true), "/api/admin/users"); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), *member.Email) {
+		t.Errorf("GET /api/admin/users as an admin = %d, want 200 listing the member: %s", w.Code, w.Body.String())
 	}
 }
 

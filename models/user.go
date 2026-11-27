@@ -167,3 +167,50 @@ func (user *User) IsMFAEnabled() bool {
 func (user *User) IsLocalAuth() bool {
 	return user.AuthSource == nil || *user.AuthSource == "" || *user.AuthSource == AuthSourceLocal
 }
+
+// HasOIDCIdentity reports whether an identity provider account is attached to
+// the user: one provisioned through single sign-on, or a local account linked
+// on its owner's first single sign-on.
+func (user *User) HasOIDCIdentity() bool {
+	return user.OIDCSubject != nil && *user.OIDCSubject != ""
+}
+
+// AdminUser is what the admin dashboard shows of an account. NewAdminUser
+// copies it field by field, so nothing else of the account (password hash,
+// codes, OIDC subject or issuer) can reach the response.
+type AdminUser struct {
+	ID         uuid.UUID `json:"id"`
+	CreatedAt  time.Time `json:"created_at"`
+	FirstName  string    `json:"first_name"`
+	LastName   string    `json:"last_name"`
+	Email      string    `json:"email"`
+	Admin      bool      `json:"admin"`
+	Enabled    bool      `json:"enabled"`
+	MFAEnabled bool      `json:"mfa_enabled"`
+	// AuthSource is AuthSourceLocal or AuthSourceOIDC. A local account linked
+	// to an identity provider stays local, with OIDCLinked set.
+	AuthSource string `json:"auth_source"`
+	OIDCLinked bool   `json:"oidc_linked"`
+}
+
+// NewAdminUser builds the admin dashboard's view of an account.
+func NewAdminUser(user User) AdminUser {
+	adminUser := AdminUser{
+		ID:         user.ID,
+		CreatedAt:  user.CreatedAt,
+		FirstName:  user.FirstName,
+		LastName:   user.LastName,
+		Admin:      user.Admin,
+		Enabled:    user.Enabled != nil && *user.Enabled,
+		MFAEnabled: user.IsMFAEnabled(),
+		AuthSource: AuthSourceLocal,
+		OIDCLinked: user.HasOIDCIdentity(),
+	}
+	if user.Email != nil {
+		adminUser.Email = *user.Email
+	}
+	if !user.IsLocalAuth() {
+		adminUser.AuthSource = *user.AuthSource
+	}
+	return adminUser
+}
