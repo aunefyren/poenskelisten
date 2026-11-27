@@ -258,6 +258,7 @@ function handleOAuthCallback() {
 }
 
 // Roll the access token using the refresh cookie via the OAuth token endpoint.
+// onFailure gets the HTTP status (0 when the request never got an answer).
 function refreshAccessToken(onSuccess, onFailure) {
     var body = new URLSearchParams({ grant_type: "refresh_token", client_id: OAUTH_CLIENT_ID });
 
@@ -279,7 +280,7 @@ function refreshAccessToken(onSuccess, onFailure) {
                     return;
                 }
             }
-            if(onFailure) onFailure();
+            if(onFailure) onFailure(this.status);
         }
     };
     xhttp.withCredentials = true;
@@ -311,8 +312,25 @@ function scheduleSessionRefresh() {
     var delaySeconds = Math.max(30, Math.floor(accessTokenLifetime * 2 / 3));
     sessionRefreshTimer = setTimeout(function() {
         sessionRefreshTimer = null;
-        refreshAccessToken(null, scheduleSessionRefresh);
+        refreshAccessToken(null, onScheduledRefreshFailed);
     }, delaySeconds * 1000);
+}
+
+// A refresh the token endpoint refused (400 invalid_grant, 401) won't succeed
+// on a retry: the session was revoked, by a password change or reset or by
+// "sign out everywhere". Retrying would only leave the tab running on its
+// current access token until that expires and every request fails. Start the
+// authorization flow instead: a browser still signed in (the one the password
+// was changed in) comes straight back to this page with new tokens, and one
+// that was signed out ends up at the login page. Anything else (no answer,
+// rate limiting, a server error) is retried later.
+function onScheduledRefreshFailed(status) {
+    if(status === 400 || status === 401) {
+        sessionRefreshActive = false;
+        startAuthorizeFlow();
+        return;
+    }
+    scheduleSessionRefresh();
 }
 
 // Bootstrap the page: ensure a valid access token (refresh, or start the OAuth

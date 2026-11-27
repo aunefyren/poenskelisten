@@ -22,8 +22,8 @@ type TokenRequest struct {
 
 // dummyPasswordHash is checked against when there's no password to compare
 // with, so that a login for an unknown account takes as long as one for a
-// real account with a wrong password. It's built on first use, at the cost
-// real passwords are hashed with.
+// real account with a wrong password. It's built once, at the cost real
+// passwords are hashed with; PreparePasswordLogin builds it at startup.
 var dummyPasswordHash = sync.OnceValue(func() []byte {
 	hash, err := bcrypt.GenerateFromPassword([]byte("no account has this password"), models.BcryptCost)
 	if err != nil {
@@ -31,6 +31,13 @@ var dummyPasswordHash = sync.OnceValue(func() []byte {
 	}
 	return hash
 })
+
+// PreparePasswordLogin builds the placeholder hash before the server takes
+// requests. Built lazily instead, the first login for an unknown e-mail would
+// also pay for hashing it and take about twice as long as any other.
+func PreparePasswordLogin() {
+	dummyPasswordHash()
+}
 
 // passwordMatches reports whether password is the user's. When there's no
 // account (found is false) or it has no local password (OIDC), it still does

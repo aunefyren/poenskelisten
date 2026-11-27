@@ -654,7 +654,7 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// A sign-in begun with the old password can't be finished with the new one.
-	if userUpdateRequest.Password != "" && userOriginal.HasPassword() {
+	if passwordChanged {
 		if err := database.ClearMFAChallenge(userOriginal.ID); err != nil {
 			logger.Log.Error("Failed to clear the MFA challenge. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user."})
@@ -673,8 +673,9 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// A new password signs out every other session, on any device or app, in
-	// case the old one was known to someone else. This browser is signed back
-	// in at once, so the web app picks up new tokens when it next refreshes.
+	// case the old one was known to someone else. This browser gets a fresh SSO
+	// cookie, so when the account page reloads, its refresh fails and the web
+	// app gets new tokens from /oauth/authorize without asking for a login.
 	if passwordChanged {
 		if err := revokeAllForUser(userID); err != nil {
 			logger.Log.Error("Failed to revoke sessions after password change. Error: " + err.Error())

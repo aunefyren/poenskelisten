@@ -185,6 +185,7 @@ func TestGenerateTokenDatabaseFailure(t *testing.T) {
 // The placeholder must cost what a real password check costs, or the time
 // taken would still tell unknown e-mails apart.
 func TestDummyPasswordHashUsesTheRealCost(t *testing.T) {
+	PreparePasswordLogin()
 	cost, err := bcrypt.Cost(dummyPasswordHash())
 	if err != nil {
 		t.Fatalf("placeholder hash is invalid: %v", err)

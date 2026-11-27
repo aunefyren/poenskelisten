@@ -164,6 +164,8 @@ func run(serve func(router *gin.Engine, address string) error) error {
 
 	runAccountRecoveryActions(actions)
 
+	controllers.PreparePasswordLogin()
+
 	// Initialize Router
 	router := initRouter(config.ConfigFile)
 	logger.Log.Info("router initialized. starting Pønskelisten at http://*:" + strconv.Itoa(config.ConfigFile.PoenskelistenPort))

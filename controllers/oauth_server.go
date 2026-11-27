@@ -36,11 +36,7 @@ func resolveSSOUser(ctx *gin.Context) (models.User, bool) {
 	if err != nil {
 		return models.User{}, false
 	}
-	// A JWT's iat only has second precision, so the marker is compared at the
-	// same precision: otherwise a session issued just after a revocation, in
-	// the same second (a password change signs the browser back in at once),
-	// would look older than it and be refused.
-	if user.SessionsInvalidatedAt != nil && claims.IssuedAt != nil && claims.IssuedAt.Time.Before(user.SessionsInvalidatedAt.Truncate(time.Second)) {
+	if auth.IssuedBeforeSignOut(claims.IssuedAt, user.SessionsInvalidatedAt) {
 		return models.User{}, false
 	}
 	return user, true

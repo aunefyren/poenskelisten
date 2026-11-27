@@ -228,3 +228,23 @@ func SetUserSessionsInvalidatedAt(userID uuid.UUID, at time.Time) error {
 		})
 	return record.Error
 }
+
+// GetUserSessionsInvalidatedAt returns an enabled user's global logout marker,
+// nil if they have never been signed out everywhere. It reads only that column
+// because the API and MCP resource servers call it on every request.
+func GetUserSessionsInvalidatedAt(userID uuid.UUID) (*time.Time, error) {
+	var users []models.User
+	record := Instance.
+		Model(&models.User{}).
+		Select("sessions_invalidated_at").
+		Where("id = ? AND enabled = ?", userID, true).
+		Limit(1).
+		Find(&users)
+	if record.Error != nil {
+		return nil, record.Error
+	}
+	if len(users) == 0 {
+		return nil, ErrUserNotFound
+	}
+	return users[0].SessionsInvalidatedAt, nil
+}

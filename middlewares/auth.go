@@ -3,10 +3,12 @@ package middlewares
 import (
 	"aunefyren/poenskelisten/auth"
 	"aunefyren/poenskelisten/config"
+	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -44,11 +46,48 @@ func AuthFunction(context *gin.Context, admin bool) (success bool, errorString s
 		return false, "failed to validate token.", http.StatusUnauthorized
 	}
 
+	if err := CheckNotSignedOut(claims); err != nil {
+		if errors.Is(err, ErrTokenRevoked) {
+			logger.Log.Info("Refused access token. Error: " + err.Error())
+			return false, "failed to validate token.", http.StatusUnauthorized
+		}
+		logger.Log.Error("Failed to check whether the access token was revoked. Error: " + err.Error())
+		return false, "failed to validate token.", http.StatusInternalServerError
+	}
+
 	if admin && !claims.Admin {
 		return false, "insufficient permissions.", http.StatusForbidden
 	}
 
 	return true, "", http.StatusOK
+}
+
+// ErrTokenRevoked is returned by CheckNotSignedOut for a token that must be
+// refused: it predates the user's last sign-out everywhere (a password reset or
+// change, "sign out everywhere", an admin revoking the user's sessions), or its
+// account no longer exists or is disabled.
+var ErrTokenRevoked = errors.New("access token has been revoked")
+
+// CheckNotSignedOut checks an already validated access token against its
+// user's global logout marker. Access tokens are stateless, so without this
+// check a revocation would leave every token already issued working until it
+// expires. A refused token gives ErrTokenRevoked; any other error is a failed
+// database lookup, which callers answer as a server error rather than a 401.
+func CheckNotSignedOut(claims *auth.OAuthClaims) error {
+	userID, err := utilities.ParseID(claims.Subject)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrTokenRevoked, err)
+	}
+	marker, err := database.GetUserSessionsInvalidatedAt(userID)
+	if errors.Is(err, database.ErrUserNotFound) {
+		return fmt.Errorf("%w: %v", ErrTokenRevoked, err)
+	} else if err != nil {
+		return err
+	}
+	if auth.IssuedBeforeSignOut(claims.IssuedAt, marker) {
+		return fmt.Errorf("%w: it was issued before the user was signed out everywhere", ErrTokenRevoked)
+	}
+	return nil
 }
 
 // GetAuthUsername returns the user ID (token subject) from an OAuth access token.

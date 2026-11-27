@@ -6,6 +6,7 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/models"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -41,7 +42,8 @@ func TestContainsScope(t *testing.T) {
 
 func TestVerifyTokenValid(t *testing.T) {
 	setupMCPConfig(t)
-	userID := uuid.New()
+	setupMCPDB(t)
+	userID := createMCPTestUser(t, "Ada").ID
 
 	token, err := pauth.GenerateOAuthAccessToken(userID, "mcp-client", config.MCPResource(), "mcp:wishlists.read mcp:groups.read", false, true)
 	if err != nil {
@@ -201,4 +203,41 @@ func TestToolsSurfaceDatabaseFailures(t *testing.T) {
 			t.Errorf("listGroups = (%v, %v), want 'failed to load groups'", res, err)
 		}
 	})
+}
+
+// An MCP token issued before the user was signed out everywhere (a password
+// reset, or revoking every session) stops working, like an API token.
+func TestVerifyTokenRefusesTokenIssuedBeforeSignOut(t *testing.T) {
+	setupMCPConfig(t)
+	setupMCPDB(t)
+	user := createMCPTestUser(t, "Ada")
+	token, err := pauth.GenerateOAuthAccessToken(user.ID, "mcp-client", config.MCPResource(), "mcp:wishlists.read", false, true)
+	if err != nil {
+		t.Fatalf("GenerateOAuthAccessToken error: %v", err)
+	}
+	if err := database.SetUserSessionsInvalidatedAt(user.ID, time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("failed to stamp logout marker: %v", err)
+	}
+
+	if _, err := verifyToken(context.Background(), token, nil); !errors.Is(err, mcpauth.ErrInvalidToken) {
+		t.Errorf("err = %v, want ErrInvalidToken", err)
+	}
+}
+
+// A failed lookup is reported as a server error, not as a bad token.
+func TestVerifyTokenDatabaseFailure(t *testing.T) {
+	setupMCPConfig(t)
+	setupMCPDB(t)
+	user := createMCPTestUser(t, "Ada")
+	token, err := pauth.GenerateOAuthAccessToken(user.ID, "mcp-client", config.MCPResource(), "mcp:wishlists.read", false, true)
+	if err != nil {
+		t.Fatalf("GenerateOAuthAccessToken error: %v", err)
+	}
+	if err := database.Instance.Migrator().DropTable(&models.User{}); err != nil {
+		t.Fatalf("failed to drop users table: %v", err)
+	}
+
+	if _, err := verifyToken(context.Background(), token, nil); err == nil || errors.Is(err, mcpauth.ErrInvalidToken) {
+		t.Errorf("err = %v, want a lookup error", err)
+	}
 }
