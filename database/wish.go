@@ -272,8 +272,16 @@ func EnsureWishPlacements() error {
 		placement.ID = uuid.New()
 		placements = append(placements, placement)
 	}
+	// In a multi-row insert, GORM writes DEFAULT for an uncategorized wish's
+	// category_id when another row in the batch has one, and SQLite refuses
+	// DEFAULT inside VALUES. One row per insert there leaves the column out
+	// instead.
+	batchSize := 500
+	if Instance.Dialector.Name() == "sqlite" {
+		batchSize = 1
+	}
 	if len(placements) > 0 {
-		if err := Instance.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(&placements, 500).Error; err != nil {
+		if err := Instance.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(&placements, batchSize).Error; err != nil {
 			return err
 		}
 	}

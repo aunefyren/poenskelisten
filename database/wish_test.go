@@ -704,3 +704,86 @@ func TestEnsureWishPlacementsFailures(t *testing.T) {
 		})
 	}
 }
+
+// A batch that mixes categorized and uncategorized wishes made GORM write the
+// uncategorized rows' category as DEFAULT, which SQLite refuses inside a
+// multi-row VALUES list, so upgrading a SQLite install with both kinds of
+// wishes failed at startup.
+func TestEnsureWishPlacementsMixedCategories(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	mixedList := createTestWishlist(t, owner.ID)
+	plainList := createTestWishlist(t, owner.ID)
+	otherList := createTestWishlist(t, owner.ID)
+	categoryID := uuid.New()
+
+	// Stored the way an older version stored wishes: no placement.
+	legacyWish := func(name string, wishlistID uuid.UUID, categoryID *uuid.UUID) models.Wish {
+		t.Helper()
+		wish := models.Wish{Name: name, Enabled: true, OwnerID: owner.ID, WishlistID: wishlistID, CategoryID: categoryID}
+		wish.ID = uuid.New()
+		if err := Instance.Create(&wish).Error; err != nil {
+			t.Fatalf("failed to create legacy wish %q: %v", name, err)
+		}
+		return wish
+	}
+	categorized := legacyWish("Categorized", mixedList.ID, &categoryID)
+	uncategorized := legacyWish("Uncategorized", mixedList.ID, nil)
+	plain := legacyWish("Plain", plainList.ID, nil)
+
+	// A wish that is already placed and also shown on a second wishlist.
+	shared := createWishForOwner(t, mixedList.ID, owner.ID, "Shared")
+	extra := models.WishlistWish{WishlistID: otherList.ID, WishID: shared.ID, CategoryID: &categoryID}
+	extra.ID = uuid.New()
+	if err := Instance.Create(&extra).Error; err != nil {
+		t.Fatalf("failed to place the wish on a second wishlist: %v", err)
+	}
+
+	want := []struct {
+		wish       models.Wish
+		wishlistID uuid.UUID
+		categoryID *uuid.UUID
+	}{
+		{categorized, mixedList.ID, &categoryID},
+		{uncategorized, mixedList.ID, nil},
+		{plain, plainList.ID, nil},
+		{shared, mixedList.ID, nil},
+		{shared, otherList.ID, &categoryID},
+	}
+
+	for run := 1; run <= 3; run++ {
+		if err := EnsureWishPlacements(); err != nil {
+			t.Fatalf("run %d: EnsureWishPlacements error: %v", run, err)
+		}
+
+		var total int64
+		if err := Instance.Model(&models.WishlistWish{}).Count(&total).Error; err != nil {
+			t.Fatalf("run %d: failed to count placements: %v", run, err)
+		}
+		if total != int64(len(want)) {
+			t.Errorf("run %d: %d placements, want %d", run, total, len(want))
+		}
+
+		for _, w := range want {
+			var placements []models.WishlistWish
+			if err := Instance.Where("wishlist_wishes.wish_id = ? AND wishlist_wishes.wishlist_id = ?", w.wish.ID, w.wishlistID).Find(&placements).Error; err != nil {
+				t.Fatalf("run %d: failed to read placements: %v", run, err)
+			}
+			if len(placements) != 1 {
+				t.Errorf("run %d: %q has %d placements on %v, want 1", run, w.wish.Name, len(placements), w.wishlistID)
+				continue
+			}
+			got := placements[0].CategoryID
+			if (got == nil) != (w.categoryID == nil) || (got != nil && *got != *w.categoryID) {
+				t.Errorf("run %d: %q on %v has category %v, want %v", run, w.wish.Name, w.wishlistID, got, w.categoryID)
+			}
+		}
+	}
+
+	if _, wishes, err := GetWishesFromWishlist(mixedList.ID); err != nil || len(wishes) != 3 {
+		t.Errorf("GetWishesFromWishlist(mixed) = (%d wishes, %v), want 3", len(wishes), err)
+	}
+	if _, wishes, err := GetWishesFromWishlist(otherList.ID); err != nil || len(wishes) != 1 {
+		t.Errorf("GetWishesFromWishlist(other) = (%d wishes, %v), want the shared wish", len(wishes), err)
+	}
+}
