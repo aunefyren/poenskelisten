@@ -550,6 +550,17 @@ function toggle_navbar() {
     }
 }
 
+// Mark the menu entry of the page being shown, so the phone menu says where
+// you are.
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('#navbar .nav-item').forEach(function(item) {
+        var path = item.getAttribute('href');
+        if(path && path !== '#' && (window.location.pathname === path || window.location.pathname.startsWith(path + '/'))) {
+            item.classList.add('current');
+        }
+    });
+});
+
 // Toggle navbar if clicked outside
 document.addEventListener('click', function(event) {
     var myModal = document.getElementById("myModal")
