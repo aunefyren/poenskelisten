@@ -1307,6 +1307,15 @@ func TestInitRouterRefusesSignInFromOtherSites(t *testing.T) {
 		if w.Code != http.StatusForbidden || w.Header().Get("Set-Cookie") != "" {
 			t.Errorf("POST %s from another site = %d, Set-Cookie %q, want 403 and no cookie", path, w.Code, w.Header().Get("Set-Cookie"))
 		}
+		// The consent page is a plain form, so the browser shows the refusal
+		// as the page itself: it must not be JSON.
+		want := "application/json"
+		if path == "/oauth/consent" {
+			want = "text/plain"
+		}
+		if contentType := w.Header().Get("Content-Type"); !strings.HasPrefix(contentType, want) {
+			t.Errorf("POST %s from another site answered %q, want %s", path, contentType, want)
+		}
 	}
 	// Refused requests don't spend the visitor's sign-in budget.
 	for i := 0; i < 20; i++ {

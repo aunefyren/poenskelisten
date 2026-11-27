@@ -4,6 +4,7 @@ import (
 	"aunefyren/poenskelisten/config"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -35,19 +36,37 @@ func TestSameOrigin(t *testing.T) {
 		{"same site without Origin", "", "same-site", false},
 		{"cross site without Origin", "", "cross-site", false},
 	}
-	for _, c := range cases {
-		w := httptest.NewRecorder()
-		ctx, _ := gin.CreateTestContext(w)
-		ctx.Request = httptest.NewRequest(http.MethodPost, "/api/open/tokens/register", nil)
-		if c.origin != "" {
-			ctx.Request.Header.Set("Origin", c.origin)
-		}
-		if c.fetchSite != "" {
-			ctx.Request.Header.Set("Sec-Fetch-Site", c.fetchSite)
-		}
-		SameOrigin()(ctx)
-		if allowed := !ctx.IsAborted(); allowed != c.allowed {
-			t.Errorf("%s: allowed = %v (status %d), want %v", c.name, allowed, w.Code, c.allowed)
+	// The API answers a refusal in JSON; the consent form's page shows it as
+	// plain text.
+	guards := []struct {
+		name        string
+		handler     gin.HandlerFunc
+		contentType string
+	}{
+		{"SameOrigin", SameOrigin(), "application/json"},
+		{"SameOriginForm", SameOriginForm(), "text/plain"},
+	}
+	for _, m := range guards {
+		for _, c := range cases {
+			w := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(w)
+			ctx.Request = httptest.NewRequest(http.MethodPost, "/api/open/tokens/register", nil)
+			if c.origin != "" {
+				ctx.Request.Header.Set("Origin", c.origin)
+			}
+			if c.fetchSite != "" {
+				ctx.Request.Header.Set("Sec-Fetch-Site", c.fetchSite)
+			}
+			m.handler(ctx)
+			if allowed := !ctx.IsAborted(); allowed != c.allowed {
+				t.Errorf("%s, %s: allowed = %v (status %d), want %v", m.name, c.name, allowed, w.Code, c.allowed)
+			}
+			if c.allowed {
+				continue
+			}
+			if w.Code != http.StatusForbidden || !strings.HasPrefix(w.Header().Get("Content-Type"), m.contentType) || !strings.Contains(w.Body.String(), crossOriginMessage) {
+				t.Errorf("%s, %s: refusal = %d %q %q, want 403 %s with the message", m.name, c.name, w.Code, w.Header().Get("Content-Type"), w.Body.String(), m.contentType)
+			}
 		}
 	}
 }

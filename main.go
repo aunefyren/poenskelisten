@@ -395,7 +395,7 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 	// client hits /oauth/token on every page load to roll its access token, so
 	// its limit is generous; it is there to cap abuse, not to slow guessing.
 	router.GET("/oauth/authorize", middlewares.RateLimit(60, time.Minute), controllers.APIOAuthAuthorize)
-	router.POST("/oauth/consent", sameOrigin, controllers.APIOAuthConsent)
+	router.POST("/oauth/consent", middlewares.SameOriginForm(), controllers.APIOAuthConsent)
 	router.POST("/oauth/token", middlewares.RateLimit(120, time.Minute), controllers.APIOAuthToken)
 	router.POST("/oauth/revoke", controllers.APIOAuthRevoke)
 	// Open dynamic client registration (RFC 7591), rate-limited per IP.
