@@ -573,6 +573,8 @@ func TestInitRouterLogsNoCodes(t *testing.T) {
 		{http.MethodPost, "/api/open/users/verify/VERIFY-CODE-SECRET"},
 		{http.MethodGet, "/api/open/wishlists/public/PUBLIC-HASH-SECRET"},
 		{http.MethodGet, "/wishlists/public/PUBLIC-PAGE-SECRET"},
+		{http.MethodHead, "/wishlists/public/HEAD-PAGE-SECRET"},
+		{http.MethodGet, "/api/open/users/verify/WRONG-METHOD-SECRET"},
 		{http.MethodGet, "/login?reset_code=LINK-CODE-SECRET"},
 		{http.MethodGet, "/oauth/callback?code=OAUTH-CODE-SECRET&state=STATE-SECRET"},
 		{http.MethodGet, "/api/open/oidc/callback?code=OIDC-CODE-SECRET&state=OIDC-STATE-SECRET"},
