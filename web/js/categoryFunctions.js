@@ -351,7 +351,7 @@ function categoryPickerHTML(selectedID) {
     options += '<option value="__new__">+ New category…</option>';
 
     var html = '';
-    html += '<label for="wish_category" style="margin-top: 0.5em;">Category (optional):</label><br>';
+    html += '<label class="form-label" for="wish_category">Category <span class="form-label-optional">(optional)</span></label>';
     html += '<select name="wish_category" id="wish_category" data-on-change="toggleNewCategoryInput">' + options + '</select>';
     html += '<input type="text" name="wish_category_new" id="wish_category_new" placeholder="New category name" autocomplete="off" style="display: none;" />';
     return html;
@@ -368,8 +368,8 @@ function toggleNewCategoryInput() {
     }
 }
 
-// Read the picker into the wish object as category_id / category_name so the
-// values survive the base64 round-trip between modal steps.
+// Read the picker into the wish object as category_id / category_name, the
+// fields the wish create and update requests carry.
 function readCategorySelection(wishObject) {
     try {
         var select = document.getElementById("wish_category");

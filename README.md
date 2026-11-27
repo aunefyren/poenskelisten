@@ -32,9 +32,6 @@ Share gift ideas, see which ones are already taken, and avoid the awkward “oh�
 - Let an AI assistant read your wishlists and add, change or delete wishes through the built-in MCP server (optional)
 - Installable as a web app (PWA)
 
-### Known Limitations
-- UI is not yet fully optimized for small screens
-
 <br>
 
 ![Wishlists screenshot](https://raw.githubusercontent.com/aunefyren/poenskelisten/main/.github/assets/wishlists.jpg?raw=true)
@@ -444,9 +441,6 @@ So… “The plotting list”.
 
 ### Is a demo available?
 Not at the moment.
-
-### Is mobile UI coming?
-Yes - improvements planned.
 
 ## 🙌 Contributing
 

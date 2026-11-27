@@ -68,7 +68,7 @@ function editWish(wishID, wishlistID, groupID, userID) {
             if(result.error) {
                 error(result.error);
             } else {
-                editWishTwo(wishID, wishlistID, groupID, userID, toBASE64(JSON.stringify(result.wish)));
+                showEditWishForm(wishID, wishlistID, userID, result.wish);
             }
         }
     };
@@ -80,130 +80,105 @@ function editWish(wishID, wishlistID, groupID, userID) {
     return false;
 }
 
-function editWishTwo(wishID, wishlistID, groupID, userID, wishObjectBase64) {
-    var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
-    wishObject.image_delete = false;
-    
-    var html = '';
-    
-    html += `
-        <form action="" ${onSubmit('editWishThree', String(wishID), String(wishlistID), String(groupID), String(userID), String(wishObjectBase64))}>
-            <label for="wish_name">Edit wish:</label><br>
-            <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" value="${wishObject.name}" autocomplete="off" required />
-            <button id="register-button" type="submit" href="/">Next</button>
+// Creating and editing a wish share one single-screen form: every field is on
+// it at once, so nothing has to be carried between steps, and a save the server
+// refuses leaves the form open with what was typed.
+function wishFormFieldsHTML(wishObject, currency, selectedCategoryID) {
+    var price = (typeof wishObject.price === "number" && !isNaN(wishObject.price)) ? wishObject.price : "";
+
+    return `
+        <label class="form-label" for="wish_name">Name</label>
+        <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" autocomplete="off" value="${escapeHTML(wishObject.name)}" required />
+
+        <label class="form-label" for="wish_url">Link <span class="form-label-optional">(optional)</span></label>
+        <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" inputmode="url" autocomplete="off" value="${escapeHTML(wishObject.url)}" />
+
+        <label class="form-label" for="wish_price">Price <span class="form-label-optional">(optional)</span></label>
+        <input type="number" name="wish_price" id="wish_price" step="0.01" min="0" inputmode="decimal" placeholder="Wish price in ${escapeHTML(currency)}" value="${price}" autocomplete="off" />
+
+        <label class="form-label" for="wish_note">Note <span class="form-label-optional">(optional)</span></label>
+        <textarea name="wish_note" id="wish_note" placeholder="Wish note" autocomplete="off" rows="3">${escapeHTML(wishObject.note)}</textarea>
+
+        ${categoryPickerHTML(selectedCategoryID)}
+    `;
+}
+
+function wishFormButtonsHTML(submitText) {
+    return `
+        <div class="alert alert-danger form-error" id="wish-form-error" role="alert" style="display: none;"></div>
+
+        <button id="wish-form-submit" type="submit">${submitText}</button>
+        <button type="button" class="button-secondary" data-on-click="toggleModal">Cancel</button>
+    `;
+}
+
+function createWish(wishlistID, userID, currency) {
+    var wishObject = { "name": "", "note": "", "url": "", "price": null };
+
+    var html = `
+        <form action="" ${onSubmit('submitCreateWish', String(wishlistID), String(userID))}>
+            <div class="title-two wish-form-title">Create wish</div>
+
+            ${wishFormFieldsHTML(wishObject, currency, "")}
+
+            <label class="form-label" for="wish_image">Image <span class="form-label-optional">(optional)</span></label>
+            <input type="file" name="wish_image" id="wish_image" accept="image/png, image/jpeg" />
+
+            ${wishFormButtonsHTML("Create wish")}
         </form>
     `;
 
     toggleModal(html);
+    document.getElementById("wish_name").focus();
 }
 
-function editWishThree(wishID, wishlistID, groupID, userID, wishObjectBase64) {
-    var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
-
-    try {
-        var wishName = document.getElementById("wish_name").value
-
-        if(wishName == "" || wishName.length < 5) {
-            alert("Wish name too short");
-            return
-        }
-
-        wishObject.name = wishName
-    } catch (error) {
-        console.log("Failed to get values. Error: " + error)
-    }
-
-    wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
-
+function showEditWishForm(wishID, wishlistID, userID, wishObject) {
     var selectedCategoryID = wishObject.category_id ? wishObject.category_id : (wishObject.category ? wishObject.category.id : "");
 
-    var html = '';
-
-    html += `
-        <div class="profile-icon clickable top-left-button" ${onClick('editWishTwo', String(wishID), String(wishlistID), String(groupID), String(userID), String(wishObjectBase64))} title="Go back" style="">
-            <img class="icon-img" src="/assets/arrow-left.svg">
-        </div>
-
-        <form action="" ${onSubmit('editWishFour', String(wishID), String(wishlistID), String(groupID), String(userID), String(wishObjectBase64))}>
-            <label for="wish_note" style="">Optional details:</label><br>
-
-            <textarea name="wish_note" id="wish_note" placeholder="Wish note" value="" autocomplete="off" rows="3" />${escapeHTML(wishObject.note)}</textarea>
-
-            <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" value="${escapeHTML(wishObject.url)}" autocomplete="off" />
-
-            <input type="number" name="wish_price" id="wish_price" step="0.01" min="0" placeholder="Wish price in ${wishObject.currency}" value="${wishObject.price}" autocomplete="off" />
-
-            ${categoryPickerHTML(selectedCategoryID)}
-
-            <button id="register-button" type="submit" href="/">Next</button>
-        </form>
-    `;
-
-    toggleModal(html);
-}
-
-function editWishFour(wishID, wishlistID, groupID, userID, wishObjectBase64) {
-    var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
-
-    try {
-        var wishNote = document.getElementById("wish_note").value
-        var wishURL = document.getElementById("wish_url").value
-        var wishPrice = parseFloat(document.getElementById("wish_price").value)
-        wishObject.note = wishNote
-        wishObject.url = wishURL
-        wishObject.price = wishPrice
-        readCategorySelection(wishObject)
-    } catch (error) {
-        console.log("Failed to get values. Error: " + error)
-    }
-
-    wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
-
+    // A wish without an image just offers the upload; one with an image picks
+    // between keeping, replacing and removing it.
     var imageHTML = '';
-    var deleteButtonHTML = 'clickable button-grouping-part';
-    var deleteButtonInputHTML = 'delete'
     if(wishObject.image) {
-        imageHTML += `
+        imageHTML = `
+            <div class="form-label" id="wish-image-label">Image</div>
             <div class="wish-image-edit">
-                <img id="modal-img" class="wish-image-edit-img" src="/assets/loading.gif">
+                <img id="modal-img" class="wish-image-edit-img" src="/assets/loading.gif" alt="Current image of the wish">
             </div>
-        `
+
+            <div class="button-grouping" id="image-button-grouping" role="group" aria-labelledby="wish-image-label">
+                <button type="button" id="button-grouping-part-leave" class="button-grouping-part button-grouping-part-border button-grouping-part-selected" aria-pressed="true" data-on-click="toggleEditWishImage" data-click-args="[&quot;leave&quot;]">Keep</button>
+                <button type="button" id="button-grouping-part-replace" class="button-grouping-part button-grouping-part-border" aria-pressed="false" data-on-click="toggleEditWishImage" data-click-args="[&quot;replace&quot;]">Replace</button>
+                <button type="button" id="button-grouping-part-delete" class="button-grouping-part" aria-pressed="false" data-on-click="toggleEditWishImage" data-click-args="[&quot;delete&quot;]">Remove</button>
+            </div>
+
+            <div class="full-width" id="edit-wish-replace-image" style="display: none;">
+                <label class="form-label" for="wish_image">New image</label>
+                <input type="file" name="wish_image" id="wish_image" accept="image/png, image/jpeg" />
+            </div>
+        `;
     } else {
-        deleteButtonHTML = 'button-grouping-part-disabled unselectable'
-        deleteButtonInputHTML = ''
+        imageHTML = `
+            <label class="form-label" for="wish_image">Image <span class="form-label-optional">(optional)</span></label>
+            <input type="file" name="wish_image" id="wish_image" accept="image/png, image/jpeg" />
+        `;
     }
 
-    var html = '';
-    html += `
-        <div class="profile-icon clickable top-left-button" ${onClick('editWishThree', String(wishID), String(wishlistID), String(groupID), String(userID), String(wishObjectBase64))} title="Go back" style="">
-            <img class="icon-img" src="/assets/arrow-left.svg">
-        </div>
+    var html = `
+        <form action="" ${onSubmit('submitEditWish', String(wishID), String(wishlistID), String(userID))}>
+            <div class="title-two wish-form-title">Edit wish</div>
 
-        <div id="wishlists-title" class="title-two" style="margin-bottom: 0.25em;">
-            Image:
-        </div>
+            ${wishFormFieldsHTML(wishObject, wishObject.currency, selectedCategoryID)}
 
-        <form action="" ${onSubmit('editWishFive', String(wishID), String(userID), String(wishlistID), String(groupID), String(wishObjectBase64))}>
             ${imageHTML}
 
-            <div class="button-grouping" id="image-button-grouping">
-                <div id="button-grouping-part-leave" class="clickable button-grouping-part button-grouping-part-border button-grouping-part-selected" data-on-click="toggleEditWishImage" data-click-args="[&quot;leave&quot;]">Leave</div>
-                <div id="button-grouping-part-replace" class="clickable button-grouping-part button-grouping-part-border" data-on-click="toggleEditWishImage" data-click-args="[&quot;replace&quot;]">Replace</div>
-                <div id="button-grouping-part-delete" class="${deleteButtonHTML}" ${onClick('toggleEditWishImage', String(deleteButtonInputHTML))}>Delete</div>
-            </div>
-
-            <div class="form-input-wrapper" id="edit-wish-replace-image" style="display: none;">
-                <label id="form-input-icon" for="wish_image" style="">Replace optional image:</label>
-                <input type="file" name="wish_image" id="wish_image" placeholder="" value="" accept="image/png, image/jpeg" />
-            </div>
-
             <input type="hidden" id="image_delete" value="false">
-            
-            <button id="register-button" type="submit" href="/">Save wish</button>
+
+            ${wishFormButtonsHTML("Save wish")}
         </form>
     `;
 
     toggleModal(html);
+    document.getElementById("wish_name").focus();
 
     if(wishObject.image) {
         GetWishImage(wishID);
@@ -211,110 +186,148 @@ function editWishFour(wishID, wishlistID, groupID, userID, wishObjectBase64) {
 }
 
 function toggleEditWishImage(buttonName) {
-    switch(buttonName) {
-        case 'replace':
-            formElement = document.getElementById('edit-wish-replace-image')
-            formDisplay = formElement.style.display
-
-            if(formDisplay == 'none') {
-                formElement.style.display = 'flex'
-            } else {
-                formElement.style.display = 'none'
-            }
-            document.getElementById('image_delete').value = 'false'
-            document.getElementById('wish_image').required = true
-
-            document.getElementById('button-grouping-part-leave').classList.remove('button-grouping-part-selected')
-            document.getElementById('button-grouping-part-replace').classList.add('button-grouping-part-selected')
-            document.getElementById('button-grouping-part-delete').classList.remove('button-grouping-part-selected')
-            break;
-        case 'delete':
-            document.getElementById('edit-wish-replace-image').style.display = 'none'
-            document.getElementById('image_delete').value = 'true'
-            document.getElementById('wish_image').value = ""
-            document.getElementById('wish_image').required = false
-
-            document.getElementById('button-grouping-part-leave').classList.remove('button-grouping-part-selected')
-            document.getElementById('button-grouping-part-replace').classList.remove('button-grouping-part-selected')
-            document.getElementById('button-grouping-part-delete').classList.add('button-grouping-part-selected')
-            break;
-        case 'leave':
-            document.getElementById('edit-wish-replace-image').style.display = 'none'
-            document.getElementById('image_delete').value = 'false'
-            document.getElementById('wish_image').value = ""
-            document.getElementById('wish_image').required = false
-
-            document.getElementById('button-grouping-part-leave').classList.add('button-grouping-part-selected')
-            document.getElementById('button-grouping-part-replace').classList.remove('button-grouping-part-selected')
-            document.getElementById('button-grouping-part-delete').classList.remove('button-grouping-part-selected')
-            break;
-        default:
-            console.log('No button case hit. Input: ' + buttonName)
-    }
-    
-
-    
-
-}
-
-function editWishFive(wishID, userID, wishlistID, groupID, wishObjectBase64) {
-    var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
-
-    if(!confirm("Are you sure you want to update this wish?")) {
+    var choices = ['leave', 'replace', 'delete'];
+    if(choices.indexOf(buttonName) === -1) {
+        console.log('No button case hit. Input: ' + buttonName)
         return;
     }
 
-    var wish_image = document.getElementById('wish_image').files[0];
-    var imageDeleteString = document.getElementById('image_delete').value;
-    var imageDelete = false
-
-    if(imageDeleteString == 'true') {
-        imageDelete = true;
+    var replacing = buttonName == 'replace';
+    document.getElementById('edit-wish-replace-image').style.display = replacing ? 'block' : 'none';
+    document.getElementById('image_delete').value = buttonName == 'delete' ? 'true' : 'false';
+    document.getElementById('wish_image').required = replacing;
+    if(!replacing) {
+        document.getElementById('wish_image').value = "";
     }
 
-    if(wish_image) {
-        if(wish_image.size > 10000000) {
-            error("Image exceeds 10MB size limit.")
-            return;
-        }
+    choices.forEach(function(choice) {
+        var button = document.getElementById('button-grouping-part-' + choice);
+        button.classList.toggle('button-grouping-part-selected', choice == buttonName);
+        button.setAttribute('aria-pressed', choice == buttonName ? 'true' : 'false');
+    });
+}
 
-        wish_image = get_base64(wish_image);
-        
-        wish_image.then(function(result) {
-            var form_obj = {
-                "name" : wishObject.name,
-                "note" : wishObject.note,
-                "url": wishObject.url,
-                "price": wishObject.price,
-                "image_data": result,
-                "image_delete": imageDelete,
-                "category_id": wishObject.category_id ? wishObject.category_id : null,
-                "category_name": wishObject.category_name ? wishObject.category_name : ""
-            };
+function showWishFormError(message) {
+    var errorBox = document.getElementById("wish-form-error");
+    if(!errorBox) {
+        error(message);
+        return;
+    }
+    errorBox.textContent = message;
+    errorBox.style.display = "block";
+    errorBox.scrollIntoView({ block: "nearest" });
+}
 
-            var form_data = JSON.stringify(form_obj);
+// The submit button stays disabled while a save is in flight, so a double tap
+// can't create the same wish twice.
+function setWishFormBusy(busy) {
+    var button = document.getElementById("wish-form-submit");
+    if(button) {
+        button.disabled = busy;
+    }
+}
 
-            editWishSix(form_data, wishID, userID, wishlistID, groupID);
-        });
-    } else {
+// Reads the shared fields, or returns null when they can't be saved (showing
+// why) or a save is already under way.
+function readWishForm() {
+    if(document.getElementById("wish-form-submit").disabled) {
+        return null;
+    }
+
+    var errorBox = document.getElementById("wish-form-error");
+    errorBox.style.display = "none";
+
+    var wishObject = {
+        "name": document.getElementById("wish_name").value,
+        "note": document.getElementById("wish_note").value,
+        "url": document.getElementById("wish_url").value,
+        "price": parseFloat(document.getElementById("wish_price").value),
+        "category_id": null,
+        "category_name": ""
+    };
+    readCategorySelection(wishObject);
+
+    if(wishObject.name.trim().length < 5) {
+        showWishFormError("The name of the wish must be five or more letters.");
+        document.getElementById("wish_name").focus();
+        return null;
+    }
+
+    return wishObject;
+}
+
+// Calls back with the chosen image as a data URL, or "" when none was picked.
+function readWishImage(callback) {
+    var wishImage = document.getElementById('wish_image').files[0];
+
+    if(!wishImage) {
+        callback("");
+        return;
+    }
+
+    if(wishImage.size > 10000000) {
+        showWishFormError("Image exceeds 10MB size limit.");
+        setWishFormBusy(false);
+        return;
+    }
+
+    get_base64(wishImage).then(callback, function() {
+        showWishFormError("Could not read the image.");
+        setWishFormBusy(false);
+    });
+}
+
+function submitCreateWish(wishlistID, userID) {
+    var wishObject = readWishForm();
+    if(!wishObject) {
+        return;
+    }
+
+    setWishFormBusy(true);
+    readWishImage(function(imageData) {
         var form_obj = {
             "name" : wishObject.name,
             "note" : wishObject.note,
             "url": wishObject.url,
             "price": wishObject.price,
-            "image_data": "",
+            "image_data": imageData,
+            "category_id": wishObject.category_id ? wishObject.category_id : null,
+            "category_name": wishObject.category_name ? wishObject.category_name : ""
+        };
+
+        sendWishForm(api_url + "auth/wishes?wishlist=" + wishlistID, JSON.stringify(form_obj), wishlistID, userID);
+    });
+}
+
+function submitEditWish(wishID, wishlistID, userID) {
+    var wishObject = readWishForm();
+    if(!wishObject) {
+        return;
+    }
+
+    var imageDelete = document.getElementById('image_delete').value == 'true';
+    if(imageDelete && !confirm("Remove the image from this wish?")) {
+        return;
+    }
+
+    setWishFormBusy(true);
+    readWishImage(function(imageData) {
+        var form_obj = {
+            "name" : wishObject.name,
+            "note" : wishObject.note,
+            "url": wishObject.url,
+            "price": wishObject.price,
+            "image_data": imageData,
             "image_delete": imageDelete,
             "category_id": wishObject.category_id ? wishObject.category_id : null,
             "category_name": wishObject.category_name ? wishObject.category_name : ""
         };
 
-        var form_data = JSON.stringify(form_obj);
-        editWishSix(form_data, wishID, userID, wishlistID, groupID)
-    }
-
+        sendWishForm(api_url + "auth/wishes/" + wishID, JSON.stringify(form_obj), wishlistID, userID);
+    });
 }
 
-function editWishSix(form_data, wishID, userID, wishlistID, groupID) {
+function sendWishForm(url, form_data, wishlistID, userID) {
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == 4) {
@@ -322,12 +335,14 @@ function editWishSix(form_data, wishID, userID, wishlistID, groupID) {
                 result = JSON.parse(this.responseText);
             } catch(e) {
                 console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
+                showWishFormError("Could not reach API.");
+                setWishFormBusy(false);
                 return;
             }
-            
+
             if(result.error) {
-                error(result.error);
+                showWishFormError(result.error);
+                setWishFormBusy(false);
             } else {
                 // Re-render the full list so the wish lands under its (possibly
                 // changed) category, and refresh the picker's category cache.
@@ -338,191 +353,7 @@ function editWishSix(form_data, wishID, userID, wishlistID, groupID) {
         }
     };
     xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishes/" + wishID);
-    xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-    xhttp.setRequestHeader("Authorization", jwt);
-    xhttp.send(form_data);
-    return false;
-}
-
-function createWish(wishlistID, userID, currency, wishObjectBase64) {
-    try {
-        var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
-    } catch (error) {
-        var wishObject = {
-            "name": "",
-            "note" : "",
-            "image": "",
-            "url": "",
-            "price": null,
-            "category_id": null,
-            "category_name": ""
-        }
-        wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
-        console.log("Remade object. Error: " + error)
-    }
-
-    var html = '';
-    
-    html += `
-        <form action="" ${onSubmit('createWishTwo', String(wishlistID), String(userID), String(currency), String(wishObjectBase64))}>        
-            <label for="wish_name">Create wish:</label><br>
-            <input type="text" name="wish_name" id="wish_name" placeholder="Wish name" autocomplete="off" value="${wishObject.name}" required />
-
-            <button id="register-button" type="submit" href="/">Next</button>
-        </form>
-    `;
-
-    toggleModal(html);
-}
-
-function createWishTwo(wishlistID, userID, currency, wishObjectBase64) {
-    var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
-
-    try {
-        var wishName = document.getElementById("wish_name").value
-        wishObject.name = wishName
-
-        if(wishName == "" || wishName.length < 5) {
-            alert("Wish name too short");
-            return
-        }
-    } catch (error) {
-        console.log("Failed to get values. Error: " + error)
-    }
-
-    wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
-
-    var selectedCategoryID = wishObject.category_id ? wishObject.category_id : "";
-
-    var html = '';
-
-    html += `
-        <div class="profile-icon clickable top-left-button" ${onClick('createWish', String(wishlistID), String(userID), String(currency), String(wishObjectBase64))} title="Go back" style="">
-            <img class="icon-img" src="/assets/arrow-left.svg">
-        </div>
-
-        <form action="" ${onSubmit('createWishThree', String(wishlistID), String(userID), String(wishObjectBase64))}>
-            <label for="wish_note" style="">Optional details:</label><br>
-
-            <textarea name="wish_note" id="wish_note" placeholder="Wish note" autocomplete="off" rows="3" />${escapeHTML(wishObject.note)}</textarea>
-
-            <input type="text" name="wish_url" id="wish_url" placeholder="Wish URL" autocomplete="off" value="${escapeHTML(wishObject.url)}" />
-
-            <input type="number" name="wish_price" id="wish_price" step="0.01" min="0" placeholder="Wish price in ${currency}" value="${wishObject.price}" autocomplete="off" />
-
-            ${categoryPickerHTML(selectedCategoryID)}
-
-            <button id="register-button" type="submit" href="/">Next</button>
-        </form>
-    `;
-
-    toggleModal(html);
-}
-
-function createWishThree(wishlistID, userID, wishObjectBase64) {
-    var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
-
-    try {
-        var wishNote = document.getElementById("wish_note").value
-        var wishURL = document.getElementById("wish_url").value
-        var wishPrice = parseFloat(document.getElementById("wish_price").value)
-        wishObject.note = wishNote
-        wishObject.url = wishURL
-        wishObject.price = wishPrice
-        readCategorySelection(wishObject)
-    } catch (error) {
-        console.log("Failed to get values. Error: " + error)
-    }
-
-    wishObjectBase64 = toBASE64(JSON.stringify(wishObject))
-    var html = '';
-
-    html += `
-        <div class="profile-icon clickable top-left-button" ${onClick('createWishTwo', String(wishlistID), String(userID), String(currency), String(wishObjectBase64))} title="Go back" style="">
-            <img class="icon-img" src="/assets/arrow-left.svg">
-        </div>
-
-        <form action="" ${onSubmit('createWishFour', String(wishlistID), String(userID), String(wishObjectBase64))}>
-            <label id="form-input-icon" for="wish_image" style="">Add optional image:</label>
-            <input type="file" name="wish_image" id="wish_image" placeholder="" value="${wishObject.image}" accept="image/png, image/jpeg" />
-            
-            <button id="register-button" type="submit" href="/">Create wish</button>
-        </form>
-    `;
-
-    toggleModal(html);
-}
-
-function createWishFour(wishlistID, userID, wishObjectBase64){
-    var wishObject = JSON.parse(fromBASE64(wishObjectBase64))
-    var wish_image = document.getElementById('wish_image').files[0];
-
-    if(wish_image) {
-        if(wish_image.size > 10000000) {
-            error("Image exceeds 10MB size limit.")
-            return;
-        }
-
-        wish_image = get_base64(wish_image);
-        
-        wish_image.then(function(result) {
-            var form_obj = {
-                "name" : wishObject.name,
-                "note" : wishObject.note,
-                "url": wishObject.url,
-                "price": wishObject.price,
-                "image_data": result,
-                "category_id": wishObject.category_id ? wishObject.category_id : null,
-                "category_name": wishObject.category_name ? wishObject.category_name : ""
-            };
-
-            var form_data = JSON.stringify(form_obj);
-
-            createWishFive(form_data, wishlistID, userID);
-        });
-
-    } else {
-        var form_obj = {
-                "name" : wishObject.name,
-                "note" : wishObject.note,
-                "url": wishObject.url,
-                "price": wishObject.price,
-                "image_data": "",
-                "category_id": wishObject.category_id ? wishObject.category_id : null,
-                "category_name": wishObject.category_name ? wishObject.category_name : ""
-            };
-
-        var form_data = JSON.stringify(form_obj);
-
-        createWishFive(form_data, wishlistID, userID);
-    }
-}
-
-function createWishFive(form_data, wishlistID, userID) {
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4) {
-            try {
-                result = JSON.parse(this.responseText);
-            } catch(e) {
-                console.log(e +' - Response: ' + this.responseText);
-                error("Could not reach API.");
-                return;
-            }
-            
-            if(result.error) {
-                error(result.error);
-            } else {
-                placeWishes(result.wishes, wishlistID, userID);
-                refreshCategories(wishlistID);
-                toggleModal(false);
-            }
-
-        }
-    };
-    xhttp.withCredentials = true;
-    xhttp.open("post", api_url + "auth/wishes?wishlist=" + wishlistID);
+    xhttp.open("post", url);
     xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhttp.setRequestHeader("Authorization", jwt);
     xhttp.send(form_data);
@@ -571,13 +402,8 @@ registerActions({
     openURLModalTwo,
     deleteWish,
     editWish,
-    editWishTwo,
-    editWishThree,
-    editWishFour,
     toggleEditWishImage,
-    editWishFive,
+    submitEditWish,
     createWish,
-    createWishTwo,
-    createWishThree,
-    createWishFour,
+    submitCreateWish,
 });

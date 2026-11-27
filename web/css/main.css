@@ -248,10 +248,12 @@
     max-width: 10em;
   }
   
-  .nav-item:hover, .nav-title:hover{
-    background-color: var(--lightblue);
-    color: var(--eggshell);
-    text-decoration: none;
+  @media (hover: hover) {
+    .nav-item:hover, .nav-title:hover{
+      background-color: var(--lightblue);
+      color: var(--eggshell);
+      text-decoration: none;
+    }
   }
   
   .nav-item:active {
@@ -384,10 +386,12 @@ button {
   align-items: center;
 }
 
-button:hover {
-  opacity: 0.5;
-  cursor: pointer;
-  background-color: var(--eggshell);
+@media (hover: hover) {
+  button:hover {
+    opacity: 0.5;
+    cursor: pointer;
+    background-color: var(--eggshell);
+  }
 }
 
 button:disabled {
@@ -437,8 +441,10 @@ button:disabled {
   cursor: pointer;
 }
 
-.clickable:hover{
-  opacity: 0.5;
+@media (hover: hover) {
+  .clickable:hover{
+    opacity: 0.5;
+  }
 }
 
 .underline {
@@ -601,6 +607,12 @@ button:disabled {
   justify-items: center;
 }
 
+/* A note stays hidden until its card is expanded. The wishlist page also hides
+   it inline; the public page relied on this class alone. */
+.wish-note.collapsed {
+  display: none;
+}
+
 .wish-category {
   width: 100%;
   width: -webkit-fill-available;
@@ -743,6 +755,7 @@ button:disabled {
   float: none;
   display: block !important;
   text-align: left;
+  border-top: 0.05em solid rgba(224, 225, 221, 0.12);
   width: 100%;
   width: -webkit-fill-available;
   width: -moz-available;
@@ -752,6 +765,9 @@ button:disabled {
 }
 .nav-logo.responsive {
   position: fixed;
+}
+.navbar.responsive .nav-item.current {
+  background-color: var(--mediumblue);
 }
 }
 
@@ -901,6 +917,7 @@ hr {
 .wish-price {
   margin: 0.25em 0.5em;
   padding: 0.25em 0.5em;
+  white-space: nowrap;
   background-color: var(--blue);
   border-radius: 1em;
   font-size: 0.75rem;
@@ -979,7 +996,7 @@ hr {
   display: block;
   width: 80%;
   max-width: 700px;
-  max-height: 80%;
+  max-height: calc(100% - 2em);
   display: flex;
   flex-direction: column;
   /* nowrap: tall content scrolls vertically instead of wrapping into a second
@@ -1042,10 +1059,16 @@ hr {
   cursor: pointer;
 }
 
-/* 100% Image Width on Smaller Screens */
-@media only screen and (max-width: 700px){
-  .modal-content {
+/* Small or short screens (phones, landscape, an open on-screen keyboard): use
+   the whole screen for the modal, keeping just enough room for the close button. */
+@media only screen and (max-width: 700px), only screen and (max-height: 36em) {
+  .modal {
+    padding: 4em 0.5em 0.5em 0.5em;
+  }
+
+  .modalContent {
     width: 100%;
+    max-height: 100%;
   }
 }
 
@@ -1271,6 +1294,7 @@ textarea {
 
 .urlWrapper {
   text-align: center;
+  overflow-wrap: anywhere;
   border-radius: 0.5em;
   border: solid 0.15em var(--darkblue); 
   margin: 1em;
@@ -1449,12 +1473,29 @@ textarea {
 }
 
 .button-grouping-part {
-  padding: 0.25em 0.5em;
+  padding: 0.5em 1em;
   background-color: var(--lightblue);
   color: var(--white)
 }
 
-.button-grouping-part-border {
+/* The parts are buttons, so they can be reached and pressed from the keyboard;
+   undo the full-width form button look. */
+button.button-grouping-part {
+  width: auto;
+  max-width: none;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  font-weight: 400;
+}
+
+@media (hover: hover) {
+  button.button-grouping-part:hover {
+    background-color: var(--mediumblue);
+  }
+}
+
+button.button-grouping-part-border {
   border-right: 0.15em solid var(--darkblue);
 }
 
@@ -1462,26 +1503,38 @@ textarea {
   background-color: var(--mediumblue);
 }
 
-.button-grouping-part-disabled {
-  padding: 0.25em 0.5em;
-  background-color: var(--lightblue);
-  color: var(--white)
+/* Labels for forms with several fields (the wish form): left-aligned above the
+   input they name, with optional fields marked as such. */
+.form-label {
+  display: block;
+  align-self: stretch;
+  margin: 0.5em 0.5em -0.25em 0.5em;
+  font-size: 1rem;
+  text-align: left;
 }
 
-.form-input-wrapper {
-  overflow: hidden;
-  box-sizing: inherit;
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  flex-direction: row;
-  align-content: center;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  width: -webkit-fill-available;
-  width: -moz-available;
-  margin-top: 1em;
+.form-label-optional {
+  color: var(--mediumblue);
+  font-size: 0.85rem;
+}
+
+/* A form's own error message, shown in the form so it stays open. */
+.form-error {
+  align-self: stretch;
+  margin: 0.5em;
+}
+
+/* The quieter companion of a form's main button, e.g. "Cancel". */
+button.button-secondary {
+  margin-top: 0;
+  border-color: transparent;
+  background: transparent;
+  font-weight: 400;
+  text-decoration: underline;
+}
+
+.wish-form-title {
+  margin-bottom: 0.25em;
 }
 
 .server-info-title {
@@ -1592,4 +1645,186 @@ textarea {
   width: -webkit-fill-available;
   width: -moz-available;
   margin: 0.3em 0;
+}
+
+/* Admin modules sit side by side where there is room, under the full-width
+   server info, instead of in one narrow column down the left. */
+#admin-page {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+#admin-page .server-info {
+  flex: 1 1 100%;
+}
+
+/* Touch screens get larger targets for the icon buttons on cards and info
+   boxes. Below 22em a card's four icons would no longer fit beside its date,
+   so the narrowest phones keep the regular size. */
+@media (pointer: coarse) {
+  .bottom-right-button .icon-img.clickable {
+    padding: 0.35em;
+  }
+
+  input[type=checkbox] {
+    width: 1.25em;
+    height: 1.25em;
+  }
+}
+
+@media (pointer: coarse) and (min-width: 22em) {
+  .profile-icon.clickable {
+    width: 2.5em;
+    height: 2.5em;
+  }
+}
+
+/* Phones (below 36em): a layout of their own rather than the desktop one
+   shrunk. Cards lead with their title, with the date and the action icons on a
+   row under it; sections sit closer together; the button that adds to a list
+   stays in reach at the bottom of the screen; and controls get the full width. */
+@media screen and (max-width: 36em) {
+  .card {
+    margin-bottom: 2em;
+  }
+
+  /* clip, unlike hidden, doesn't make a scroll container, so the add buttons
+     below can stick to the bottom of the screen. */
+  .card-body, #front-page {
+    overflow-x: clip;
+  }
+
+  .module {
+    margin: 1.25em 0;
+  }
+
+  .wishlist-info, .group-info {
+    margin-bottom: 1em;
+    padding: 0.75em;
+  }
+
+  .wish-wrapper, .group-wrapper, .wishlist-wrapper {
+    margin: 0.5em 0 1em 0;
+  }
+
+  .wish {
+    grid-template-columns: auto 1fr;
+  }
+
+  .wish > .wish-title {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    flex-wrap: nowrap;
+  }
+
+  .wish-title-text {
+    min-width: 0;
+  }
+
+  .wish > .wish-updatedat {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .wish > .profile {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .wishlist {
+    flex-wrap: wrap;
+  }
+
+  .wishlist > .wishlist-title {
+    order: -1;
+    flex-basis: 100%;
+    max-width: 100%;
+  }
+
+  .wishlist > .profile {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* A group keeps its icons beside a short name and moves them under a long one. */
+  .group {
+    flex-wrap: wrap;
+  }
+
+  .group > .group-title {
+    flex: 1 1 10em;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .group > .profile {
+    margin-left: auto;
+  }
+
+  /* Full-width sort controls; 1rem text so iOS doesn't zoom in on them. */
+  .wish-sort-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wish-sort-controls .wish-sort-select {
+    width: 100%;
+    height: 2.75em;
+    font-size: 1rem;
+  }
+
+  .wish-input, .group-input, .wishlist-input {
+    position: sticky;
+    bottom: max(0.75em, env(safe-area-inset-bottom, 0px));
+    z-index: 5;
+  }
+
+  .wish-input > button, .group-input > button, .wishlist-input > button {
+    box-shadow: 0 0.25em 1em rgba(13, 27, 42, 0.3);
+  }
+
+  /* Admin modules use the whole width, one under the other. */
+  #admin-page > div {
+    flex: 1 1 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0.5em 0;
+    padding: 0.75em;
+  }
+
+  #admin-page h3 {
+    font-size: 1.35rem;
+  }
+
+  /* Each checkbox sits on one line with its label instead of above it. */
+  #admin-page .currency-module, #admin-page .security-module {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    column-gap: 0.5em;
+  }
+
+  #admin-page .currency-module > :not(input[type=checkbox], label),
+  #admin-page .security-module > :not(input[type=checkbox], label) {
+    grid-column: 1 / -1;
+  }
+
+  #admin-page .currency-module > br, #admin-page .security-module > br {
+    display: none;
+  }
+
+  #admin-page .currency-module > label, #admin-page .security-module > label {
+    margin: 0.5em 0 0;
+    font-size: 1rem;
+    text-align: left;
+  }
+
+  .user-active-profile-photo {
+    width: 7em;
+    height: 7em;
+    margin: 1em auto;
+  }
 }
