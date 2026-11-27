@@ -266,13 +266,23 @@ func EnsureWishPlacements() error {
 		return err
 	}
 
-	placements := make([]models.WishlistWish, 0, len(wishes))
+	// Placements with a category and placements without one are stored in
+	// separate batches: in a batch mixing both, GORM writes DEFAULT for the
+	// missing categories, which SQLite refuses.
+	var categorized, uncategorized []models.WishlistWish
 	for _, wish := range wishes {
 		placement := models.WishlistWish{WishlistID: wish.WishlistID, WishID: wish.ID, CategoryID: wish.CategoryID}
 		placement.ID = uuid.New()
-		placements = append(placements, placement)
+		if placement.CategoryID != nil {
+			categorized = append(categorized, placement)
+		} else {
+			uncategorized = append(uncategorized, placement)
+		}
 	}
-	if len(placements) > 0 {
+	for _, placements := range [][]models.WishlistWish{categorized, uncategorized} {
+		if len(placements) == 0 {
+			continue
+		}
 		if err := Instance.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(&placements, 500).Error; err != nil {
 			return err
 		}

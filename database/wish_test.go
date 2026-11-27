@@ -704,3 +704,33 @@ func TestEnsureWishPlacementsFailures(t *testing.T) {
 		})
 	}
 }
+
+// Wishes from before placements existed are placed in batches. One batch can
+// mix wishes with a category and wishes without one, which SQLite can only
+// store when every row spells out its category, null or not.
+func TestEnsureWishPlacementsMixesWishesWithAndWithoutACategory(t *testing.T) {
+	setupTestDB(t)
+	owner := createTestUser(t)
+	wishlist := createTestWishlist(t, owner.ID)
+	categoryID := uuid.New()
+
+	categorized := models.Wish{Name: "Categorized wish", Enabled: true, OwnerID: owner.ID, WishlistID: wishlist.ID, CategoryID: &categoryID}
+	categorized.ID = uuid.New()
+	plain := models.Wish{Name: "Plain wish", Enabled: true, OwnerID: owner.ID, WishlistID: wishlist.ID}
+	plain.ID = uuid.New()
+	for _, wish := range []*models.Wish{&categorized, &plain} {
+		if err := Instance.Create(wish).Error; err != nil {
+			t.Fatalf("failed to create legacy wish: %v", err)
+		}
+	}
+
+	if err := EnsureWishPlacements(); err != nil {
+		t.Fatalf("EnsureWishPlacements error: %v", err)
+	}
+	if placements := wishPlacements(t, categorized.ID); len(placements) != 1 || placements[0].CategoryID == nil || *placements[0].CategoryID != categoryID {
+		t.Errorf("placements of the categorized wish = %+v, want one in category %v", placements, categoryID)
+	}
+	if placements := wishPlacements(t, plain.ID); len(placements) != 1 || placements[0].CategoryID != nil {
+		t.Errorf("placements of the plain wish = %+v, want one without a category", placements)
+	}
+}
