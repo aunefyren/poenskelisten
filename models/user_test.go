@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -104,6 +105,104 @@ func TestIsLocalAuth(t *testing.T) {
 				t.Errorf("IsLocalAuth() = %v, want %v", got, c.want)
 			}
 		})
+	}
+}
+
+func TestHasOIDCIdentity(t *testing.T) {
+	cases := []struct {
+		name string
+		user User
+		want bool
+	}{
+		{"no subject", User{}, false},
+		{"empty subject", User{OIDCSubject: strPtr("")}, false},
+		{"subject set", User{OIDCSubject: strPtr("sub-1")}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := c.user.HasOIDCIdentity(); got != c.want {
+				t.Errorf("HasOIDCIdentity() = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+func TestNewAdminUserSignInMethod(t *testing.T) {
+	cases := []struct {
+		name           string
+		user           User
+		wantAuthSource string
+		wantLinked     bool
+	}{
+		{"legacy account without auth source", User{Password: strPtr("hash")}, AuthSourceLocal, false},
+		{"local account", User{Password: strPtr("hash"), AuthSource: strPtr(AuthSourceLocal)}, AuthSourceLocal, false},
+		{"local account linked to an identity provider", User{Password: strPtr("hash"), OIDCSubject: strPtr("sub-1"), OIDCIssuer: strPtr("https://idp.example.com")}, AuthSourceLocal, true},
+		{"account provisioned through single sign-on", User{AuthSource: strPtr(AuthSourceOIDC), OIDCSubject: strPtr("sub-2"), OIDCIssuer: strPtr("https://idp.example.com")}, AuthSourceOIDC, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := NewAdminUser(c.user)
+			if got.AuthSource != c.wantAuthSource || got.OIDCLinked != c.wantLinked {
+				t.Errorf("auth_source = %q, oidc_linked = %v, want %q, %v", got.AuthSource, got.OIDCLinked, c.wantAuthSource, c.wantLinked)
+			}
+		})
+	}
+}
+
+// The admin view is an allowlist: whatever else a User carries, only these
+// keys may reach the response.
+func TestNewAdminUserCarriesOnlyItsOwnFields(t *testing.T) {
+	email := "ada@example.com"
+	user := User{
+		FirstName:        "Ada",
+		LastName:         "Lovelace",
+		Email:            &email,
+		Password:         strPtr("hash"),
+		Admin:            true,
+		Enabled:          boolPtr(true),
+		Verified:         boolPtr(true),
+		VerificationCode: strPtr("VERIFYCODE"),
+		ResetCode:        strPtr("RESETCODE"),
+		MFAEnabled:       boolPtr(true),
+		MFASecret:        strPtr("MFASECRET"),
+		OIDCSubject:      strPtr("SUBJECT"),
+		OIDCIssuer:       strPtr("https://idp.example.com"),
+	}
+
+	adminUser := NewAdminUser(user)
+	if adminUser.FirstName != "Ada" || adminUser.LastName != "Lovelace" || adminUser.Email != email ||
+		!adminUser.Admin || !adminUser.Enabled || !adminUser.MFAEnabled {
+		t.Errorf("NewAdminUser lost account details: %+v", adminUser)
+	}
+
+	encoded, err := json.Marshal(adminUser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys map[string]interface{}
+	if err := json.Unmarshal(encoded, &keys); err != nil {
+		t.Fatal(err)
+	}
+	allowed := map[string]bool{"id": true, "created_at": true, "first_name": true, "last_name": true, "email": true,
+		"admin": true, "enabled": true, "mfa_enabled": true, "auth_source": true, "oidc_linked": true}
+	for key := range keys {
+		if !allowed[key] {
+			t.Errorf("admin view carries %q", key)
+		}
+	}
+	for _, secret := range []string{"hash", "VERIFYCODE", "RESETCODE", "MFASECRET", "SUBJECT", "idp.example.com"} {
+		if strings.Contains(string(encoded), secret) {
+			t.Errorf("admin view leaks %q: %s", secret, encoded)
+		}
+	}
+}
+
+func TestNewAdminUserDisabledAccount(t *testing.T) {
+	if NewAdminUser(User{Enabled: boolPtr(false)}).Enabled {
+		t.Error("a disabled account is shown as enabled")
+	}
+	if NewAdminUser(User{}).Enabled {
+		t.Error("an account without an enabled flag is shown as enabled")
 	}
 }
 

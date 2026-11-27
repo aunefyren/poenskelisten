@@ -319,6 +319,8 @@ func initRouter(configFile models.ConfigStruct) *gin.Engine {
 			admin.POST("/currency/update", controllers.APIUpdateCurrency)
 			admin.POST("/server/settings", controllers.APIUpdateServerSettings)
 
+			admin.GET("/users", controllers.APIAdminGetUsers)
+			admin.GET("/users/:user_id", controllers.APIAdminGetUser)
 			admin.DELETE("/users/:user_id", controllers.APIDeleteUser)
 			admin.DELETE("/users/:user_id/mfa", controllers.APIAdminDeleteUserMFA)
 			admin.DELETE("/users/:user_id/sessions", controllers.APIAdminRevokeUserSessions)

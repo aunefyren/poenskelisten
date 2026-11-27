@@ -213,6 +213,67 @@ func TestGenerateResetCodeForMissingUser(t *testing.T) {
 	}
 }
 
+func TestGetAdminUsersListsEnabledAccountsByName(t *testing.T) {
+	setupTestDB(t)
+
+	zed := createTestUser(t)
+	zed.FirstName = "zed"
+	ada := createTestUser(t)
+	ada.FirstName = "Ada"
+	ada.AuthSource = strPtr(models.AuthSourceOIDC)
+	ada.Password = nil
+	ada.OIDCSubject = strPtr("ada-sub")
+	ada.OIDCIssuer = strPtr("https://idp.example.com")
+	gone := createTestUser(t)
+	gone.FirstName = "Gone"
+	gone.Enabled = boolPtr(false)
+	for _, user := range []models.User{zed, ada, gone} {
+		if _, err := UpdateUserInDB(user); err != nil {
+			t.Fatalf("failed to update user: %v", err)
+		}
+	}
+
+	users, err := GetAdminUsers()
+	if err != nil {
+		t.Fatalf("GetAdminUsers returned error: %v", err)
+	}
+	if len(users) != 2 {
+		t.Fatalf("len(users) = %d, want 2 (the deleted account left out): %+v", len(users), users)
+	}
+	// Sorted ignoring case: "Ada" before "zed".
+	if users[0].ID != ada.ID || users[1].ID != zed.ID {
+		t.Errorf("users = %s, %s; want Ada, then zed", users[0].FirstName, users[1].FirstName)
+	}
+	if users[0].AuthSource != models.AuthSourceOIDC || !users[0].OIDCLinked {
+		t.Errorf("single sign-on account shown as %q, linked %v", users[0].AuthSource, users[0].OIDCLinked)
+	}
+	if users[1].AuthSource != models.AuthSourceLocal || users[1].OIDCLinked {
+		t.Errorf("local account shown as %q, linked %v", users[1].AuthSource, users[1].OIDCLinked)
+	}
+}
+
+func TestGetAdminUserFindsDeletedAccounts(t *testing.T) {
+	setupTestDB(t)
+
+	user := createTestUser(t)
+	user.Enabled = boolPtr(false)
+	if _, err := UpdateUserInDB(user); err != nil {
+		t.Fatalf("failed to disable user: %v", err)
+	}
+
+	got, err := GetAdminUser(user.ID)
+	if err != nil {
+		t.Fatalf("GetAdminUser returned error: %v", err)
+	}
+	if got.ID != user.ID || got.Enabled {
+		t.Errorf("got %+v, want the deleted account, not enabled", got)
+	}
+
+	if _, err := GetAdminUser(uuid.New()); !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("unknown account: err = %v, want ErrUserNotFound", err)
+	}
+}
+
 func TestUserQueriesFailOnClosedDB(t *testing.T) {
 	runClosedDBCases(t, map[string]func() error{
 		"GetUserInformation": func() error {
@@ -257,6 +318,14 @@ func TestUserQueriesFailOnClosedDB(t *testing.T) {
 		},
 		"GetAllUsers": func() error {
 			_, err := GetAllUsers()
+			return err
+		},
+		"GetAdminUsers": func() error {
+			_, err := GetAdminUsers()
+			return err
+		},
+		"GetAdminUser": func() error {
+			_, err := GetAdminUser(uuid.New())
 			return err
 		},
 		"UpdateUserInDB": func() error {

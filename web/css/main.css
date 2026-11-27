@@ -815,7 +815,7 @@ hr {
   width: auto;
 }
 
-.invites, .currency-module, .security-module, .oauth-clients-module {
+.invites, .currency-module, .security-module, .oauth-clients-module, .sso-users-module {
   width: auto;
   max-width: 100%;
   margin: 1em;
@@ -860,6 +860,72 @@ hr {
 
 .invite-list {
   overflow-y: scroll;
+}
+
+/* An account in the admin's single sign-on user list. It is a button so it
+   can be opened from the keyboard; undo the full-width form button look. */
+button.admin-user {
+  max-width: none;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  color: var(--black);
+  font-weight: 400;
+}
+
+.admin-user-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5em;
+  min-width: 0;
+  text-align: left;
+}
+
+.admin-user-row .profile-icon {
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.admin-user-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-user-email {
+  font-size: 0.8rem;
+  color: var(--mediumblue);
+}
+
+.admin-user-labels {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.25em;
+  margin-top: 0.35em;
+}
+
+.admin-user-note {
+  margin: 0.5em;
+  font-size: 0.85rem;
+  color: var(--mediumblue);
+  text-align: center;
+}
+
+/* Account details in the admin's user modal: the picture keeps its size, and
+   the details move under it when the two don't fit side by side. */
+.user-wrapper > .profile-icon {
+  flex-shrink: 0;
+}
+
+.user-infolist {
+  min-width: min(12em, 100%);
+  overflow-wrap: anywhere;
+}
+
+/* Actions that delete something stand apart from the others. */
+button.button-danger {
+  color: var(--red);
+  border-color: var(--red);
 }
 
 .unselectable {
@@ -1356,7 +1422,8 @@ textarea {
 .user-wrapper {
   display: flex;
   flex-direction: row;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  gap: 0.5em;
   align-content: center;
   justify-content: space-around;
   align-items: center;

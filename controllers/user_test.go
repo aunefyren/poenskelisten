@@ -710,6 +710,146 @@ func TestUpdateUserClearMFAChallengeFails(t *testing.T) {
 	}
 }
 
+// createTestOIDCUser inserts an account provisioned through single sign-on:
+// no password, an OIDC identity and the oidc auth source.
+func createTestOIDCUser(t *testing.T) models.User {
+	t.Helper()
+
+	user := createTestUser(t)
+	authSource := models.AuthSourceOIDC
+	subject := "subject-" + user.ID.String()
+	issuer := "https://idp.example.com"
+	user.Password = nil
+	user.AuthSource = &authSource
+	user.OIDCSubject = &subject
+	user.OIDCIssuer = &issuer
+
+	updated, err := database.UpdateUserInDB(user)
+	if err != nil {
+		t.Fatalf("failed to make the user a single sign-on account: %v", err)
+	}
+	return updated
+}
+
+func TestAPIAdminGetUsersShowsHowEachAccountSignsIn(t *testing.T) {
+	setupControllersDB(t)
+	admin := createTestUser(t)
+	ssoUser := createTestOIDCUser(t)
+	linked := createTestUser(t)
+	subject := "linked-subject"
+	linked.OIDCSubject = &subject
+	if _, err := database.UpdateUserInDB(linked); err != nil {
+		t.Fatal(err)
+	}
+	deleted := createTestOIDCUser(t)
+	disabled := false
+	deleted.Enabled = &disabled
+	if _, err := database.UpdateUserInDB(deleted); err != nil {
+		t.Fatal(err)
+	}
+
+	header := map[string]string{"Authorization": authHeader(t, admin.ID, true)}
+	code, resp, w := doRequest(APIAdminGetUsers, "GET", "/api/admin/users", "", header, nil)
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+
+	var body struct {
+		Users []models.AdminUser `json:"users"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	got := map[uuid.UUID]models.AdminUser{}
+	for _, user := range body.Users {
+		got[user.ID] = user
+	}
+	if len(got) != 3 {
+		t.Fatalf("listed %d accounts, want 3 (the deleted one left out): %s", len(got), w.Body.String())
+	}
+	if user := got[admin.ID]; user.AuthSource != models.AuthSourceLocal || user.OIDCLinked {
+		t.Errorf("local account: %+v", user)
+	}
+	if user := got[ssoUser.ID]; user.AuthSource != models.AuthSourceOIDC || !user.OIDCLinked || user.Email != *ssoUser.Email {
+		t.Errorf("single sign-on account: %+v", user)
+	}
+	if user := got[linked.ID]; user.AuthSource != models.AuthSourceLocal || !user.OIDCLinked {
+		t.Errorf("linked local account: %+v", user)
+	}
+
+	for _, leak := range []string{"hashed-password", subject, *ssoUser.OIDCSubject, "idp.example.com", `"password"`} {
+		if strings.Contains(w.Body.String(), leak) {
+			t.Errorf("response carries %s: %s", leak, w.Body.String())
+		}
+	}
+}
+
+func TestAPIAdminGetUserShowsDeletedAccount(t *testing.T) {
+	setupControllersDB(t)
+	admin := createTestUser(t)
+	target := createTestOIDCUser(t)
+	disabled := false
+	target.Enabled = &disabled
+	if _, err := database.UpdateUserInDB(target); err != nil {
+		t.Fatal(err)
+	}
+
+	header := map[string]string{"Authorization": authHeader(t, admin.ID, true)}
+	params := gin.Params{{Key: "user_id", Value: target.ID.String()}}
+	code, resp, w := doRequest(APIAdminGetUser, "GET", "/api/admin/users/"+target.ID.String(), "", header, params)
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	var body struct {
+		User models.AdminUser `json:"user"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.User.ID != target.ID || body.User.Enabled || body.User.AuthSource != models.AuthSourceOIDC {
+		t.Errorf("user = %+v, want the deleted single sign-on account", body.User)
+	}
+	if strings.Contains(w.Body.String(), *target.OIDCSubject) {
+		t.Errorf("response carries the OIDC subject: %s", w.Body.String())
+	}
+}
+
+func TestAPIAdminGetUserRefusesBadIDs(t *testing.T) {
+	setupControllersDB(t)
+	admin := createTestUser(t)
+	header := map[string]string{"Authorization": authHeader(t, admin.ID, true)}
+
+	for _, id := range []string{"not-a-uuid", uuid.Nil.String(), uuid.NewString()} {
+		params := gin.Params{{Key: "user_id", Value: id}}
+		if code, resp, _ := doRequest(APIAdminGetUser, "GET", "/api/admin/users/"+id, "", header, params); code != 400 {
+			t.Errorf("user %s: status = %d, want 400; body=%v", id, code, resp)
+		}
+	}
+}
+
+func TestAPIAdminGetUsersQueryFails(t *testing.T) {
+	setupControllersDB(t)
+	admin := createTestUser(t)
+	failDBOperation(t, "query", "users", 0)
+
+	header := map[string]string{"Authorization": authHeader(t, admin.ID, true)}
+	if code, resp, _ := doRequest(APIAdminGetUsers, "GET", "/api/admin/users", "", header, nil); code != 500 {
+		t.Errorf("status = %d, want 500; body=%v", code, resp)
+	}
+}
+
+func TestAPIAdminGetUserQueryFails(t *testing.T) {
+	setupControllersDB(t)
+	admin := createTestUser(t)
+	failDBOperation(t, "query", "users", 0)
+
+	header := map[string]string{"Authorization": authHeader(t, admin.ID, true)}
+	params := gin.Params{{Key: "user_id", Value: admin.ID.String()}}
+	if code, resp, _ := doRequest(APIAdminGetUser, "GET", "/api/admin/users/"+admin.ID.String(), "", header, params); code != 500 {
+		t.Errorf("status = %d, want 500; body=%v", code, resp)
+	}
+}
+
 func TestAPIDeleteUserCannotDeleteSelf(t *testing.T) {
 	setupControllersDB(t)
 	user := createTestUser(t)

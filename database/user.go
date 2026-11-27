@@ -313,6 +313,36 @@ func GetAllUsers() (usersRedacted []models.User, err error) {
 	return
 }
 
+// GetAdminUsers lists the enabled accounts, sorted by name, as the admin
+// dashboard shows them.
+func GetAdminUsers() ([]models.AdminUser, error) {
+	users := []models.User{}
+
+	record := Instance.
+		Where("users.enabled = ?", true).
+		Order("LOWER(users.first_name), LOWER(users.last_name)").
+		Find(&users)
+	if record.Error != nil {
+		return nil, record.Error
+	}
+
+	adminUsers := make([]models.AdminUser, 0, len(users))
+	for _, user := range users {
+		adminUsers = append(adminUsers, models.NewAdminUser(user))
+	}
+	return adminUsers, nil
+}
+
+// GetAdminUser is the admin dashboard's view of one account, a deleted one
+// included: an invite still names the account that used it.
+func GetAdminUser(userID uuid.UUID) (models.AdminUser, error) {
+	user, err := GetAllUserInformationAnyState(userID)
+	if err != nil {
+		return models.AdminUser{}, err
+	}
+	return models.NewAdminUser(user), nil
+}
+
 // UpdateUserInDB saves the whole user record, except the one-time MFA state
 // (the last TOTP step used and the pending sign-in challenge): the record was
 // read earlier, and writing those back could undo a code or challenge used

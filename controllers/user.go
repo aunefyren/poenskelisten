@@ -922,6 +922,47 @@ func APIChangePassword(context *gin.Context) {
 	context.JSON(http.StatusOK, gin.H{"message": "Password reset. You can now log in."})
 }
 
+// APIAdminGetUsers lists the enabled accounts for the admin dashboard, with
+// how each one signs in. Like every /api/admin route it is admin-only
+// (middlewares.Auth(true)).
+func APIAdminGetUsers(context *gin.Context) {
+	users, err := database.GetAdminUsers()
+	if err != nil {
+		logger.Log.Error("Failed to get users. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get users."})
+		context.Abort()
+		return
+	}
+
+	context.JSON(http.StatusOK, gin.H{"users": users, "message": "Users retrieved."})
+}
+
+// APIAdminGetUser is one account as the admin dashboard shows it, a deleted
+// one included.
+func APIAdminGetUser(context *gin.Context) {
+	userID, err := utilities.ParseID(context.Param("user_id"))
+	if err != nil {
+		logger.Log.Error("Failed to parse user ID. Error: " + err.Error())
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse user ID."})
+		context.Abort()
+		return
+	}
+
+	user, err := database.GetAdminUser(userID)
+	if errors.Is(err, database.ErrUserNotFound) {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Failed to find user."})
+		context.Abort()
+		return
+	} else if err != nil {
+		logger.Log.Error("Failed to get user. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
+		context.Abort()
+		return
+	}
+
+	context.JSON(http.StatusOK, gin.H{"user": user, "message": "User retrieved."})
+}
+
 func APIDeleteUser(context *gin.Context) {
 	var userIDString = context.Param("user_id")
 
