@@ -280,3 +280,28 @@ func TestOAuthAccessTokenUsesConfiguredLifetime(t *testing.T) {
 		}
 	}
 }
+
+func TestIssuedBeforeSignOut(t *testing.T) {
+	marker := time.Date(2026, 1, 2, 3, 4, 5, 600_000_000, time.UTC)
+	at := func(d time.Time) *jwt.NumericDate { return jwt.NewNumericDate(d) }
+
+	cases := []struct {
+		name     string
+		issuedAt *jwt.NumericDate
+		marker   *time.Time
+		want     bool
+	}{
+		{"never signed out", at(marker.Add(-time.Hour)), nil, false},
+		{"issued a second before", at(marker.Add(-time.Second)), &marker, true},
+		// iat is rounded down to the second, so a token from the marker's own
+		// second is accepted rather than mistaken for an older one.
+		{"issued in the same second", at(marker.Add(100 * time.Millisecond)), &marker, false},
+		{"issued after", at(marker.Add(time.Minute)), &marker, false},
+		{"no iat", nil, &marker, true},
+	}
+	for _, c := range cases {
+		if got := IssuedBeforeSignOut(c.issuedAt, c.marker); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}

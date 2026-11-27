@@ -10,6 +10,7 @@ import (
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
+	"aunefyren/poenskelisten/middlewares"
 	"aunefyren/poenskelisten/models"
 	"aunefyren/poenskelisten/utilities"
 	"context"
@@ -89,6 +90,13 @@ func verifyToken(_ context.Context, token string, _ *http.Request) (*mcpauth.Tok
 	claims, err := pauth.ValidateOAuthAccessToken(token, config.MCPResource())
 	if err != nil {
 		return nil, mcpauth.ErrInvalidToken
+	}
+	if err := middlewares.CheckNotSignedOut(claims); err != nil {
+		if errors.Is(err, middlewares.ErrTokenRevoked) {
+			return nil, mcpauth.ErrInvalidToken
+		}
+		logger.Log.Error("Failed to check whether the MCP access token was revoked. Error: " + err.Error())
+		return nil, err
 	}
 	info := &mcpauth.TokenInfo{
 		UserID: claims.Subject,

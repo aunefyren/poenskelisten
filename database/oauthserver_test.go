@@ -448,3 +448,48 @@ func TestSeedFirstPartyClientAdditionalURLs(t *testing.T) {
 		t.Errorf("remaining additional URL missing: %v", client.RedirectURIs)
 	}
 }
+
+func TestGetUserSessionsInvalidatedAt(t *testing.T) {
+	setupTestDB(t)
+	user := createTestUser(t)
+
+	if marker, err := GetUserSessionsInvalidatedAt(user.ID); err != nil || marker != nil {
+		t.Fatalf("before any sign-out: marker = %v, err = %v, want nil, nil", marker, err)
+	}
+
+	at := time.Now().Truncate(time.Second)
+	if err := SetUserSessionsInvalidatedAt(user.ID, at); err != nil {
+		t.Fatalf("SetUserSessionsInvalidatedAt error: %v", err)
+	}
+	marker, err := GetUserSessionsInvalidatedAt(user.ID)
+	if err != nil || marker == nil || !marker.Equal(at) {
+		t.Errorf("marker = %v, err = %v, want %v", marker, err, at)
+	}
+
+	if _, err := GetUserSessionsInvalidatedAt(uuid.New()); !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("unknown user: err = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestGetUserSessionsInvalidatedAtDisabledUser(t *testing.T) {
+	setupTestDB(t)
+	user := createTestUser(t)
+	if err := Instance.Model(&models.User{}).Where("id = ?", user.ID).Update("enabled", false).Error; err != nil {
+		t.Fatalf("failed to disable user: %v", err)
+	}
+
+	if _, err := GetUserSessionsInvalidatedAt(user.ID); !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("disabled user: err = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestGetUserSessionsInvalidatedAtDatabaseFailure(t *testing.T) {
+	setupTestDB(t)
+	if err := Instance.Migrator().DropTable(&models.User{}); err != nil {
+		t.Fatalf("failed to drop users table: %v", err)
+	}
+
+	if _, err := GetUserSessionsInvalidatedAt(uuid.New()); err == nil || errors.Is(err, ErrUserNotFound) {
+		t.Errorf("err = %v, want a query error", err)
+	}
+}

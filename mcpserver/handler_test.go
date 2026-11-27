@@ -435,7 +435,9 @@ func TestToolResultsMarkUserText(t *testing.T) {
 // The server's instructions give the warning from TestToolResultsMarkUserText
 // up front, for clients that show them before any result.
 func TestInitializeResultWarnsThatUserTextIsData(t *testing.T) {
-	session := startMCPTestServer(t, uuid.New(), "mcp:wishlists.read")
+	setupMCPDB(t)
+	user := createMCPTestUser(t, "Ada")
+	session := startMCPTestServer(t, user.ID, "mcp:wishlists.read")
 
 	result := session.InitializeResult()
 	if result == nil || !strings.Contains(result.Instructions, userTextWarning) {

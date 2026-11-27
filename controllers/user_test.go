@@ -5,11 +5,14 @@ import (
 	"aunefyren/poenskelisten/database"
 	"aunefyren/poenskelisten/logger"
 	"aunefyren/poenskelisten/models"
+	"aunefyren/poenskelisten/utilities"
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"gorm.io/gorm"
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -2257,5 +2260,124 @@ func TestGetUserHidesEmailFromOtherUsers(t *testing.T) {
 	user, _ := resp["user"].(map[string]interface{})
 	if user["email"] != nil || user["first_name"] != "Test" {
 		t.Errorf("user = %v, want the name without the email", user)
+	}
+}
+
+// openRefreshSession gives the user a live refresh session, as a signed-in
+// device would have, and returns its refresh-token hash.
+func openRefreshSession(t *testing.T, userID uuid.UUID) string {
+	t.Helper()
+	hash := utilities.HashOpaqueToken("refresh-" + uuid.NewString())
+	if _, err := database.CreateOAuthRefreshSession(userID, hash, models.FirstPartyClientID, "openid", config.APIResource(), "test", "203.0.113.1"); err != nil {
+		t.Fatalf("failed to create refresh session: %v", err)
+	}
+	return hash
+}
+
+// assertSignedOutEverywhere checks that the refresh session no longer works
+// and that the global marker (which voids older SSO cookies) is stamped.
+func assertSignedOutEverywhere(t *testing.T, userID uuid.UUID, refreshHash string) {
+	t.Helper()
+	if _, err := database.RotateSession(refreshHash, utilities.HashOpaqueToken(uuid.NewString()), "test", "203.0.113.1"); !errors.Is(err, database.ErrSessionRevoked) {
+		t.Errorf("refreshing the old session: err = %v, want ErrSessionRevoked", err)
+	}
+	user, err := database.GetAllUserInformation(userID)
+	if err != nil {
+		t.Fatalf("failed to reload user: %v", err)
+	}
+	if user.SessionsInvalidatedAt == nil {
+		t.Error("SessionsInvalidatedAt not set, so SSO cookies issued before stay valid")
+	}
+}
+
+func TestAPIChangePasswordSignsOutEverywhere(t *testing.T) {
+	setupControllersDB(t)
+	enableOAuth(t)
+	user := createTestUser(t)
+	refreshHash := openRefreshSession(t, user.ID)
+	resetCode, err := database.GenerateRandomResetCodeForUser(user.ID, true)
+	if err != nil {
+		t.Fatalf("failed to generate reset code: %v", err)
+	}
+
+	body := `{"reset_code":"` + resetCode + `","password":"NewPassword1!","password_repeat":"NewPassword1!"}`
+	code, resp, _ := doRequest(APIChangePassword, "POST", "/api/open/users/password", body, nil, nil)
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	assertSignedOutEverywhere(t, user.ID, refreshHash)
+}
+
+func TestUpdateUserPasswordChangeSignsOutOtherSessions(t *testing.T) {
+	setupControllersDB(t)
+	enablePrivateKey(t)
+	user := newUserWithPassword(t, "CorrectHorse1!")
+	refreshHash := openRefreshSession(t, user.ID)
+
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	body := `{"email":"` + *user.Email + `","password_original":"CorrectHorse1!","password":"NewHorse2!x","password_repeat":"NewHorse2!x"}`
+	code, resp, w := doRequest(UpdateUser, "POST", "/api/auth/users/update", body, header, nil)
+	if code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	assertSignedOutEverywhere(t, user.ID, refreshHash)
+
+	// This browser was signed back in, and its new SSO cookie isn't caught by
+	// the marker stamped a moment before, in the same second.
+	var sso *http.Cookie
+	for _, cookie := range w.Result().Cookies() {
+		if cookie.Name == ssoCookieName && cookie.Value != "" {
+			sso = cookie
+		}
+	}
+	if sso == nil {
+		t.Fatal("expected a fresh SSO cookie")
+	}
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest("GET", "/oauth/authorize", nil)
+	ctx.Request.AddCookie(sso)
+	if _, ok := resolveSSOUser(ctx); !ok {
+		t.Error("the fresh SSO cookie should be accepted")
+	}
+}
+
+func TestUpdateUserWithoutPasswordChangeKeepsSessions(t *testing.T) {
+	setupControllersDB(t)
+	user := newUserWithPassword(t, "CorrectHorse1!")
+	refreshHash := openRefreshSession(t, user.ID)
+
+	header := map[string]string{"Authorization": authHeader(t, user.ID, false)}
+	body := `{"email":"` + *user.Email + `","password_original":"CorrectHorse1!"}`
+	if code, resp, _ := doRequest(UpdateUser, "POST", "/api/auth/users/update", body, header, nil); code != 200 {
+		t.Fatalf("status = %d, want 200; body=%v", code, resp)
+	}
+	if _, err := database.RotateSession(refreshHash, utilities.HashOpaqueToken(uuid.NewString()), "test", "203.0.113.1"); err != nil {
+		t.Errorf("session should still work after a change without a new password: %v", err)
+	}
+}
+
+// A request that can't create an account must not cost a bcrypt hash. With
+// a cost bcrypt refuses, any hashing would surface as a 500 instead of the
+// expected 400.
+func TestRegisterUserRejectsBeforeHashing(t *testing.T) {
+	setupControllersDB(t)
+	originalCost := models.BcryptCost
+	models.BcryptCost = 32
+	t.Cleanup(func() { models.BcryptCost = originalCost })
+	existing := createTestUser(t)
+	invite := createTestInvite(t)
+
+	cases := []struct{ name, email, invite, wantError string }{
+		{"invalid invite", "ada@example.com", "NOT-REAL", "Invitiation code is not valid."},
+		{"e-mail in use", *existing.Email, invite.Code, "E-mail is already in use."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			body := fmt.Sprintf(`{"first_name":"Ada","last_name":"Lovelace","email":"%s","password":"Sup3rSecret!","password_repeat":"Sup3rSecret!","invite_code":"%s"}`, c.email, c.invite)
+			code, resp, _ := doRequest(RegisterUser, "POST", "/api/open/users", body, nil, nil)
+			if code != 400 || resp["error"] != c.wantError {
+				t.Errorf("got %d %v, want 400 %q (no hashing)", code, resp, c.wantError)
+			}
+		})
 	}
 }

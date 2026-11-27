@@ -36,7 +36,7 @@ func resolveSSOUser(ctx *gin.Context) (models.User, bool) {
 	if err != nil {
 		return models.User{}, false
 	}
-	if user.SessionsInvalidatedAt != nil && claims.IssuedAt != nil && claims.IssuedAt.Time.Before(*user.SessionsInvalidatedAt) {
+	if auth.IssuedBeforeSignOut(claims.IssuedAt, user.SessionsInvalidatedAt) {
 		return models.User{}, false
 	}
 	return user, true

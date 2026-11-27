@@ -88,14 +88,6 @@ func RegisterUser(context *gin.Context) {
 		user.Verified = &verifiedBool
 	}
 
-	// Hash the selected password
-	if err := user.HashPassword(*user.Password); err != nil {
-		logger.Log.Error("Failed to hash password. Error: " + err.Error())
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password."})
-		context.Abort()
-		return
-	}
-
 	// Verify unsued invite code exists
 	unique_invitecode, err := database.VerifyUnusedUserInviteCode(userCreationRequest.InviteCode)
 	if err != nil {
@@ -118,6 +110,16 @@ func RegisterUser(context *gin.Context) {
 		return
 	} else if !unique_email {
 		context.JSON(http.StatusBadRequest, gin.H{"error": "E-mail is already in use."})
+		context.Abort()
+		return
+	}
+
+	// Hash the selected password. Hashing is deliberately slow, so it only runs
+	// once the request is otherwise valid: before the invite check, it was free
+	// CPU load for anyone who could reach the registration endpoint.
+	if err := user.HashPassword(*user.Password); err != nil {
+		logger.Log.Error("Failed to hash password. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password."})
 		context.Abort()
 		return
 	}
@@ -621,7 +623,8 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// Hash the selected password (local accounts only; OIDC accounts have none).
-	if userUpdateRequest.Password != "" && userOriginal.HasPassword() {
+	passwordChanged := userUpdateRequest.Password != "" && userOriginal.HasPassword()
+	if passwordChanged {
 		if err := userOriginal.HashPassword(userUpdateRequest.Password); err != nil {
 			logger.Log.Error("Failed to hash password. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password."})
@@ -651,7 +654,7 @@ func UpdateUser(context *gin.Context) {
 	}
 
 	// A sign-in begun with the old password can't be finished with the new one.
-	if userUpdateRequest.Password != "" && userOriginal.HasPassword() {
+	if passwordChanged {
 		if err := database.ClearMFAChallenge(userOriginal.ID); err != nil {
 			logger.Log.Error("Failed to clear the MFA challenge. Error: " + err.Error())
 			context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user."})
@@ -667,6 +670,23 @@ func UpdateUser(context *gin.Context) {
 		context.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user."})
 		context.Abort()
 		return
+	}
+
+	// A new password signs out every other session, on any device or app, in
+	// case the old one was known to someone else. This browser gets a fresh SSO
+	// cookie, so when the account page reloads, its refresh fails and the web
+	// app gets new tokens from /oauth/authorize without asking for a login.
+	if passwordChanged {
+		if err := revokeAllForUser(userID); err != nil {
+			logger.Log.Error("Failed to revoke sessions after password change. Error: " + err.Error())
+			context.JSON(http.StatusInternalServerError, gin.H{"error": "Password changed, but signing out other sessions failed."})
+			context.Abort()
+			return
+		}
+		// Not fatal: the change is saved, and the user just logs in again.
+		if err := issueSSOSession(context, user); err != nil {
+			logger.Log.Error("Failed to renew session after password change. Error: " + err.Error())
+		}
 	}
 
 	// If user is not verified and SMTP is enabled, send verification e-mail
@@ -886,6 +906,15 @@ func APIChangePassword(context *gin.Context) {
 	if err != nil {
 		logger.Log.Error("Failed to generate reset code for user during password reset. Error: " + err.Error())
 		context.JSON(http.StatusInternalServerError, gin.H{"message": "Error."})
+		context.Abort()
+		return
+	}
+
+	// A reset usually means the old password is lost or known to someone else,
+	// so whoever is signed in with it, on any device or app, is signed out.
+	if err := revokeAllForUser(user.ID); err != nil {
+		logger.Log.Error("Failed to revoke sessions after password reset. Error: " + err.Error())
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "Password reset, but signing out other sessions failed."})
 		context.Abort()
 		return
 	}

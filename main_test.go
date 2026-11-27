@@ -35,6 +35,14 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// TestMain drops models.BcryptCost to bcrypt's minimum, as in the controllers
+// package: a login with an unknown e-mail still checks a password, and the
+// rate limit tests send dozens of them.
+func TestMain(m *testing.M) {
+	models.BcryptCost = bcrypt.MinCost
+	os.Exit(m.Run())
+}
+
 func init() {
 	gin.SetMode(gin.TestMode)
 	if logger.Log == nil {

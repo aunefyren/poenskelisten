@@ -166,8 +166,8 @@ func GenerateSSOToken(userID uuid.UUID) (string, error) {
 }
 
 // ValidateSSOToken validates an SSO token's signature, expiry, and purpose. The
-// caller additionally checks the user's SessionsInvalidatedAt against IssuedAt for
-// global logout (that needs a DB lookup, so it lives in the controller).
+// caller additionally checks it against the user's logout marker with
+// IssuedBeforeSignOut (that needs a DB lookup, so it lives in the controller).
 func ValidateSSOToken(signedToken string) (*JWTClaim, error) {
 	claims, err := ParseToken(signedToken)
 	if err != nil {
@@ -190,6 +190,22 @@ func ValidateSSOToken(signedToken string) (*JWTClaim, error) {
 		return nil, errors.New("sso token has no user")
 	}
 	return claims, nil
+}
+
+// IssuedBeforeSignOut reports whether a token was issued before the user's
+// global logout marker (models.User.SessionsInvalidatedAt) and must be refused.
+// A JWT's iat only has second precision, so the marker is compared at that
+// precision too: otherwise a token issued just after a revocation, in the same
+// second (a password change signs the browser straight back in), would look
+// older than the marker. A token with no iat can't be shown to be newer.
+func IssuedBeforeSignOut(issuedAt *jwt.NumericDate, invalidatedAt *time.Time) bool {
+	if invalidatedAt == nil {
+		return false
+	}
+	if issuedAt == nil {
+		return true
+	}
+	return issuedAt.Time.Before(invalidatedAt.Truncate(time.Second))
 }
 
 // VerifyPKCE checks a PKCE code_verifier against a stored S256 challenge.

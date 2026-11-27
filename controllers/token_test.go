@@ -3,12 +3,14 @@ package controllers
 import (
 	"aunefyren/poenskelisten/config"
 	"aunefyren/poenskelisten/database"
+	"aunefyren/poenskelisten/models"
 	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func postGenerateToken(body string) (int, map[string]interface{}) {
@@ -33,9 +35,11 @@ func TestGenerateTokenBadJSON(t *testing.T) {
 func TestGenerateTokenUnknownEmail(t *testing.T) {
 	setupControllersDB(t)
 
+	// The same status and message as a wrong password, so the response doesn't
+	// tell whether the account exists.
 	code, body := postGenerateToken(`{"email":"nobody@example.com","password":"whatever"}`)
-	if code != 500 {
-		t.Fatalf("status = %d, want 500 for an unknown e-mail; body=%v", code, body)
+	if code != 401 {
+		t.Fatalf("status = %d, want 401 for an unknown e-mail; body=%v", code, body)
 	}
 	if body["error"] != "Invalid credentials." {
 		t.Errorf("error = %v, want a generic invalid-credentials message", body["error"])
@@ -149,5 +153,47 @@ func TestGenerateTokenIgnoresEmailCaseAndSpace(t *testing.T) {
 	code, body := postGenerateToken(`{"email":"  ` + strings.ToUpper(*user.Email) + ` ","password":"correct-horse-battery-staple"}`)
 	if code != 200 {
 		t.Fatalf("status = %d, want 200; body=%v", code, body)
+	}
+}
+
+// An OIDC-only account has no password; it is refused like any wrong
+// password rather than with a quicker or different answer.
+func TestGenerateTokenPasswordlessAccount(t *testing.T) {
+	setupControllersDB(t)
+	user := createTestUser(t)
+	user.Password = nil
+	if _, err := database.UpdateUserInDB(user); err != nil {
+		t.Fatalf("failed to clear password: %v", err)
+	}
+
+	code, body := postGenerateToken(`{"email":"` + *user.Email + `","password":"anything"}`)
+	if code != 401 || body["error"] != "Invalid credentials." {
+		t.Errorf("got %d %v, want 401 invalid credentials", code, body)
+	}
+}
+
+func TestGenerateTokenDatabaseFailure(t *testing.T) {
+	setupControllersDB(t)
+	breakControllersDB(t)
+
+	code, body := postGenerateToken(`{"email":"nobody@example.com","password":"whatever"}`)
+	if code != 500 || body["error"] != "Failed to log in." {
+		t.Errorf("got %d %v, want 500 when the lookup itself fails", code, body)
+	}
+}
+
+// The placeholder must cost what a real password check costs, or the time
+// taken would still tell unknown e-mails apart.
+func TestDummyPasswordHashUsesTheRealCost(t *testing.T) {
+	PreparePasswordLogin()
+	cost, err := bcrypt.Cost(dummyPasswordHash())
+	if err != nil {
+		t.Fatalf("placeholder hash is invalid: %v", err)
+	}
+	if cost != models.BcryptCost {
+		t.Errorf("cost = %d, want models.BcryptCost (%d)", cost, models.BcryptCost)
+	}
+	if passwordMatches(models.User{}, false, "no account has this password") {
+		t.Error("passwordMatches must never accept a login without an account")
 	}
 }
