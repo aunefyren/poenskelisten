@@ -190,7 +190,10 @@ func run(serve func(router *gin.Engine, address string) error) error {
 }
 
 func initRouter(configFile models.ConfigStruct) *gin.Engine {
-	router := gin.Default()
+	// Not gin.Default(): its logger writes whole URLs, codes included.
+	router := gin.New()
+	router.Use(middlewares.AccessLog(gin.DefaultWriter, router.Routes), gin.Recovery())
+
 	// Gin trusts X-Forwarded-For from every peer by default, which would let any
 	// client choose its own IP and dodge the per-IP rate limits. Only the
 	// configured reverse proxies may vouch for a client's address.
@@ -567,6 +570,18 @@ func parseFlags(configFile models.ConfigStruct) (models.ConfigStruct, startupAct
 			flagsProvided = true
 		}
 	})
+
+	// entrypoint.sh turns the other environment variables into flags, but
+	// not the secrets: any user who can see a process can read its arguments,
+	// while its environment is readable only by its own user and root. A flag
+	// given explicitly still wins.
+	for name, value := range map[string]*string{"dbpassword": dbPassword, "smtppassword": smtpPassword, "oidcclientsecret": oidcClientSecret} {
+		if secret := os.Getenv(name); secret != "" && !provided[name] {
+			*value = secret
+			provided[name] = true
+			flagsProvided = true
+		}
+	}
 
 	if provided["port"] {
 		configFile.PoenskelistenPort = *port

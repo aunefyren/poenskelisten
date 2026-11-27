@@ -12,6 +12,10 @@ fi
 # win over environment variables.
 argCount=$#
 
+# dbpassword, smtppassword and oidcclientsecret aren't turned into flags:
+# anyone who can see a process can read its arguments. The app reads them
+# from its environment itself.
+
 # Add the Pønskelisten environment variables if set
 [ -n "$port" ] && set -- "$@" --port "$port"
 [ -n "$externalurl" ] && set -- "$@" --externalurl "$externalurl"
@@ -28,7 +32,6 @@ argCount=$#
 [ -n "$dbport" ] && set -- "$@" --dbport "$dbport"
 [ -n "$dbtype" ] && set -- "$@" --dbtype "$dbtype"
 [ -n "$dbusername" ] && set -- "$@" --dbusername "$dbusername"
-[ -n "$dbpassword" ] && set -- "$@" --dbpassword "$dbpassword"
 [ -n "$dbname" ] && set -- "$@" --dbname "$dbname"
 [ -n "$dbip" ] && set -- "$@" --dbip "$dbip"
 [ -n "$dbssl" ] && set -- "$@" --dbssl "$dbssl"
@@ -46,7 +49,6 @@ argCount=$#
 [ -n "$oidcprovidername" ] && set -- "$@" --oidcprovidername "$oidcprovidername"
 [ -n "$oidcissuerurl" ] && set -- "$@" --oidcissuerurl "$oidcissuerurl"
 [ -n "$oidcclientid" ] && set -- "$@" --oidcclientid "$oidcclientid"
-[ -n "$oidcclientsecret" ] && set -- "$@" --oidcclientsecret "$oidcclientsecret"
 [ -n "$oidcredirecturl" ] && set -- "$@" --oidcredirecturl "$oidcredirecturl"
 [ -n "$oidcautocreateusers" ] && set -- "$@" --oidcautocreateusers "$oidcautocreateusers"
 [ -n "$disablelocallogin" ] && set -- "$@" --disablelocallogin "$disablelocallogin"
@@ -68,7 +70,6 @@ argCount=$#
 [ -n "$smtphost" ] && set -- "$@" --smtphost "$smtphost"
 [ -n "$smtpport" ] && set -- "$@" --smtpport "$smtpport"
 [ -n "$smtpusername" ] && set -- "$@" --smtpusername "$smtpusername"
-[ -n "$smtppassword" ] && set -- "$@" --smtppassword "$smtppassword"
 [ -n "$smtpfrom" ] && set -- "$@" --smtpfrom "$smtpfrom"
 
 # Rotate the container's own arguments from the front to the end, then prefix

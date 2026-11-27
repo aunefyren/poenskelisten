@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -323,6 +324,63 @@ func TestParseFlagsOutOfRangeMaxImagePixelsFails(t *testing.T) {
 	}
 }
 
+// The secrets come from the environment, which entrypoint.sh no longer
+// copies into the process's arguments; a flag given explicitly wins.
+func TestParseFlagsReadsSecretsFromTheEnvironment(t *testing.T) {
+	t.Setenv("dbpassword", "db-from-env")
+	t.Setenv("smtppassword", "smtp-from-env")
+	t.Setenv("oidcclientsecret", "oidc-from-env")
+
+	withArgs(t)
+	out, _, provided, err := parseFlags(models.ConfigStruct{DBPassword: "db-from-config"})
+	if err != nil {
+		t.Fatalf("parseFlags returned error: %v", err)
+	}
+	if out.DBPassword != "db-from-env" || out.SMTPPassword != "smtp-from-env" || out.OIDCClientSecret != "oidc-from-env" || !provided {
+		t.Errorf("secrets = %q %q %q (provided %v), want the environment's, to be saved", out.DBPassword, out.SMTPPassword, out.OIDCClientSecret, provided)
+	}
+
+	withArgs(t, "-dbpassword", "db-from-flag")
+	out, _, _, err = parseFlags(models.ConfigStruct{})
+	if err != nil {
+		t.Fatalf("parseFlags returned error: %v", err)
+	}
+	if out.DBPassword != "db-from-flag" || out.SMTPPassword != "smtp-from-env" {
+		t.Errorf("secrets = %q %q, want the flag's, then the environment's", out.DBPassword, out.SMTPPassword)
+	}
+}
+
+// Any user who can see a process can read its arguments, so entrypoint.sh
+// must leave the secrets in the environment.
+func TestEntrypointKeepsSecretsOutOfArguments(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("as root, entrypoint.sh changes file owners and switches user")
+	}
+	script, err := os.ReadFile("entrypoint.sh")
+	if err != nil {
+		t.Fatalf("failed to read entrypoint.sh: %v", err)
+	}
+	printsArguments := strings.Replace(string(script), "set -- /app/poenskelisten", "set -- echo", 1)
+	path := filepath.Join(t.TempDir(), "entrypoint.sh")
+	if err := os.WriteFile(path, []byte(printsArguments), 0o700); err != nil {
+		t.Fatalf("failed to write the script: %v", err)
+	}
+
+	cmd := exec.Command("sh", path, "--port", "9000")
+	cmd.Env = append(os.Environ(), "dbusername=wishlist", "dbpassword=db-secret", "smtppassword=smtp-secret", "oidcclientsecret=oidc-secret")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("entrypoint.sh failed: %v", err)
+	}
+	arguments := string(out)
+	if !strings.Contains(arguments, "--dbusername wishlist") || !strings.HasSuffix(strings.TrimSpace(arguments), "--port 9000") {
+		t.Fatalf("arguments = %q, want the environment as flags, then the container's", arguments)
+	}
+	if strings.Contains(arguments, "secret") {
+		t.Errorf("arguments = %q, want no secret", arguments)
+	}
+}
+
 func TestParseFlagsDisableSMTPTrueDisablesSMTP(t *testing.T) {
 	withArgs(t, "-disablesmtp", "true")
 
@@ -496,6 +554,47 @@ func TestInitRouterUnknownPathIs404(t *testing.T) {
 
 	if w := serve(router, http.MethodGet, "/no-such-page"); w.Code != http.StatusNotFound {
 		t.Errorf("GET /no-such-page = %d, want 404", w.Code)
+	}
+}
+
+// The access log goes to stdout, so to the container's logs: whoever reads
+// them mustn't find a code there that signs in, resets a password or opens
+// a public wishlist. Other IDs are kept, for tracing a request.
+func TestInitRouterLogsNoCodes(t *testing.T) {
+	var logged strings.Builder
+	original := gin.DefaultWriter
+	t.Cleanup(func() { gin.DefaultWriter = original })
+	gin.DefaultWriter = &logged
+	router, _ := setupRouterTest(t)
+
+	listID := uuid.NewString()
+	requests := []struct{ method, path string }{
+		{http.MethodGet, "/api/open/users/reset/RESET-CODE-SECRET"},
+		{http.MethodPost, "/api/open/users/verify/VERIFY-CODE-SECRET"},
+		{http.MethodGet, "/api/open/wishlists/public/PUBLIC-HASH-SECRET"},
+		{http.MethodGet, "/wishlists/public/PUBLIC-PAGE-SECRET"},
+		{http.MethodHead, "/wishlists/public/HEAD-PAGE-SECRET"},
+		{http.MethodGet, "/api/open/users/verify/WRONG-METHOD-SECRET"},
+		{http.MethodGet, "/login?reset_code=LINK-CODE-SECRET"},
+		{http.MethodGet, "/oauth/callback?code=OAUTH-CODE-SECRET&state=STATE-SECRET"},
+		{http.MethodGet, "/api/open/oidc/callback?code=OIDC-CODE-SECRET&state=OIDC-STATE-SECRET"},
+		{http.MethodGet, "/api/auth/wishlists/" + listID},
+	}
+	for _, request := range requests {
+		serve(router, request.method, request.path)
+	}
+
+	output := logged.String()
+	if strings.Contains(output, "SECRET") {
+		t.Errorf("the access log holds a code:\n%s", output)
+	}
+	for _, want := range []string{`"/api/open/users/reset/:resetCode"`, `"/wishlists/public/:wishlist_hash"`, `"/login"`, `"/api/auth/wishlists/` + listID + `"`} {
+		if !strings.Contains(output, want) {
+			t.Errorf("the access log lacks %s:\n%s", want, output)
+		}
+	}
+	if lines := strings.Count(output, "[GIN] "); lines != len(requests) {
+		t.Errorf("%d access log lines, want one per request (%d):\n%s", lines, len(requests), output)
 	}
 }
 

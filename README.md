@@ -136,6 +136,7 @@ Pønskelisten keeps its state in `files/` (config, log and, with SQLite, the dat
 
 - `config.json` is created on the first run. Values given as startup flags or environment variables are **written back into it** whenever they differ from what's there, so it's always the full picture of your configuration.
 - It holds secrets: the auto-generated `oauth_signing_key` and `private_key`, plus any database, SMTP and OIDC passwords you configure, including ones passed as environment variables. Treat it as sensitive. Pønskelisten creates `config.json` and its log readable by its own user only (`0600`) and keeps `files/` closed to other users (`0700`); on every start it tightens `config.json` and `files/` if an older version left them readable. A backup job that reads the folder as a different, non-root user needs to run as the app's user instead.
+- Give `dbpassword`, `smtppassword` and `oidcclientsecret` as environment variables rather than startup flags: any user who can see a process can read its arguments. The app reads these three from its environment itself, on any install, not only in Docker: when set, they override `config.json` and are saved into it. The Docker image's entrypoint doesn't pass them as arguments.
 - Keep the signing keys. If `config.json` is lost or replaced, new keys are generated: everyone is logged out, and connected apps (MCP clients) have to be authorised again.
 
 ### Images and memory
@@ -324,6 +325,11 @@ set `trustedproxies` to that address for the real visitor IP to be used:
 Without it, `X-Forwarded-For` is ignored and all visitors share one rate limit,
 and the log warns about this once after startup. Only list proxies you run:
 any address in the list can claim to be any visitor.
+
+Pønskelisten's access log, on its standard output, leaves out query strings and
+the codes some URLs carry: password reset and e-mail verification codes, and
+public wishlist links. Your proxy's access log, if you keep one, may record
+whole URLs, so reset links: keep it as private as the app's data.
 
 ### HTTPS
 
